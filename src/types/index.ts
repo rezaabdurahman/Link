@@ -15,6 +15,7 @@ export interface User {
   connectionPriority: 'want-closer' | 'regular';
   lastSeen: Date;
   broadcast?: string;
+  profileType: 'public' | 'private';
 }
 
 export interface Message {

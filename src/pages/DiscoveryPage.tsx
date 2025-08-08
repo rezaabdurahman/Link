@@ -114,9 +114,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         value={searchQuery}
         onChange={setSearchQuery}
         suggestions={[
-          'find me a tall guy with blue eyes',
+          'tall blond guy by the bar you here?',
           'find me another solo traveler',
-          'find me a venture capitalist',
+          'I need funding for my startup',
           'find me someone who loves art',
           'find me a fitness enthusiast',
           'find me a foodie',

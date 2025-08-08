@@ -97,9 +97,15 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }
               )}
             </div>
             
-            <h3 className="text-3xl font-bold mb-2 text-gradient-primary">
-              {user.name}, {user.age}
-            </h3>
+            {user.profileType === 'public' ? (
+              <h3 className="text-3xl font-bold mb-2 text-gradient-primary">
+                {user.name}, {user.age}
+              </h3>
+            ) : (
+              <h3 className="text-3xl font-bold mb-2 text-gradient-primary">
+                Private Profile
+              </h3>
+            )}
             
             {/* Distance and Mutual Friends */}
             <div className="flex justify-center gap-4 mb-4">
@@ -181,57 +187,61 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }
             </div>
           </div>
 
-          {/* Social Media */}
-          <div style={{ marginBottom: '24px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
-              Connect
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {socialLinks.map((social, index) => (
-                <div
-                  key={index}
-                  className="ios-card"
-                  style={{
-                    padding: '12px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <social.icon size={20} className="text-accent" />
-                  <span style={{ fontSize: '16px' }}>{social.handle}</span>
-                </div>
-              ))}
+          {/* Social Media - only show for public profiles */}
+          {user.profileType === 'public' && (
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
+                Connect
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {socialLinks.map((social, index) => (
+                  <div
+                    key={index}
+                    className="ios-card"
+                    style={{
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <social.icon size={20} className="text-accent" />
+                    <span style={{ fontSize: '16px' }}>{social.handle}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Photos */}
-          <div style={{ marginBottom: '24px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
-              Photos
-            </h4>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(2, 1fr)', 
-              gap: '12px' 
-            }}>
-              {additionalPhotos.map((photo, index) => (
-                <img
-                  key={index}
-                  src={photo}
-                  alt={`${user.name} photo ${index + 1}`}
-                  style={{
-                    width: '100%',
-                    aspectRatio: '1',
-                    borderRadius: '12px',
-                    objectFit: 'cover',
-                    cursor: 'pointer'
-                  }}
-                />
-              ))}
+          {/* Photos - only show for public profiles */}
+          {user.profileType === 'public' && (
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
+                Photos
+              </h4>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(2, 1fr)', 
+                gap: '12px' 
+              }}>
+                {additionalPhotos.map((photo, index) => (
+                  <img
+                    key={index}
+                    src={photo}
+                    alt={`${user.name} photo ${index + 1}`}
+                    style={{
+                      width: '100%',
+                      aspectRatio: '1',
+                      borderRadius: '12px',
+                      objectFit: 'cover',
+                      cursor: 'pointer'
+                    }}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Chat Window */}
@@ -290,7 +300,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }
                   </div>
                 )}
                 <span style={{ fontSize: '16px', fontWeight: '600' }}>
-                  {user.name}
+                  {user.profileType === 'public' ? user.name : 'Private Profile'}
                 </span>
               </div>
               <button

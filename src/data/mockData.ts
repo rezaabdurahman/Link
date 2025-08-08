@@ -15,7 +15,8 @@ export const currentUser: User = {
   isAvailable: true,
   mutualFriends: [],
   connectionPriority: 'regular',
-  lastSeen: new Date()
+  lastSeen: new Date(),
+  profileType: 'public'
 };
 
 export const nearbyUsers: User[] = [
@@ -35,7 +36,8 @@ export const nearbyUsers: User[] = [
     mutualFriends: ['Sarah Wilson'],
     connectionPriority: 'want-closer',
     lastSeen: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-    broadcast: 'Looking for someone to join me for the indie film festival this weekend!'
+    broadcast: 'Looking for someone to join me for the indie film festival this weekend!',
+    profileType: 'private'
   },
   {
     id: '3',
@@ -52,7 +54,8 @@ export const nearbyUsers: User[] = [
     isAvailable: false,
     mutualFriends: ['David Kim', 'Sarah Wilson'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 30 * 60 * 1000) // 30 minutes ago
+    lastSeen: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
+    profileType: 'public'
   },
   {
     id: '4',
@@ -70,7 +73,8 @@ export const nearbyUsers: User[] = [
     mutualFriends: ['Lisa Park'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
-    broadcast: 'Hosting a sunrise yoga session in Golden Gate Park tomorrow!'
+    broadcast: 'Hosting a sunrise yoga session in Golden Gate Park tomorrow!',
+    profileType: 'public'
   },
   {
     id: '5',
@@ -87,7 +91,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: [],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 45 * 60 * 1000) // 45 minutes ago
+    lastSeen: new Date(Date.now() - 45 * 60 * 1000), // 45 minutes ago
+    profileType: 'public'
   },
   {
     id: '6',
@@ -105,7 +110,8 @@ export const nearbyUsers: User[] = [
     mutualFriends: ['Anna Lee'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 20 * 60 * 1000),
-    broadcast: 'Anyone want to join me for weekend plant shopping at the nursery?'
+    broadcast: 'Anyone want to join me for weekend plant shopping at the nursery?',
+    profileType: 'public'
   },
   {
     id: '7',
@@ -122,7 +128,8 @@ export const nearbyUsers: User[] = [
     isAvailable: false,
     mutualFriends: ['Mike Johnson'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 60 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 60 * 60 * 1000),
+    profileType: 'public'
   },
   {
     id: '8',
@@ -140,7 +147,8 @@ export const nearbyUsers: User[] = [
     mutualFriends: ['Emma Johnson', 'Lisa Park'],
     connectionPriority: 'want-closer',
     lastSeen: new Date(Date.now() - 10 * 60 * 1000),
-    broadcast: 'Doing a street photography walk through Chinatown this Saturday - who wants to come?'
+    broadcast: 'Doing a street photography walk through Chinatown this Saturday - who wants to come?',
+    profileType: 'public'
   },
   {
     id: '9',
@@ -157,7 +165,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: [],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 25 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 25 * 60 * 1000),
+    profileType: 'public'
   },
   {
     id: '10',
@@ -174,7 +183,8 @@ export const nearbyUsers: User[] = [
     isAvailable: false,
     mutualFriends: ['David Kim'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 35 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 35 * 60 * 1000),
+    profileType: 'public'
   },
   {
     id: '11',
@@ -192,7 +202,8 @@ export const nearbyUsers: User[] = [
     mutualFriends: ['Sofia Martinez'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 40 * 60 * 1000),
-    broadcast: 'Hosting a wine tasting dinner party Friday night - message me for details!'
+    broadcast: 'Hosting a wine tasting dinner party Friday night - message me for details!',
+    profileType: 'public'
   },
   {
     id: '12',
@@ -209,7 +220,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: [],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 50 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 50 * 60 * 1000),
+    profileType: 'public'
   },
   {
     id: '13',
@@ -226,7 +238,8 @@ export const nearbyUsers: User[] = [
     isAvailable: false,
     mutualFriends: ['Maya Patel'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 55 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 55 * 60 * 1000),
+    profileType: 'public'
   },
   {
     id: '14',
@@ -244,7 +257,8 @@ export const nearbyUsers: User[] = [
     mutualFriends: ['Ryan O\'Connor'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 15 * 60 * 1000),
-    broadcast: 'Taking my golden retriever to the dog park every morning - join us!'
+    broadcast: 'Taking my golden retriever to the dog park every morning - join us!',
+    profileType: 'public'
   },
   {
     id: '15',
@@ -261,7 +275,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: [],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 30 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 30 * 60 * 1000),
+    profileType: 'public'
   },
   {
     id: '16',
@@ -278,7 +293,8 @@ export const nearbyUsers: User[] = [
     isAvailable: false,
     mutualFriends: ['Alex Rivera', 'Marcus Rodriguez'],
     connectionPriority: 'want-closer',
-    lastSeen: new Date(Date.now() - 65 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 65 * 60 * 1000),
+    profileType: 'public'
   }
 ];
 
