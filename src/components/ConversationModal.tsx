@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Send, Bot, User as UserIcon, Clock, MapPin, UserPlus } from 'lucide-react';
+import { X, Send, Bot, User as UserIcon, Clock, MapPin, UserPlus, Bookmark } from 'lucide-react';
 import { Chat, User, Message } from '../types';
 import { nearbyUsers } from '../data/mockData';
+import ConversationalCueCards from './ConversationalCueCards';
 
 interface ConversationModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const [messages, setMessages] = useState<(Message | BotSummary)[]>([]);
   const [newMessage, setNewMessage] = useState<string>(initialMessage || '');
   const [user, setUser] = useState<User | null>(null);
+  const [savedContexts, setSavedContexts] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -148,6 +150,22 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     return shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
   };
 
+  const handleSuggestionClick = (suggestion: string) => {
+    setNewMessage(suggestion);
+  };
+
+  const handleToggleContext = (messageId: string) => {
+    setSavedContexts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
   const handleSendMessage = () => {
     if (newMessage.trim() && chat) {
       const message: Message = {
@@ -215,7 +233,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
             <div>
               <h3 className="font-semibold text-gray-900">{chat.participantName}</h3>
               <p className="text-xs text-gray-600">
-                {user?.isAvailable ? '🟢 Available' : '⚫ Away'}
+                {user?.isAvailable ? 'Available' : 'Away'}
               </p>
             </div>
           </div>
@@ -286,6 +304,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               // Regular message
               const msg = message as Message;
               const isFromCurrentUser = msg.senderId === 'current-user';
+              const isSaved = savedContexts.has(msg.id);
               return (
                 <div key={msg.id} className={`flex gap-3 ${isFromCurrentUser ? 'flex-row-reverse' : ''}`}>
                   {!isFromCurrentUser && (
@@ -301,17 +320,34 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                       )}
                     </div>
                   )}
-                  <div className={`max-w-[80%] ${isFromCurrentUser ? 'text-right' : ''}`}>
-                    <div className={`rounded-2xl p-3 ${
-                      isFromCurrentUser 
-                        ? 'bg-aqua text-white rounded-br-sm' 
-                        : 'bg-surface-hover text-gray-900 rounded-bl-sm'
-                    }`}>
-                      <p className="text-sm">{msg.content}</p>
+                  <div className={`max-w-[80%] ${isFromCurrentUser ? 'text-right' : ''} flex items-start ${isFromCurrentUser ? 'flex-row-reverse' : ''} gap-2`}>
+                    <div className="flex-1">
+                      <div className={`rounded-2xl p-3 ${
+                        isFromCurrentUser 
+                          ? 'bg-aqua text-white rounded-br-sm' 
+                          : 'bg-surface-hover text-gray-900 rounded-bl-sm'
+                      }`}>
+                        <p className="text-sm">{msg.content}</p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    {!isFromCurrentUser && (
+                      <button
+                        onClick={() => handleToggleContext(msg.id)}
+                        className={`mt-2 p-1.5 rounded-full transition-all duration-200 hover:scale-110 ${
+                          isSaved 
+                            ? 'bg-accent-copper/20 text-accent-copper hover:bg-accent-copper/30' 
+                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+                        }`}
+                        title={isSaved ? 'Remove from friend context' : 'Save to friend context'}
+                      >
+                        <Bookmark size={12} className={`transition-all duration-200 ${
+                          isSaved ? 'fill-current' : ''
+                        }`} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -320,15 +356,22 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Conversational Cue Cards */}
+        <ConversationalCueCards
+          chat={chat}
+          user={user}
+          onSuggestionClick={handleSuggestionClick}
+        />
+
         {/* Input */}
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 pt-2">
           <div className="flex items-end gap-2 bg-surface-hover rounded-2xl p-3">
             <textarea
               ref={inputRef}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type a message..."
+              placeholder="Type a message or start with @ to ask Linkbot"
               className="flex-1 bg-transparent border-none outline-none text-gray-900 placeholder-gray-400 text-sm resize-none min-h-[20px] max-h-20"
               rows={1}
             />
@@ -336,12 +379,18 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               onClick={handleSendMessage}
               disabled={!newMessage.trim()}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                newMessage.trim() 
-                  ? 'bg-aqua text-white hover:bg-aqua-dark' 
+                newMessage.trim()
+                  ? newMessage.startsWith('@')
+                    ? 'bg-gradient-to-b from-accent-copper-light to-accent-copper-dark text-white hover:shadow-md border border-accent-copper/40'
+                    : 'bg-aqua text-white hover:bg-aqua-dark'
                   : 'bg-gray-200 text-gray-500 cursor-not-allowed'
               }`}
             >
-              <Send size={14} />
+              {newMessage.trim() && newMessage.startsWith('@') ? (
+                <Bot size={14} className="drop-shadow-sm" />
+              ) : (
+                <Send size={14} />
+              )}
             </button>
           </div>
         </div>

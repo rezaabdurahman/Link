@@ -40,7 +40,8 @@ module.exports = {
           copper: '#b45309',      // Main copper brown
           'copper-light': '#d97706', // Light copper for highlights
           'copper-dark': '#92400e',  // Dark copper for emphasis
-          // Streamlined palette: aqua + copper brown only
+          charcoal: '#36454f',    // Charcoal gray for additional accent
+          // Streamlined palette: aqua + copper brown + charcoal
         }
       },
       fontFamily: {
