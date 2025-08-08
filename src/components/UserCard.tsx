@@ -39,9 +39,6 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick }): JSX.Element => {
         
         {/* Bottom Overlay Content */}
         <div className="overlay-content absolute bottom-0 left-0 right-0 p-2">
-          <div className="text-white text-xs font-medium drop-shadow-sm mb-1">
-            {user.name}, {user.age}
-          </div>
           <div className="flex items-center gap-3">
             {/* Distance */}
             <div className="flex items-center gap-1">
