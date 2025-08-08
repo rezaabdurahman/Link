@@ -1,6 +1,6 @@
 import React from 'react';
 
-type SortOption = 'priority' | 'time' | 'unread';
+type SortOption = 'priority' | 'time' | 'unread' | 'discover';
 
 interface RankToggleProps {
   value: SortOption;
@@ -11,7 +11,8 @@ const RankToggle: React.FC<RankToggleProps> = ({ value, onChange }): JSX.Element
   const options: { value: SortOption; label: string }[] = [
     { value: 'priority', label: 'Priority' },
     { value: 'time', label: 'Recent' },
-    { value: 'unread', label: 'Unread' }
+    { value: 'unread', label: 'Unread' },
+    { value: 'discover', label: 'Discover' }
   ];
 
   return (

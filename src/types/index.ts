@@ -45,6 +45,7 @@ export interface Chat {
   conversationSummary: string;
   priority: number;
   messages?: Message[];
+  isFriend?: boolean; // New property to track friendship status
 }
 
 export interface Story {

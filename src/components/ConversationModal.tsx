@@ -84,8 +84,15 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
       ];
       
       // Set initial messages (mock conversation + bot summary)
-      const chatMessages = chat.messages || initialMessages;
-      setMessages([...chatMessages, botSummary]);
+      // Use initialMessages if chat.messages is undefined OR empty
+      const chatMessages = (chat.messages && chat.messages.length > 0) ? chat.messages : initialMessages;
+      
+      // Only add bot summary for friends (isFriend === true)
+      if (chat.isFriend) {
+        setMessages([...chatMessages, botSummary]);
+      } else {
+        setMessages([...chatMessages]);
+      }
       
       // Set initial message if provided
       if (initialMessage) {
@@ -206,8 +213,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               </div>
             )}
             <div>
-              <h3 className="font-semibold text-text-primary">{chat.participantName}</h3>
-              <p className="text-xs text-text-secondary">
+              <h3 className="font-semibold text-gray-900">{chat.participantName}</h3>
+              <p className="text-xs text-gray-600">
                 {user?.isAvailable ? '🟢 Available' : '⚫ Away'}
               </p>
             </div>
@@ -230,7 +237,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               onClick={onClose}
               className="p-2 hover:bg-surface-hover rounded-full transition-colors"
             >
-              <X size={20} className="text-text-secondary" />
+              <X size={20} className="text-gray-600" />
             </button>
           </div>
         </div>
@@ -242,19 +249,19 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               // Bot summary message
               return (
                 <div key={message.id} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-aqua/20 flex items-center justify-center flex-shrink-0">
-                    <Bot size={16} className="text-aqua" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-sm border border-accent-copper/40">
+                    <Bot size={16} className="text-white drop-shadow-sm" />
                   </div>
                   <div className="flex-1">
-                    <div className="bg-surface-hover/30 rounded-2xl rounded-tl-sm p-3">
-                      <p className="text-sm text-text-secondary mb-3">{message.content}</p>
+                    <div className="bg-accent-copper/20 rounded-2xl rounded-tl-sm p-3 border border-accent-copper/30">
+                      <p className="text-sm text-gray-700 mb-3">{message.content}</p>
                       <div className="space-y-2">
                         {message.activities.map((activity, index) => (
                           <div key={index} className="flex items-start gap-2 text-xs">
                             <div className="w-1 h-1 rounded-full bg-aqua mt-2 flex-shrink-0" />
                             <div className="flex-1">
-                              <p className="text-text-secondary">{activity.content}</p>
-                              <div className="flex items-center gap-2 text-text-muted mt-1">
+                              <p className="text-gray-700">{activity.content}</p>
+                              <div className="flex items-center gap-2 text-gray-500 mt-1">
                                 <Clock size={10} />
                                 <span>{activity.time}</span>
                                 {activity.location && (
@@ -269,7 +276,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                         ))}
                       </div>
                     </div>
-                    <p className="text-xs text-text-muted mt-1 ml-3">
+                    <p className="text-xs text-gray-500 mt-1 ml-3">
                       LinkBot • {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
@@ -290,7 +297,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                           className="w-8 h-8 rounded-full object-cover"
                         />
                       ) : (
-                        <UserIcon size={16} className="text-text-secondary" />
+                        <UserIcon size={16} className="text-gray-600" />
                       )}
                     </div>
                   )}
@@ -298,11 +305,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                     <div className={`rounded-2xl p-3 ${
                       isFromCurrentUser 
                         ? 'bg-aqua text-white rounded-br-sm' 
-                        : 'bg-surface-hover text-text-primary rounded-bl-sm'
+                        : 'bg-surface-hover text-gray-900 rounded-bl-sm'
                     }`}>
                       <p className="text-sm">{msg.content}</p>
                     </div>
-                    <p className="text-xs text-text-muted mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
@@ -322,7 +329,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
-              className="flex-1 bg-transparent border-none outline-none text-text-primary placeholder-text-muted text-sm resize-none min-h-[20px] max-h-20"
+              className="flex-1 bg-transparent border-none outline-none text-gray-900 placeholder-gray-400 text-sm resize-none min-h-[20px] max-h-20"
               rows={1}
             />
             <button
@@ -331,7 +338,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
                 newMessage.trim() 
                   ? 'bg-aqua text-white hover:bg-aqua-dark' 
-                  : 'bg-gray-200 text-text-muted cursor-not-allowed'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
               }`}
             >
               <Send size={14} />

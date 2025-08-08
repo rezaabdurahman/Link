@@ -30,7 +30,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
         alignItems: 'center',
         gap: '16px',
         padding: '16px 0',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
         cursor: 'pointer'
       }}
       onClick={onClick}
@@ -77,7 +77,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
           <h3 style={{
             fontSize: '16px',
             fontWeight: '600',
-            color: chat.unreadCount > 0 ? '#ffffff' : 'rgba(235, 235, 245, 0.8)',
+            color: chat.unreadCount > 0 ? '#1f2937' : '#374151',
             margin: 0,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -89,7 +89,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <span style={{
               fontSize: '12px',
-              color: 'rgba(235, 235, 245, 0.6)'
+              color: '#6b7280'
             }}>
               {formatTime(chat.lastMessage.timestamp)}
             </span>
@@ -113,17 +113,17 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
         {/* Conversation Summary */}
         <p style={{
           fontSize: '12px',
-          color: '#007AFF',
+          color: '#06b6d4',
           margin: '0 0 6px 0',
           fontWeight: '500'
         }}>
-          Summary: {chat.conversationSummary}
+          Last: {chat.conversationSummary}
         </p>
 
         {/* Last Message */}
         <p style={{
           fontSize: '14px',
-          color: chat.unreadCount > 0 ? 'rgba(235, 235, 245, 0.8)' : 'rgba(235, 235, 245, 0.6)',
+          color: chat.unreadCount > 0 ? '#374151' : '#6b7280',
           margin: 0,
           overflow: 'hidden',
           textOverflow: 'ellipsis',

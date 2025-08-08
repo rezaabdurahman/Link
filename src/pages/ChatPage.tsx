@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, UserPlus } from 'lucide-react';
 import { chats } from '../data/mockData';
 import { Chat } from '../types';
 import ChatListItem from '../components/ChatListItem';
@@ -7,8 +7,9 @@ import IntelligentMessageBox from '../components/IntelligentMessageBox';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import RankToggle from '../components/RankToggle';
 import ConversationModal from '../components/ConversationModal';
+import AddFriendModal from '../components/AddFriendModal';
 
-type SortOption = 'priority' | 'time' | 'unread';
+type SortOption = 'priority' | 'time' | 'unread' | 'discover';
 
 const ChatPage: React.FC = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -16,11 +17,20 @@ const ChatPage: React.FC = (): JSX.Element => {
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [conversationModalOpen, setConversationModalOpen] = useState<boolean>(false);
   const [initialMessage, setInitialMessage] = useState<string>('');
+  const [addFriendModalOpen, setAddFriendModalOpen] = useState<boolean>(false);
 
-  const filteredChats = chats.filter(chat =>
-    chat.participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.conversationSummary.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredChats = chats.filter(chat => {
+    // Text search filter
+    const matchesSearch = chat.participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      chat.conversationSummary.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Discover filter: only show non-friends
+    if (sortBy === 'discover') {
+      return matchesSearch && !chat.isFriend;
+    }
+    
+    return matchesSearch;
+  });
 
   const sortedChats = [...filteredChats].sort((a, b) => {
     switch (sortBy) {
@@ -30,6 +40,9 @@ const ChatPage: React.FC = (): JSX.Element => {
         return b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime();
       case 'unread':
         return b.unreadCount - a.unreadCount;
+      case 'discover':
+        // For discover, sort by most recent messages from non-friends
+        return b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime();
       default:
         return 0;
     }
@@ -84,6 +97,13 @@ const ChatPage: React.FC = (): JSX.Element => {
             {sortedChats.reduce((sum, chat) => sum + chat.unreadCount, 0)} unread messages
           </p>
         </div>
+        <button
+          onClick={() => setAddFriendModalOpen(true)}
+          className="w-10 h-10 bg-aqua hover:bg-aqua-dark text-white rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:shadow-md"
+          title="Add Friend"
+        >
+          <UserPlus size={20} />
+        </button>
       </div>
 
       {/* Search */}
@@ -138,6 +158,12 @@ const ChatPage: React.FC = (): JSX.Element => {
         onClose={handleCloseConversation}
         chat={selectedChat}
         initialMessage={initialMessage}
+      />
+
+      {/* Add Friend Modal */}
+      <AddFriendModal
+        isOpen={addFriendModalOpen}
+        onClose={() => setAddFriendModalOpen(false)}
       />
     </div>
   );

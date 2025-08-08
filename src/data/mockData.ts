@@ -314,7 +314,8 @@ export const chats: Chat[] = [
     },
     unreadCount: 2,
     conversationSummary: "Planning to attend indie film festival together",
-    priority: 1
+    priority: 1,
+    isFriend: true
   },
   {
     id: 'chat2',
@@ -331,7 +332,8 @@ export const chats: Chat[] = [
     },
     unreadCount: 0,
     conversationSummary: "Discussed local startup events and networking",
-    priority: 2
+    priority: 2,
+    isFriend: true
   },
   {
     id: 'chat3',
@@ -348,7 +350,44 @@ export const chats: Chat[] = [
     },
     unreadCount: 1,
     conversationSummary: "Shared yoga and art gallery recommendations",
-    priority: 3
+    priority: 3,
+    isFriend: false
+  },
+  {
+    id: 'chat4',
+    participantId: '8',
+    participantName: 'Zoe Kim',
+    participantAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg4',
+      senderId: '8',
+      receiverId: '1',
+      content: "Would love to show you some street photography spots around Chinatown!",
+      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 0,
+    conversationSummary: "Photography walk planning and camera gear discussion",
+    priority: 4,
+    isFriend: false
+  },
+  {
+    id: 'chat5',
+    participantId: '11',
+    participantName: 'Jordan Taylor',
+    participantAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg5',
+      senderId: '1',
+      receiverId: '11',
+      content: "Your wine tasting event sounds incredible! Any spots left?",
+      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 2,
+    conversationSummary: "Wine tasting dinner party invitation and food pairing tips",
+    priority: 5,
+    isFriend: false
   }
 ];
 
