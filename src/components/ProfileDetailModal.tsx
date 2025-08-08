@@ -1,47 +1,39 @@
 import React, { useState } from 'react';
-import { X, MessageCircle, UserPlus, Instagram, Twitter, Facebook, MapPin, Users, Send, Minimize2 } from 'lucide-react';
-import { User } from '../types';
+import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users } from 'lucide-react';
+import { User, Chat } from '../types';
+import ConversationModal from './ConversationModal';
 
 interface ProfileDetailModalProps {
   user: User;
   onClose: () => void;
 }
 
-interface Message {
-  id: string;
-  text: string;
-  sender: 'me' | 'them';
-  timestamp: Date;
-}
-
 const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }): JSX.Element => {
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: `Hey there! 👋`,
-      sender: 'them',
-      timestamp: new Date(Date.now() - 300000), // 5 minutes ago
-    }
-  ]);
-  const [newMessage, setNewMessage] = useState<string>('');
   const [isFriend, setIsFriend] = useState<boolean>(false);
-
-  const handleSendMessage = (): void => {
-    if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
-        text: newMessage.trim(),
-        sender: 'me',
-        timestamp: new Date(),
-      };
-      setMessages([...messages, message]);
-      setNewMessage('');
-    }
-  };
 
   const handleAddFriend = (): void => {
     setIsFriend(!isFriend);
+  };
+
+  // Create a Chat object for ConversationModal
+  const chatData: Chat = {
+    id: `chat-${user.id}`,
+    participantId: user.id,
+    participantName: user.profileType === 'public' ? user.name : 'Private Profile',
+    participantAvatar: user.profilePicture || '',
+    lastMessage: {
+      id: 'last-msg',
+      senderId: user.id,
+      receiverId: 'current-user',
+      content: "Hey there! 👋",
+      timestamp: new Date(Date.now() - 300000),
+      type: 'text'
+    },
+    unreadCount: 0,
+    conversationSummary: 'Recent conversation',
+    priority: 1,
+    messages: []
   };
 
   const socialLinks = [
@@ -134,18 +126,6 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }
               >
                 <MessageCircle size={16} />
                 Message
-              </button>
-              
-              <button
-                onClick={handleAddFriend}
-                className={`flex-1 max-w-36 font-semibold py-3 px-6 rounded-ios transition-all duration-200 flex items-center justify-center gap-2 ${
-                  isFriend 
-                    ? 'bg-white/20 hover:bg-white/30 text-white' 
-                    : 'bg-accent-green hover:bg-accent-green/80 text-white hover-glow'
-                }`}
-              >
-                <UserPlus size={16} />
-                {isFriend ? 'Friends' : 'Add Friend'}
               </button>
             </div>
           </div>
@@ -244,157 +224,14 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }
           )}
         </div>
 
-        {/* Chat Window */}
-        {isChatOpen && (
-          <div 
-            className="chat-window"
-            style={{
-              position: 'fixed',
-              bottom: '20px',
-              right: '20px',
-              width: '300px',
-              height: '400px',
-              background: 'rgba(28, 28, 30, 0.95)',
-              backdropFilter: 'blur(20px)',
-              borderRadius: '16px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              display: 'flex',
-              flexDirection: 'column',
-              zIndex: 1001
-            }}
-          >
-            {/* Chat Header */}
-            <div style={{
-              padding: '16px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {user.profilePicture ? (
-                  <img
-                    src={user.profilePicture}
-                    alt={user.name}
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '12px',
-                      objectFit: 'cover'
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    color: 'rgba(235, 235, 245, 0.8)'
-                  }}>
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span style={{ fontSize: '16px', fontWeight: '600' }}>
-                  {user.profileType === 'public' ? user.name : 'Private Profile'}
-                </span>
-              </div>
-              <button
-                onClick={() => setIsChatOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'rgba(235, 235, 245, 0.6)',
-                  cursor: 'pointer',
-                  padding: '4px'
-                }}
-              >
-                <Minimize2 size={16} />
-              </button>
-            </div>
-
-            {/* Messages */}
-            <div style={{
-              flex: 1,
-              padding: '16px',
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  style={{
-                    alignSelf: message.sender === 'me' ? 'flex-end' : 'flex-start',
-                    maxWidth: '80%'
-                  }}
-                >
-                  <div
-                    style={{
-                      background: message.sender === 'me' ? '#007AFF' : 'rgba(255, 255, 255, 0.1)',
-                      color: 'white',
-                      padding: '8px 12px',
-                      borderRadius: '16px',
-                      fontSize: '14px',
-                      lineHeight: '1.3'
-                    }}
-                  >
-                    {message.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Message Input */}
-            <div style={{
-              padding: '16px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-              display: 'flex',
-              gap: '8px'
-            }}>
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Type a message..."
-                style={{
-                  flex: 1,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '20px',
-                  padding: '8px 16px',
-                  color: 'white',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
-                style={{
-                  background: newMessage.trim() ? '#007AFF' : 'rgba(255, 255, 255, 0.2)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '36px',
-                  height: '36px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: newMessage.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'background 0.2s ease'
-                }}
-              >
-                <Send size={16} color="white" />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* ConversationModal */}
+        <ConversationModal
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          chat={chatData}
+          onAddFriend={handleAddFriend}
+          isFriend={isFriend}
+        />
       </div>
     </div>
   );

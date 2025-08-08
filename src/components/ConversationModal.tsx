@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Bot, User as UserIcon, Clock, MapPin } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Send, Bot, User as UserIcon, Clock, MapPin, UserPlus } from 'lucide-react';
 import { Chat, User, Message } from '../types';
 import { nearbyUsers } from '../data/mockData';
 
@@ -8,6 +9,8 @@ interface ConversationModalProps {
   onClose: () => void;
   chat: Chat | null;
   initialMessage?: string;
+  onAddFriend?: () => void;
+  isFriend?: boolean;
 }
 
 interface BotSummary {
@@ -27,7 +30,9 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   isOpen, 
   onClose, 
   chat, 
-  initialMessage 
+  initialMessage,
+  onAddFriend,
+  isFriend
 }): JSX.Element => {
   const [messages, setMessages] = useState<(Message | BotSummary)[]>([]);
   const [newMessage, setNewMessage] = useState<string>(initialMessage || '');
@@ -181,13 +186,15 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     }
   };
 
-  if (!isOpen || !chat) return <></>;
+  if (!isOpen || !chat) return <>!</>;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-gray-900 rounded-t-3xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
+  console.log('ConversationModal rendering:', { isOpen, chat: chat?.participantName, user: user?.name });
+
+  const modalContent = (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center">
+      <div className="bg-surface-card rounded-t-3xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-surface-hover/30">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             {user?.profilePicture ? (
               <img 
@@ -201,18 +208,33 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               </div>
             )}
             <div>
-              <h3 className="font-semibold text-white">{chat.participantName}</h3>
+              <h3 className="font-semibold text-text-primary">{chat.participantName}</h3>
               <p className="text-xs text-text-secondary">
                 {user?.isAvailable ? '🟢 Available' : '⚫ Away'}
               </p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-surface-hover/50 rounded-full transition-colors"
-          >
-            <X size={20} className="text-text-secondary" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onAddFriend && (
+              <button
+                onClick={onAddFriend}
+                className={`p-2 hover:bg-surface-hover rounded-full transition-colors ${
+                  isFriend 
+                    ? 'text-text-primary' 
+                    : 'text-accent-green'
+                }`}
+                title={isFriend ? 'Friends' : 'Add Friend'}
+              >
+                <UserPlus size={16} />
+              </button>
+            )}
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-surface-hover rounded-full transition-colors"
+            >
+              <X size={20} className="text-text-secondary" />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -234,7 +256,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                             <div className="w-1 h-1 rounded-full bg-aqua mt-2 flex-shrink-0" />
                             <div className="flex-1">
                               <p className="text-text-secondary">{activity.content}</p>
-                              <div className="flex items-center gap-2 text-text-tertiary mt-1">
+                              <div className="flex items-center gap-2 text-text-muted mt-1">
                                 <Clock size={10} />
                                 <span>{activity.time}</span>
                                 {activity.location && (
@@ -249,7 +271,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                         ))}
                       </div>
                     </div>
-                    <p className="text-xs text-text-tertiary mt-1 ml-3">
+                    <p className="text-xs text-text-muted mt-1 ml-3">
                       LinkBot • {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
@@ -278,11 +300,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                     <div className={`rounded-2xl p-3 ${
                       isFromCurrentUser 
                         ? 'bg-aqua text-white rounded-br-sm' 
-                        : 'bg-surface-hover/30 text-white rounded-bl-sm'
+                        : 'bg-surface-hover text-text-primary rounded-bl-sm'
                     }`}>
                       <p className="text-sm">{msg.content}</p>
                     </div>
-                    <p className="text-xs text-text-tertiary mt-1">
+                    <p className="text-xs text-text-muted mt-1">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
@@ -294,15 +316,15 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         </div>
 
         {/* Input */}
-        <div className="p-4 border-t border-surface-hover/30">
-          <div className="flex items-end gap-2 bg-surface-hover/30 rounded-2xl p-3">
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex items-end gap-2 bg-surface-hover rounded-2xl p-3">
             <textarea
               ref={inputRef}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
-              className="flex-1 bg-transparent border-none outline-none text-white placeholder-text-secondary text-sm resize-none min-h-[20px] max-h-20"
+              className="flex-1 bg-transparent border-none outline-none text-text-primary placeholder-text-muted text-sm resize-none min-h-[20px] max-h-20"
               rows={1}
             />
             <button
@@ -311,7 +333,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
                 newMessage.trim() 
                   ? 'bg-aqua text-white hover:bg-aqua-dark' 
-                  : 'bg-surface-hover/50 text-text-tertiary cursor-not-allowed'
+                  : 'bg-gray-200 text-text-muted cursor-not-allowed'
               }`}
             >
               <Send size={14} />
@@ -321,6 +343,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 export default ConversationModal;
