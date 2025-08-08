@@ -64,7 +64,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
               isAvailable 
                 ? 'bg-accent-green text-white hover:bg-accent-green/80' 
-                : 'bg-white/20 text-white hover:bg-white/30'
+                : 'bg-gray-200 text-text-primary hover:bg-gray-300'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -113,8 +113,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         </div>
       )}
 
-      {/* Users Grid */}
-      <div className="grid grid-cols-2 gap-4 mb-24">
+      {/* Users Grid - Instagram style */}
+      <div className="grid grid-cols-3 gap-1 mb-24">
         {filteredUsers.map((user) => (
           <UserCard
             key={user.id}

@@ -10,80 +10,59 @@ interface UserCardProps {
 const UserCard: React.FC<UserCardProps> = ({ user, onClick }): JSX.Element => {
   return (
     <div 
-      className="ios-card haptic-light fade-in hover-glow group cursor-pointer p-4" 
+      className="relative group cursor-pointer overflow-hidden" 
       onClick={onClick}
     >
       {/* Profile Picture */}
-      <div className="relative mb-3">
+      <div className="relative gradient-overlay-bottom-strong">
         {user.profilePicture ? (
           <img
             src={user.profilePicture}
             alt={user.name}
-            className="w-full aspect-square rounded-ios object-cover transition-transform duration-300 group-hover:scale-105"
+            className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full aspect-square rounded-ios bg-surface-hover flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-            <div className="text-text-muted text-2xl font-bold">
+          <div className="w-full aspect-square bg-gray-200 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+            <div className="text-gray-500 text-2xl font-bold">
               {user.name.charAt(0).toUpperCase()}
             </div>
           </div>
         )}
+        
+        {/* Status indicator - top right */}
         {user.isAvailable && (
-          <div className="online-indicator" />
+          <div className="absolute top-2 right-2 w-3 h-3 bg-accent-green rounded-full border-2 border-white" />
         )}
         {!user.isAvailable && (
-          <div className="offline-indicator" />
+          <div className="absolute top-2 right-2 w-3 h-3 bg-accent-orange rounded-full border-2 border-white" />
         )}
-      </div>
-
-      {/* User Info */}
-      <div className="mb-3">
-        <h3 className="text-base font-semibold mb-1 leading-tight text-gradient-primary">
-          {user.name}, {user.age}
-        </h3>
         
-        {/* Distance and Mutual Friends */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex items-center gap-1">
-            <MapPin size={12} className="text-text-muted" />
-            <span className="text-text-muted text-xs">
-              {user.location.proximityKm}km away
-            </span>
+        {/* Bottom Overlay Content */}
+        <div className="overlay-content absolute bottom-0 left-0 right-0 p-2">
+          <div className="text-white text-xs font-medium drop-shadow-sm mb-1">
+            {user.name}, {user.age}
           </div>
-          
-          {user.mutualFriends.length > 0 && (
+          <div className="flex items-center gap-3">
+            {/* Distance */}
             <div className="flex items-center gap-1">
-              <Users size={12} className="text-aqua" />
-              <span className="text-aqua text-xs font-medium">
-                {user.mutualFriends.length} mutual
+              <MapPin size={10} className="text-white drop-shadow-sm" />
+              <span className="text-white text-xs drop-shadow-sm">
+                {user.location.proximityKm}km
               </span>
             </div>
-          )}
-        </div>
-
-        {/* Bio */}
-        <p className="text-text-secondary text-xs leading-tight mb-2 line-clamp-2">
-          {user.bio}
-        </p>
-
-        {/* Interests */}
-        <div className="flex flex-wrap gap-1">
-          {user.interests.slice(0, 2).map((interest, index) => (
-            <span
-              key={index}
-              className="bg-aqua/20 text-aqua px-2 py-0.5 rounded-full text-xs font-medium"
-            >
-              {interest}
-            </span>
-          ))}
-          {user.interests.length > 2 && (
-            <span className="bg-white/10 text-text-muted px-2 py-0.5 rounded-full text-xs">
-              +{user.interests.length - 2}
-            </span>
-          )}
+            
+            {/* Mutual Friends */}
+            {user.mutualFriends.length > 0 && (
+              <div className="flex items-center gap-1">
+                <Users size={10} className="text-white drop-shadow-sm" />
+                <span className="text-white text-xs drop-shadow-sm">
+                  {user.mutualFriends.length}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
     </div>
   );
 };
