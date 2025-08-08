@@ -188,8 +188,6 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
 
   if (!isOpen || !chat) return <>!</>;
 
-  console.log('ConversationModal rendering:', { isOpen, chat: chat?.participantName, user: user?.name });
-
   const modalContent = (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center">
       <div className="bg-surface-card rounded-t-3xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
@@ -221,7 +219,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                 className={`p-2 hover:bg-surface-hover rounded-full transition-colors ${
                   isFriend 
                     ? 'text-text-primary' 
-                    : 'text-accent-green'
+                    : 'text-aqua'
                 }`}
                 title={isFriend ? 'Friends' : 'Add Friend'}
               >

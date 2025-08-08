@@ -37,10 +37,10 @@ module.exports = {
           muted: '#9ca3af', // Light gray text
         },
         accent: {
-          pink: '#ec4899',
-          purple: '#a855f7',
-          orange: '#f97316',
-          green: '#22c55e',
+          copper: '#b45309',      // Main copper brown
+          'copper-light': '#d97706', // Light copper for highlights
+          'copper-dark': '#92400e',  // Dark copper for emphasis
+          // Streamlined palette: aqua + copper brown only
         }
       },
       fontFamily: {

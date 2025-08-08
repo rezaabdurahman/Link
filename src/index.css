@@ -60,11 +60,11 @@
 
   /* Status indicators */
   .online-indicator {
-    @apply w-3 h-3 bg-accent-green rounded-full border-2 border-white absolute bottom-0.5 right-0.5;
+    @apply w-3 h-3 bg-aqua rounded-full border-2 border-white absolute bottom-0.5 right-0.5;
   }
 
   .offline-indicator {
-    @apply w-3 h-3 bg-accent-orange rounded-full border-2 border-white absolute bottom-0.5 right-0.5;
+    @apply w-3 h-3 bg-accent-copper rounded-full border-2 border-white absolute bottom-0.5 right-0.5;
   }
 
   /* Tab bar */
@@ -100,8 +100,8 @@
   .text-primary { @apply text-text-primary; }
   .text-secondary { @apply text-text-secondary; }
   .text-accent { @apply text-aqua; }
-  .text-success { @apply text-accent-green; }
-  .text-warning { @apply text-accent-orange; }
+  .text-success { @apply text-aqua; }
+  .text-warning { @apply text-accent-copper; }
   .text-error { @apply text-red-500; }
 }
 

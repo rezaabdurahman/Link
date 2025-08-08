@@ -85,7 +85,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }
                 </div>
               )}
               {user.isAvailable && (
-                <div className="absolute bottom-2 right-2 w-5 h-5 bg-accent-green rounded-full border-2 border-surface-dark" />
+                <div className="absolute bottom-2 right-2 w-5 h-5 bg-aqua rounded-full border-2 border-surface-dark" />
               )}
             </div>
             

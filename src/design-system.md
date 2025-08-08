@@ -44,10 +44,12 @@ text-muted:     #64748b    /* Muted text (gray) */
 ### Accent Colors
 ```css
 accent-pink:   #ec4899    /* Pink accents */
-accent-purple: #a855f7    /* Purple accents */
-accent-orange: #f97316    /* Orange accents */
-accent-green:  #22c55e    /* Green accents (success) */
+accent-copper: #b45309    /* Copper accents (main) */
+accent-copper-light: #d97706  /* Light copper for highlights */
+accent-copper-dark: #92400e   /* Dark copper for emphasis */
 ```
+
+**Note:** We removed the green accent color to streamline the palette - all success states and positive indicators now use aqua for better brand coherence.
 
 ## 🧩 Component System
 
@@ -68,8 +70,8 @@ accent-green:  #22c55e    /* Green accents (success) */
 - Consistent padding and border radius
 
 ### Status Indicators
-- **`.online-indicator`** - Green availability indicator
-- **`.offline-indicator`** - Orange busy/offline indicator
+- **`.online-indicator`** - Aqua availability indicator (was green, changed for palette consistency)
+- **`.offline-indicator`** - Copper busy/offline indicator
 
 ## 🎭 Animations & Effects
 
@@ -150,8 +152,8 @@ pulse-slow: /* Slow pulse for emphasis */
 ### Status Indicator
 ```tsx
 <div className="flex items-center gap-2">
-  <div className="w-3 h-3 bg-accent-green rounded-full" />
-  <span className="text-accent-green text-sm font-medium">Available</span>
+  <div className="w-3 h-3 bg-aqua rounded-full" />
+  <span className="text-aqua text-sm font-medium">Available</span>
 </div>
 ```
 

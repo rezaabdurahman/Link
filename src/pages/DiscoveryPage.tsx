@@ -79,13 +79,13 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             onClick={toggleAvailability}
             className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
               isAvailable 
-                ? 'bg-accent-green text-white hover:bg-accent-green/80' 
+                ? 'bg-aqua text-white hover:bg-aqua/80' 
                 : 'bg-gray-200 text-text-primary hover:bg-gray-300'
             }`}
           >
             <div className="flex items-center justify-center gap-2">
               <div className={`w-2 h-2 rounded-full ${
-                isAvailable ? 'bg-white' : 'bg-accent-orange'
+                isAvailable ? 'bg-white' : 'bg-accent-copper'
               }`} />
               {isAvailable ? 'Available' : 'Busy'}
             </div>
@@ -100,7 +100,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
               </button>
               <button
                 onClick={handleOpenAddBroadcast}
-                className="px-3 py-2 rounded-full text-xs font-medium bg-accent-purple/10 text-accent-purple border border-accent-purple/30 hover:bg-accent-purple/20 transition-all duration-200"
+                className="px-3 py-2 rounded-full text-xs font-medium bg-accent-copper/10 text-accent-copper border border-accent-copper/30 hover:bg-accent-copper/20 transition-all duration-200"
               >
                 Add Broadcast
               </button>
