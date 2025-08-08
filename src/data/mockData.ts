@@ -74,7 +74,7 @@ export const nearbyUsers: User[] = [
     id: '5',
     name: '(anonymous)',
     age: 27,
-    profilePicture: '', // No photo, will show placeholder
+    profilePicture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
     bio: 'Prefers to stay anonymous until we connect',
     interests: ['privacy', 'mystery', 'books', 'philosophy'],
     location: {
@@ -86,6 +86,193 @@ export const nearbyUsers: User[] = [
     mutualFriends: [],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 45 * 60 * 1000) // 45 minutes ago
+  },
+  {
+    id: '6',
+    name: 'Sofia Martinez',
+    age: 29,
+    profilePicture: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=150&h=150&fit=crop&crop=face',
+    bio: 'Interior designer, plant mom, weekend baker',
+    interests: ['design', 'plants', 'baking', 'architecture'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 1.5
+    },
+    isAvailable: true,
+    mutualFriends: ['Anna Lee'],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 20 * 60 * 1000)
+  },
+  {
+    id: '7',
+    name: 'Ryan O\'Connor',
+    age: 32,
+    profilePicture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+    bio: 'Software developer, musician, craft beer enthusiast',
+    interests: ['coding', 'music', 'craft beer', 'gaming'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 0.9
+    },
+    isAvailable: false,
+    mutualFriends: ['Mike Johnson'],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 60 * 60 * 1000)
+  },
+  {
+    id: '8',
+    name: 'Zoe Kim',
+    age: 25,
+    profilePicture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+    bio: 'Fashion photographer, travel blogger, sushi lover',
+    interests: ['photography', 'fashion', 'travel', 'sushi'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 1.8
+    },
+    isAvailable: true,
+    mutualFriends: ['Emma Johnson', 'Lisa Park'],
+    connectionPriority: 'want-closer',
+    lastSeen: new Date(Date.now() - 10 * 60 * 1000)
+  },
+  {
+    id: '9',
+    name: 'Alex Rivera',
+    age: 28,
+    profilePicture: 'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=150&h=150&fit=crop&crop=face',
+    bio: 'Marine biologist, surfer, ocean conservation advocate',
+    interests: ['surfing', 'marine biology', 'ocean conservation', 'diving'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 2.3
+    },
+    isAvailable: true,
+    mutualFriends: [],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 25 * 60 * 1000)
+  },
+  {
+    id: '10',
+    name: 'Maya Patel',
+    age: 26,
+    profilePicture: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
+    bio: 'Data scientist, marathon runner, chess player',
+    interests: ['data science', 'running', 'chess', 'AI'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 0.7
+    },
+    isAvailable: false,
+    mutualFriends: ['David Kim'],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 35 * 60 * 1000)
+  },
+  {
+    id: '11',
+    name: 'Jordan Taylor',
+    age: 30,
+    profilePicture: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&crop=face',
+    bio: 'Chef, food blogger, wine connoisseur',
+    interests: ['cooking', 'wine', 'food blogging', 'restaurants'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 1.4
+    },
+    isAvailable: true,
+    mutualFriends: ['Sofia Martinez'],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 40 * 60 * 1000)
+  },
+  {
+    id: '12',
+    name: 'Casey Brown',
+    age: 27,
+    profilePicture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+    bio: 'Graphic designer, skateboard enthusiast, vinyl collector',
+    interests: ['graphic design', 'skateboarding', 'vinyl records', 'street art'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 1.1
+    },
+    isAvailable: true,
+    mutualFriends: [],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 50 * 60 * 1000)
+  },
+  {
+    id: '13',
+    name: 'Aria Singh',
+    age: 24,
+    profilePicture: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=150&h=150&fit=crop&crop=face',
+    bio: 'Medical student, classical violinist, tea enthusiast',
+    interests: ['medicine', 'violin', 'classical music', 'tea'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 1.9
+    },
+    isAvailable: false,
+    mutualFriends: ['Maya Patel'],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 55 * 60 * 1000)
+  },
+  {
+    id: '14',
+    name: 'Sam Cooper',
+    age: 31,
+    profilePicture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    bio: 'Podcast host, comedy writer, dog walker',
+    interests: ['podcasting', 'comedy', 'writing', 'dogs'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 0.6
+    },
+    isAvailable: true,
+    mutualFriends: ['Ryan O\'Connor'],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 15 * 60 * 1000)
+  },
+  {
+    id: '15',
+    name: 'Luna Zhang',
+    age: 28,
+    profilePicture: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150&h=150&fit=crop&crop=face',
+    bio: 'Astronomer, sci-fi writer, stargazing guide',
+    interests: ['astronomy', 'sci-fi', 'writing', 'stargazing'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 2.0
+    },
+    isAvailable: true,
+    mutualFriends: [],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 30 * 60 * 1000)
+  },
+  {
+    id: '16',
+    name: 'River Jackson',
+    age: 26,
+    profilePicture: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=150&h=150&fit=crop&crop=face',
+    bio: 'Environmental lawyer, rock climber, zero-waste advocate',
+    interests: ['environmental law', 'rock climbing', 'sustainability', 'hiking'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityKm: 1.3
+    },
+    isAvailable: false,
+    mutualFriends: ['Alex Rivera', 'Marcus Rodriguez'],
+    connectionPriority: 'want-closer',
+    lastSeen: new Date(Date.now() - 65 * 60 * 1000)
   }
 ];
 

@@ -101,17 +101,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         className="mb-6"
       />
 
-      {/* Availability Status */}
-      {isAvailable && (
-        <div className="bg-accent-green/10 border border-accent-green/30 rounded-card p-4 mb-6 fade-in">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-accent-green rounded-full" />
-            <span className="text-accent-green text-sm font-medium">
-              You're available for connections
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Users Grid - Instagram style */}
       <div className="grid grid-cols-3 gap-1 mb-24">
