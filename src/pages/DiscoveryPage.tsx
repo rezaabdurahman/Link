@@ -5,12 +5,14 @@ import UserCard from '../components/UserCard';
 import ProfileDetailModal from '../components/ProfileDetailModal';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import AddCuesModal from '../components/AddCuesModal';
+import AddBroadcastModal from '../components/AddBroadcastModal';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   const [isAvailable, setIsAvailable] = useState<boolean>(currentUser.isAvailable);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
+  const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
 
   const filteredUsers = nearbyUsers.filter(user =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -46,6 +48,20 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     // For now, just close the modal
   };
 
+  const handleOpenAddBroadcast = (): void => {
+    setIsAddBroadcastModalOpen(true);
+  };
+
+  const handleCloseAddBroadcast = (): void => {
+    setIsAddBroadcastModalOpen(false);
+  };
+
+  const handleSubmitBroadcast = (broadcast: string): void => {
+    // Here you would typically save the broadcast to your backend/state
+    console.log('New broadcast:', broadcast);
+    // For now, just close the modal
+  };
+
   return (
     <div className="ios-safe-area px-5">
       {/* Header */}
@@ -67,7 +83,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 : 'bg-gray-200 text-text-primary hover:bg-gray-300'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2">
               <div className={`w-2 h-2 rounded-full ${
                 isAvailable ? 'bg-white' : 'bg-accent-orange'
               }`} />
@@ -75,12 +91,20 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             </div>
           </button>
           {isAvailable && (
-            <button
-              onClick={handleOpenAddCues}
-              className="px-4 py-2 rounded-full text-sm font-medium bg-aqua/10 text-aqua border border-aqua/30 hover:bg-aqua/20 transition-all duration-200"
-            >
-              Add Cues
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleOpenAddCues}
+                className="px-3 py-2 rounded-full text-xs font-medium bg-aqua/10 text-aqua border border-aqua/30 hover:bg-aqua/20 transition-all duration-200"
+              >
+                Add Cues
+              </button>
+              <button
+                onClick={handleOpenAddBroadcast}
+                className="px-3 py-2 rounded-full text-xs font-medium bg-accent-purple/10 text-accent-purple border border-accent-purple/30 hover:bg-accent-purple/20 transition-all duration-200"
+              >
+                Add Broadcast
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -103,7 +127,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
 
       {/* Users Grid - Instagram style */}
-      <div className="grid grid-cols-3 gap-1 mb-24">
+      <div className="grid grid-cols-2 gap-1 mb-24">
         {filteredUsers.map((user) => (
           <UserCard
             key={user.id}
@@ -126,6 +150,13 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         isOpen={isAddCuesModalOpen}
         onClose={handleCloseAddCues}
         onSubmit={handleSubmitCue}
+      />
+
+      {/* Add Broadcast Modal */}
+      <AddBroadcastModal
+        isOpen={isAddBroadcastModalOpen}
+        onClose={handleCloseAddBroadcast}
+        onSubmit={handleSubmitBroadcast}
       />
     </div>
   );

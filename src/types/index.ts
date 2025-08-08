@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   age: number;
-  profilePicture: string;
+  profilePicture?: string;
   bio: string;
   interests: string[];
   location: {
@@ -12,8 +12,9 @@ export interface User {
   };
   isAvailable: boolean;
   mutualFriends: string[];
-  connectionPriority: 'close' | 'want-closer' | 'regular';
+  connectionPriority: 'want-closer' | 'regular';
   lastSeen: Date;
+  broadcast?: string;
 }
 
 export interface Message {

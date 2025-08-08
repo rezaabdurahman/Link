@@ -27,14 +27,14 @@ module.exports = {
           deeper: '#0e7490', // Deeper aqua
         },
         surface: {
-          dark: '#0f172a', // Dark surface
-          card: '#1e293b', // Card background
-          hover: '#334155', // Hover state
+          dark: '#f8fafc', // Light surface
+          card: '#ffffff', // Card background
+          hover: '#f1f5f9', // Hover state
         },
         text: {
-          primary: '#ffffff',
-          secondary: '#cbd5e1',
-          muted: '#64748b',
+          primary: '#1f2937', // Dark text for light background
+          secondary: '#4b5563', // Medium gray text
+          muted: '#9ca3af', // Light gray text
         },
         accent: {
           pink: '#ec4899',
@@ -65,6 +65,7 @@ module.exports = {
         'scale-in': 'scaleIn 0.2s ease-out',
         'pulse-slow': 'pulse 2s infinite',
         'cursor-blink': 'blink 1s infinite',
+        'scroll-text': 'scrollText 10s linear infinite',
       },
       keyframes: {
         fadeIn: {
@@ -82,6 +83,11 @@ module.exports = {
         blink: {
           '0%, 50%': { opacity: '1' },
           '51%, 100%': { opacity: '0' },
+        },
+        scrollText: {
+          '0%': { transform: 'translateX(0%)' },
+          '50%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(0%)' },
         }
       }
     },

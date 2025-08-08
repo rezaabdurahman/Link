@@ -34,7 +34,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: ['Sarah Wilson'],
     connectionPriority: 'want-closer',
-    lastSeen: new Date(Date.now() - 5 * 60 * 1000) // 5 minutes ago
+    lastSeen: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+    broadcast: 'Looking for someone to join me for the indie film festival this weekend!'
   },
   {
     id: '3',
@@ -68,7 +69,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: ['Lisa Park'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 15 * 60 * 1000) // 15 minutes ago
+    lastSeen: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
+    broadcast: 'Hosting a sunrise yoga session in Golden Gate Park tomorrow!'
   },
   {
     id: '5',
@@ -102,7 +104,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: ['Anna Lee'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 20 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 20 * 60 * 1000),
+    broadcast: 'Anyone want to join me for weekend plant shopping at the nursery?'
   },
   {
     id: '7',
@@ -136,7 +139,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: ['Emma Johnson', 'Lisa Park'],
     connectionPriority: 'want-closer',
-    lastSeen: new Date(Date.now() - 10 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 10 * 60 * 1000),
+    broadcast: 'Doing a street photography walk through Chinatown this Saturday - who wants to come?'
   },
   {
     id: '9',
@@ -187,7 +191,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: ['Sofia Martinez'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 40 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 40 * 60 * 1000),
+    broadcast: 'Hosting a wine tasting dinner party Friday night - message me for details!'
   },
   {
     id: '12',
@@ -238,7 +243,8 @@ export const nearbyUsers: User[] = [
     isAvailable: true,
     mutualFriends: ['Ryan O\'Connor'],
     connectionPriority: 'regular',
-    lastSeen: new Date(Date.now() - 15 * 60 * 1000)
+    lastSeen: new Date(Date.now() - 15 * 60 * 1000),
+    broadcast: 'Taking my golden retriever to the dog park every morning - join us!'
   },
   {
     id: '15',

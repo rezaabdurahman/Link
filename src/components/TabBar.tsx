@@ -62,7 +62,7 @@ const TabBar: React.FC = (): JSX.Element => {
               gap: '4px',
               padding: '0',
               minWidth: '60px',
-              color: location.pathname === tab.path ? '#007AFF' : 'rgba(235, 235, 245, 0.6)',
+              color: location.pathname === tab.path ? '#06b6d4' : '#6b7280',
               transition: 'color 0.2s ease'
             }}
             className="haptic-light"

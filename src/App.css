@@ -1,6 +1,6 @@
 .app {
   min-height: 100vh;
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   position: relative;
 }
 
@@ -15,7 +15,7 @@
 }
 
 .modal-content {
-  @apply bg-surface-card/95 backdrop-blur-ios border border-white/10 rounded-modal w-full max-w-md max-h-[90vh] overflow-hidden shadow-modal animate-slide-up;
+  @apply bg-white/95 backdrop-blur-ios border border-gray-200 rounded-modal w-full max-w-md max-h-[90vh] overflow-hidden shadow-modal animate-slide-up;
 }
 
 /* Chat Window Styles */
