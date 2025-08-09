@@ -36,13 +36,6 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick }): JSX.Element => {
           </div>
         )}
         
-        {/* Status indicator - top right */}
-        {user.isAvailable && (
-          <div className="absolute top-2 right-2 w-3 h-3 bg-aqua rounded-full border-2 border-white" />
-        )}
-        {!user.isAvailable && (
-          <div className="absolute top-2 right-2 w-3 h-3 bg-accent-copper rounded-full border-2 border-white" />
-        )}
         
         {/* Bottom Overlay Content */}
         <div className="overlay-content absolute bottom-0 left-0 right-0 p-2 space-y-2">
