@@ -51,7 +51,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
         <button
           onClick={() => setIsEditing(!isEditing)}
           style={{
-            background: 'rgba(118, 118, 128, 0.24)',
+            background: 'rgba(6, 182, 212, 0.2)',
             border: 'none',
             borderRadius: '50%',
             width: '36px',
@@ -60,7 +60,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            color: 'rgba(235, 235, 245, 0.8)'
+            color: '#06b6d4'
           }}
           className="haptic-light"
         >
@@ -99,12 +99,12 @@ const ProfilePage: React.FC = (): JSX.Element => {
             }}>
               {currentUser.name}
             </h2>
-            <p className="text-secondary" style={{ fontSize: '16px', marginBottom: '8px' }}>
+            <p style={{ fontSize: '16px', marginBottom: '8px', color: '#000000' }}>
               {currentUser.age} years old
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <MapPin size={14} className="text-secondary" />
-              <span className="text-secondary" style={{ fontSize: '14px' }}>
+              <MapPin size={14} style={{ color: '#64748b' }} />
+              <span style={{ fontSize: '14px', color: '#64748b' }}>
                 San Francisco, CA
               </span>
             </div>
@@ -113,7 +113,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
 
         {/* Bio */}
         <div style={{ marginBottom: '20px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
             Bio
           </h3>
           {isEditing ? (
@@ -139,7 +139,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
                     border: 'none',
                     borderRadius: '8px',
                     padding: '8px 16px',
-                    color: 'rgba(235, 235, 245, 0.6)',
+                    color: '#64748b',
                     fontSize: '14px',
                     cursor: 'pointer'
                   }}
@@ -161,7 +161,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
               </div>
             </div>
           ) : (
-            <p className="text-secondary" style={{ fontSize: '14px', lineHeight: '1.4' }}>
+            <p style={{ fontSize: '14px', lineHeight: '1.4', color: '#000000' }}>
               {currentUser.bio}
             </p>
           )}
@@ -169,24 +169,24 @@ const ProfilePage: React.FC = (): JSX.Element => {
 
         {/* Interests */}
         <div>
-          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
             Interests
           </h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {currentUser.interests.map((interest, index) => (
-              <span
-                key={index}
-                style={{
-                  background: 'rgba(0, 122, 255, 0.2)',
-                  color: '#007AFF',
-                  padding: '6px 12px',
-                  borderRadius: '16px',
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}
-              >
-                {interest}
-              </span>
+            <span
+              key={index}
+              style={{
+                background: 'rgba(6, 182, 212, 0.2)',
+                color: '#06b6d4',
+                padding: '6px 12px',
+                borderRadius: '16px',
+                fontSize: '12px',
+                fontWeight: '500'
+              }}
+            >
+              {interest}
+            </span>
             ))}
           </div>
         </div>
@@ -194,7 +194,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
 
       {/* Stats */}
       <div className="ios-card" style={{ padding: '20px', marginBottom: '32px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
           Your Connections
         </h3>
         <div style={{ 
@@ -206,12 +206,12 @@ const ProfilePage: React.FC = (): JSX.Element => {
             <div style={{ 
               fontSize: '24px', 
               fontWeight: '700', 
-              color: '#007AFF',
+              color: '#06b6d4',
               marginBottom: '4px'
             }}>
               12
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(235, 235, 245, 0.6)' }}>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>
               Active Chats
             </div>
           </div>
@@ -219,12 +219,12 @@ const ProfilePage: React.FC = (): JSX.Element => {
             <div style={{ 
               fontSize: '24px', 
               fontWeight: '700', 
-              color: '#34C759',
+              color: '#06b6d4',
               marginBottom: '4px'
             }}>
               3
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(235, 235, 245, 0.6)' }}>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>
               Close Friends
             </div>
           </div>
@@ -232,12 +232,12 @@ const ProfilePage: React.FC = (): JSX.Element => {
             <div style={{ 
               fontSize: '24px', 
               fontWeight: '700', 
-              color: '#FF9500',
+              color: '#06b6d4',
               marginBottom: '4px'
             }}>
               8
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(235, 235, 245, 0.6)' }}>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>
               This Month
             </div>
           </div>
@@ -250,7 +250,8 @@ const ProfilePage: React.FC = (): JSX.Element => {
           fontSize: '16px', 
           fontWeight: '600', 
           padding: '20px 20px 0 20px',
-          marginBottom: '16px'
+          marginBottom: '16px',
+          color: '#000000'
         }}>
           Settings
         </h3>
@@ -279,11 +280,11 @@ const ProfilePage: React.FC = (): JSX.Element => {
                   flex: 1, 
                   textAlign: 'left',
                   fontSize: '16px',
-                  color: 'rgba(235, 235, 245, 0.8)'
+                  color: '#000000'
                 }}>
                   {item.label}
                 </span>
-                <span style={{ color: 'rgba(235, 235, 245, 0.3)' }}>
+                <span style={{ color: '#64748b' }}>
                   ›
                 </span>
               </button>

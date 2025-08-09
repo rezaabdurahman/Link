@@ -226,7 +226,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
             
             // Auto-approve for demo (simulate user clicking "Yes")
             setTimeout(() => {
-              handlePermissionResponse(permissionRequest.id, true, queuedMessageId, messageContent);
+              handlePermissionResponse(permissionRequest.id, true, queuedMessageId);
             }, 2000);
           }, 1500);
         }, 800);
@@ -269,14 +269,14 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     }
   };
   
-  const handlePermissionResponse = (permissionMessageId: string, approved: boolean, queuedMessageId: string, originalMessage: string) => {
+  const handlePermissionResponse = (permissionMessageId: string, approved: boolean, queuedMessageId: string) => {
     // Update the permission request message to show response
     setMessages(prev => prev.map(msg => {
-      if (msg.id === permissionMessageId) {
+      if (msg.id === permissionMessageId && 'permissionData' in msg) {
         return {
           ...msg,
           permissionData: {
-            ...msg.permissionData!,
+            ...(msg.permissionData || {}),
             isApproved: approved
           }
         } as Message;
@@ -303,11 +303,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         if (approved) {
           // Convert queued message to regular message and deliver it
           newMessages = newMessages.map(msg => {
-            if (msg.id === queuedMessageId) {
+            if (msg.id === queuedMessageId && 'senderId' in msg) {
               return {
                 ...msg,
                 type: 'text' as const
-              };
+              } as Message;
             }
             return msg;
           });
@@ -407,15 +407,15 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                     <Bot size={16} className="text-white drop-shadow-sm" />
                   </div>
                   <div className="flex-1">
-                    <div className="bg-accent-copper/20 rounded-2xl rounded-tl-sm p-3 border border-accent-copper/30">
-                      <p className="text-sm text-gray-700 mb-3">{message.content}</p>
+                    <div className="bg-accent-copper rounded-2xl rounded-tl-sm p-3">
+                      <p className="text-sm text-white mb-3">{message.content}</p>
                       <div className="space-y-2">
                         {message.activities.map((activity, index) => (
                           <div key={index} className="flex items-start gap-2 text-xs">
                             <div className="w-1 h-1 rounded-full bg-aqua mt-2 flex-shrink-0" />
                             <div className="flex-1">
-                              <p className="text-gray-700">{activity.content}</p>
-                              <div className="flex items-center gap-2 text-gray-500 mt-1">
+                              <p className="text-white">{activity.content}</p>
+                              <div className="flex items-center gap-2 text-white/70 mt-1">
                                 <Clock size={10} />
                                 <span>{activity.time}</span>
                                 {activity.location && (
@@ -452,8 +452,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                       <Bot size={16} className="text-white drop-shadow-sm" />
                     </div>
                     <div className="flex-1">
-                      <div className="bg-accent-copper/20 rounded-2xl rounded-tl-sm p-3 border border-accent-copper/30">
-                        <p className="text-sm text-gray-700">{msg.content}</p>
+                      <div className="bg-accent-copper rounded-2xl rounded-tl-sm p-3">
+                        <p className="text-sm text-white">{msg.content}</p>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 ml-3">
                         LinkBot • {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -469,19 +469,19 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                       <Bot size={16} className="text-white drop-shadow-sm" />
                     </div>
                     <div className="flex-1">
-                      <div className="bg-accent-copper/20 rounded-2xl rounded-tl-sm p-3 border border-accent-copper/30">
-                        <p className="text-sm text-gray-700 mb-3">{msg.content}</p>
+                      <div className="bg-accent-copper rounded-2xl rounded-tl-sm p-3">
+                        <p className="text-sm text-white mb-3">{msg.content}</p>
                         {msg.permissionData && msg.permissionData.isApproved === undefined && (
                           <div className="flex gap-2 mt-3">
                             <button
-                              onClick={() => handlePermissionResponse(msg.id, true, msg.permissionData!.queuedMessageId!, msg.permissionData!.originalMessage)}
+                              onClick={() => handlePermissionResponse(msg.id, true, msg.permissionData!.queuedMessageId!)}
                               className="flex items-center gap-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-full transition-colors"
                             >
                               <Check size={12} />
                               Yes
                             </button>
                             <button
-                              onClick={() => handlePermissionResponse(msg.id, false, msg.permissionData!.queuedMessageId!, msg.permissionData!.originalMessage)}
+                              onClick={() => handlePermissionResponse(msg.id, false, msg.permissionData!.queuedMessageId!)}
                               className="flex items-center gap-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-full transition-colors"
                             >
                               <XIcon size={12} />

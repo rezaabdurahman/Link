@@ -41,11 +41,11 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
       <div className="ios-card fade-in" style={{ 
         padding: '20px', 
         marginBottom: '24px',
-        background: 'linear-gradient(135deg, rgba(0, 122, 255, 0.1) 0%, rgba(255, 149, 0, 0.1) 100%)',
-        borderColor: 'rgba(0, 122, 255, 0.3)'
+        background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(45, 212, 191, 0.1) 100%)',
+        borderColor: 'rgba(6, 182, 212, 0.3)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-          <Sparkles size={24} color="#007AFF" />
+          <Sparkles size={24} color="#06b6d4" />
           <h3 style={{ fontSize: '16px', fontWeight: '600' }}>
             AI Insights
           </h3>
@@ -80,11 +80,11 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
               onClick={() => setFilter(tab.key)}
               className="haptic-light"
               style={{
-                background: isActive ? '#007AFF' : 'rgba(118, 118, 128, 0.24)',
-                border: 'none',
+                background: isActive ? '#06b6d4' : 'rgba(255, 255, 255, 0.1)',
+                border: isActive ? 'none' : '1px solid rgba(255, 255, 255, 0.2)',
                 borderRadius: '20px',
                 padding: '8px 16px',
-                color: isActive ? 'white' : 'rgba(235, 235, 245, 0.6)',
+                color: isActive ? 'white' : '#000000',
                 fontSize: '14px',
                 fontWeight: '500',
                 cursor: 'pointer',
@@ -99,7 +99,7 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
               {tab.label}
               {count > 0 && (
                 <span style={{
-                  background: isActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 122, 255, 0.3)',
+                  background: isActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(6, 182, 212, 0.3)',
                   borderRadius: '10px',
                   padding: '2px 6px',
                   fontSize: '12px',

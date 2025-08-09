@@ -6,6 +6,7 @@ import ProfileDetailModal from '../components/ProfileDetailModal';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import AddCuesModal from '../components/AddCuesModal';
 import AddBroadcastModal from '../components/AddBroadcastModal';
+import Toast from '../components/Toast';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   const [isAvailable, setIsAvailable] = useState<boolean>(currentUser.isAvailable);
@@ -14,6 +15,11 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
   const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
   const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' }>({ 
+    isVisible: false, 
+    message: '', 
+    type: 'success' 
+  });
 
   const filteredUsers = nearbyUsers.filter(user =>
     !hiddenUserIds.has(user.id) && // Exclude hidden users
@@ -25,7 +31,23 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   );
 
   const toggleAvailability = (): void => {
-    setIsAvailable(!isAvailable);
+    const newAvailability = !isAvailable;
+    setIsAvailable(newAvailability);
+    
+    // Show toast notification
+    const message = newAvailability 
+      ? "You're now discoverable by others nearby" 
+      : "You've been removed from the discovery grid";
+    
+    setToast({
+      isVisible: true,
+      message,
+      type: 'success'
+    });
+  };
+  
+  const handleCloseToast = (): void => {
+    setToast(prev => ({ ...prev, isVisible: false }));
   };
 
   const handleUserClick = (user: User): void => {
@@ -82,38 +104,48 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             {filteredUsers.length} people nearby
           </p>
         </div>
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={toggleAvailability}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
-              isAvailable 
-                ? 'bg-aqua text-white hover:bg-aqua/80' 
-                : 'bg-gray-200 text-text-primary hover:bg-gray-300'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                isAvailable ? 'bg-white' : 'bg-accent-copper'
-              }`} />
+        <div className="flex flex-col gap-2 w-32">
+          {/* Toggle Switch for Availability */}
+          <div className="flex items-center gap-3 justify-end">
+            <span className={`text-sm font-medium transition-colors duration-200 ${
+              isAvailable ? 'text-aqua' : 'text-gray-500'
+            }`}>
               {isAvailable ? 'Available' : 'Busy'}
-            </div>
-          </button>
-          {isAvailable && (
-            <div className="flex gap-2">
-              <button
-                onClick={handleOpenAddCues}
-                className="px-3 py-2 rounded-full text-xs font-medium bg-aqua/10 text-aqua border border-aqua/30 hover:bg-aqua/20 transition-all duration-200"
-              >
-                Add Cues
-              </button>
-              <button
-                onClick={handleOpenAddBroadcast}
-                className="px-3 py-2 rounded-full text-xs font-medium bg-accent-copper/10 text-accent-copper border border-accent-copper/30 hover:bg-accent-copper/20 transition-all duration-200"
-              >
-                Add Broadcast
-              </button>
-            </div>
-          )}
+            </span>
+            <button
+              onClick={toggleAvailability}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${
+                isAvailable 
+                  ? 'bg-aqua' 
+                  : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                  isAvailable ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          {/* Fixed height container for buttons to prevent layout shift */}
+          <div className="h-8 flex justify-end">
+            {isAvailable && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleOpenAddCues}
+                  className="px-3 py-2 rounded-full text-xs font-medium bg-aqua/20 text-aqua hover:bg-aqua/30 transition-all duration-200"
+                >
+                  Cues
+                </button>
+                <button
+                  onClick={handleOpenAddBroadcast}
+                  className="px-3 py-2 rounded-full text-xs font-medium bg-aqua text-white hover:bg-aqua-dark transition-all duration-200"
+                >
+                  Broadcast
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -166,6 +198,14 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         isOpen={isAddBroadcastModalOpen}
         onClose={handleCloseAddBroadcast}
         onSubmit={handleSubmitBroadcast}
+      />
+      
+      {/* Toast Notification */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={handleCloseToast}
       />
     </div>
   );

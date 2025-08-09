@@ -13,45 +13,45 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({ opportunity, onAccept
   const getTypeIcon = (): React.ReactNode => {
     switch (opportunity.type) {
       case 'reminder':
-        return <Clock size={20} color="#FF9500" />;
+        return <Clock size={20} color="#b45309" />;
       case 'ai-suggestion':
-        return <Sparkles size={20} color="#007AFF" />;
+        return <Sparkles size={20} color="#06b6d4" />;
       case 'seasonal':
-        return <Calendar size={20} color="#34C759" />;
+        return <Calendar size={20} color="#2dd4bf" />;
       case 'group-pairing':
-        return <Users size={20} color="#FF69B4" />;
+        return <Users size={20} color="#ec4899" />;
       default:
-        return <Calendar size={20} color="#007AFF" />;
+        return <Calendar size={20} color="#06b6d4" />;
     }
   };
 
   const getTypeColor = (): string => {
     switch (opportunity.type) {
       case 'reminder':
-        return 'rgba(255, 149, 0, 0.1)';
+        return 'rgba(180, 83, 9, 0.1)';
       case 'ai-suggestion':
-        return 'rgba(0, 122, 255, 0.1)';
+        return 'rgba(6, 182, 212, 0.1)';
       case 'seasonal':
-        return 'rgba(52, 199, 89, 0.1)';
+        return 'rgba(45, 212, 191, 0.1)';
       case 'group-pairing':
-        return 'rgba(255, 105, 180, 0.1)';
+        return 'rgba(236, 72, 153, 0.1)';
       default:
-        return 'rgba(0, 122, 255, 0.1)';
+        return 'rgba(6, 182, 212, 0.1)';
     }
   };
 
   const getTypeBorderColor = (): string => {
     switch (opportunity.type) {
       case 'reminder':
-        return 'rgba(255, 149, 0, 0.3)';
+        return 'rgba(180, 83, 9, 0.3)';
       case 'ai-suggestion':
-        return 'rgba(0, 122, 255, 0.3)';
+        return 'rgba(6, 182, 212, 0.3)';
       case 'seasonal':
-        return 'rgba(52, 199, 89, 0.3)';
+        return 'rgba(45, 212, 191, 0.3)';
       case 'group-pairing':
-        return 'rgba(255, 105, 180, 0.3)';
+        return 'rgba(236, 72, 153, 0.3)';
       default:
-        return 'rgba(0, 122, 255, 0.3)';
+        return 'rgba(6, 182, 212, 0.3)';
     }
   };
 
@@ -214,7 +214,7 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({ opportunity, onAccept
           }}
           style={{
             flex: 2,
-            background: '#007AFF',
+            background: '#06b6d4',
             border: 'none',
             borderRadius: '8px',
             padding: '12px',

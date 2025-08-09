@@ -176,8 +176,8 @@ const ConversationalCueCards: React.FC<ConversationalCueCardsProps> = ({
       // LinkBot cards: copper fill
       return 'bg-accent-copper text-white border-0';
     } else {
-      // User cards: charcoal fill with no outline
-      return 'bg-accent-charcoal text-white border-0';
+      // User cards: light gray fill with dark text
+      return 'bg-gray-200 text-gray-700 border-0';
     }
   };
 
