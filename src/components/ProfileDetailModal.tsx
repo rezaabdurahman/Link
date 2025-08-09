@@ -1,19 +1,27 @@
 import React, { useState } from 'react';
-import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users } from 'lucide-react';
+import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users, EyeOff } from 'lucide-react';
 import { User, Chat } from '../types';
 import ConversationModal from './ConversationModal';
 
 interface ProfileDetailModalProps {
   user: User;
   onClose: () => void;
+  onHide?: (userId: string) => void;
 }
 
-const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }): JSX.Element => {
+const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose, onHide }): JSX.Element => {
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isFriend, setIsFriend] = useState<boolean>(false);
 
   const handleAddFriend = (): void => {
     setIsFriend(!isFriend);
+  };
+
+  const handleHideUser = (): void => {
+    if (onHide) {
+      onHide(user.id);
+      onClose(); // Close the modal after hiding
+    }
   };
 
   // Create a Chat object for ConversationModal
@@ -127,6 +135,15 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose }
                 <MessageCircle size={16} />
                 Message
               </button>
+              {onHide && (
+                <button
+                  onClick={handleHideUser}
+                  className="flex-1 max-w-36 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-ios transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <EyeOff size={16} />
+                  Hide
+                </button>
+              )}
             </div>
           </div>
 

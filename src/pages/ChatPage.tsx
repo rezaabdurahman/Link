@@ -5,6 +5,7 @@ import { Chat } from '../types';
 import ChatListItem from '../components/ChatListItem';
 import IntelligentMessageBox from '../components/IntelligentMessageBox';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
+import { isFeatureEnabled } from '../config/featureFlags';
 import RankToggle from '../components/RankToggle';
 import ConversationModal from '../components/ConversationModal';
 import AddFriendModal from '../components/AddFriendModal';
@@ -150,7 +151,9 @@ const ChatPage: React.FC = (): JSX.Element => {
       )}
 
       {/* Intelligent Message Box */}
-      <IntelligentMessageBox onSendMessage={handleSendMessage} />
+      {isFeatureEnabled('INTELLIGENT_MESSAGE_BOX') && (
+        <IntelligentMessageBox onSendMessage={handleSendMessage} />
+      )}
 
       {/* Conversation Modal */}
       <ConversationModal 

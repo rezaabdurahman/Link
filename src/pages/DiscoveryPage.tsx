@@ -13,13 +13,15 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
   const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
+  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
 
   const filteredUsers = nearbyUsers.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    !hiddenUserIds.has(user.id) && // Exclude hidden users
+    (user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.interests.some(interest => 
       interest.toLowerCase().includes(searchQuery.toLowerCase())
     ) ||
-    user.bio.toLowerCase().includes(searchQuery.toLowerCase())
+    user.bio.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const toggleAvailability = (): void => {
@@ -60,6 +62,12 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     // Here you would typically save the broadcast to your backend/state
     console.log('New broadcast:', broadcast);
     // For now, just close the modal
+  };
+
+  const handleHideUser = (userId: string): void => {
+    setHiddenUserIds(prev => new Set([...prev, userId]));
+    // Here you would typically save the hidden user to your backend
+    console.log('User hidden:', userId);
   };
 
   return (
@@ -142,6 +150,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         <ProfileDetailModal
           user={selectedUser}
           onClose={handleCloseProfile}
+          onHide={handleHideUser}
         />
       )}
 

@@ -24,8 +24,14 @@ export interface Message {
   receiverId: string;
   content: string;
   timestamp: Date;
-  type: 'text' | 'system' | 'context-card';
+  type: 'text' | 'system' | 'context-card' | 'permission-request' | 'permission-response' | 'queued';
   contextCard?: ContextCard;
+  permissionData?: {
+    originalMessage: string;
+    senderName: string;
+    isApproved?: boolean;
+    queuedMessageId?: string;
+  };
 }
 
 export interface ContextCard {
