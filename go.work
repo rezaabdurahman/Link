@@ -1,0 +1,12 @@
+go 1.21
+
+use (
+    ./backend/api-gateway
+    ./backend/user-svc
+    ./backend/location-svc
+    ./backend/chat-svc
+    ./backend/ai-svc
+    ./backend/stories-svc
+    ./backend/opportunities-svc
+    ./backend/shared
+)

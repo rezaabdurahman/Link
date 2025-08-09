@@ -1,0 +1,250 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres:
+    image: postgres:16-alpine
+    container_name: link_postgres
+    environment:
+      POSTGRES_DB: linkdb
+      POSTGRES_USER: ${DB_USER:-linkuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-linkpass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/infrastructure/database/init:/docker-entrypoint-initdb.d
+    networks:
+      - link_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-linkuser} -d linkdb"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: link_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - link_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend Services
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: link_api_gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=linkdb
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  user-svc:
+    build:
+      context: ./backend/user-svc
+      dockerfile: Dockerfile
+    container_name: link_user_svc
+    ports:
+      - "8081:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=linkdb
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  location-svc:
+    build:
+      context: ./backend/location-svc
+      dockerfile: Dockerfile
+    container_name: link_location_svc
+    ports:
+      - "8082:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=linkdb
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  chat-svc:
+    build:
+      context: ./backend/chat-svc
+      dockerfile: Dockerfile
+    container_name: link_chat_svc
+    ports:
+      - "8083:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=linkdb
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  ai-svc:
+    build:
+      context: ./backend/ai-svc
+      dockerfile: Dockerfile
+    container_name: link_ai_svc
+    ports:
+      - "8084:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=linkdb
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  stories-svc:
+    build:
+      context: ./backend/stories-svc
+      dockerfile: Dockerfile
+    container_name: link_stories_svc
+    ports:
+      - "8085:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=linkdb
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  opportunities-svc:
+    build:
+      context: ./backend/opportunities-svc
+      dockerfile: Dockerfile
+    container_name: link_opportunities_svc
+    ports:
+      - "8086:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=linkdb
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  # Frontend (for development)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: link_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://api-gateway:8080
+      - NODE_ENV=${NODE_ENV:-development}
+    depends_on:
+      - api-gateway
+    networks:
+      - link_network
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+
+networks:
+  link_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
