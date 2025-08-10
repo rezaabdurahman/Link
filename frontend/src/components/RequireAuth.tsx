@@ -4,6 +4,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { isAuthRequired } from '../config';
 
 /**
  * RequireAuth component that protects routes requiring authentication
@@ -16,6 +17,11 @@ import { useAuth } from '../contexts/AuthContext';
 const RequireAuth: React.FC = (): JSX.Element => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+
+  // Skip authentication if environment doesn't require it (demo mode, etc.)
+  if (!isAuthRequired()) {
+    return <Outlet />;
+  }
 
   // Show loading state while authentication status is being determined
   if (isLoading) {

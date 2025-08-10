@@ -1,8 +1,16 @@
+export interface ProfileMedia {
+  type: 'image' | 'video';
+  url: string;
+  thumbnail?: string; // For videos, optional thumbnail image
+  duration?: number; // For videos, duration in seconds
+}
+
 export interface User {
   id: string;
   name: string;
   age: number;
-  profilePicture?: string;
+  profilePicture?: string; // Deprecated - use profileMedia instead
+  profileMedia?: ProfileMedia; // New unified media field
   bio: string;
   interests: string[];
   location: {

@@ -22,9 +22,14 @@ export const currentUser: User = {
 export const nearbyUsers: User[] = [
   {
     id: '2',
-    name: 'Jamie Chen',
-    age: 26,
-    profilePicture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+    name: 'Reza Abdurahman',
+    age: 30,
+    profileMedia: {
+      type: 'video',
+      url: '/videos/jamie-profile.mov',
+      thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=500&fit=crop&crop=face',
+      duration: 15
+    },
     bio: 'Film enthusiast, volleyball player, coffee lover',
     interests: ['indie films', 'volleyball', 'coffee', 'books'],
     location: {
@@ -36,7 +41,7 @@ export const nearbyUsers: User[] = [
     mutualFriends: ['Sarah Wilson'],
     connectionPriority: 'want-closer',
     lastSeen: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-    broadcast: 'Looking for someone to join me for the indie film festival this weekend!',
+    broadcast: 'Founder of this app ! Give me feedback',
     profileType: 'private'
   },
   {
@@ -61,7 +66,12 @@ export const nearbyUsers: User[] = [
     id: '4',
     name: 'Emma Johnson',
     age: 24,
-    profilePicture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+    profileMedia: {
+      type: 'video',
+      url: 'https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4',
+      thumbnail: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=500&fit=crop&crop=face',
+      duration: 12
+    },
     bio: 'Artist, yoga instructor, nature lover',
     interests: ['art', 'yoga', 'nature', 'photography', 'coffee'],
     location: {
@@ -135,7 +145,12 @@ export const nearbyUsers: User[] = [
     id: '8',
     name: 'Zoe Kim',
     age: 25,
-    profilePicture: 'https://images.unsplash.com/photo-1521566652839-697aa473761a?w=150&h=150&fit=crop&crop=face',
+    profileMedia: {
+      type: 'video',
+      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+      thumbnail: 'https://images.unsplash.com/photo-1521566652839-697aa473761a?w=400&h=500&fit=crop&crop=face',
+      duration: 18
+    },
     bio: 'Fashion photographer, travel blogger, sushi lover',
     interests: ['photography', 'fashion', 'travel', 'sushi'],
     location: {
