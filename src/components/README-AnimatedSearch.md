@@ -1,3 +1,9 @@
+---
+redirect_to: /frontend/src/components/README-AnimatedSearch.md
+status: "moved"
+reason: "Consolidated duplicate files - moved to frontend structure"
+---
+
 # Animated Search Input Feature
 
 ## Overview

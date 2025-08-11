@@ -1,3 +1,9 @@
+---
+redirect_to: /frontend/src/design-system.md
+status: "moved"
+reason: "Consolidated duplicate files - moved to frontend structure"
+---
+
 # Link App - Design System Documentation
 
 ## Overview
