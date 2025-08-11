@@ -42,7 +42,7 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({ isOpen, onClose, 
             Add Broadcast
           </h2>
           <p className="text-sm text-gray-600 leading-relaxed">
-            Add broadcast will show what you write below on your profile page
+            Share what you want people to know — it'll appear on your card in the discovery grid.
           </p>
         </div>
 
@@ -51,7 +51,7 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({ isOpen, onClose, 
           <textarea
             value={broadcastText}
             onChange={(e) => setBroadcastText(e.target.value)}
-            placeholder="e.g. anyone wants to grab me a drink?"
+            placeholder="e.g. Just moved in and looking to make friends with neighbors"
             className="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm text-gray-900 placeholder:text-gray-400"
             maxLength={200}
           />
