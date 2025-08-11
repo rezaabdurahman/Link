@@ -1,7 +1,11 @@
 # `/api/me` Endpoint Implementation Guide
 
+> **Note**: This document provides frontend-specific implementation guidance. For the complete API specification including authentication, security, and rate limiting, see the [Unified API Contract](../docs/api-contract.md).
+
 ## Overview
 The `/api/me` endpoint returns the current authenticated user's profile data. This endpoint is called after token refresh to populate the user's authentication state.
+
+**Gateway Mapping**: Frontend `/api/me` requests → Gateway `/users/profile` → User Service `/api/v1/profile`
 
 ## Endpoint Specification
 

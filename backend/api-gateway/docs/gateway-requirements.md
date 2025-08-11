@@ -110,6 +110,8 @@ This document outlines the complete API contract for the Link App API Gateway, w
 
 ## Authentication & Authorization Strategy
 
+> **Note**: For detailed authentication specifications, security standards, and rate limiting policies, see the [Unified API Contract](../../../docs/api-contract.md).
+
 ### JWT Token Structure
 ```json
 {

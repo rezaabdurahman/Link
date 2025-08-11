@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import DiscoveryPage from './pages/DiscoveryPage';
+import DiscoveryPage from 'frontend/src/pages/DiscoveryPage';
 import ChatPage from './pages/ChatPage';
 import CheckinPage from './pages/CheckinPage';
 import OpportunitiesPage from './pages/OpportunitiesPage';
