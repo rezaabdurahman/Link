@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { nearbyUsers, currentUser } from '../data/mockData';
+import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
 import { User } from '../types';
 import UserCard from '../components/UserCard';
 import ProfileDetailModal from '../components/ProfileDetailModal';
@@ -8,9 +8,14 @@ import AddCuesModal from '../components/AddCuesModal';
 import AddBroadcastModal from '../components/AddBroadcastModal';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
+import { createBroadcast, updateBroadcast, deleteBroadcast, getBroadcastErrorMessage, isBroadcastError } from '../services';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
-  const [isAvailable, setIsAvailable] = useState<boolean>(currentUser.isAvailable);
+  // User state management
+  const [currentUser, setCurrentUser] = useState<User>(initialCurrentUser);
+  const [isAvailable, setIsAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
+  
+  // UI state management  
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
@@ -23,6 +28,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   });
   const [showFeedAnimation, setShowFeedAnimation] = useState<boolean>(false);
   const [isGridView, setIsGridView] = useState<boolean>(true);
+  
+  // Loading state for broadcast operations
+  const [isBroadcastSubmitting, setIsBroadcastSubmitting] = useState<boolean>(false);
 
   // Handle initial animation state if user is already available
   useEffect(() => {
@@ -110,10 +118,63 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setIsAddBroadcastModalOpen(false);
   };
 
-  const handleSubmitBroadcast = (broadcast: string): void => {
-    // Here you would typically save the broadcast to your backend/state
-    console.log('New broadcast:', broadcast);
-    // For now, just close the modal
+  const handleSubmitBroadcast = async (broadcast: string): Promise<void> => {
+    if (isBroadcastSubmitting) return; // Prevent multiple submissions
+    
+    setIsBroadcastSubmitting(true);
+    
+    // Store original broadcast for rollback on failure
+    const originalBroadcast = currentUser.broadcast;
+    
+    // Optimistic UI update: immediately update currentUser.broadcast
+    setCurrentUser(prevUser => ({
+      ...prevUser,
+      broadcast: broadcast.trim()
+    }));
+    
+    // Show optimistic success toast
+    setToast({
+      isVisible: true,
+      message: 'Broadcast updated successfully!',
+      type: 'success'
+    });
+    
+    // Close modal immediately for better UX
+    setIsAddBroadcastModalOpen(false);
+    
+    try {
+      // Determine whether to create or update broadcast
+      if (originalBroadcast) {
+        await updateBroadcast({ message: broadcast.trim() });
+      } else {
+        await createBroadcast({ message: broadcast.trim() });
+      }
+      
+      // Success: broadcast is already updated optimistically
+      console.log('Broadcast saved successfully:', broadcast);
+      
+    } catch (error) {
+      console.error('Failed to save broadcast:', error);
+      
+      // Revert optimistic update on failure
+      setCurrentUser(prevUser => ({
+        ...prevUser,
+        broadcast: originalBroadcast
+      }));
+      
+      // Show error toast
+      const errorMessage = isBroadcastError(error) 
+        ? getBroadcastErrorMessage(error.error)
+        : 'Failed to update broadcast. Please try again.';
+      
+      setToast({
+        isVisible: true,
+        message: errorMessage,
+        type: 'error'
+      });
+    } finally {
+      setIsBroadcastSubmitting(false);
+    }
   };
 
   const handleHideUser = (userId: string): void => {
@@ -347,6 +408,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
           isOpen={isAddBroadcastModalOpen}
           onClose={handleCloseAddBroadcast}
           onSubmit={handleSubmitBroadcast}
+          isSubmitting={isBroadcastSubmitting}
+          currentBroadcast={currentUser.broadcast}
         />
       )}
       

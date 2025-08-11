@@ -1,34 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface AddBroadcastModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (broadcast: string) => void;
+  onSubmit: (broadcast: string) => Promise<void> | void;
+  isSubmitting?: boolean;
+  currentBroadcast?: string;
 }
 
-const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({ isOpen, onClose, onSubmit }): JSX.Element | null => {
+const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  isSubmitting = false, 
+  currentBroadcast = '' 
+}): JSX.Element | null => {
   const [broadcastText, setBroadcastText] = useState<string>('');
+
+  // Pre-fill with current broadcast when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setBroadcastText(currentBroadcast);
+    }
+  }, [isOpen, currentBroadcast]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (): void => {
-    if (broadcastText.trim()) {
-      onSubmit(broadcastText.trim());
+  const handleSubmit = async (): Promise<void> => {
+    if (broadcastText.trim() && !isSubmitting) {
+      try {
+        await onSubmit(broadcastText.trim());
+        setBroadcastText('');
+      } catch (error) {
+        // Error handling is done in the parent component
+        console.error('Submit error:', error);
+      }
+    }
+  };
+
+  const handleCancel = (): void => {
+    if (!isSubmitting) {
       setBroadcastText('');
       onClose();
     }
   };
 
-  const handleCancel = (): void => {
-    setBroadcastText('');
-    onClose();
-  };
-
   const handleBackdropClick = (e: React.MouseEvent): void => {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && !isSubmitting) {
       handleCancel();
     }
   };
+
+  const isFormValid = broadcastText.trim().length > 0;
+  const hasChanges = broadcastText.trim() !== currentBroadcast;
 
   return (
     <div 
@@ -39,7 +63,7 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({ isOpen, onClose, 
         {/* Header */}
         <div className="px-6 py-6 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-900 mb-2">
-            Add Broadcast
+            {currentBroadcast ? 'Edit Broadcast' : 'Add Broadcast'}
           </h2>
           <p className="text-sm text-gray-600 leading-relaxed">
             Share what you want people to know — it'll appear on your card in the discovery grid.
@@ -52,8 +76,10 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({ isOpen, onClose, 
             value={broadcastText}
             onChange={(e) => setBroadcastText(e.target.value)}
             placeholder="e.g. Just moved in and looking to make friends with neighbors"
-            className="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm text-gray-900 placeholder:text-gray-400"
+            className="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm text-gray-900 placeholder:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             maxLength={200}
+            disabled={isSubmitting}
+            autoFocus
           />
           <div className="text-right mt-2">
             <span className="text-xs text-gray-400">
@@ -66,16 +92,27 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({ isOpen, onClose, 
         <div className="px-6 py-4 bg-gray-50 flex gap-3">
           <button
             onClick={handleCancel}
-            className="flex-1 px-4 py-2.5 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+            disabled={isSubmitting}
+            className="flex-1 px-4 py-2.5 text-gray-700 font-medium rounded-xl hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!broadcastText.trim()}
-            className="flex-1 px-4 py-2.5 bg-aqua text-white font-medium rounded-xl hover:bg-aqua-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={!isFormValid || !hasChanges || isSubmitting}
+            className="flex-1 px-4 py-2.5 bg-aqua text-white font-medium rounded-xl hover:bg-aqua-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
-            Submit
+            {isSubmitting ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+              </>
+            ) : (
+              currentBroadcast ? 'Update' : 'Create'
+            )}
           </button>
         </div>
       </div>
