@@ -40,7 +40,7 @@ const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="ios-text-field w-full pl-11 pr-4 py-3 bg-surface-hover/60 border-none rounded-ios text-black placeholder:text-transparent focus:ring-2 focus:ring-aqua/50 relative z-0"
+        className="ios-text-field w-full pl-11 pr-4 py-2.5 bg-surface-hover/60 border-none rounded-ios text-black placeholder:text-transparent focus:ring-2 focus:ring-aqua/50 relative z-0"
       />
       
       {/* Animated placeholder overlay */}

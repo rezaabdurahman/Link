@@ -7,6 +7,7 @@ export const FeatureFlags = {
   // Discovery page features
   DISCOVERY_CUES: true, // Enable social cues functionality
   DISCOVERY_BROADCAST: true, // Enable broadcast functionality
+  DISCOVERY_GRID_VIEW: true, // Enable grid/feed view toggle
   
   // Future feature flags can be added here
   // ADVANCED_CHAT_ANALYTICS: false,

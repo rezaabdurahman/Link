@@ -16,7 +16,7 @@ export interface User {
   location: {
     lat: number;
     lng: number;
-    proximityKm: number;
+    proximityMiles: number;
   };
   isAvailable: boolean;
   mutualFriends: string[];

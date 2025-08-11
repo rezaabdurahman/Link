@@ -10,7 +10,7 @@ export const currentUser: User = {
   location: {
     lat: 37.7749,
     lng: -122.4194,
-    proximityKm: 2
+    proximityMiles: 1.2
   },
   isAvailable: false,
   mutualFriends: [],
@@ -35,7 +35,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 0.5
+      proximityMiles: 0.3
     },
     isAvailable: true,
     mutualFriends: ['Sarah Wilson'],
@@ -54,7 +54,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 1.2
+      proximityMiles: 1.2
     },
     isAvailable: false,
     mutualFriends: ['David Kim', 'Sarah Wilson'],
@@ -77,7 +77,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 0.8
+      proximityMiles: 0.8
     },
     isAvailable: true,
     mutualFriends: ['Lisa Park'],
@@ -96,7 +96,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 2.1
+      proximityMiles: 2.1
     },
     isAvailable: true,
     mutualFriends: [],
@@ -114,7 +114,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 1.5
+      proximityMiles: 1.5
     },
     isAvailable: true,
     mutualFriends: ['Anna Lee'],
@@ -133,7 +133,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 0.9
+      proximityMiles: 0.9
     },
     isAvailable: false,
     mutualFriends: ['Mike Johnson'],
@@ -156,7 +156,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 1.8
+      proximityMiles: 1.8
     },
     isAvailable: true,
     mutualFriends: ['Emma Johnson', 'Lisa Park'],
@@ -175,7 +175,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 2.3
+      proximityMiles: 2.3
     },
     isAvailable: true,
     mutualFriends: [],
@@ -193,7 +193,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 0.7
+      proximityMiles: 0.7
     },
     isAvailable: false,
     mutualFriends: ['David Kim'],
@@ -211,7 +211,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 1.4
+      proximityMiles: 1.4
     },
     isAvailable: true,
     mutualFriends: ['Sofia Martinez'],
@@ -230,7 +230,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 1.1
+      proximityMiles: 1.1
     },
     isAvailable: true,
     mutualFriends: [],
@@ -248,7 +248,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 1.9
+      proximityMiles: 1.9
     },
     isAvailable: false,
     mutualFriends: ['Maya Patel'],
@@ -266,7 +266,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 0.6
+      proximityMiles: 0.6
     },
     isAvailable: true,
     mutualFriends: ['Ryan O\'Connor'],
@@ -285,7 +285,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 2.0
+      proximityMiles: 2.0
     },
     isAvailable: true,
     mutualFriends: [],
@@ -303,7 +303,7 @@ export const nearbyUsers: User[] = [
     location: {
       lat: 37.7749,
       lng: -122.4194,
-      proximityKm: 1.3
+      proximityMiles: 1.3
     },
     isAvailable: false,
     mutualFriends: ['Alex Rivera', 'Marcus Rodriguez'],

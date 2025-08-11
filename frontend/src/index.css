@@ -137,7 +137,7 @@
 
   /* Text gradient utilities */
   .text-gradient-aqua {
-    @apply bg-gradient-to-r from-aqua to-primary-300 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-aqua to-aqua-dark bg-clip-text text-transparent;
   }
 
   .text-gradient-primary {

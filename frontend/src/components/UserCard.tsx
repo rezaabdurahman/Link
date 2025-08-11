@@ -152,7 +152,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
                 <div className="flex items-center gap-3 text-white/90 text-sm">
                   <div className="flex items-center gap-1">
                     <MapPin size={16} className="drop-shadow-lg" />
-                    <span className="drop-shadow-lg">{user.location.proximityKm}km away</span>
+                    <span className="drop-shadow-lg">{user.location.proximityMiles}mi away</span>
                   </div>
                   {user.mutualFriends.length > 0 && (
                     <div className="flex items-center gap-1">
@@ -261,7 +261,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
             <div className="flex items-center gap-1">
               <MapPin size={10} className="text-white drop-shadow-sm" />
               <span className="text-white text-xs drop-shadow-sm">
-                {user.location.proximityKm}km
+                {user.location.proximityMiles}mi
               </span>
             </div>
             
