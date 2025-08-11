@@ -1,5 +1,3 @@
-import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
 import {
   updateBroadcast,
   UserServiceError,
@@ -8,86 +6,17 @@ import {
   ApiError,
 } from './user';
 
+// Mock fetch globally
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
 // Test constants
 const API_BASE_URL = 'http://localhost:8080';
-const BROADCAST_ENDPOINT = '/users/profile/broadcast';
-
-// MSW handlers for user API endpoints
-const userApiHandlers = [
-  // Successful broadcast update
-  http.put(`${API_BASE_URL}${BROADCAST_ENDPOINT}`, async ({ request }) => {
-    const body = await request.json();
-    
-    // Simulate validation
-    if (!body.broadcast) {
-      return HttpResponse.json(
-        {
-          message: 'Broadcast message is required',
-          field: 'broadcast',
-          code: 'REQUIRED_FIELD',
-        },
-        { status: 400 }
-      );
-    }
-    
-    if (body.broadcast.length > 500) {
-      return HttpResponse.json(
-        {
-          message: 'Broadcast message too long',
-          field: 'broadcast',
-          code: 'BROADCAST_TOO_LONG',
-        },
-        { status: 400 }
-      );
-    }
-
-    return HttpResponse.json({
-      broadcast: body.broadcast,
-    });
-  }),
-
-  // Unauthorized request
-  http.put(`${API_BASE_URL}/users/profile/broadcast-unauthorized`, () => {
-    return HttpResponse.json(
-      {
-        message: 'Authentication token is invalid',
-        code: 'TOKEN_EXPIRED',
-      },
-      { status: 401 }
-    );
-  }),
-
-  // Rate limited request
-  http.put(`${API_BASE_URL}/users/profile/broadcast-rate-limited`, () => {
-    return HttpResponse.json(
-      {
-        message: 'Too many requests',
-        retryAfter: 120,
-        code: 'TOO_MANY_REQUESTS',
-      },
-      { status: 429 }
-    );
-  }),
-
-  // Server error
-  http.put(`${API_BASE_URL}/users/profile/broadcast-server-error`, () => {
-    return HttpResponse.json(
-      {
-        message: 'Internal server error',
-        code: 'INTERNAL_SERVER_ERROR',
-      },
-      { status: 500 }
-    );
-  }),
-];
-
-// Setup MSW server
-const server = setupServer(...userApiHandlers);
 
 // Mock environment variables
 const originalEnv = process.env;
+
 beforeAll(() => {
-  server.listen({ onUnhandledRequest: 'error' });
   process.env = {
     ...originalEnv,
     API_BASE_URL: API_BASE_URL,
@@ -95,11 +24,10 @@ beforeAll(() => {
 });
 
 afterEach(() => {
-  server.resetHandlers();
+  mockFetch.mockClear();
 });
 
 afterAll(() => {
-  server.close();
   process.env = originalEnv;
 });
 
@@ -108,28 +36,73 @@ describe('user API', () => {
     it('should successfully update broadcast message', async () => {
       const testBroadcast = 'Looking for coffee partners this afternoon! ☕';
       
+      // Mock successful response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          get: (name: string) => name === 'content-type' ? 'application/json' : null
+        },
+        json: () => Promise.resolve({ broadcast: testBroadcast })
+      } as Response);
+      
       const result = await updateBroadcast(testBroadcast);
       
       expect(result).toEqual({
         broadcast: testBroadcast,
       });
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${API_BASE_URL}/users/profile/broadcast`,
+        expect.objectContaining({
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ broadcast: testBroadcast }),
+          credentials: 'include'
+        })
+      );
     });
 
     it('should trim whitespace from broadcast message', async () => {
       const testBroadcast = '  Gaming session tonight!  ';
       const trimmedBroadcast = 'Gaming session tonight!';
       
+      // Mock successful response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          get: (name: string) => name === 'content-type' ? 'application/json' : null
+        },
+        json: () => Promise.resolve({ broadcast: trimmedBroadcast })
+      } as Response);
+      
       const result = await updateBroadcast(testBroadcast);
       
       expect(result).toEqual({
         broadcast: trimmedBroadcast,
       });
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${API_BASE_URL}/users/profile/broadcast`,
+        expect.objectContaining({
+          body: JSON.stringify({ broadcast: trimmedBroadcast })
+        })
+      );
     });
 
     it('should handle empty broadcast message', async () => {
       const testBroadcast = '';
       
-      // This should trigger the server's validation error
+      // Mock validation error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({
+          message: 'Broadcast message is required',
+          field: 'broadcast',
+          code: 'REQUIRED_FIELD'
+        })
+      } as Response);
+      
       try {
         await updateBroadcast(testBroadcast);
         fail('Should have thrown an error for empty broadcast');
@@ -156,18 +129,15 @@ describe('user API', () => {
     });
 
     it('should handle authentication errors', async () => {
-      // Mock the endpoint to return 401
-      server.use(
-        http.put(`${API_BASE_URL}${BROADCAST_ENDPOINT}`, () => {
-          return HttpResponse.json(
-            {
-              message: 'Authentication token is invalid',
-              code: 'TOKEN_EXPIRED',
-            },
-            { status: 401 }
-          );
+      // Mock authentication error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({
+          message: 'Authentication token is invalid',
+          code: 'TOKEN_EXPIRED'
         })
-      );
+      } as Response);
 
       try {
         await updateBroadcast('Test broadcast');
@@ -182,18 +152,16 @@ describe('user API', () => {
     });
 
     it('should handle rate limiting errors', async () => {
-      server.use(
-        http.put(`${API_BASE_URL}${BROADCAST_ENDPOINT}`, () => {
-          return HttpResponse.json(
-            {
-              message: 'Too many requests',
-              retryAfter: 120,
-              code: 'TOO_MANY_REQUESTS',
-            },
-            { status: 429 }
-          );
+      // Mock rate limiting error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: () => Promise.resolve({
+          message: 'Too many requests',
+          retryAfter: 120,
+          code: 'TOO_MANY_REQUESTS'
         })
-      );
+      } as Response);
 
       try {
         await updateBroadcast('Test broadcast');
@@ -210,17 +178,15 @@ describe('user API', () => {
     });
 
     it('should handle server errors', async () => {
-      server.use(
-        http.put(`${API_BASE_URL}${BROADCAST_ENDPOINT}`, () => {
-          return HttpResponse.json(
-            {
-              message: 'Database connection failed',
-              code: 'DATABASE_ERROR',
-            },
-            { status: 500 }
-          );
+      // Mock server error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({
+          message: 'Database connection failed',
+          code: 'DATABASE_ERROR'
         })
-      );
+      } as Response);
 
       try {
         await updateBroadcast('Test broadcast');
@@ -234,11 +200,8 @@ describe('user API', () => {
     });
 
     it('should handle network errors', async () => {
-      server.use(
-        http.put(`${API_BASE_URL}${BROADCAST_ENDPOINT}`, () => {
-          return HttpResponse.error();
-        })
-      );
+      // Mock network error
+      mockFetch.mockRejectedValueOnce(new Error('Network connection failed'));
 
       try {
         await updateBroadcast('Test broadcast');
@@ -252,16 +215,13 @@ describe('user API', () => {
     });
 
     it('should handle non-JSON error responses', async () => {
-      server.use(
-        http.put(`${API_BASE_URL}${BROADCAST_ENDPOINT}`, () => {
-          return new HttpResponse('Internal Server Error', {
-            status: 500,
-            headers: {
-              'Content-Type': 'text/plain',
-            },
-          });
-        })
-      );
+      // Mock non-JSON error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        json: () => Promise.reject(new Error('Invalid JSON'))
+      } as Response);
 
       try {
         await updateBroadcast('Test broadcast');
@@ -385,5 +345,5 @@ describe('user API', () => {
   });
 });
 
-// Export MSW handlers for use in other tests or global setup
-export { userApiHandlers };
+// Export mock functions for reuse in other tests if needed
+export { mockFetch };
