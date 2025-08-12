@@ -2,11 +2,16 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './utils/devAuth' // Load dev authentication helper in development
-import { startMockWorker } from './mocks/browser'
 import './index.css'
 
-// Start MSW for API mocking in development/demo
-startMockWorker();
+// Conditionally start MSW for API mocking in development/demo
+if (import.meta.env.DEV || import.meta.env.VITE_APP_MODE === 'demo' || import.meta.env.VITE_ENABLE_MOCKING === 'true') {
+  import('./mocks/browser').then(({ startMockWorker }) => {
+    startMockWorker();
+  }).catch(error => {
+    console.warn('Failed to load MSW:', error);
+  });
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
