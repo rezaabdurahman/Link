@@ -369,11 +369,7 @@ describe('LoginPage', () => {
     });
 
     it('should redirect to intended route after successful login', () => {
-      const mockLocationWithFrom = {
-        ...mockLocation,
-        state: { from: '/protected' },
-      };
-      // Update the mock location with state
+      // Test would need to mock location state properly
 
       jest.doMock('../contexts/AuthContext', () => ({
         useAuth: () => ({

@@ -165,8 +165,8 @@ export const broadcastHandlers = [
 
       mockBroadcasts.set(userId, broadcast);
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Simulate network delay (reduced for testing)
+      await new Promise(resolve => setTimeout(resolve, process.env.NODE_ENV === 'test' ? 10 : 300));
 
       return res(ctx.status(201), ctx.json(broadcast));
     } catch (error) {
