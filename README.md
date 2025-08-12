@@ -42,7 +42,7 @@ The backend follows a microservices architecture with:
 - **API Gateway** - Central entry point, handles JWT authentication, routes requests
 - **User Service** - User management, authentication, friend system
 - **Location Service** - Location tracking and proximity features (planned)
-- **Chat Service** - Real-time messaging (planned)
+- **Chat Service** - Real-time messaging with WebSocket support ✅
 - **Discovery Service** - Broadcasts and user discovery (planned)
 
 ### Frontend
@@ -170,6 +170,159 @@ All requests go through the API Gateway at `http://localhost:8080`:
 ### Health Check
 - `GET /health` - Service health status
 
+## 💬 Chat Service
+
+The Chat Service provides real-time messaging capabilities with WebSocket support.
+
+### Setup Chat Service
+
+1. **Navigate to chat service directory**:
+   ```bash
+   cd backend/chat-svc
+   ```
+
+2. **Set up environment**:
+   ```bash
+   make dev-setup
+   # or manually:
+   cp .env.example .env
+   ```
+
+3. **Configure environment variables**:
+   Edit `.env` with your configuration (see Environment Variables section below)
+
+4. **Install dependencies**:
+   ```bash
+   make deps
+   ```
+
+5. **Run database migrations**:
+   ```bash
+   make migrate-up
+   ```
+
+6. **Start the service**:
+   ```bash
+   # Development mode with hot reload
+   make dev
+   
+   # Or regular run
+   make run
+   
+   # Or build and run binary
+   make build
+   ./bin/chat-svc
+   ```
+
+### Chat API Endpoints
+
+All chat endpoints require JWT authentication via `Authorization: Bearer <token>` header.
+
+#### Conversations
+- `GET /api/v1/chat/conversations` - Get user conversations
+  - Query params: `limit` (1-100, default 20), `offset` (default 0)
+- `POST /api/v1/chat/conversations` - Create new conversation
+  ```json
+  {
+    "type": "direct|group",
+    "name": "Group Chat Name", // required for group
+    "description": "Optional description",
+    "is_private": false,
+    "max_members": 50, // for group chats
+    "participant_ids": ["user-uuid-1", "user-uuid-2"]
+  }
+  ```
+
+#### Messages
+- `GET /api/v1/chat/conversations/{id}/messages` - Get conversation messages
+  - Query params: `limit` (1-100, default 50), `offset`, `before` (timestamp)
+- `POST /api/v1/chat/messages` - Send message
+  ```json
+  {
+    "conversation_id": "conversation-uuid",
+    "content": "Message content",
+    "message_type": "text|image|file|video|audio",
+    "parent_id": "parent-message-uuid" // for replies
+  }
+  ```
+
+#### WebSocket Connection
+- `WS /ws/chat/{room_id}` - Connect to chat room for real-time messaging
+
+### WebSocket Messages
+
+WebSocket messages follow this format:
+```json
+{
+  "type": "message|typing|stop_typing|user_joined|user_left|presence_update|message_read|heartbeat|error",
+  "conversation_id": "conversation-uuid",
+  "user_id": "user-uuid",
+  "message": { /* Message object */ },
+  "presence": { /* UserPresence object */ },
+  "data": { /* Additional data */ },
+  "error": "Error message if type is error",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+### Migration Commands
+
+```bash
+# Run all migrations up
+make migrate-up
+
+# Rollback migrations
+make migrate-down
+
+# Create new migration
+make migrate-create name=add_user_settings
+
+# Alternative migration command
+make migrate
+```
+
+### Development Commands
+
+```bash
+make help                 # Show all available commands
+make build               # Build the application
+make run                 # Run the application locally
+make dev                 # Start with hot reload (requires air)
+make test                # Run all tests
+make test-coverage       # Run tests with coverage report
+make lint                # Run golangci-lint
+make format              # Format Go code
+make clean               # Clean build artifacts
+make docker-build        # Build Docker image
+make docker-run          # Run Docker container
+make docs                # Generate API documentation
+make security-scan       # Run security scan with gosec
+```
+
+### API Documentation
+
+The chat service includes comprehensive OpenAPI 3.0 specification and generated HTML documentation.
+
+**View API Documentation:**
+- **OpenAPI Spec**: `backend/chat-svc/api/openapi.yaml`
+- **HTML Documentation**: `backend/chat-svc/docs/api.html`
+- **Generated with**: `redoc-cli build api/openapi.yaml --output docs/api.html`
+
+**API Documentation Includes:**
+- All REST endpoints with detailed parameters
+- Request/response schemas and examples
+- WebSocket message formats and types
+- Authentication requirements
+- Error response formats
+- Interactive API explorer
+
+**Regenerate Documentation:**
+```bash
+cd backend/chat-svc
+npm install -g redoc-cli  # or use: npx @redocly/cli build-docs
+redoc-cli build api/openapi.yaml --output docs/api.html
+```
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -184,6 +337,65 @@ VITE_API_BASE_URL=http://localhost:8080
 - Database credentials
 - Service URLs and timeouts
 - CORS origins
+
+#### Chat Service (.env)
+
+**Server Configuration**
+```bash
+SERVER_PORT=8080                    # Server port
+SERVER_HOST=0.0.0.0                # Server host
+```
+
+**Database Configuration**
+```bash
+DB_HOST=localhost                   # Database host
+DB_PORT=5432                       # Database port
+DB_NAME=chat_db                    # Database name
+DB_USER=postgres                   # Database user
+DB_PASSWORD=your_password          # Database password
+DB_SSL_MODE=disable                # SSL mode for development
+DB_MAX_OPEN_CONNS=25               # Max open connections
+DB_MAX_IDLE_CONNS=25               # Max idle connections
+DB_CONN_MAX_LIFETIME=300s          # Connection max lifetime
+```
+
+**Redis Configuration**
+```bash
+REDIS_HOST=localhost               # Redis host for WebSocket scaling
+REDIS_PORT=6379                    # Redis port
+REDIS_PASSWORD=                    # Redis password (optional)
+REDIS_DB=0                         # Redis database number
+```
+
+**JWT Configuration**
+```bash
+JWT_SECRET=your_jwt_secret_key_here # JWT secret key (MUST match API Gateway)
+JWT_EXPIRES_IN=24h                 # Token expiration time
+```
+
+**WebSocket Configuration**
+```bash
+WS_READ_BUFFER_SIZE=1024           # WebSocket read buffer size
+WS_WRITE_BUFFER_SIZE=1024          # WebSocket write buffer size
+WS_MAX_MESSAGE_SIZE=512            # Max WebSocket message size
+```
+
+**CORS & Security**
+```bash
+CORS_ALLOWED_ORIGINS=http://localhost:3000  # Allowed CORS origins
+CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+CORS_ALLOWED_HEADERS=Accept,Authorization,Content-Type,X-CSRF-Token,X-User-ID,X-User-Email,X-User-Name
+RATE_LIMIT_ENABLED=true            # Enable rate limiting
+RATE_LIMIT_REQUESTS_PER_MINUTE=100 # Rate limit per minute
+```
+
+**Logging & Environment**
+```bash
+LOG_LEVEL=info                     # Logging level (debug, info, warn, error)
+LOG_FORMAT=json                    # Log format (json, text)
+ENVIRONMENT=development            # Environment (development, staging, production)
+HEALTH_CHECK_INTERVAL=30s          # Health check interval
+```
 
 ## 🐛 Troubleshooting
 
@@ -211,7 +423,7 @@ VITE_API_BASE_URL=http://localhost:8080
 ## 🗺️ Roadmap
 
 - [ ] **Location Service** - GPS tracking and proximity features
-- [ ] **Chat Service** - Real-time messaging with WebSocket support
+- [x] **Chat Service** - Real-time messaging with WebSocket support ✅
 - [ ] **Discovery Service** - User discovery and broadcast features
 - [ ] **AI Service** - Intelligent matching and recommendations
 - [ ] **Stories Service** - Social stories and media sharing

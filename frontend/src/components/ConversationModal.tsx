@@ -2,9 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Send, Bot, User as UserIcon, Clock, MapPin, UserPlus, Bookmark, Check, X as XIcon } from 'lucide-react';
 import { Chat, User, Message } from '../types';
-import { nearbyUsers } from '../data/mockData';
 import ConversationalCueCards from './ConversationalCueCards';
 import { isFeatureEnabled } from '../config/featureFlags';
+import { 
+  getConversationMessages, 
+  sendMessage as sendApiMessage, 
+  apiMessageToUIMessage, 
+  chatWebSocket 
+} from '../services/chatClient';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ConversationModalProps {
   isOpen: boolean;
@@ -38,10 +44,14 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
 }): JSX.Element => {
   const [messages, setMessages] = useState<(Message | BotSummary)[]>([]);
   const [newMessage, setNewMessage] = useState<string>(initialMessage || '');
-  const [user, setUser] = useState<User | null>(null);
+  const [user] = useState<User | null>(null);
   const [savedContexts, setSavedContexts] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState<boolean>(false);
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  
+  const { user: currentUser, token } = useAuth();
 
   const scrollToBottom = (): void => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -51,59 +61,111 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     scrollToBottom();
   }, [messages]);
 
+  // Fetch messages and setup WebSocket when modal opens
   useEffect(() => {
-    if (isOpen && chat) {
-      // Find the user from nearby users
-      const foundUser = nearbyUsers.find(u => u.id === chat.participantId);
-      setUser(foundUser || null);
-      
-      // Generate mock bot summary
-      const botSummary: BotSummary = {
-        id: `bot-${Date.now()}`,
-        type: 'summary',
-        content: generateBotSummary(foundUser || { name: chat.participantName }),
-        timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-        activities: generateMockActivities()
-      };
-
-      // Create some initial conversation messages for demonstration
-      const initialMessages: Message[] = [
-        {
-          id: 'init1',
-          senderId: chat.participantId,
-          receiverId: 'current-user',
-          content: "Hey! How's your week going?",
-          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-          type: 'text'
-        },
-        {
-          id: 'init2', 
-          senderId: 'current-user',
-          receiverId: chat.participantId,
-          content: "Pretty good! Been busy with work but looking forward to the weekend. How about you?",
-          timestamp: new Date(Date.now() - 23 * 60 * 60 * 1000), // 23 hours ago
-          type: 'text'
-        }
-      ];
-      
-      // Set initial messages (mock conversation + bot summary)
-      // Use initialMessages if chat.messages is undefined OR empty
-      const chatMessages = (chat.messages && chat.messages.length > 0) ? chat.messages : initialMessages;
-      
-      // Only add bot summary for friends (isFriend === true)
-      if (chat.isFriend) {
-        setMessages([...chatMessages, botSummary]);
-      } else {
-        setMessages([...chatMessages]);
-      }
+    if (isOpen && chat && token) {
+      loadConversationMessages();
+      setupWebSocket();
       
       // Set initial message if provided
       if (initialMessage) {
         setNewMessage(initialMessage);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
+      
+      // Cleanup function
+      return () => {
+        chatWebSocket.disconnect();
+      };
     }
-  }, [isOpen, chat, initialMessage]);
+  }, [isOpen, chat, initialMessage, token]);
+
+  // Load conversation messages from API
+  const loadConversationMessages = async () => {
+    if (!chat || !token) return;
+    
+    try {
+      setLoading(true);
+      const response = await getConversationMessages(chat.id, { limit: 50 });
+      const uiMessages = response.data.map(apiMessage => ({
+        ...apiMessageToUIMessage(apiMessage),
+        receiverId: apiMessage.sender_id === currentUser?.id ? chat.participantId : currentUser?.id || '',
+        senderId: apiMessage.sender_id === currentUser?.id ? 'current-user' : chat.participantId,
+      }));
+      
+      // Generate bot summary for friends
+      const botSummary: BotSummary = {
+        id: `bot-${Date.now()}`,
+        type: 'summary',
+        content: generateBotSummary({ name: chat.participantName }),
+        timestamp: new Date(Date.now() - 5 * 60 * 1000),
+        activities: generateMockActivities()
+      };
+      
+      // Only add bot summary for friends
+      if (chat.isFriend) {
+        setMessages([...uiMessages, botSummary]);
+      } else {
+        setMessages(uiMessages);
+      }
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+      // Fall back to empty messages array
+      setMessages([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Setup WebSocket connection
+  const setupWebSocket = () => {
+    if (!chat || !token?.token) return;
+    
+    // Setup WebSocket event handlers
+    chatWebSocket.onMessage = (event) => {
+      if (event.message) {
+        const newMessage: Message = {
+          ...apiMessageToUIMessage(event.message),
+          senderId: event.user_id === currentUser?.id ? 'current-user' : chat.participantId,
+          receiverId: event.user_id === currentUser?.id ? chat.participantId : currentUser?.id || '',
+        };
+        setMessages(prev => [...prev, newMessage]);
+      }
+    };
+    
+    chatWebSocket.onTyping = (userId) => {
+      if (userId !== currentUser?.id) {
+        setTypingUsers(prev => new Set([...prev, userId]));
+        // Remove typing indicator after 3 seconds
+        setTimeout(() => {
+          setTypingUsers(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(userId);
+            return newSet;
+          });
+        }, 3000);
+      }
+    };
+    
+    chatWebSocket.onStopTyping = (userId) => {
+      setTypingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    };
+    
+    chatWebSocket.onOpen = () => {
+      console.log('Connected to WebSocket for conversation:', chat.id);
+    };
+    
+    chatWebSocket.onError = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
+    // Connect to WebSocket
+    chatWebSocket.connect(chat.id, token.token);
+  };
 
   const generateBotSummary = (user: { name: string }): string => {
     const summaries = [
@@ -167,104 +229,88 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     });
   };
 
-  const handleSendMessage = (): void => {
-    if (newMessage.trim() && chat) {
-      const messageContent = newMessage.trim();
-      const currentUserName = 'Alex Thompson'; // In real app, get from current user context
+  const handleSendMessage = async (): Promise<void> => {
+    if (!newMessage.trim() || !chat || !currentUser) return;
+    
+    const messageContent = newMessage.trim();
+    // const currentUserName = `${currentUser.first_name} ${currentUser.last_name}`;
+    
+    // Check if this is the first message to a non-friend (keep this logic for permission system)
+    const isFirstMessageToNonFriend = !chat.isFriend && messages.length <= 2;
+    
+    if (isFirstMessageToNonFriend) {
+      // Handle permission-based messaging (keep existing logic for demo)
+      const queuedMessageId = `queued-${Date.now()}`;
       
-      // Check if this is the first message to a non-friend
-      const isFirstMessageToNonFriend = !chat.isFriend && messages.length <= 2; // Only initial demo messages
+      const queuedMessage: Message = {
+        id: queuedMessageId,
+        content: messageContent,
+        senderId: 'current-user',
+        receiverId: chat.participantId,
+        timestamp: new Date(),
+        type: 'queued'
+      };
       
-      if (isFirstMessageToNonFriend) {
-        // Queue the message and show LinkBot permission request
-        const queuedMessageId = `queued-${Date.now()}`;
-        
-        // Add queued message (user sees their message)
-        const queuedMessage: Message = {
-          id: queuedMessageId,
-          content: messageContent,
-          senderId: 'current-user',
-          receiverId: chat.participantId,
+      setMessages(prev => [...prev, queuedMessage]);
+      setNewMessage('');
+      
+      // Add LinkBot permission flow (simplified for demo)
+      setTimeout(() => {
+        const linkBotMessage: Message = {
+          id: `linkbot-${Date.now()}`,
+          content: `I'm asking ${chat.participantName} for permission to receive your message. I'll let you know when they respond!`,
+          senderId: 'linkbot',
+          receiverId: 'current-user',
           timestamp: new Date(),
-          type: 'queued'
+          type: 'system'
         };
         
-        setMessages(prev => [...prev, queuedMessage]);
-        setNewMessage('');
+        setMessages(prev => [...prev, linkBotMessage]);
         
-        // Add LinkBot message about requesting permission
+        // Auto-approve for demo after 2 seconds
         setTimeout(() => {
-          const linkBotMessage: Message = {
-            id: `linkbot-${Date.now()}`,
-            content: `I'm asking ${chat.participantName} for permission to receive your message. I'll let you know when they respond!`,
-            senderId: 'linkbot',
-            receiverId: 'current-user',
-            timestamp: new Date(),
-            type: 'system'
-          };
-          
-          setMessages(prev => [...prev, linkBotMessage]);
-          
-          // Simulate permission request to recipient after delay
-          setTimeout(() => {
-            const permissionRequest: Message = {
-              id: `permission-${Date.now()}`,
-              content: `${currentUserName} would like to send you a message. Would you like to see it?`,
-              senderId: 'linkbot',
-              receiverId: chat.participantId,
-              timestamp: new Date(),
-              type: 'permission-request',
-              permissionData: {
-                originalMessage: messageContent,
-                senderName: currentUserName,
-                queuedMessageId: queuedMessageId
-              }
-            };
-            
-            // Simulate recipient seeing the permission request
-            setMessages(prev => [...prev, permissionRequest]);
-            
-            // Auto-approve for demo (simulate user clicking "Yes")
-            setTimeout(() => {
-              handlePermissionResponse(permissionRequest.id, true, queuedMessageId);
-            }, 2000);
-          }, 1500);
-        }, 800);
-      } else {
-        // Normal message flow for friends or after permission is granted
-        const message: Message = {
-          id: Date.now().toString(),
+          handlePermissionResponse('', true, queuedMessageId);
+        }, 2000);
+      }, 800);
+    } else {
+      // Normal message flow - use real API and WebSocket
+      try {
+        // Optimistic update - add message immediately
+        const optimisticMessage: Message = {
+          id: `temp-${Date.now()}`,
           content: messageContent,
           senderId: 'current-user',
           receiverId: chat.participantId,
           timestamp: new Date(),
           type: 'text'
         };
-
-        setMessages(prev => [...prev, message]);
+        
+        setMessages(prev => [...prev, optimisticMessage]);
         setNewMessage('');
         
-        // Simulate recipient response after a delay
+        // Send via WebSocket if connected, otherwise use REST API
+        if (chatWebSocket.isConnected()) {
+          chatWebSocket.sendMessage(messageContent);
+        } else {
+          // Fallback to REST API
+          await sendApiMessage({
+            conversation_id: chat.id,
+            content: messageContent,
+            message_type: 'text'
+          });
+        }
+        
+        // Remove optimistic message and let WebSocket/API response handle the real message
+        // The real message will be received via WebSocket onMessage handler
         setTimeout(() => {
-          const responses = [
-            "Hey! Great to hear from you 😊",
-            "Thanks for reaching out!",
-            "Perfect timing! I was just thinking about you",
-            "Absolutely! Let's catch up soon",
-            "That sounds amazing! Tell me more"
-          ];
-          
-          const response: Message = {
-            id: (Date.now() + 1).toString(),
-            content: responses[Math.floor(Math.random() * responses.length)],
-            senderId: chat.participantId,
-            receiverId: 'current-user',
-            timestamp: new Date(),
-            type: 'text'
-          };
-
-          setMessages(prev => [...prev, response]);
-        }, 1000 + Math.random() * 2000);
+          setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
+        }, 1000);
+        
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        // Revert optimistic update on error
+        setMessages(prev => prev.filter(msg => msg.id.startsWith('temp-')));
+        setNewMessage(messageContent); // Restore message content
       }
     }
   };
@@ -398,6 +444,13 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {loading && messages.length === 0 && (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-aqua"></div>
+              <span className="ml-2 text-gray-500 text-sm">Loading messages...</span>
+            </div>
+          )}
+          
           {messages.map((message) => {
             if ('type' in message && message.type === 'summary') {
               // Bot summary message
@@ -575,6 +628,36 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               }
             }
           })}
+          
+          {/* Typing Indicator */}
+          {typingUsers.size > 0 && (
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-surface-hover/50 flex items-center justify-center flex-shrink-0">
+                {user?.profilePicture ? (
+                  <img 
+                    src={user.profilePicture} 
+                    alt={chat.participantName}
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <UserIcon size={16} className="text-gray-600" />
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="bg-surface-hover text-gray-900 rounded-2xl rounded-bl-sm p-3 max-w-[80px]">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {chat.participantName} is typing...
+                </p>
+              </div>
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
 

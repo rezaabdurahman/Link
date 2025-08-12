@@ -1,13 +1,10 @@
-go 1.21
+go 1.23.0
+
+toolchain go1.24.6
 
 use (
-    ./backend/api-gateway
-    ./backend/user-svc
-    ./backend/location-svc
-    ./backend/discovery-svc
-    ./backend/chat-svc
-    ./backend/ai-svc
-    ./backend/stories-svc
-    ./backend/opportunities-svc
-    ./backend/shared
+	./backend/api-gateway
+	./backend/chat-svc
+	./backend/discovery-svc
+	./backend/user-svc
 )

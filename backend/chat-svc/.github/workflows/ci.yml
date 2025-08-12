@@ -1,0 +1,343 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.23'
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/chat-svc
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Wait for PostgreSQL
+        run: |
+          timeout 60s bash -c 'until pg_isready -h localhost -p 5432 -U testuser; do sleep 2; done'
+
+      - name: Run unit tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: testuser
+          DB_PASSWORD: testpass
+          DB_NAME: testdb
+          DB_SSL_MODE: disable
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-for-testing-only
+
+      - name: Check test coverage
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total test coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+            echo "::error::Test coverage $COVERAGE% is below the required 60%"
+            exit 1
+          fi
+          echo "::notice::Test coverage $COVERAGE% meets the required minimum of 60%"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Build application
+        run: go build -o chat-svc ./cmd/main.go
+
+      - name: Start application in background
+        run: |
+          ./chat-svc &
+          APP_PID=$!
+          echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+          sleep 10  # Give the app time to start
+        env:
+          SERVER_HOST: localhost
+          SERVER_PORT: 8080
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: testuser
+          DB_PASSWORD: testpass
+          DB_NAME: testdb
+          DB_SSL_MODE: disable
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-for-testing-only
+          LOG_LEVEL: error
+
+      - name: Wait for application to be ready
+        run: |
+          timeout 60s bash -c 'until curl -s http://localhost:8080/health/liveness > /dev/null; do sleep 2; done'
+
+      - name: Install Newman
+        run: npm install -g newman
+
+      - name: Run API contract tests with Newman
+        run: |
+          newman run test/api/chat-svc-api-tests.postman_collection.json \
+            --environment <(echo '{}') \
+            --reporters cli,json \
+            --reporter-json-export newman-results.json \
+            --bail \
+            --color off \
+            --disable-unicode
+        continue-on-error: true
+
+      - name: Display Newman results
+        if: always()
+        run: |
+          if [ -f newman-results.json ]; then
+            echo "::group::Newman Test Results"
+            cat newman-results.json | jq '.run.stats'
+            echo "::endgroup::"
+            
+            # Check if tests passed
+            FAILURES=$(cat newman-results.json | jq '.run.stats.assertions.failed')
+            if [ "$FAILURES" -gt 0 ]; then
+              echo "::error::$FAILURES API contract tests failed"
+              exit 1
+            fi
+          fi
+
+      - name: Stop application
+        if: always()
+        run: |
+          if [ ! -z "$APP_PID" ]; then
+            kill $APP_PID || true
+          fi
+
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, test, integration-test]
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-name: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+            COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build.outputs.image-name }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://chat-svc-staging.example.com
+
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment"
+          echo "Image: ${{ needs.build.outputs.image-name }}"
+          echo "Digest: ${{ needs.build.outputs.image-digest }}"
+          # Add your staging deployment logic here
+          # This could include:
+          # - Updating Kubernetes manifests
+          # - Triggering deployment via API
+          # - Using Helm charts
+          # - etc.
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://chat-svc.example.com
+
+    steps:
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment"
+          echo "Image: ${{ needs.build.outputs.image-name }}"
+          echo "Digest: ${{ needs.build.outputs.image-digest }}"
+          # Add your production deployment logic here
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [lint, test, integration-test, build]
+    if: always()
+
+    steps:
+      - name: Notify on success
+        if: needs.lint.result == 'success' && needs.test.result == 'success' && needs.integration-test.result == 'success' && needs.build.result == 'success'
+        run: |
+          echo "✅ All CI/CD pipeline steps completed successfully!"
+          # Add notification logic here (Slack, Discord, email, etc.)
+
+      - name: Notify on failure
+        if: needs.lint.result == 'failure' || needs.test.result == 'failure' || needs.integration-test.result == 'failure' || needs.build.result == 'failure'
+        run: |
+          echo "❌ CI/CD pipeline failed!"
+          # Add failure notification logic here

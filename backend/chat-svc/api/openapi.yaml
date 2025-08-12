@@ -1,0 +1,569 @@
+openapi: 3.0.3
+info:
+  title: Chat Service API
+  description: Real-time chat service for Link-chat application
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://example.com/support
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /chat/conversations:
+    get:
+      summary: Get user conversations
+      description: Retrieve a paginated list of conversations for the authenticated user
+      operationId: getConversations
+      tags:
+        - conversations
+      parameters:
+        - name: limit
+          in: query
+          description: Number of conversations per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Number of conversations to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create new conversation
+      description: Create a new group conversation or direct conversation
+      operationId: createConversation
+      tags:
+        - conversations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '201':
+          description: Conversation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /chat/conversations/{id}/messages:
+    get:
+      summary: Get conversation messages
+      description: Retrieve messages from a specific conversation
+      operationId: getConversationMessages
+      tags:
+        - messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          description: Number of messages per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: Number of messages to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: before
+          in: query
+          description: Get messages before this timestamp
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /chat/messages:
+    post:
+      summary: Send message
+      description: Send a message to a conversation
+      operationId: sendMessage
+      tags:
+        - messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the conversation
+        name:
+          type: string
+          description: Conversation name (for group chats)
+          nullable: true
+        description:
+          type: string
+          description: Conversation description
+          nullable: true
+        type:
+          $ref: '#/components/schemas/ConversationType'
+        is_private:
+          type: boolean
+          description: Whether the conversation is private
+        max_members:
+          type: integer
+          description: Maximum number of members allowed
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+          description: ID of the user who created the conversation
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+          description: List of conversation participants
+        unread_count:
+          type: integer
+          description: Number of unread messages for the current user
+        last_message:
+          $ref: '#/components/schemas/Message'
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - is_private
+        - created_by
+        - participants
+        - unread_count
+        - created_at
+        - updated_at
+
+    ConversationType:
+      type: string
+      enum:
+        - direct
+        - group
+      description: Type of conversation
+
+    Participant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the participant
+        user_id:
+          type: string
+          format: uuid
+          description: User ID
+        role:
+          $ref: '#/components/schemas/ParticipantRole'
+        joined_at:
+          type: string
+          format: date-time
+        left_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - user_id
+        - role
+        - joined_at
+
+    ParticipantRole:
+      type: string
+      enum:
+        - owner
+        - admin
+        - moderator
+        - member
+      description: Participant role in the conversation
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the message
+        conversation_id:
+          type: string
+          format: uuid
+          description: ID of the conversation this message belongs to
+        user_id:
+          type: string
+          format: uuid
+          description: ID of the user who sent the message
+        content:
+          type: string
+          description: Message content
+        message_type:
+          $ref: '#/components/schemas/MessageType'
+        parent_id:
+          type: string
+          format: uuid
+          description: ID of the parent message (for replies)
+          nullable: true
+        edited_at:
+          type: string
+          format: date-time
+          description: When the message was last edited
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversation_id
+        - user_id
+        - content
+        - message_type
+        - created_at
+        - updated_at
+
+    MessageType:
+      type: string
+      enum:
+        - text
+        - image
+        - file
+        - video
+        - audio
+        - system
+      description: Type of message
+
+    CreateConversationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Conversation name (required for group conversations)
+          nullable: true
+        description:
+          type: string
+          description: Conversation description
+          nullable: true
+        type:
+          $ref: '#/components/schemas/ConversationType'
+        is_private:
+          type: boolean
+          description: Whether the conversation is private
+          default: false
+        max_members:
+          type: integer
+          description: Maximum number of members (for group conversations)
+          nullable: true
+        participant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: List of user IDs to add as participants
+      required:
+        - type
+
+    SendMessageRequest:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: ID of the conversation to send message to
+        content:
+          type: string
+          description: Message content
+          minLength: 1
+          maxLength: 4000
+        message_type:
+          $ref: '#/components/schemas/MessageType'
+          default: text
+        parent_id:
+          type: string
+          format: uuid
+          description: ID of the parent message (for replies)
+          nullable: true
+      required:
+        - conversation_id
+        - content
+
+    ConversationsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+        total:
+          type: integer
+          description: Total number of conversations
+        limit:
+          type: integer
+          description: Number of conversations per page
+        offset:
+          type: integer
+          description: Number of conversations skipped
+        has_more:
+          type: boolean
+          description: Whether there are more conversations available
+      required:
+        - data
+        - total
+        - limit
+        - offset
+        - has_more
+
+    MessagesResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        total:
+          type: integer
+          description: Total number of messages
+        limit:
+          type: integer
+          description: Number of messages per page
+        offset:
+          type: integer
+          description: Number of messages skipped
+        has_more:
+          type: boolean
+          description: Whether there are more messages available
+      required:
+        - data
+        - total
+        - limit
+        - offset
+        - has_more
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: integer
+          description: HTTP status code
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional error details
+          nullable: true
+      required:
+        - error
+        - code
+
+    WebSocketMessage:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/WebSocketMessageType'
+        conversation_id:
+          type: string
+          format: uuid
+          nullable: true
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        message:
+          $ref: '#/components/schemas/Message'
+          nullable: true
+        presence:
+          $ref: '#/components/schemas/UserPresence'
+          nullable: true
+        data:
+          type: object
+          description: Additional data for the message
+          nullable: true
+        error:
+          type: string
+          description: Error message
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - type
+
+    WebSocketMessageType:
+      type: string
+      enum:
+        - message
+        - typing
+        - stop_typing
+        - user_joined
+        - user_left
+        - presence_update
+        - message_read
+        - heartbeat
+        - error
+      description: Type of WebSocket message
+
+    UserPresence:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PresenceStatus'
+        last_seen:
+          type: string
+          format: date-time
+        conversation_id:
+          type: string
+          format: uuid
+          description: Current conversation if online
+          nullable: true
+      required:
+        - user_id
+        - status
+        - last_seen
+
+    PresenceStatus:
+      type: string
+      enum:
+        - online
+        - away
+        - offline
+        - busy
+      description: User presence status
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

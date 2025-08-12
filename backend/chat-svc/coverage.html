@@ -1,0 +1,2504 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>handler: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/link-app/chat-svc/internal/handler/chat_handler.go (13.1%)</option>
+				
+				<option value="file1">github.com/link-app/chat-svc/internal/handler/health_handler.go (6.3%)</option>
+				
+				<option value="file2">github.com/link-app/chat-svc/internal/service/chat.go (0.0%)</option>
+				
+				<option value="file3">github.com/link-app/chat-svc/internal/service/chat_service.go (14.0%)</option>
+				
+				<option value="file4">github.com/link-app/chat-svc/internal/service/redis.go (0.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package handler
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "net/http"
+        "strconv"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/go-chi/chi/v5"
+        "github.com/google/uuid"
+        "github.com/gorilla/websocket"
+        openapi_types "github.com/oapi-codegen/runtime/types"
+        "github.com/sirupsen/logrus"
+
+        "github.com/link-app/chat-svc/internal/api"
+        "github.com/link-app/chat-svc/internal/middleware"
+        "github.com/link-app/chat-svc/internal/model"
+        "github.com/link-app/chat-svc/internal/service"
+)
+
+// ChatHandler handles HTTP requests and WebSocket connections for chat operations
+type ChatHandler struct {
+        service     *service.Service
+        logger      *logrus.Logger
+        upgrader    websocket.Upgrader
+        authMw      *middleware.AuthMiddleware
+        connections map[string]*websocket.Conn // conversation_id:user_id -&gt; connection mapping
+        mu          sync.RWMutex               // Mutex for thread-safe connections map access
+}
+
+// NewChatHandler creates a new chat handler
+func NewChatHandler(service *service.Service, logger *logrus.Logger, authMw *middleware.AuthMiddleware) *ChatHandler <span class="cov0" title="0">{
+        return &amp;ChatHandler{
+                service: service,
+                logger:  logger,
+                upgrader: websocket.Upgrader{
+                        ReadBufferSize:  1024,
+                        WriteBufferSize: 1024,
+                        CheckOrigin: func(r *http.Request) bool </span><span class="cov0" title="0">{
+                                // In production, implement proper origin checking
+                                return true
+                        }</span>,
+                        Subprotocols: []string{"jwt"},
+                },
+                authMw:      authMw,
+                connections: make(map[string]*websocket.Conn),
+                mu:          sync.RWMutex{},
+        }
+}
+
+// Routes returns the router with all chat routes
+func (h *ChatHandler) Routes() chi.Router <span class="cov0" title="0">{
+        r := chi.NewRouter()
+
+        // Apply authentication middleware to all routes
+        r.Use(h.authMw.Middleware)
+
+        // Conversation routes
+        r.Get("/conversations", h.GetConversations)
+        r.Post("/conversations", h.CreateConversation)
+        r.Get("/conversations/{id}/messages", h.GetConversationMessages)
+
+        // Message routes
+        r.Post("/messages", h.SendMessage)
+
+        return r
+}</span>
+
+// GetConversations handles GET /api/v1/chat/conversations
+func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        userID, ok := middleware.GetUserIDFromContext(r.Context())
+        if !ok </span><span class="cov8" title="1">{
+                h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+                return
+        }</span>
+
+        // Parse query parameters
+        <span class="cov0" title="0">limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+        if err != nil || limit &lt;= 0 </span><span class="cov0" title="0">{
+                limit = 20
+        }</span>
+        <span class="cov0" title="0">if limit &gt; 100 </span><span class="cov0" title="0">{
+                limit = 100
+        }</span>
+
+        <span class="cov0" title="0">offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+        if err != nil || offset &lt; 0 </span><span class="cov0" title="0">{
+                offset = 0
+        }</span>
+
+        <span class="cov0" title="0">conversations, total, err := h.service.GetConversationService().GetUserConversations(r.Context(), userID, limit, offset)
+        if err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Failed to get user conversations")
+                h.writeError(w, "Failed to get conversations", http.StatusInternalServerError)
+                return
+        }</span>
+
+        // Convert to API response format
+        <span class="cov0" title="0">apiConversations := make([]api.Conversation, 0, len(conversations))
+        for _, conv := range conversations </span><span class="cov0" title="0">{
+                apiConv := h.mapToAPIConversation(conv)
+                apiConversations = append(apiConversations, apiConv)
+        }</span>
+
+        <span class="cov0" title="0">response := api.ConversationsResponse{
+                Data:    apiConversations,
+                Total:   total,
+                Limit:   limit,
+                Offset:  offset,
+                HasMore: total &gt; offset+limit,
+        }
+
+        h.writeJSON(w, response, http.StatusOK)</span>
+}
+
+// CreateConversation handles POST /api/v1/chat/conversations
+func (h *ChatHandler) CreateConversation(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        userID, ok := middleware.GetUserIDFromContext(r.Context())
+        if !ok </span><span class="cov0" title="0">{
+                h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req api.CreateConversationRequest
+        if err := json.NewDecoder(r.Body).Decode(&amp;req); err != nil </span><span class="cov8" title="1">{
+                h.writeError(w, "Invalid request body", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Validate request
+        <span class="cov8" title="1">if req.Type == "" </span><span class="cov8" title="1">{
+                h.writeError(w, "Conversation type is required", http.StatusBadRequest)
+                return
+        }</span>
+
+        // For group conversations, name is required
+        <span class="cov0" title="0">if req.Type == api.Group &amp;&amp; (req.Name == nil || *req.Name == "") </span><span class="cov0" title="0">{
+                h.writeError(w, "Name is required for group conversations", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Convert to internal model
+        <span class="cov0" title="0">createReq := model.CreateRoomRequest{
+                Name:        getStringOrEmpty(req.Name),
+                Description: getStringOrEmpty(req.Description),
+                IsPrivate:   getBoolOrDefault(req.IsPrivate, false),
+                MaxMembers:  getIntOrDefault(req.MaxMembers, 100),
+        }
+
+        // Get participant IDs
+        participantIDs := []uuid.UUID{}
+        if req.ParticipantIds != nil </span><span class="cov0" title="0">{
+                for _, id := range *req.ParticipantIds </span><span class="cov0" title="0">{
+                        participantIDs = append(participantIDs, uuid.UUID(id))
+                }</span>
+        }
+
+        <span class="cov0" title="0">var conversation *model.ChatRoom
+        var err error
+
+        if req.Type == api.Direct </span><span class="cov0" title="0">{
+                // For direct conversations, we need exactly one participant
+                if len(participantIDs) != 1 </span><span class="cov0" title="0">{
+                        h.writeError(w, "Direct conversations require exactly one participant", http.StatusBadRequest)
+                        return
+                }</span>
+                <span class="cov0" title="0">conversation, err = h.service.GetConversationService().CreateDirectConversation(r.Context(), userID, participantIDs[0])</span>
+        } else<span class="cov0" title="0"> {
+                // For group conversations
+                conversation, err = h.service.GetConversationService().CreateGroupConversation(r.Context(), createReq, userID, participantIDs)
+        }</span>
+
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Failed to create conversation")
+                h.writeError(w, "Failed to create conversation", http.StatusInternalServerError)
+                return
+        }</span>
+
+        // Convert to API response
+        <span class="cov0" title="0">apiConv := h.mapToAPIConversation(&amp;model.ConversationWithUnread{
+                ChatRoom:     conversation,
+                UnreadCount:  0,
+                LastMessage:  nil,
+        })
+
+        h.writeJSON(w, apiConv, http.StatusCreated)</span>
+}
+
+// GetConversationMessages handles GET /api/v1/chat/conversations/{id}/messages
+func (h *ChatHandler) GetConversationMessages(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        userID, ok := middleware.GetUserIDFromContext(r.Context())
+        if !ok </span><span class="cov0" title="0">{
+                h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+                return
+        }</span>
+
+        // Parse conversation ID
+        <span class="cov8" title="1">conversationIDStr := chi.URLParam(r, "id")
+        conversationID, err := uuid.Parse(conversationIDStr)
+        if err != nil </span><span class="cov8" title="1">{
+                h.writeError(w, "Invalid conversation ID", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Parse query parameters
+        <span class="cov0" title="0">limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+        if err != nil || limit &lt;= 0 </span><span class="cov0" title="0">{
+                limit = 50
+        }</span>
+        <span class="cov0" title="0">if limit &gt; 100 </span><span class="cov0" title="0">{
+                limit = 100
+        }</span>
+
+        <span class="cov0" title="0">offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+        if err != nil || offset &lt; 0 </span><span class="cov0" title="0">{
+                offset = 0
+        }</span>
+
+        <span class="cov0" title="0">var before *time.Time
+        beforeStr := r.URL.Query().Get("before")
+        if beforeStr != "" </span><span class="cov0" title="0">{
+                t, err := time.Parse(time.RFC3339, beforeStr)
+                if err == nil </span><span class="cov0" title="0">{
+                        before = &amp;t
+                }</span>
+        }
+
+        // Get messages
+        <span class="cov0" title="0">messages, total, err := h.service.GetMessageService().GetConversationMessages(
+                r.Context(), conversationID, userID, limit, offset, before,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not a member") </span><span class="cov0" title="0">{
+                        h.writeError(w, "Conversation not found or access denied", http.StatusNotFound)
+                        return
+                }</span>
+                <span class="cov0" title="0">h.logger.WithError(err).Error("Failed to get conversation messages")
+                h.writeError(w, "Failed to get messages", http.StatusInternalServerError)
+                return</span>
+        }
+
+        // Convert to API response
+        <span class="cov0" title="0">apiMessages := make([]api.Message, 0, len(messages))
+        for _, msg := range messages </span><span class="cov0" title="0">{
+                apiMessages = append(apiMessages, h.mapToAPIMessage(msg))
+        }</span>
+
+        <span class="cov0" title="0">response := api.MessagesResponse{
+                Data:    apiMessages,
+                Total:   total,
+                Limit:   limit,
+                Offset:  offset,
+                HasMore: total &gt; offset+limit,
+        }
+
+        h.writeJSON(w, response, http.StatusOK)</span>
+}
+
+// SendMessage handles POST /api/v1/chat/messages
+func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        userID, ok := middleware.GetUserIDFromContext(r.Context())
+        if !ok </span><span class="cov0" title="0">{
+                h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req api.SendMessageRequest
+        if err := json.NewDecoder(r.Body).Decode(&amp;req); err != nil </span><span class="cov8" title="1">{
+                h.writeError(w, "Invalid request body", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Validate request
+        <span class="cov8" title="1">if req.Content == "" </span><span class="cov8" title="1">{
+                h.writeError(w, "Message content is required", http.StatusBadRequest)
+                return
+        }</span>
+
+        <span class="cov0" title="0">conversationID := uuid.UUID(req.ConversationId)
+
+        // Set default message type if not provided
+        messageType := model.MessageTypeText
+        if req.MessageType != nil </span><span class="cov0" title="0">{
+                messageType = model.MessageType(string(*req.MessageType))
+        }</span>
+
+        // Convert parent ID if provided
+        <span class="cov0" title="0">var parentID *uuid.UUID
+        if req.ParentId != nil </span><span class="cov0" title="0">{
+                pid := uuid.UUID(*req.ParentId)
+                parentID = &amp;pid
+        }</span>
+
+        // Create internal request model
+        <span class="cov0" title="0">msgReq := model.SendMessageRequest{
+                Content:     req.Content,
+                MessageType: messageType,
+                ParentID:    parentID,
+        }
+
+        // Send message
+        message, err := h.service.GetMessageService().SendMessage(r.Context(), msgReq, conversationID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not a member") </span><span class="cov0" title="0">{
+                        h.writeError(w, "Conversation not found or access denied", http.StatusNotFound)
+                        return
+                }</span>
+                <span class="cov0" title="0">h.logger.WithError(err).Error("Failed to send message")
+                h.writeError(w, "Failed to send message", http.StatusInternalServerError)
+                return</span>
+        }
+
+        // Convert to API response
+        <span class="cov0" title="0">apiMessage := h.mapToAPIMessage(message)
+
+        // Broadcast message to WebSocket clients
+        h.broadcastMessage(message)
+
+        h.writeJSON(w, apiMessage, http.StatusCreated)</span>
+}
+
+// HandleWebSocket handles WebSocket connections for real-time chat
+func (h *ChatHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        // Verify subprotocol
+        if !containsSubprotocol(r.Header.Get("Sec-WebSocket-Protocol"), "jwt") </span><span class="cov0" title="0">{
+                h.logger.Error("WebSocket connection missing JWT subprotocol")
+                http.Error(w, "WebSocket protocol 'jwt' is required", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Get JWT token from query parameters
+        <span class="cov0" title="0">token := r.URL.Query().Get("token")
+        if token == "" </span><span class="cov0" title="0">{
+                h.logger.Error("Missing JWT token for WebSocket connection")
+                http.Error(w, "Missing JWT token", http.StatusUnauthorized)
+                return
+        }</span>
+
+        // Validate JWT token
+        <span class="cov0" title="0">claims, err := h.authMw.ValidateWebSocketToken(token)
+        if err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Invalid JWT token for WebSocket connection")
+                http.Error(w, "Invalid JWT token", http.StatusUnauthorized)
+                return
+        }</span>
+
+        <span class="cov0" title="0">userID := claims.UserID
+
+        // Parse conversation ID from path
+        conversationIDStr := chi.URLParam(r, "id")
+        conversationID, err := uuid.Parse(conversationIDStr)
+        if err != nil </span><span class="cov0" title="0">{
+                h.logger.Error("Invalid conversation ID for WebSocket connection")
+                http.Error(w, "Invalid conversation ID", http.StatusBadRequest)
+                return
+        }</span>
+
+        // Verify user is a member of the conversation
+        <span class="cov0" title="0">isMember, err := h.service.GetConversationService().IsConversationMember(r.Context(), conversationID, userID)
+        if err != nil || !isMember </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("User is not a member of the conversation")
+                http.Error(w, "Not a member of the conversation", http.StatusForbidden)
+                return
+        }</span>
+
+        // Upgrade connection to WebSocket
+        <span class="cov0" title="0">conn, err := h.upgrader.Upgrade(w, r, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Failed to upgrade WebSocket connection")
+                return
+        }</span>
+
+        // Store connection
+        <span class="cov0" title="0">connectionKey := fmt.Sprintf("%s:%s", conversationID.String(), userID.String())
+        
+        h.mu.Lock()
+        h.connections[connectionKey] = conn
+        h.mu.Unlock()
+        
+        h.logger.WithFields(logrus.Fields{
+                "conversation_id": conversationID,
+                "user_id":         userID,
+        }).Info("WebSocket connection established")
+
+        // Notify other users that this user joined
+        h.broadcastUserJoined(conversationID, userID)
+
+        // Handle incoming messages
+        go h.handleWebSocketConnection(conn, conversationID, userID)</span>
+}
+
+
+// Helper methods
+func (h *ChatHandler) writeJSON(w http.ResponseWriter, data interface{}, statusCode int) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(statusCode)
+        json.NewEncoder(w).Encode(data)
+}</span>
+
+func (h *ChatHandler) writeError(w http.ResponseWriter, message string, statusCode int) <span class="cov8" title="1">{
+        response := api.Error{
+                Error: message,
+                Code:  statusCode,
+        }
+        h.writeJSON(w, response, statusCode)
+}</span>
+
+// handleWebSocketConnection processes incoming WebSocket messages for a connection
+func (h *ChatHandler) handleWebSocketConnection(conn *websocket.Conn, conversationID, userID uuid.UUID) <span class="cov0" title="0">{
+        defer func() </span><span class="cov0" title="0">{
+                conn.Close()
+                
+                connectionKey := fmt.Sprintf("%s:%s", conversationID.String(), userID.String())
+                
+                h.mu.Lock()
+                delete(h.connections, connectionKey)
+                h.mu.Unlock()
+                
+                // Notify other users that this user left
+                h.broadcastUserLeft(conversationID, userID)
+                
+                h.logger.WithFields(logrus.Fields{
+                        "conversation_id": conversationID,
+                        "user_id":         userID,
+                }).Info("WebSocket connection closed")
+        }</span>()
+
+        <span class="cov0" title="0">for </span><span class="cov0" title="0">{
+                var wsMessage model.WebSocketMessage
+                err := conn.ReadJSON(&amp;wsMessage)
+                if err != nil </span><span class="cov0" title="0">{
+                        if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) </span><span class="cov0" title="0">{
+                                h.logger.WithError(err).Debug("WebSocket read error")
+                        }</span>
+                        <span class="cov0" title="0">break</span>
+                }
+
+                <span class="cov0" title="0">h.handleWebSocketMessage(conn, &amp;wsMessage, conversationID, userID)</span>
+        }
+}
+
+// handleWebSocketMessage processes incoming WebSocket messages
+func (h *ChatHandler) handleWebSocketMessage(conn *websocket.Conn, wsMessage *model.WebSocketMessage, conversationID, userID uuid.UUID) <span class="cov0" title="0">{
+        ctx := context.Background()
+
+        switch wsMessage.Type </span>{
+        case model.WSMessageTypeMessage:<span class="cov0" title="0">
+                if wsMessage.Message == nil </span><span class="cov0" title="0">{
+                        h.sendWebSocketError(conn, "Message data is required")
+                        return
+                }</span>
+
+                <span class="cov0" title="0">req := model.SendMessageRequest{
+                        Content:     wsMessage.Message.Content,
+                        MessageType: wsMessage.Message.MessageType,
+                        ParentID:    wsMessage.Message.ParentID,
+                }
+
+                message, err := h.service.GetMessageService().SendMessage(ctx, req, conversationID, userID)
+                if err != nil </span><span class="cov0" title="0">{
+                        h.sendWebSocketError(conn, "Failed to send message")
+                        return
+                }</span>
+
+                // Broadcast message to all connections in the conversation
+                <span class="cov0" title="0">h.broadcastMessage(message)</span>
+
+        case model.WSMessageTypeTyping:<span class="cov0" title="0">
+                // Broadcast typing indicator to all connections in the conversation
+                h.broadcastTypingEvent(conversationID, userID, true)</span>
+
+        case model.WSMessageTypeStopTyping:<span class="cov0" title="0">
+                // Broadcast stop typing indicator to all connections in the conversation
+                h.broadcastTypingEvent(conversationID, userID, false)</span>
+
+        case model.WSMessageTypeHeartbeat:<span class="cov0" title="0">
+                // Respond to heartbeat
+                response := model.WebSocketMessage{
+                        Type:   model.WSMessageTypeHeartbeat,
+                        RoomID: conversationID,
+                        UserID: userID,
+                }
+                conn.WriteJSON(&amp;response)</span>
+
+        default:<span class="cov0" title="0">
+                h.sendWebSocketError(conn, "Unknown message type")</span>
+        }
+}
+
+// broadcastMessage broadcasts a new message to all WebSocket connections in a conversation
+func (h *ChatHandler) broadcastMessage(message *model.Message) <span class="cov0" title="0">{
+        wsMessage := model.WebSocketMessage{
+                Type:    model.WSMessageTypeMessage,
+                RoomID:  message.RoomID,
+                UserID:  message.UserID,
+                Message: message,
+        }
+
+        h.broadcastToConversation(message.RoomID, &amp;wsMessage)
+}</span>
+
+// broadcastUserJoined broadcasts a user joined event to all WebSocket connections in a conversation
+func (h *ChatHandler) broadcastUserJoined(conversationID, userID uuid.UUID) <span class="cov0" title="0">{
+        wsMessage := model.WebSocketMessage{
+                Type:   model.WSMessageTypeUserJoined,
+                RoomID: conversationID,
+                UserID: userID,
+        }
+
+        h.broadcastToConversation(conversationID, &amp;wsMessage)
+}</span>
+
+// broadcastUserLeft broadcasts a user left event to all WebSocket connections in a conversation
+func (h *ChatHandler) broadcastUserLeft(conversationID, userID uuid.UUID) <span class="cov0" title="0">{
+        wsMessage := model.WebSocketMessage{
+                Type:   model.WSMessageTypeUserLeft,
+                RoomID: conversationID,
+                UserID: userID,
+        }
+
+        h.broadcastToConversation(conversationID, &amp;wsMessage)
+}</span>
+
+// broadcastTypingEvent broadcasts a typing or stop typing event to all WebSocket connections in a conversation
+func (h *ChatHandler) broadcastTypingEvent(conversationID, userID uuid.UUID, isTyping bool) <span class="cov0" title="0">{
+        messageType := model.WSMessageTypeTyping
+        if !isTyping </span><span class="cov0" title="0">{
+                messageType = model.WSMessageTypeStopTyping
+        }</span>
+
+        <span class="cov0" title="0">wsMessage := model.WebSocketMessage{
+                Type:   messageType,
+                RoomID: conversationID,
+                UserID: userID,
+        }
+
+        h.broadcastToConversation(conversationID, &amp;wsMessage)</span>
+}
+
+// broadcastToConversation broadcasts a WebSocket message to all connections in a conversation
+func (h *ChatHandler) broadcastToConversation(conversationID uuid.UUID, message *model.WebSocketMessage) <span class="cov0" title="0">{
+        conversationPrefix := conversationID.String() + ":"
+        
+        h.mu.RLock()
+        defer h.mu.RUnlock()
+        
+        for connectionKey, conn := range h.connections </span><span class="cov0" title="0">{
+                if strings.HasPrefix(connectionKey, conversationPrefix) </span><span class="cov0" title="0">{
+                        if err := conn.WriteJSON(message); err != nil </span><span class="cov0" title="0">{
+                                h.logger.WithError(err).Debug("Failed to send message to WebSocket connection")
+                                // Don't delete here to avoid concurrent map write during iteration
+                        }</span>
+                }
+        }
+}
+
+// sendWebSocketError sends an error message over WebSocket
+func (h *ChatHandler) sendWebSocketError(conn *websocket.Conn, errorMsg string) <span class="cov0" title="0">{
+        response := model.WebSocketMessage{
+                Type:  model.WSMessageTypeError,
+                Error: errorMsg,
+        }
+        conn.WriteJSON(&amp;response)
+}</span>
+
+// mapToAPIConversation converts internal conversation model to API model
+func (h *ChatHandler) mapToAPIConversation(conv *model.ConversationWithUnread) api.Conversation <span class="cov0" title="0">{
+        // Determine conversation type
+        conversationType := api.Group
+        if conv.MaxMembers == 2 </span><span class="cov0" title="0">{
+                conversationType = api.Direct
+        }</span>
+
+        // Convert participants
+        <span class="cov0" title="0">participants := make([]api.Participant, 0)
+        // In a real implementation, you would fetch participants from the service
+
+        // Convert last message if exists
+        var lastMessage *api.Message
+        if conv.LastMessage != nil </span><span class="cov0" title="0">{
+                msg := h.mapToAPIMessage(conv.LastMessage)
+                lastMessage = &amp;msg
+        }</span>
+
+        // Convert name and description to pointers
+        <span class="cov0" title="0">var name, description *string
+        if conv.Name != "" </span><span class="cov0" title="0">{
+                name = &amp;conv.Name
+        }</span>
+        <span class="cov0" title="0">if conv.Description != "" </span><span class="cov0" title="0">{
+                description = &amp;conv.Description
+        }</span>
+
+        // Convert max members to pointer
+        <span class="cov0" title="0">maxMembers := &amp;conv.MaxMembers
+
+        return api.Conversation{
+                Id:          openapi_types.UUID(conv.ID),
+                Name:        name,
+                Description: description,
+                Type:        conversationType,
+                IsPrivate:   conv.IsPrivate,
+                MaxMembers:  maxMembers,
+                CreatedBy:   openapi_types.UUID(conv.CreatedBy),
+                Participants: participants,
+                UnreadCount: conv.UnreadCount,
+                LastMessage: lastMessage,
+                CreatedAt:   conv.CreatedAt,
+                UpdatedAt:   conv.UpdatedAt,
+        }</span>
+}
+
+// mapToAPIMessage converts internal message model to API model
+func (h *ChatHandler) mapToAPIMessage(msg *model.Message) api.Message <span class="cov0" title="0">{
+        // Convert parent ID if exists
+        var parentID *openapi_types.UUID
+        if msg.ParentID != nil </span><span class="cov0" title="0">{
+                pid := openapi_types.UUID(*msg.ParentID)
+                parentID = &amp;pid
+        }</span>
+
+        <span class="cov0" title="0">return api.Message{
+                Id:            openapi_types.UUID(msg.ID),
+                ConversationId: openapi_types.UUID(msg.RoomID),
+                UserId:        openapi_types.UUID(msg.UserID),
+                Content:       msg.Content,
+                MessageType:   api.MessageType(string(msg.MessageType)),
+                ParentId:      parentID,
+                EditedAt:      msg.EditedAt,
+                CreatedAt:     msg.CreatedAt,
+                UpdatedAt:     msg.UpdatedAt,
+        }</span>
+}
+
+// Helper functions for optional fields
+
+func getStringOrEmpty(s *string) string <span class="cov0" title="0">{
+        if s == nil </span><span class="cov0" title="0">{
+                return ""
+        }</span>
+        <span class="cov0" title="0">return *s</span>
+}
+
+func getBoolOrDefault(b *bool, defaultValue bool) bool <span class="cov0" title="0">{
+        if b == nil </span><span class="cov0" title="0">{
+                return defaultValue
+        }</span>
+        <span class="cov0" title="0">return *b</span>
+}
+
+func getIntOrDefault(i *int, defaultValue int) int <span class="cov0" title="0">{
+        if i == nil </span><span class="cov0" title="0">{
+                return defaultValue
+        }</span>
+        <span class="cov0" title="0">return *i</span>
+}
+
+// containsSubprotocol checks if a subprotocol is in the list
+func containsSubprotocol(header, protocol string) bool <span class="cov0" title="0">{
+        protocols := strings.Split(header, ", ")
+        for _, p := range protocols </span><span class="cov0" title="0">{
+                if p == protocol </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package handler
+
+import (
+        "context"
+        "encoding/json"
+        "net/http"
+        "time"
+
+        "github.com/sirupsen/logrus"
+
+        "github.com/link-app/chat-svc/internal/db"
+        "github.com/link-app/chat-svc/internal/service"
+)
+
+// HealthHandler handles health check endpoints
+type HealthHandler struct {
+        database *db.Database
+        redis    *service.RedisService
+        logger   *logrus.Logger
+}
+
+// HealthResponse represents the health check response
+type HealthResponse struct {
+        Status  string                 `json:"status"`
+        Service string                 `json:"service"`
+        Version string                 `json:"version,omitempty"`
+        Checks  map[string]HealthCheck `json:"checks"`
+}
+
+// HealthCheck represents individual component health
+type HealthCheck struct {
+        Status    string `json:"status"`
+        Message   string `json:"message,omitempty"`
+        Timestamp string `json:"timestamp"`
+}
+
+// NewHealthHandler creates a new health handler
+func NewHealthHandler(database *db.Database, redis *service.RedisService, logger *logrus.Logger) *HealthHandler <span class="cov0" title="0">{
+        return &amp;HealthHandler{
+                database: database,
+                redis:    redis,
+                logger:   logger,
+        }
+}</span>
+
+// HandleHealth performs comprehensive health checks
+func (h *HealthHandler) HandleHealth(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+        defer cancel()
+
+        w.Header().Set("Content-Type", "application/json")
+        
+        response := HealthResponse{
+                Status:  "healthy",
+                Service: "chat-svc",
+                Version: "1.0.0",
+                Checks:  make(map[string]HealthCheck),
+        }
+
+        timestamp := time.Now().UTC().Format(time.RFC3339)
+        overallHealthy := true
+
+        // Check database health
+        dbCheck := HealthCheck{
+                Status:    "healthy",
+                Message:   "Database connection successful",
+                Timestamp: timestamp,
+        }
+
+        if err := h.database.Health(); err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Database health check failed")
+                dbCheck.Status = "unhealthy"
+                dbCheck.Message = "Database connection failed: " + err.Error()
+                overallHealthy = false
+        }</span>
+
+        <span class="cov0" title="0">response.Checks["database"] = dbCheck
+
+        // Check Redis health
+        redisCheck := HealthCheck{
+                Status:    "healthy",
+                Message:   "Redis connection successful",
+                Timestamp: timestamp,
+        }
+
+        if err := h.redis.Health(ctx); err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Redis health check failed")
+                redisCheck.Status = "unhealthy"
+                redisCheck.Message = "Redis connection failed: " + err.Error()
+                overallHealthy = false
+        }</span>
+
+        <span class="cov0" title="0">response.Checks["redis"] = redisCheck
+
+        // Set overall status
+        if !overallHealthy </span><span class="cov0" title="0">{
+                response.Status = "unhealthy"
+                w.WriteHeader(http.StatusServiceUnavailable)
+        }</span> else<span class="cov0" title="0"> {
+                w.WriteHeader(http.StatusOK)
+        }</span>
+
+        // Add basic system check
+        <span class="cov0" title="0">response.Checks["system"] = HealthCheck{
+                Status:    "healthy",
+                Message:   "Service is running",
+                Timestamp: timestamp,
+        }
+
+        if err := json.NewEncoder(w).Encode(response); err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Failed to encode health response")
+                http.Error(w, "Internal server error", http.StatusInternalServerError)
+                return
+        }</span>
+
+        <span class="cov0" title="0">if overallHealthy </span><span class="cov0" title="0">{
+                h.logger.Debug("Health check passed")
+        }</span> else<span class="cov0" title="0"> {
+                h.logger.Warn("Health check failed")
+        }</span>
+}
+
+// HandleReadiness performs readiness checks (lighter than health checks)
+func (h *HealthHandler) HandleReadiness(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+        defer cancel()
+
+        w.Header().Set("Content-Type", "application/json")
+
+        // For readiness, we do a quick ping to ensure we can accept traffic
+        ready := true
+        checks := make(map[string]HealthCheck)
+        timestamp := time.Now().UTC().Format(time.RFC3339)
+
+        // Quick database ping
+        if err := h.database.Health(); err != nil </span><span class="cov0" title="0">{
+                ready = false
+                checks["database"] = HealthCheck{
+                        Status:    "not_ready",
+                        Message:   "Database not ready",
+                        Timestamp: timestamp,
+                }
+        }</span> else<span class="cov0" title="0"> {
+                checks["database"] = HealthCheck{
+                        Status:    "ready",
+                        Message:   "Database ready",
+                        Timestamp: timestamp,
+                }
+        }</span>
+
+        // Quick Redis ping
+        <span class="cov0" title="0">if err := h.redis.Health(ctx); err != nil </span><span class="cov0" title="0">{
+                ready = false
+                checks["redis"] = HealthCheck{
+                        Status:    "not_ready",
+                        Message:   "Redis not ready",
+                        Timestamp: timestamp,
+                }
+        }</span> else<span class="cov0" title="0"> {
+                checks["redis"] = HealthCheck{
+                        Status:    "ready",
+                        Message:   "Redis ready",
+                        Timestamp: timestamp,
+                }
+        }</span>
+
+        <span class="cov0" title="0">response := map[string]interface{}{
+                "status":  "ready",
+                "service": "chat-svc",
+                "checks":  checks,
+        }
+
+        if !ready </span><span class="cov0" title="0">{
+                response["status"] = "not_ready"
+                w.WriteHeader(http.StatusServiceUnavailable)
+        }</span> else<span class="cov0" title="0"> {
+                w.WriteHeader(http.StatusOK)
+        }</span>
+
+        <span class="cov0" title="0">if err := json.NewEncoder(w).Encode(response); err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Failed to encode readiness response")
+                http.Error(w, "Internal server error", http.StatusInternalServerError)
+                return
+        }</span>
+}
+
+// HandleLiveness performs basic liveness checks
+func (h *HealthHandler) HandleLiveness(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+
+        response := map[string]interface{}{
+                "status":    "alive",
+                "service":   "chat-svc",
+                "timestamp": time.Now().UTC().Format(time.RFC3339),
+        }
+
+        if err := json.NewEncoder(w).Encode(response); err != nil </span><span class="cov0" title="0">{
+                h.logger.WithError(err).Error("Failed to encode liveness response")
+                http.Error(w, "Internal server error", http.StatusInternalServerError)
+                return
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package service
+
+import (
+        "context"
+        "errors"
+        "fmt"
+        "strings"
+        "time"
+
+        "github.com/google/uuid"
+        "github.com/sirupsen/logrus"
+
+        "github.com/link-app/chat-svc/internal/config"
+        "github.com/link-app/chat-svc/internal/db"
+        "github.com/link-app/chat-svc/internal/model"
+)
+
+// Service orchestrates all chat operations with Redis integration
+type Service struct {
+        repo   *db.Repository
+        redis  *RedisService
+        logger *logrus.Logger
+}
+
+// New creates a new chat service orchestrator
+func New(cfg *config.Config, repo *db.Repository, logger *logrus.Logger) *Service <span class="cov0" title="0">{
+        redisService := NewRedisService(&amp;cfg.Redis, logger)
+        
+        return &amp;Service{
+                repo:   repo,
+                redis:  redisService,
+                logger: logger,
+        }
+}</span>
+
+// ConversationService provides conversation management operations
+type ConversationService struct {
+        *Service
+}
+
+// MessageService provides message operations
+type MessageService struct {
+        *Service
+}
+
+// PresenceService provides presence and real-time features
+type PresenceService struct {
+        *Service
+}
+
+// GetConversationService returns conversation service
+func (s *Service) GetConversationService() *ConversationService <span class="cov0" title="0">{
+        return &amp;ConversationService{Service: s}
+}</span>
+
+// GetMessageService returns message service
+func (s *Service) GetMessageService() *MessageService <span class="cov0" title="0">{
+        return &amp;MessageService{Service: s}
+}</span>
+
+// GetPresenceService returns presence service
+func (s *Service) GetPresenceService() *PresenceService <span class="cov0" title="0">{
+        return &amp;PresenceService{Service: s}
+}</span>
+
+// =======================
+// Conversation Operations
+// =======================
+
+// CreateGroupConversation creates a new group conversation with validation
+func (cs *ConversationService) CreateGroupConversation(ctx context.Context, req model.CreateRoomRequest, creatorID uuid.UUID, participantIDs []uuid.UUID) (*model.ChatRoom, error) <span class="cov0" title="0">{
+        // Validate request and participants
+        if err := cs.validateGroupConversationRequest(req, creatorID, participantIDs); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("invalid group conversation request: %w", err)
+        }</span>
+
+        // Ensure uniqueness by checking if identical group already exists
+        <span class="cov0" title="0">if existingRoom := cs.findExistingGroupConversation(ctx, participantIDs); existingRoom != nil </span><span class="cov0" title="0">{
+                cs.logger.WithFields(logrus.Fields{
+                        "existing_room_id": existingRoom.ID,
+                        "participants":     participantIDs,
+                }).Info("Returning existing group conversation")
+                return existingRoom, nil
+        }</span>
+
+        // Create conversation
+        <span class="cov0" title="0">room := &amp;model.ChatRoom{
+                ID:          uuid.New(),
+                Name:        strings.TrimSpace(req.Name),
+                Description: strings.TrimSpace(req.Description),
+                CreatedBy:   creatorID,
+                IsPrivate:   req.IsPrivate,
+                MaxMembers:  req.MaxMembers,
+                CreatedAt:   time.Now().UTC(),
+                UpdatedAt:   time.Now().UTC(),
+        }
+
+        if err := cs.repo.Conversations.CreateConversation(ctx, room); err != nil </span><span class="cov0" title="0">{
+                cs.logger.WithError(err).Error("Failed to create group conversation")
+                return nil, fmt.Errorf("failed to create conversation: %w", err)
+        }</span>
+
+        // Add all participants as members
+        <span class="cov0" title="0">allParticipants := append(participantIDs, creatorID)
+        if err := cs.addConversationMembers(ctx, room.ID, allParticipants, creatorID); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to add members: %w", err)
+        }</span>
+
+        // Publish group creation event
+        <span class="cov0" title="0">cs.publishGroupCreatedEvent(ctx, room, allParticipants)
+
+        cs.logger.WithFields(logrus.Fields{
+                "room_id":       room.ID,
+                "creator_id":    creatorID,
+                "member_count":  len(allParticipants),
+                "room_name":     room.Name,
+        }).Info("Group conversation created successfully")
+
+        return room, nil</span>
+}
+
+// CreateDirectConversation creates or retrieves a direct conversation between two users
+func (cs *ConversationService) CreateDirectConversation(ctx context.Context, participant1, participant2 uuid.UUID) (*model.ChatRoom, error) <span class="cov0" title="0">{
+        // Validate participants
+        if err := cs.validateDirectConversationParticipants(participant1, participant2); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("invalid direct conversation: %w", err)
+        }</span>
+
+        // Check for existing direct conversation (enforces uniqueness)
+        <span class="cov0" title="0">existingRoom, err := cs.repo.Conversations.GetDirectConversation(ctx, participant1, participant2)
+        if err == nil </span><span class="cov0" title="0">{
+                cs.logger.WithFields(logrus.Fields{
+                        "room_id":      existingRoom.ID,
+                        "participant1": participant1,
+                        "participant2": participant2,
+                }).Debug("Direct conversation already exists")
+                return existingRoom, nil
+        }</span>
+
+        // Create new direct conversation
+        <span class="cov0" title="0">room, err := cs.repo.Conversations.CreateDirectConversation(ctx, participant1, participant2)
+        if err != nil </span><span class="cov0" title="0">{
+                cs.logger.WithError(err).Error("Failed to create direct conversation")
+                return nil, fmt.Errorf("failed to create direct conversation: %w", err)
+        }</span>
+
+        // Publish direct conversation creation event
+        <span class="cov0" title="0">participants := []uuid.UUID{participant1, participant2}
+        cs.publishDirectConversationCreatedEvent(ctx, room, participants)
+
+        cs.logger.WithFields(logrus.Fields{
+                "room_id":      room.ID,
+                "participant1": participant1,
+                "participant2": participant2,
+        }).Info("Direct conversation created successfully")
+
+        return room, nil</span>
+}
+
+// GetConversationsWithUnread retrieves user's conversations with unread message counts
+func (cs *ConversationService) GetConversationsWithUnread(ctx context.Context, userID uuid.UUID, page, size int) ([]*model.ConversationWithUnread, int, error) <span class="cov0" title="0">{
+        // Get conversations from database with basic unread counts
+        conversations, total, err := cs.repo.Conversations.ListConversationsWithUnread(ctx, userID, page, size)
+        if err != nil </span><span class="cov0" title="0">{
+                cs.logger.WithError(err).Error("Failed to list conversations")
+                return nil, 0, fmt.Errorf("failed to list conversations: %w", err)
+        }</span>
+
+        // Enhance with Redis real-time unread counts
+        <span class="cov0" title="0">for _, conv := range conversations </span><span class="cov0" title="0">{
+                redisUnread, err := cs.redis.GetUnreadCount(ctx, userID, conv.ID)
+                if err == nil &amp;&amp; redisUnread &gt; conv.UnreadCount </span><span class="cov0" title="0">{
+                        // Use Redis count if higher (more up-to-date)
+                        conv.UnreadCount = redisUnread
+                }</span>
+        }
+
+        <span class="cov0" title="0">cs.logger.WithFields(logrus.Fields{
+                "user_id":     userID,
+                "total_convs": total,
+                "page":        page,
+                "size":        size,
+        }).Debug("Retrieved conversations with unread counts")
+
+        return conversations, total, nil</span>
+}
+
+// GetConversation retrieves a conversation with membership validation
+func (cs *ConversationService) GetConversation(ctx context.Context, roomID, userID uuid.UUID) (*model.ChatRoom, error) <span class="cov0" title="0">{
+        // Validate membership
+        if !cs.isUserMemberOfConversation(ctx, roomID, userID) </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("user is not a member of this conversation")
+        }</span>
+
+        <span class="cov0" title="0">room, err := cs.repo.Conversations.GetConversationByID(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                cs.logger.WithError(err).Error("Failed to get conversation")
+                return nil, fmt.Errorf("failed to get conversation: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return room, nil</span>
+}
+
+// JoinConversation adds a user to a conversation with validation
+func (cs *ConversationService) JoinConversation(ctx context.Context, roomID, userID uuid.UUID) error <span class="cov0" title="0">{
+        // Validate join request
+        if err := cs.validateJoinRequest(ctx, roomID, userID); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("cannot join conversation: %w", err)
+        }</span>
+
+        // Add member
+        <span class="cov0" title="0">member := &amp;model.RoomMember{
+                ID:       uuid.New(),
+                RoomID:   roomID,
+                UserID:   userID,
+                Role:     model.MemberRoleMember,
+                JoinedAt: time.Now().UTC(),
+        }
+
+        if err := cs.repo.RoomMembers.AddMember(ctx, member); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to join conversation: %w", err)
+        }</span>
+
+        // Publish user joined event
+        <span class="cov0" title="0">event := &amp;model.RealtimeEvent{
+                Type:   model.EventTypeUserJoined,
+                RoomID: roomID,
+                UserID: userID,
+        }
+        cs.redis.PublishRealtimeEvent(ctx, event)
+
+        cs.logger.WithFields(logrus.Fields{
+                "room_id": roomID,
+                "user_id": userID,
+        }).Info("User joined conversation")
+
+        return nil</span>
+}
+
+// LeaveConversation removes a user from a conversation
+func (cs *ConversationService) LeaveConversation(ctx context.Context, roomID, userID uuid.UUID) error <span class="cov0" title="0">{
+        // Validate leave request
+        if !cs.isUserMemberOfConversation(ctx, roomID, userID) </span><span class="cov0" title="0">{
+                return fmt.Errorf("user is not a member of this conversation")
+        }</span>
+
+        // Remove member
+        <span class="cov0" title="0">if err := cs.repo.RoomMembers.RemoveMember(ctx, roomID, userID); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to leave conversation: %w", err)
+        }</span>
+
+        // Clear user's unread count for this conversation
+        <span class="cov0" title="0">cs.redis.ResetUnreadCount(ctx, userID, roomID)
+
+        // Publish user left event
+        event := &amp;model.RealtimeEvent{
+                Type:   model.EventTypeUserLeft,
+                RoomID: roomID,
+                UserID: userID,
+        }
+        cs.redis.PublishRealtimeEvent(ctx, event)
+
+        cs.logger.WithFields(logrus.Fields{
+                "room_id": roomID,
+                "user_id": userID,
+        }).Info("User left conversation")
+
+        return nil</span>
+}
+
+// GetConversationMembers retrieves all members of a conversation
+func (cs *ConversationService) GetConversationMembers(ctx context.Context, roomID, requesterID uuid.UUID) ([]*model.RoomMember, error) <span class="cov0" title="0">{
+        // Validate membership
+        if !cs.isUserMemberOfConversation(ctx, roomID, requesterID) </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("user is not a member of this conversation")
+        }</span>
+
+        <span class="cov0" title="0">members, err := cs.repo.RoomMembers.GetRoomMembers(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get conversation members: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return members, nil</span>
+}
+
+// ====================
+// Message Operations
+// ====================
+
+// SendMessage sends a message with comprehensive validation and real-time distribution
+func (ms *MessageService) SendMessage(ctx context.Context, req model.SendMessageRequest, roomID, userID uuid.UUID) (*model.Message, error) <span class="cov0" title="0">{
+        // Validate message and membership
+        if err := ms.validateMessageSend(ctx, req, roomID, userID); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("invalid message send: %w", err)
+        }</span>
+
+        // Create message
+        <span class="cov0" title="0">message := &amp;model.Message{
+                ID:          uuid.New(),
+                RoomID:      roomID,
+                UserID:      userID,
+                Content:     strings.TrimSpace(req.Content),
+                MessageType: req.MessageType,
+                ParentID:    req.ParentID,
+                CreatedAt:   time.Now().UTC(),
+                UpdatedAt:   time.Now().UTC(),
+        }
+
+        // Store message
+        if err := ms.repo.Messages.CreateMessage(ctx, message); err != nil </span><span class="cov0" title="0">{
+                ms.logger.WithError(err).Error("Failed to create message")
+                return nil, fmt.Errorf("failed to send message: %w", err)
+        }</span>
+
+        // Handle post-message operations asynchronously
+        <span class="cov0" title="0">go ms.handlePostMessageOperations(context.Background(), message, roomID, userID)
+
+        ms.logger.WithFields(logrus.Fields{
+                "message_id": message.ID,
+                "room_id":    roomID,
+                "user_id":    userID,
+                "type":       message.MessageType,
+        }).Info("Message sent successfully")
+
+        return message, nil</span>
+}
+
+// GetMessages retrieves paginated messages for a conversation
+func (ms *MessageService) GetMessages(ctx context.Context, roomID, userID uuid.UUID, page, size int) ([]*model.Message, int, error) <span class="cov0" title="0">{
+        // Validate membership
+        if !ms.isUserMemberOfConversation(ctx, roomID, userID) </span><span class="cov0" title="0">{
+                return nil, 0, fmt.Errorf("user is not a member of this conversation")
+        }</span>
+
+        <span class="cov0" title="0">messages, total, err := ms.repo.Messages.ListMessages(ctx, roomID, userID, page, size)
+        if err != nil </span><span class="cov0" title="0">{
+                ms.logger.WithError(err).Error("Failed to get messages")
+                return nil, 0, fmt.Errorf("failed to get messages: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return messages, total, nil</span>
+}
+
+// MarkMessagesAsRead marks messages as read and updates unread counts
+func (ms *MessageService) MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, messageIDs []uuid.UUID, roomID uuid.UUID) error <span class="cov0" title="0">{
+        if len(messageIDs) == 0 </span><span class="cov0" title="0">{
+                return errors.New("no message IDs provided")
+        }</span>
+
+        // Mark as read in database
+        <span class="cov0" title="0">if err := ms.repo.Messages.MarkMessagesAsRead(ctx, userID, messageIDs); err != nil </span><span class="cov0" title="0">{
+                ms.logger.WithError(err).Error("Failed to mark messages as read")
+                return fmt.Errorf("failed to mark messages as read: %w", err)
+        }</span>
+
+        // Reset Redis unread count
+        <span class="cov0" title="0">if err := ms.redis.ResetUnreadCount(ctx, userID, roomID); err != nil </span><span class="cov0" title="0">{
+                ms.logger.WithError(err).Error("Failed to reset Redis unread count")
+                // Don't fail operation for Redis errors
+        }</span>
+
+        // Publish read event
+        <span class="cov0" title="0">event := &amp;model.RealtimeEvent{
+                Type:   model.EventTypeMessageRead,
+                RoomID: roomID,
+                UserID: userID,
+                Data:   map[string]interface{}{"message_ids": messageIDs, "count": len(messageIDs)},
+        }
+        ms.redis.PublishRealtimeEvent(ctx, event)
+
+        ms.logger.WithFields(logrus.Fields{
+                "user_id":       userID,
+                "room_id":       roomID,
+                "message_count": len(messageIDs),
+        }).Debug("Messages marked as read")
+
+        return nil</span>
+}
+
+// GetUnreadCount gets unread message count for a user in a conversation
+func (ms *MessageService) GetUnreadCount(ctx context.Context, userID, roomID uuid.UUID) (int, error) <span class="cov0" title="0">{
+        // Get from Redis first (most up-to-date)
+        redisCount, err := ms.redis.GetUnreadCount(ctx, userID, roomID)
+        if err == nil </span><span class="cov0" title="0">{
+                return redisCount, nil
+        }</span>
+
+        // Fallback to database
+        <span class="cov0" title="0">dbCount, err := ms.repo.Messages.GetUnreadCount(ctx, userID, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, fmt.Errorf("failed to get unread count: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return dbCount, nil</span>
+}
+
+// ====================
+// Presence Operations
+// ====================
+
+// SetUserPresence updates user presence with Redis TTL
+func (ps *PresenceService) SetUserPresence(ctx context.Context, userID uuid.UUID, status model.PresenceStatus, roomID *uuid.UUID) error <span class="cov0" title="0">{
+        presence := model.UserPresence{
+                UserID:   userID,
+                Status:   status,
+                LastSeen: time.Now().UTC(),
+                RoomID:   roomID,
+        }
+
+        if err := ps.redis.SetUserPresence(ctx, userID, presence); err != nil </span><span class="cov0" title="0">{
+                ps.logger.WithError(err).Error("Failed to set user presence")
+                return fmt.Errorf("failed to set presence: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">ps.logger.WithFields(logrus.Fields{
+                "user_id": userID,
+                "status":  status,
+                "room_id": roomID,
+        }).Debug("User presence updated")
+
+        return nil</span>
+}
+
+// GetUserPresence retrieves user presence status
+func (ps *PresenceService) GetUserPresence(ctx context.Context, userID uuid.UUID) (*model.UserPresence, error) <span class="cov0" title="0">{
+        presence, err := ps.redis.GetUserPresence(ctx, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get user presence: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return presence, nil</span>
+}
+
+// SetTypingIndicator manages typing indicators with auto-expiry
+func (ps *PresenceService) SetTypingIndicator(ctx context.Context, roomID, userID uuid.UUID, isTyping bool) error <span class="cov0" title="0">{
+        // Validate membership
+        if !ps.isUserMemberOfConversation(ctx, roomID, userID) </span><span class="cov0" title="0">{
+                return fmt.Errorf("user is not a member of this conversation")
+        }</span>
+
+        <span class="cov0" title="0">if err := ps.redis.SetTypingIndicator(ctx, roomID, userID, isTyping); err != nil </span><span class="cov0" title="0">{
+                ps.logger.WithError(err).Error("Failed to set typing indicator")
+                return fmt.Errorf("failed to set typing indicator: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// GetOnlineUsers retrieves all currently online users
+func (ps *PresenceService) GetOnlineUsers(ctx context.Context) ([]uuid.UUID, error) <span class="cov0" title="0">{
+        users, err := ps.redis.GetOnlineUsers(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get online users: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return users, nil</span>
+}
+
+// RemoveUserPresence cleans up user presence on logout
+func (ps *PresenceService) RemoveUserPresence(ctx context.Context, userID uuid.UUID) error <span class="cov0" title="0">{
+        return ps.redis.RemoveUserPresence(ctx, userID)
+}</span>
+
+// ====================
+// Private Helper Methods
+// ====================
+
+// validateGroupConversationRequest validates group conversation creation
+func (cs *ConversationService) validateGroupConversationRequest(req model.CreateRoomRequest, creatorID uuid.UUID, participantIDs []uuid.UUID) error <span class="cov0" title="0">{
+        // Validate basic request
+        if strings.TrimSpace(req.Name) == "" </span><span class="cov0" title="0">{
+                return errors.New("group name is required")
+        }</span>
+        <span class="cov0" title="0">if len(req.Name) &gt; 100 </span><span class="cov0" title="0">{
+                return errors.New("group name too long (max 100 characters)")
+        }</span>
+        <span class="cov0" title="0">if len(req.Description) &gt; 500 </span><span class="cov0" title="0">{
+                return errors.New("group description too long (max 500 characters)")
+        }</span>
+
+        // Validate participants
+        <span class="cov0" title="0">if len(participantIDs) == 0 </span><span class="cov0" title="0">{
+                return errors.New("at least one participant is required")
+        }</span>
+        <span class="cov0" title="0">if len(participantIDs) &gt; 1000 </span><span class="cov0" title="0">{
+                return errors.New("too many participants (max 1000)")
+        }</span>
+
+        // Check for duplicates and ensure creator is not in participants
+        <span class="cov0" title="0">seen := make(map[uuid.UUID]bool)
+        for _, id := range participantIDs </span><span class="cov0" title="0">{
+                if id == creatorID </span><span class="cov0" title="0">{
+                        return errors.New("creator cannot be in participants list")
+                }</span>
+                <span class="cov0" title="0">if seen[id] </span><span class="cov0" title="0">{
+                        return errors.New("duplicate participants not allowed")
+                }</span>
+                <span class="cov0" title="0">seen[id] = true</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// validateDirectConversationParticipants validates direct conversation participants
+func (cs *ConversationService) validateDirectConversationParticipants(participant1, participant2 uuid.UUID) error <span class="cov0" title="0">{
+        if participant1 == participant2 </span><span class="cov0" title="0">{
+                return errors.New("cannot create conversation with yourself")
+        }</span>
+        // Additional validation could include checking if users exist, are blocked, etc.
+        <span class="cov0" title="0">return nil</span>
+}
+
+// findExistingGroupConversation checks if identical group conversation exists
+func (cs *ConversationService) findExistingGroupConversation(ctx context.Context, participantIDs []uuid.UUID) *model.ChatRoom <span class="cov0" title="0">{
+        // This would require a more complex query to find groups with exact same members
+        // For now, we'll return nil and rely on the database to handle uniqueness
+        // In a production system, you might implement a hash-based approach
+        return nil
+}</span>
+
+// addConversationMembers adds members to a conversation
+func (cs *ConversationService) addConversationMembers(ctx context.Context, roomID uuid.UUID, participantIDs []uuid.UUID, creatorID uuid.UUID) error <span class="cov0" title="0">{
+        for _, participantID := range participantIDs </span><span class="cov0" title="0">{
+                role := model.MemberRoleMember
+                if participantID == creatorID </span><span class="cov0" title="0">{
+                        role = model.MemberRoleOwner
+                }</span>
+
+                <span class="cov0" title="0">member := &amp;model.RoomMember{
+                        ID:       uuid.New(),
+                        RoomID:   roomID,
+                        UserID:   participantID,
+                        Role:     role,
+                        JoinedAt: time.Now().UTC(),
+                }
+
+                if err := cs.repo.RoomMembers.AddMember(ctx, member); err != nil </span><span class="cov0" title="0">{
+                        cs.logger.WithError(err).WithFields(logrus.Fields{
+                                "room_id": roomID,
+                                "user_id": participantID,
+                        }).Error("Failed to add member to conversation")
+                        return fmt.Errorf("failed to add member %s: %w", participantID, err)
+                }</span>
+        }
+        <span class="cov0" title="0">return nil</span>
+}
+
+// isUserMemberOfConversation checks if user is member of conversation
+func (s *Service) isUserMemberOfConversation(ctx context.Context, roomID, userID uuid.UUID) bool <span class="cov0" title="0">{
+        isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to check membership")
+                return false
+        }</span>
+        <span class="cov0" title="0">return isMember</span>
+}
+
+// validateJoinRequest validates if user can join a conversation
+func (cs *ConversationService) validateJoinRequest(ctx context.Context, roomID, userID uuid.UUID) error <span class="cov0" title="0">{
+        // Check if room exists
+        room, err := cs.repo.Conversations.GetConversationByID(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("conversation not found")
+        }</span>
+
+        // Check if already a member
+        <span class="cov0" title="0">if cs.isUserMemberOfConversation(ctx, roomID, userID) </span><span class="cov0" title="0">{
+                return fmt.Errorf("user is already a member")
+        }</span>
+
+        // Check capacity
+        <span class="cov0" title="0">members, err := cs.repo.RoomMembers.GetRoomMembers(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to check capacity")
+        }</span>
+        <span class="cov0" title="0">if room.MaxMembers &gt; 0 &amp;&amp; len(members) &gt;= room.MaxMembers </span><span class="cov0" title="0">{
+                return fmt.Errorf("conversation has reached maximum capacity")
+        }</span>
+
+        // Check if private room (would need additional invitation logic)
+        <span class="cov0" title="0">if room.IsPrivate </span><span class="cov0" title="0">{
+                // In a real system, you'd check for invitations here
+                return fmt.Errorf("cannot join private conversation without invitation")
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// validateMessageSend validates message sending request
+func (ms *MessageService) validateMessageSend(ctx context.Context, req model.SendMessageRequest, roomID, userID uuid.UUID) error <span class="cov0" title="0">{
+        // Validate content
+        if strings.TrimSpace(req.Content) == "" </span><span class="cov0" title="0">{
+                return errors.New("message content is required")
+        }</span>
+        <span class="cov0" title="0">if len(req.Content) &gt; 4000 </span><span class="cov0" title="0">{
+                return errors.New("message content too long (max 4000 characters)")
+        }</span>
+
+        // Validate message type
+        <span class="cov0" title="0">validTypes := map[model.MessageType]bool{
+                model.MessageTypeText:  true,
+                model.MessageTypeImage: true,
+                model.MessageTypeFile:  true,
+                model.MessageTypeVideo: true,
+                model.MessageTypeAudio: true,
+        }
+        if !validTypes[req.MessageType] </span><span class="cov0" title="0">{
+                return fmt.Errorf("invalid message type: %s", req.MessageType)
+        }</span>
+
+        // Validate membership
+        <span class="cov0" title="0">if !ms.isUserMemberOfConversation(ctx, roomID, userID) </span><span class="cov0" title="0">{
+                return errors.New("user is not a member of this conversation")
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// handlePostMessageOperations handles asynchronous post-message operations
+func (ms *MessageService) handlePostMessageOperations(ctx context.Context, message *model.Message, roomID, userID uuid.UUID) <span class="cov0" title="0">{
+        // Update unread counts for all members except sender
+        members, err := ms.repo.RoomMembers.GetRoomMembers(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                ms.logger.WithError(err).Error("Failed to get members for unread count update")
+                return
+        }</span>
+
+        <span class="cov0" title="0">for _, member := range members </span><span class="cov0" title="0">{
+                if member.UserID == userID </span><span class="cov0" title="0">{
+                        continue</span> // Skip sender
+                }
+                <span class="cov0" title="0">if err := ms.redis.IncrementUnreadCount(ctx, member.UserID, roomID); err != nil </span><span class="cov0" title="0">{
+                        ms.logger.WithError(err).WithField("user_id", member.UserID).Error("Failed to increment unread count")
+                }</span>
+        }
+
+        // Clear typing indicator for sender
+        <span class="cov0" title="0">ms.redis.SetTypingIndicator(ctx, roomID, userID, false)
+
+        // Publish real-time message event
+        event := &amp;model.RealtimeEvent{
+                Type:    model.EventTypeNewMessage,
+                RoomID:  roomID,
+                UserID:  userID,
+                Message: message,
+        }
+        if err := ms.redis.PublishRealtimeEvent(ctx, event); err != nil </span><span class="cov0" title="0">{
+                ms.logger.WithError(err).Error("Failed to publish message event")
+        }</span>
+}
+
+// publishGroupCreatedEvent publishes group creation event
+func (cs *ConversationService) publishGroupCreatedEvent(ctx context.Context, room *model.ChatRoom, participants []uuid.UUID) <span class="cov0" title="0">{
+        for _, participantID := range participants </span><span class="cov0" title="0">{
+                event := &amp;model.RealtimeEvent{
+                        Type:   model.EventTypeUserJoined,
+                        RoomID: room.ID,
+                        UserID: participantID,
+                        Data:   room,
+                }
+                cs.redis.PublishRealtimeEvent(ctx, event)
+        }</span>
+}
+
+// publishDirectConversationCreatedEvent publishes direct conversation creation event
+func (cs *ConversationService) publishDirectConversationCreatedEvent(ctx context.Context, room *model.ChatRoom, participants []uuid.UUID) <span class="cov0" title="0">{
+        for _, participantID := range participants </span><span class="cov0" title="0">{
+                event := &amp;model.RealtimeEvent{
+                        Type:   model.EventTypeUserJoined,
+                        RoomID: room.ID,
+                        UserID: participantID,
+                        Data:   room,
+                }
+                cs.redis.PublishRealtimeEvent(ctx, event)
+        }</span>
+}
+
+// GetUserConversations retrieves user's conversations with unread counts (alias for backward compatibility)
+func (cs *ConversationService) GetUserConversations(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*model.ConversationWithUnread, int, error) <span class="cov0" title="0">{
+        // Convert offset-based pagination to page-based
+        page := offset / limit
+        if limit == 0 </span><span class="cov0" title="0">{
+                limit = 20
+        }</span>
+        <span class="cov0" title="0">return cs.GetConversationsWithUnread(ctx, userID, page, limit)</span>
+}
+
+// GetConversationMessages retrieves paginated messages for a conversation with time filtering
+func (ms *MessageService) GetConversationMessages(ctx context.Context, conversationID, userID uuid.UUID, limit, offset int, before *time.Time) ([]*model.Message, int, error) <span class="cov0" title="0">{
+        // Validate membership
+        if !ms.isUserMemberOfConversation(ctx, conversationID, userID) </span><span class="cov0" title="0">{
+                return nil, 0, fmt.Errorf("user is not a member of this conversation")
+        }</span>
+
+        // Convert offset-based pagination to page-based
+        <span class="cov0" title="0">page := offset / limit
+        if limit == 0 </span><span class="cov0" title="0">{
+                limit = 50
+        }</span>
+
+        // For now, ignore the 'before' timestamp filtering and use basic pagination
+        // In a real implementation, you'd modify the repository method to support timestamp filtering
+        <span class="cov0" title="0">messages, total, err := ms.repo.Messages.ListMessages(ctx, conversationID, userID, page, limit)
+        if err != nil </span><span class="cov0" title="0">{
+                ms.logger.WithError(err).Error("Failed to get conversation messages")
+                return nil, 0, fmt.Errorf("failed to get messages: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return messages, total, nil</span>
+}
+
+// IsConversationMember checks if a user is a member of a conversation
+func (cs *ConversationService) IsConversationMember(ctx context.Context, conversationID, userID uuid.UUID) (bool, error) <span class="cov0" title="0">{
+        isMember, err := cs.repo.RoomMembers.IsUserMember(ctx, conversationID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                cs.logger.WithError(err).Error("Failed to check conversation membership")
+                return false, fmt.Errorf("failed to check membership: %w", err)
+        }</span>
+        <span class="cov0" title="0">return isMember, nil</span>
+}
+
+
+// GetRedisService returns the Redis service
+func (s *Service) GetRedisService() *RedisService <span class="cov0" title="0">{
+        return s.redis
+}</span>
+
+// Close closes all connections
+func (s *Service) Close() error <span class="cov0" title="0">{
+        return s.redis.Close()
+}</span>
+
+// Health checks service health
+func (s *Service) Health(ctx context.Context) error <span class="cov0" title="0">{
+        return s.redis.Health(ctx)
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package service
+
+import (
+        "context"
+        "fmt"
+        "strings"
+        "time"
+
+        "github.com/google/uuid"
+        "github.com/sirupsen/logrus"
+
+        "github.com/link-app/chat-svc/internal/db"
+        "github.com/link-app/chat-svc/internal/model"
+)
+
+// ChatService provides comprehensive business logic for chat operations
+type ChatService struct {
+        repo  *db.Repository
+        redis *RedisService
+        logger *logrus.Logger
+}
+
+// NewChatService creates a new chat service with Redis integration
+func NewChatService(repo *db.Repository, redis *RedisService, logger *logrus.Logger) *ChatService <span class="cov0" title="0">{
+        return &amp;ChatService{
+                repo:   repo,
+                redis:  redis,
+                logger: logger,
+        }
+}</span>
+
+// CreateRoom creates a new chat room with proper validation
+func (s *ChatService) CreateRoom(ctx context.Context, req model.CreateRoomRequest, userID uuid.UUID) (*model.ChatRoom, error) <span class="cov0" title="0">{
+        // Validate request
+        if err := s.validateCreateRoomRequest(req); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("invalid room creation request: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">room := &amp;model.ChatRoom{
+                ID:          uuid.New(),
+                Name:        strings.TrimSpace(req.Name),
+                Description: strings.TrimSpace(req.Description),
+                CreatedBy:   userID,
+                IsPrivate:   req.IsPrivate,
+                MaxMembers:  req.MaxMembers,
+                CreatedAt:   time.Now().UTC(),
+                UpdatedAt:   time.Now().UTC(),
+        }
+
+        // Create the room in database
+        if err := s.repo.Conversations.CreateConversation(ctx, room); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to create chat room")
+                return nil, fmt.Errorf("failed to create chat room: %w", err)
+        }</span>
+
+        // Add creator as owner
+        <span class="cov0" title="0">member := &amp;model.RoomMember{
+                ID:       uuid.New(),
+                RoomID:   room.ID,
+                UserID:   userID,
+                Role:     model.MemberRoleOwner,
+                JoinedAt: time.Now().UTC(),
+        }
+
+        if err := s.repo.RoomMembers.AddMember(ctx, member); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to add room creator as member")
+                return nil, fmt.Errorf("failed to add room creator as member: %w", err)
+        }</span>
+
+        // Publish room created event
+        <span class="cov0" title="0">event := &amp;model.RealtimeEvent{
+                Type:   model.EventTypeUserJoined,
+                RoomID: room.ID,
+                UserID: userID,
+                Data:   room,
+        }
+        s.redis.PublishRealtimeEvent(ctx, event)
+
+        s.logger.WithFields(logrus.Fields{
+                "room_id":   room.ID,
+                "room_name": room.Name,
+                "user_id":   userID,
+        }).Info("Chat room created successfully")
+
+        return room, nil</span>
+}
+
+// CreateDirectConversation creates or gets existing direct conversation
+func (s *ChatService) CreateDirectConversation(ctx context.Context, participant1, participant2 uuid.UUID) (*model.ChatRoom, error) <span class="cov8" title="1">{
+        // Validate participants
+        if participant1 == participant2 </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("cannot create conversation with yourself")
+        }</span>
+
+        // Check if direct conversation already exists
+        <span class="cov0" title="0">existingRoom, err := s.repo.Conversations.GetDirectConversation(ctx, participant1, participant2)
+        if err == nil </span><span class="cov0" title="0">{
+                s.logger.WithFields(logrus.Fields{
+                        "room_id":      existingRoom.ID,
+                        "participant1": participant1,
+                        "participant2": participant2,
+                }).Debug("Direct conversation already exists")
+                return existingRoom, nil
+        }</span>
+
+        // Create new direct conversation
+        <span class="cov0" title="0">room, err := s.repo.Conversations.CreateDirectConversation(ctx, participant1, participant2)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to create direct conversation")
+                return nil, fmt.Errorf("failed to create direct conversation: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">s.logger.WithFields(logrus.Fields{
+                "room_id":      room.ID,
+                "participant1": participant1,
+                "participant2": participant2,
+        }).Info("Direct conversation created")
+
+        return room, nil</span>
+}
+
+// GetRoom retrieves a chat room by ID with membership validation
+func (s *ChatService) GetRoom(ctx context.Context, roomID, userID uuid.UUID) (*model.ChatRoom, error) <span class="cov0" title="0">{
+        // Check if user is member of the room
+        isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to check room membership")
+                return nil, fmt.Errorf("failed to check room membership: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if !isMember </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("user is not a member of the room")
+        }</span>
+
+        <span class="cov0" title="0">room, err := s.repo.Conversations.GetConversationByID(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to get chat room")
+                return nil, fmt.Errorf("failed to get chat room: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return room, nil</span>
+}
+
+// ListConversations retrieves paginated conversations with unread counts
+func (s *ChatService) ListConversations(ctx context.Context, userID uuid.UUID, page, size int) ([]*model.ConversationWithUnread, int, error) <span class="cov0" title="0">{
+        conversations, total, err := s.repo.Conversations.ListConversationsWithUnread(ctx, userID, page, size)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to list conversations")
+                return nil, 0, fmt.Errorf("failed to list conversations: %w", err)
+        }</span>
+
+        // Enhance with Redis unread counts (more real-time)
+        <span class="cov0" title="0">for _, conv := range conversations </span><span class="cov0" title="0">{
+                redisUnread, err := s.redis.GetUnreadCount(ctx, userID, conv.ID)
+                if err == nil &amp;&amp; redisUnread &gt; 0 </span><span class="cov0" title="0">{
+                        // Use Redis count if available and higher (more recent)
+                        conv.UnreadCount = redisUnread
+                }</span>
+        }
+
+        <span class="cov0" title="0">return conversations, total, nil</span>
+}
+
+// SendMessage sends a message with comprehensive validation and real-time features
+func (s *ChatService) SendMessage(ctx context.Context, req model.SendMessageRequest, roomID, userID uuid.UUID) (*model.Message, error) <span class="cov0" title="0">{
+        // Validate message content
+        if err := s.validateSendMessageRequest(req); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("invalid message: %w", err)
+        }</span>
+
+        // Check if user is member of the room
+        <span class="cov0" title="0">isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to check room membership")
+                return nil, fmt.Errorf("failed to check room membership: %w", err)
+        }</span>
+        <span class="cov0" title="0">if !isMember </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("user is not a member of the room")
+        }</span>
+
+        // Create message
+        <span class="cov0" title="0">message := &amp;model.Message{
+                ID:          uuid.New(),
+                RoomID:      roomID,
+                UserID:      userID,
+                Content:     strings.TrimSpace(req.Content),
+                MessageType: req.MessageType,
+                ParentID:    req.ParentID,
+                CreatedAt:   time.Now().UTC(),
+                UpdatedAt:   time.Now().UTC(),
+        }
+
+        // Store message in database
+        if err := s.repo.Messages.CreateMessage(ctx, message); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to send message")
+                return nil, fmt.Errorf("failed to send message: %w", err)
+        }</span>
+
+        // Update unread counts for all room members except sender
+        <span class="cov0" title="0">go s.updateUnreadCounts(context.Background(), roomID, userID)
+
+        // Clear typing indicator for sender
+        s.redis.SetTypingIndicator(ctx, roomID, userID, false)
+
+        // Publish real-time event
+        event := &amp;model.RealtimeEvent{
+                Type:    model.EventTypeNewMessage,
+                RoomID:  roomID,
+                UserID:  userID,
+                Message: message,
+        }
+        s.redis.PublishRealtimeEvent(ctx, event)
+
+        s.logger.WithFields(logrus.Fields{
+                "message_id":   message.ID,
+                "room_id":      roomID,
+                "user_id":      userID,
+                "message_type": message.MessageType,
+        }).Info("Message sent successfully")
+
+        return message, nil</span>
+}
+
+// GetMessages retrieves paginated messages for a conversation
+func (s *ChatService) GetMessages(ctx context.Context, roomID, userID uuid.UUID, page, size int) ([]*model.Message, int, error) <span class="cov0" title="0">{
+        // Check if user is member of the room
+        isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to check room membership")
+                return nil, 0, fmt.Errorf("failed to check room membership: %w", err)
+        }</span>
+        <span class="cov0" title="0">if !isMember </span><span class="cov0" title="0">{
+                return nil, 0, fmt.Errorf("user is not a member of the room")
+        }</span>
+
+        <span class="cov0" title="0">messages, total, err := s.repo.Messages.ListMessages(ctx, roomID, userID, page, size)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to get messages")
+                return nil, 0, fmt.Errorf("failed to get messages: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return messages, total, nil</span>
+}
+
+// MarkMessagesAsRead marks messages as read and updates unread counts
+func (s *ChatService) MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, messageIDs []uuid.UUID, roomID uuid.UUID) error <span class="cov8" title="1">{
+        if len(messageIDs) == 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("no message IDs provided")
+        }</span>
+
+        // Mark messages as read in database
+        <span class="cov0" title="0">if err := s.repo.Messages.MarkMessagesAsRead(ctx, userID, messageIDs); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to mark messages as read")
+                return fmt.Errorf("failed to mark messages as read: %w", err)
+        }</span>
+
+        // Reset unread count in Redis
+        <span class="cov0" title="0">if err := s.redis.ResetUnreadCount(ctx, userID, roomID); err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to reset Redis unread count")
+                // Don't fail the operation for Redis errors
+        }</span>
+
+        // Publish message read event
+        <span class="cov0" title="0">event := &amp;model.RealtimeEvent{
+                Type:   model.EventTypeMessageRead,
+                RoomID: roomID,
+                UserID: userID,
+                Data:   map[string]interface{}{"message_ids": messageIDs},
+        }
+        s.redis.PublishRealtimeEvent(ctx, event)
+
+        s.logger.WithFields(logrus.Fields{
+                "user_id":      userID,
+                "room_id":      roomID,
+                "message_count": len(messageIDs),
+        }).Debug("Messages marked as read")
+
+        return nil</span>
+}
+
+// JoinRoom adds a user to a room with validation
+func (s *ChatService) JoinRoom(ctx context.Context, roomID, userID uuid.UUID) error <span class="cov0" title="0">{
+        // Check if room exists
+        room, err := s.repo.Conversations.GetConversationByID(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("room not found: %w", err)
+        }</span>
+
+        // Check if user is already a member
+        <span class="cov0" title="0">isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to check membership: %w", err)
+        }</span>
+        <span class="cov0" title="0">if isMember </span><span class="cov0" title="0">{
+                return fmt.Errorf("user is already a member of the room")
+        }</span>
+
+        // Check room capacity
+        <span class="cov0" title="0">members, err := s.repo.RoomMembers.GetRoomMembers(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get room members: %w", err)
+        }</span>
+        <span class="cov0" title="0">if room.MaxMembers &gt; 0 &amp;&amp; len(members) &gt;= room.MaxMembers </span><span class="cov0" title="0">{
+                return fmt.Errorf("room has reached maximum capacity")
+        }</span>
+
+        // Add member
+        <span class="cov0" title="0">member := &amp;model.RoomMember{
+                ID:       uuid.New(),
+                RoomID:   roomID,
+                UserID:   userID,
+                Role:     model.MemberRoleMember,
+                JoinedAt: time.Now().UTC(),
+        }
+
+        if err := s.repo.RoomMembers.AddMember(ctx, member); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to add member: %w", err)
+        }</span>
+
+        // Publish user joined event
+        <span class="cov0" title="0">event := &amp;model.RealtimeEvent{
+                Type:   model.EventTypeUserJoined,
+                RoomID: roomID,
+                UserID: userID,
+        }
+        s.redis.PublishRealtimeEvent(ctx, event)
+
+        s.logger.WithFields(logrus.Fields{
+                "room_id": roomID,
+                "user_id": userID,
+        }).Info("User joined room")
+
+        return nil</span>
+}
+
+// LeaveRoom removes a user from a room
+func (s *ChatService) LeaveRoom(ctx context.Context, roomID, userID uuid.UUID) error <span class="cov0" title="0">{
+        // Check if user is member
+        isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to check membership: %w", err)
+        }</span>
+        <span class="cov0" title="0">if !isMember </span><span class="cov0" title="0">{
+                return fmt.Errorf("user is not a member of the room")
+        }</span>
+
+        // Remove member
+        <span class="cov0" title="0">if err := s.repo.RoomMembers.RemoveMember(ctx, roomID, userID); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to remove member: %w", err)
+        }</span>
+
+        // Publish user left event
+        <span class="cov0" title="0">event := &amp;model.RealtimeEvent{
+                Type:   model.EventTypeUserLeft,
+                RoomID: roomID,
+                UserID: userID,
+        }
+        s.redis.PublishRealtimeEvent(ctx, event)
+
+        s.logger.WithFields(logrus.Fields{
+                "room_id": roomID,
+                "user_id": userID,
+        }).Info("User left room")
+
+        return nil</span>
+}
+
+// SetUserPresence updates user presence status
+func (s *ChatService) SetUserPresence(ctx context.Context, userID uuid.UUID, status model.PresenceStatus, roomID *uuid.UUID) error <span class="cov0" title="0">{
+        presence := model.UserPresence{
+                UserID:   userID,
+                Status:   status,
+                LastSeen: time.Now().UTC(),
+                RoomID:   roomID,
+        }
+
+        return s.redis.SetUserPresence(ctx, userID, presence)
+}</span>
+
+// GetUserPresence retrieves user presence status
+func (s *ChatService) GetUserPresence(ctx context.Context, userID uuid.UUID) (*model.UserPresence, error) <span class="cov0" title="0">{
+        return s.redis.GetUserPresence(ctx, userID)
+}</span>
+
+// SetTypingIndicator sets or clears typing indicator
+func (s *ChatService) SetTypingIndicator(ctx context.Context, roomID, userID uuid.UUID, isTyping bool) error <span class="cov0" title="0">{
+        // Check if user is member of the room
+        isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to check room membership: %w", err)
+        }</span>
+        <span class="cov0" title="0">if !isMember </span><span class="cov0" title="0">{
+                return fmt.Errorf("user is not a member of the room")
+        }</span>
+
+        <span class="cov0" title="0">return s.redis.SetTypingIndicator(ctx, roomID, userID, isTyping)</span>
+}
+
+// GetRoomMembers retrieves all members of a room
+func (s *ChatService) GetRoomMembers(ctx context.Context, roomID, userID uuid.UUID) ([]*model.RoomMember, error) <span class="cov0" title="0">{
+        // Check if user is member of the room
+        isMember, err := s.repo.RoomMembers.IsUserMember(ctx, roomID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to check room membership: %w", err)
+        }</span>
+        <span class="cov0" title="0">if !isMember </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("user is not a member of the room")
+        }</span>
+
+        <span class="cov0" title="0">members, err := s.repo.RoomMembers.GetRoomMembers(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get room members: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return members, nil</span>
+}
+
+// validateCreateRoomRequest validates room creation request
+func (s *ChatService) validateCreateRoomRequest(req model.CreateRoomRequest) error <span class="cov8" title="1">{
+        if strings.TrimSpace(req.Name) == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("room name is required")
+        }</span>
+        <span class="cov8" title="1">if len(req.Name) &gt; 100 </span><span class="cov8" title="1">{
+                return fmt.Errorf("room name too long (max 100 characters)")
+        }</span>
+        <span class="cov8" title="1">if len(req.Description) &gt; 500 </span><span class="cov8" title="1">{
+                return fmt.Errorf("room description too long (max 500 characters)")
+        }</span>
+        <span class="cov8" title="1">if req.MaxMembers &lt; 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("max members cannot be negative")
+        }</span>
+        <span class="cov8" title="1">if req.MaxMembers &gt; 10000 </span><span class="cov8" title="1">{
+                return fmt.Errorf("max members too high (max 10000)")
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// validateSendMessageRequest validates message sending request
+func (s *ChatService) validateSendMessageRequest(req model.SendMessageRequest) error <span class="cov8" title="1">{
+        if strings.TrimSpace(req.Content) == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("message content is required")
+        }</span>
+        <span class="cov8" title="1">if len(req.Content) &gt; 4000 </span><span class="cov8" title="1">{
+                return fmt.Errorf("message content too long (max 4000 characters)")
+        }</span>
+        // Validate message type
+        <span class="cov8" title="1">validTypes := map[model.MessageType]bool{
+                model.MessageTypeText:   true,
+                model.MessageTypeImage:  true,
+                model.MessageTypeFile:   true,
+                model.MessageTypeVideo:  true,
+                model.MessageTypeAudio:  true,
+                model.MessageTypeSystem: false, // System messages cannot be sent by users
+        }
+        if !validTypes[req.MessageType] </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid message type: %s", req.MessageType)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// updateUnreadCounts updates unread counts for all room members except sender
+func (s *ChatService) updateUnreadCounts(ctx context.Context, roomID, senderID uuid.UUID) <span class="cov0" title="0">{
+        members, err := s.repo.RoomMembers.GetRoomMembers(ctx, roomID)
+        if err != nil </span><span class="cov0" title="0">{
+                s.logger.WithError(err).Error("Failed to get room members for unread count update")
+                return
+        }</span>
+
+        <span class="cov0" title="0">for _, member := range members </span><span class="cov0" title="0">{
+                // Skip sender
+                if member.UserID == senderID </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                // Increment unread count in Redis
+                <span class="cov0" title="0">if err := s.redis.IncrementUnreadCount(ctx, member.UserID, roomID); err != nil </span><span class="cov0" title="0">{
+                        s.logger.WithError(err).WithFields(logrus.Fields{
+                                "user_id": member.UserID,
+                                "room_id": roomID,
+                        }).Error("Failed to increment unread count")
+                }</span>
+        }
+}
+
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package service
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "time"
+
+        "github.com/google/uuid"
+        "github.com/redis/go-redis/v9"
+        "github.com/sirupsen/logrus"
+
+        "github.com/link-app/chat-svc/internal/config"
+        "github.com/link-app/chat-svc/internal/model"
+)
+
+// RedisService handles real-time messaging and presence tracking via Redis
+type RedisService struct {
+        client *redis.Client
+        logger *logrus.Logger
+}
+
+// NewRedisService creates a new Redis service
+func NewRedisService(cfg *config.RedisConfig, logger *logrus.Logger) *RedisService <span class="cov0" title="0">{
+        client := redis.NewClient(&amp;redis.Options{
+                Addr:     fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
+                Password: cfg.Password,
+                DB:       cfg.DB,
+        })
+
+        return &amp;RedisService{
+                client: client,
+                logger: logger,
+        }
+}</span>
+
+// PublishRealtimeEvent publishes a real-time event to subscribers
+func (r *RedisService) PublishRealtimeEvent(ctx context.Context, event *model.RealtimeEvent) error <span class="cov0" title="0">{
+        event.Timestamp = time.Now().UTC()
+        
+        data, err := json.Marshal(event)
+        if err != nil </span><span class="cov0" title="0">{
+                r.logger.WithError(err).Error("Failed to marshal realtime event")
+                return fmt.Errorf("failed to marshal event: %w", err)
+        }</span>
+
+        // Publish to room-specific channel
+        <span class="cov0" title="0">roomChannel := fmt.Sprintf("room:%s", event.RoomID.String())
+        if err := r.client.Publish(ctx, roomChannel, data).Err(); err != nil </span><span class="cov0" title="0">{
+                r.logger.WithError(err).WithField("channel", roomChannel).Error("Failed to publish to room channel")
+                return fmt.Errorf("failed to publish to room channel: %w", err)
+        }</span>
+
+        // Also publish to user-specific channels for participants
+        <span class="cov0" title="0">if event.Type == model.EventTypeNewMessage || event.Type == model.EventTypeUserJoined || event.Type == model.EventTypeUserLeft </span><span class="cov0" title="0">{
+                userChannel := fmt.Sprintf("user:%s", event.UserID.String())
+                if err := r.client.Publish(ctx, userChannel, data).Err(); err != nil </span><span class="cov0" title="0">{
+                        r.logger.WithError(err).WithField("channel", userChannel).Warn("Failed to publish to user channel")
+                        // Don't fail the entire operation for user channel failures
+                }</span>
+        }
+
+        <span class="cov0" title="0">r.logger.WithFields(logrus.Fields{
+                "event_type": event.Type,
+                "room_id":    event.RoomID,
+                "user_id":    event.UserID,
+        }).Debug("Published realtime event")
+
+        return nil</span>
+}
+
+// SetUserPresence sets user presence status with TTL
+func (r *RedisService) SetUserPresence(ctx context.Context, userID uuid.UUID, presence model.UserPresence) error <span class="cov0" title="0">{
+        key := fmt.Sprintf("presence:%s", userID.String())
+        
+        data, err := json.Marshal(presence)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal presence: %w", err)
+        }</span>
+
+        // Set presence with 5-minute TTL
+        <span class="cov0" title="0">ttl := 5 * time.Minute
+        if err := r.client.Set(ctx, key, data, ttl).Err(); err != nil </span><span class="cov0" title="0">{
+                r.logger.WithError(err).WithField("user_id", userID).Error("Failed to set user presence")
+                return fmt.Errorf("failed to set presence: %w", err)
+        }</span>
+
+        // Add to online users set if online
+        <span class="cov0" title="0">if presence.Status == model.PresenceOnline </span><span class="cov0" title="0">{
+                onlineKey := "presence:online"
+                if err := r.client.SAdd(ctx, onlineKey, userID.String()).Err(); err != nil </span><span class="cov0" title="0">{
+                        r.logger.WithError(err).Error("Failed to add user to online set")
+                }</span>
+                // Set TTL for the online set key
+                <span class="cov0" title="0">r.client.Expire(ctx, onlineKey, ttl)</span>
+        }
+
+        // Publish presence update event
+        <span class="cov0" title="0">if presence.RoomID != nil </span><span class="cov0" title="0">{
+                event := &amp;model.RealtimeEvent{
+                        Type:     model.EventTypePresenceUpdate,
+                        RoomID:   *presence.RoomID,
+                        UserID:   userID,
+                        Presence: &amp;presence,
+                }
+                r.PublishRealtimeEvent(ctx, event)
+        }</span>
+
+        <span class="cov0" title="0">r.logger.WithFields(logrus.Fields{
+                "user_id": userID,
+                "status":  presence.Status,
+                "room_id": presence.RoomID,
+        }).Debug("Set user presence")
+
+        return nil</span>
+}
+
+// GetUserPresence gets user presence status
+func (r *RedisService) GetUserPresence(ctx context.Context, userID uuid.UUID) (*model.UserPresence, error) <span class="cov0" title="0">{
+        key := fmt.Sprintf("presence:%s", userID.String())
+        
+        data, err := r.client.Get(ctx, key).Result()
+        if err != nil </span><span class="cov0" title="0">{
+                if err == redis.Nil </span><span class="cov0" title="0">{
+                        // Return offline status if no presence found
+                        return &amp;model.UserPresence{
+                                UserID:   userID,
+                                Status:   model.PresenceOffline,
+                                LastSeen: time.Now().UTC(),
+                        }, nil
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("failed to get presence: %w", err)</span>
+        }
+
+        <span class="cov0" title="0">var presence model.UserPresence
+        if err := json.Unmarshal([]byte(data), &amp;presence); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to unmarshal presence: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return &amp;presence, nil</span>
+}
+
+// GetOnlineUsers returns list of currently online users
+func (r *RedisService) GetOnlineUsers(ctx context.Context) ([]uuid.UUID, error) <span class="cov0" title="0">{
+        onlineKey := "presence:online"
+        
+        userIDs, err := r.client.SMembers(ctx, onlineKey).Result()
+        if err != nil </span><span class="cov0" title="0">{
+                if err == redis.Nil </span><span class="cov0" title="0">{
+                        return []uuid.UUID{}, nil
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("failed to get online users: %w", err)</span>
+        }
+
+        <span class="cov0" title="0">result := make([]uuid.UUID, 0, len(userIDs))
+        for _, userIDStr := range userIDs </span><span class="cov0" title="0">{
+                if userID, err := uuid.Parse(userIDStr); err == nil </span><span class="cov0" title="0">{
+                        result = append(result, userID)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return result, nil</span>
+}
+
+// RemoveUserPresence removes user from presence tracking (on logout)
+func (r *RedisService) RemoveUserPresence(ctx context.Context, userID uuid.UUID) error <span class="cov0" title="0">{
+        key := fmt.Sprintf("presence:%s", userID.String())
+        onlineKey := "presence:online"
+        
+        // Remove presence data
+        if err := r.client.Del(ctx, key).Err(); err != nil </span><span class="cov0" title="0">{
+                r.logger.WithError(err).WithField("user_id", userID).Error("Failed to remove user presence")
+        }</span>
+
+        // Remove from online users set
+        <span class="cov0" title="0">if err := r.client.SRem(ctx, onlineKey, userID.String()).Err(); err != nil </span><span class="cov0" title="0">{
+                r.logger.WithError(err).WithField("user_id", userID).Error("Failed to remove user from online set")
+        }</span>
+
+        <span class="cov0" title="0">r.logger.WithField("user_id", userID).Debug("Removed user presence")
+        return nil</span>
+}
+
+// SetTypingIndicator sets typing indicator for a user in a room
+func (r *RedisService) SetTypingIndicator(ctx context.Context, roomID, userID uuid.UUID, isTyping bool) error <span class="cov0" title="0">{
+        key := fmt.Sprintf("typing:%s", roomID.String())
+        
+        if isTyping </span><span class="cov0" title="0">{
+                // Add user to typing set with TTL
+                if err := r.client.SAdd(ctx, key, userID.String()).Err(); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to set typing indicator: %w", err)
+                }</span>
+                // Set TTL for typing indicator (auto-expire after 10 seconds)
+                <span class="cov0" title="0">r.client.Expire(ctx, key, 10*time.Second)
+
+                // Publish typing start event
+                event := &amp;model.RealtimeEvent{
+                        Type:   model.EventTypeTypingStart,
+                        RoomID: roomID,
+                        UserID: userID,
+                }
+                r.PublishRealtimeEvent(ctx, event)</span>
+        } else<span class="cov0" title="0"> {
+                // Remove user from typing set
+                if err := r.client.SRem(ctx, key, userID.String()).Err(); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to remove typing indicator: %w", err)
+                }</span>
+
+                // Publish typing stop event
+                <span class="cov0" title="0">event := &amp;model.RealtimeEvent{
+                        Type:   model.EventTypeTypingStop,
+                        RoomID: roomID,
+                        UserID: userID,
+                }
+                r.PublishRealtimeEvent(ctx, event)</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// GetTypingUsers returns users currently typing in a room
+func (r *RedisService) GetTypingUsers(ctx context.Context, roomID uuid.UUID) ([]uuid.UUID, error) <span class="cov0" title="0">{
+        key := fmt.Sprintf("typing:%s", roomID.String())
+        
+        userIDs, err := r.client.SMembers(ctx, key).Result()
+        if err != nil </span><span class="cov0" title="0">{
+                if err == redis.Nil </span><span class="cov0" title="0">{
+                        return []uuid.UUID{}, nil
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("failed to get typing users: %w", err)</span>
+        }
+
+        <span class="cov0" title="0">result := make([]uuid.UUID, 0, len(userIDs))
+        for _, userIDStr := range userIDs </span><span class="cov0" title="0">{
+                if userID, err := uuid.Parse(userIDStr); err == nil </span><span class="cov0" title="0">{
+                        result = append(result, userID)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return result, nil</span>
+}
+
+// IncrementUnreadCount increments unread message count for a user in a room
+func (r *RedisService) IncrementUnreadCount(ctx context.Context, userID, roomID uuid.UUID) error <span class="cov0" title="0">{
+        key := fmt.Sprintf("unread:%s:%s", userID.String(), roomID.String())
+        
+        if err := r.client.Incr(ctx, key).Err(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to increment unread count: %w", err)
+        }</span>
+
+        // Set TTL to prevent stale data (30 days)
+        <span class="cov0" title="0">r.client.Expire(ctx, key, 30*24*time.Hour)
+        
+        return nil</span>
+}
+
+// ResetUnreadCount resets unread message count for a user in a room
+func (r *RedisService) ResetUnreadCount(ctx context.Context, userID, roomID uuid.UUID) error <span class="cov0" title="0">{
+        key := fmt.Sprintf("unread:%s:%s", userID.String(), roomID.String())
+        
+        if err := r.client.Del(ctx, key).Err(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to reset unread count: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">return nil</span>
+}
+
+// GetUnreadCount gets unread message count for a user in a room
+func (r *RedisService) GetUnreadCount(ctx context.Context, userID, roomID uuid.UUID) (int, error) <span class="cov0" title="0">{
+        key := fmt.Sprintf("unread:%s:%s", userID.String(), roomID.String())
+        
+        count, err := r.client.Get(ctx, key).Int()
+        if err != nil </span><span class="cov0" title="0">{
+                if err == redis.Nil </span><span class="cov0" title="0">{
+                        return 0, nil
+                }</span>
+                <span class="cov0" title="0">return 0, fmt.Errorf("failed to get unread count: %w", err)</span>
+        }
+        
+        <span class="cov0" title="0">return count, nil</span>
+}
+
+// Close closes the Redis connection
+func (r *RedisService) Close() error <span class="cov0" title="0">{
+        return r.client.Close()
+}</span>
+
+// Health checks Redis connectivity
+func (r *RedisService) Health(ctx context.Context) error <span class="cov0" title="0">{
+        return r.client.Ping(ctx).Err()
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
