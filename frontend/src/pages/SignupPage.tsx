@@ -111,10 +111,10 @@ const SignupPage: React.FC = (): JSX.Element => {
       setToastType('success');
       setShowToast(true);
       
-      // Auto-login after successful registration by navigating to home
+      // Redirect to onboarding after successful registration
       // The auth context already handles setting the user state
       setTimeout(() => {
-        navigate('/', { replace: true });
+        navigate('/onboarding', { replace: true });
       }, 1500);
     } catch (err) {
       // Error handling is done via useEffect watching auth context error

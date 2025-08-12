@@ -1,7 +1,8 @@
-package config
+package auth
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -161,4 +162,12 @@ func (j *JWTService) GetTokenID(tokenString string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no JTI found in token")
+}
+
+// getEnv gets environment variable with fallback
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }

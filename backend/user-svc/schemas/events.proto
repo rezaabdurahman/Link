@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package events;
+
+option go_package = "github.com/link-app/user-svc/schemas/events";
+
+import "google/protobuf/timestamp.proto";
+
+// UserRegisteredEvent is emitted when a new user is registered
+message UserRegisteredEvent {
+  string event_id = 1;
+  string event_type = 2;
+  string aggregate_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  UserRegisteredEventData data = 5;
+}
+
+// UserRegisteredEventData contains user registration information
+message UserRegisteredEventData {
+  string user_id = 1;
+  string email = 2;
+  string username = 3;
+  string first_name = 4;
+  string last_name = 5;
+  optional google.protobuf.Timestamp date_of_birth = 6;
+  google.protobuf.Timestamp registered_at = 7;
+}
+
+// UserOnboardedEvent is emitted when a user completes onboarding
+message UserOnboardedEvent {
+  string event_id = 1;
+  string event_type = 2;
+  string aggregate_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  UserOnboardedEventData data = 5;
+}
+
+// UserOnboardedEventData contains onboarding completion information
+message UserOnboardedEventData {
+  string user_id = 1;
+  google.protobuf.Timestamp completed_at = 2;
+  google.protobuf.Timestamp started_at = 3;
+  string duration = 4; // Human readable duration
+  repeated string completed_steps = 5;
+}
+
+// UserOnboardingStartedEvent is emitted when a user starts onboarding
+message UserOnboardingStartedEvent {
+  string event_id = 1;
+  string event_type = 2;
+  string aggregate_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  UserOnboardingStartedEventData data = 5;
+}
+
+// UserOnboardingStartedEventData contains onboarding start information
+message UserOnboardingStartedEventData {
+  string user_id = 1;
+  google.protobuf.Timestamp started_at = 2;
+}
+
+// UserOnboardingProgressedEvent is emitted when a user progresses through onboarding
+message UserOnboardingProgressedEvent {
+  string event_id = 1;
+  string event_type = 2;
+  string aggregate_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  UserOnboardingProgressedEventData data = 5;
+}
+
+// UserOnboardingProgressedEventData contains onboarding progress information
+message UserOnboardingProgressedEventData {
+  string user_id = 1;
+  string completed_step = 2;
+  optional string current_step = 3;
+  repeated string completed_steps = 4;
+  google.protobuf.Timestamp progressed_at = 5;
+}
+
+// UserOnboardingSkippedEvent is emitted when a user skips onboarding
+message UserOnboardingSkippedEvent {
+  string event_id = 1;
+  string event_type = 2;
+  string aggregate_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  UserOnboardingSkippedEventData data = 5;
+}
+
+// UserOnboardingSkippedEventData contains onboarding skip information
+message UserOnboardingSkippedEventData {
+  string user_id = 1;
+  google.protobuf.Timestamp skipped_at = 2;
+  optional google.protobuf.Timestamp started_at = 3;
+  repeated string partial_steps = 4; // Steps that were completed before skipping
+}
