@@ -62,11 +62,10 @@ const mockLocation = {
   state: null as any,
 };
 
-const mockUseLocation = jest.fn(() => mockLocation);
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
-  useLocation: mockUseLocation,
+  useLocation: () => mockLocation,
 }));
 
 // Test wrapper with router

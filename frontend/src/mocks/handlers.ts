@@ -1,5 +1,5 @@
 import { rest } from 'msw';
-import { BroadcastResponse, PublicBroadcastResponse } from '../services/broadcastClient';
+import { BroadcastResponse } from '../services/broadcastClient';
 
 // Mock database for broadcasts
 const mockBroadcasts: Map<string, BroadcastResponse> = new Map();
