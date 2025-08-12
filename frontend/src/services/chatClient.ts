@@ -346,7 +346,7 @@ export class ChatWebSocketClient {
 export const chatWebSocket = new ChatWebSocketClient();
 
 // Utility functions for converting between API and UI types
-import type { Chat, Message, User } from '../types';
+import type { Chat, Message } from '../types';
 
 /**
  * Convert API Conversation to UI Chat type

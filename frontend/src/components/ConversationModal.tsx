@@ -44,15 +44,14 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
 }): JSX.Element => {
   const [messages, setMessages] = useState<(Message | BotSummary)[]>([]);
   const [newMessage, setNewMessage] = useState<string>(initialMessage || '');
-  const [user, setUser] = useState<User | null>(null);
+  const [user] = useState<User | null>(null);
   const [savedContexts, setSavedContexts] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
-  const { authState } = useAuth();
-  const { token, user: currentUser } = authState;
+  const { user: currentUser, token } = useAuth();
 
   const scrollToBottom = (): void => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -234,7 +233,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     if (!newMessage.trim() || !chat || !currentUser) return;
     
     const messageContent = newMessage.trim();
-    const currentUserName = `${currentUser.first_name} ${currentUser.last_name}`;
+    // const currentUserName = `${currentUser.first_name} ${currentUser.last_name}`;
     
     // Check if this is the first message to a non-friend (keep this logic for permission system)
     const isFirstMessageToNonFriend = !chat.isFriend && messages.length <= 2;

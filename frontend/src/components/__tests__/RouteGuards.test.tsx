@@ -59,7 +59,7 @@ const renderWithRouter = (component: React.ReactElement, initialRoute = '/') => 
     {
       initialEntries: [initialRoute],
       future: {
-        v7_startTransition: true,
+        // v7_startTransition: true, // Disabled for compatibility
         v7_relativeSplatPath: true,
       },
     }
@@ -135,7 +135,7 @@ describe('Route Guards', () => {
         ],
         {
           future: {
-            v7_startTransition: true,
+            // v7_startTransition: true, // Disabled for compatibility
             v7_relativeSplatPath: true,
           },
         }

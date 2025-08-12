@@ -24,8 +24,7 @@ const ChatPage: React.FC = (): JSX.Element => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
-  const { authState } = useAuth();
-  const { token } = authState;
+  const { token } = useAuth();
 
   // Fetch conversations on mount
   useEffect(() => {

@@ -46,9 +46,9 @@ export const TestWrapper: React.FC<{
   );
 
   return (
-    <RouterProvider router={router}>
-      <AuthProvider>{/* Content will be rendered via router */}</AuthProvider>
-    </RouterProvider>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   );
 };
 
