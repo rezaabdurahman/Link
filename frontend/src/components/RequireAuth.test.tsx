@@ -31,7 +31,7 @@ jest.mock('../utils/secureTokenStorage', () => ({
 }));
 
 // Create a mock auth context that we can control
-let mockAuthContext = {
+const mockAuthContext = {
   user: null as any,
   token: null as any,
   isLoading: false,

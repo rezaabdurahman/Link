@@ -1,18 +1,30 @@
 import '@testing-library/jest-dom';
-import { server } from './mocks/server';
+import 'cross-fetch/polyfill';
 
-// Polyfill for TextEncoder/TextDecoder used by MSW
+// Polyfill for TextEncoder/TextDecoder used by MSW (must be before MSW import)
 import { TextEncoder, TextDecoder } from 'util';
 
 if (typeof global.TextEncoder === 'undefined') {
-  // @ts-ignore
+  // @ts-expect-error - Node.js util TextEncoder not compatible with DOM TextEncoder type
   global.TextEncoder = TextEncoder;
 }
 
 if (typeof global.TextDecoder === 'undefined') {
-  // @ts-ignore
+  // @ts-expect-error - Node.js util TextDecoder not compatible with DOM TextDecoder type
   global.TextDecoder = TextDecoder;
 }
+
+// Ensure fetch globals are available before importing MSW
+if (typeof global.fetch === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fetch = require('cross-fetch');
+  global.fetch = fetch;
+  global.Request = fetch.Request;
+  global.Response = fetch.Response;
+  global.Headers = fetch.Headers;
+}
+
+import { server } from './mocks/server';
 
 // Mock import.meta for Vite compatibility in tests
 const mockImportMeta = {

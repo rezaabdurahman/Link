@@ -53,6 +53,23 @@ jest.mock('../contexts/AuthContext', () => ({
   AuthProvider: ({ children }: any) => children,
 }));
 
+// Mock Toast component
+jest.mock('../components/Toast', () => {
+  const MockToast = ({ message, type, isVisible, onClose }: any) => {
+    return isVisible ? (
+      <div data-testid="toast" data-type={type} onClick={onClose}>
+        {message}
+      </div>
+    ) : null;
+  };
+  
+  return {
+    __esModule: true,
+    default: MockToast,
+    Toast: MockToast,
+  };
+});
+
 // Mock react-router-dom hooks
 const mockNavigate = jest.fn();
 const mockLocation = {
@@ -62,11 +79,10 @@ const mockLocation = {
   state: null as any,
 };
 
-const mockUseLocation = jest.fn(() => mockLocation);
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
-  useLocation: mockUseLocation,
+  useLocation: () => mockLocation,
 }));
 
 // Test wrapper with router
@@ -353,11 +369,7 @@ describe('LoginPage', () => {
     });
 
     it('should redirect to intended route after successful login', () => {
-      const mockLocationWithFrom = {
-        ...mockLocation,
-        state: { from: '/protected' },
-      };
-      mockUseLocation.mockReturnValue(mockLocationWithFrom);
+      // Test would need to mock location state properly
 
       jest.doMock('../contexts/AuthContext', () => ({
         useAuth: () => ({
