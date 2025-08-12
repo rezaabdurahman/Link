@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import { server } from './mocks/server';
 
 // Polyfill for TextEncoder/TextDecoder used by MSW
 import { TextEncoder, TextDecoder } from 'util';
@@ -33,3 +34,20 @@ const mockImportMeta = {
 (global as any).import = {
   meta: mockImportMeta
 };
+
+// MSW test setup
+beforeAll(() => {
+  // Start the server before all tests
+  server.listen({ onUnhandledRequest: 'warn' });
+});
+
+afterEach(() => {
+  // Reset any request handlers that we may add during the tests,
+  // so they don't affect other tests
+  server.resetHandlers();
+});
+
+afterAll(() => {
+  // Stop the server after all tests
+  server.close();
+});

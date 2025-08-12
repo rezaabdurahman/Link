@@ -60,6 +60,21 @@ const createAuthHeaders = (token?: AuthToken): Headers => {
 
   if (token) {
     headers.set('Authorization', `${token.tokenType} ${token.token}`);
+    
+    // SECURITY: Only add X-User-ID in development/demo for MSW
+    // This header is NEVER sent to production APIs
+    const isDev = import.meta.env?.DEV;
+    const isDemo = import.meta.env?.VITE_APP_MODE === 'demo';
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+    
+    if ((isDev || isDemo) && hostname === 'localhost' && token.token.startsWith('dev-token-')) {
+      // Extract user ID from dev token (format: dev-token-{userId})
+      const userId = token.token.replace('dev-token-', '');
+      // SECURITY: Validate user ID format before adding header
+      if (userId.match(/^[a-zA-Z0-9-]+$/)) {
+        headers.set('X-User-ID', userId);
+      }
+    }
   }
 
   return headers;
@@ -109,7 +124,7 @@ export const getCurrentUserBroadcast = async (): Promise<BroadcastResponse> => {
     throw new BroadcastError('Authentication required', 401);
   }
 
-  const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/users/broadcasts`, {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/broadcasts`, {
     method: 'GET',
     headers: createAuthHeaders(token),
   });
@@ -131,7 +146,7 @@ export const createBroadcast = async (
     throw new BroadcastError('Authentication required', 401);
   }
 
-  const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/users/broadcasts`, {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/broadcasts`, {
     method: 'POST',
     headers: createAuthHeaders(token),
     body: JSON.stringify(request),
@@ -154,7 +169,7 @@ export const updateBroadcast = async (
     throw new BroadcastError('Authentication required', 401);
   }
 
-  const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/users/broadcasts`, {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/broadcasts`, {
     method: 'PUT',
     headers: createAuthHeaders(token),
     body: JSON.stringify(request),
@@ -174,7 +189,7 @@ export const deleteBroadcast = async (): Promise<void> => {
     throw new BroadcastError('Authentication required', 401);
   }
 
-  const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/users/broadcasts`, {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/broadcasts`, {
     method: 'DELETE',
     headers: createAuthHeaders(token),
   });
@@ -191,7 +206,7 @@ export const deleteBroadcast = async (): Promise<void> => {
 export const getUserBroadcast = async (
   userId: string
 ): Promise<PublicBroadcastResponse> => {
-  const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/users/${userId}/broadcasts`, {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/broadcasts/${userId}`, {
     method: 'GET',
     headers: createAuthHeaders(), // No token needed for public endpoint
   });

@@ -79,13 +79,13 @@ func main() {
 	v1 := router.Group("/api/v1")
 	{
 		// Authenticated routes (require user_id in context)
-		v1.GET("/users/broadcasts", broadcastHandler.GetCurrentUserBroadcast)
-		v1.POST("/users/broadcasts", broadcastHandler.CreateBroadcast)
-		v1.PUT("/users/broadcasts", broadcastHandler.UpdateBroadcast)
-		v1.DELETE("/users/broadcasts", broadcastHandler.DeleteBroadcast)
+		v1.GET("/broadcasts", broadcastHandler.GetCurrentUserBroadcast)
+		v1.POST("/broadcasts", broadcastHandler.CreateBroadcast)
+		v1.PUT("/broadcasts", broadcastHandler.UpdateBroadcast)
+		v1.DELETE("/broadcasts", broadcastHandler.DeleteBroadcast)
 
 		// Public routes
-		v1.GET("/users/:userId/broadcasts", broadcastHandler.GetUserBroadcast)
+		v1.GET("/broadcasts/:userId", broadcastHandler.GetUserBroadcast)
 	}
 
 	// Start cleanup goroutine

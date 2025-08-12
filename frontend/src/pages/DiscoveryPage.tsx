@@ -8,8 +8,7 @@ import AddCuesModal from '../components/AddCuesModal';
 import AddBroadcastModal from '../components/AddBroadcastModal';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
-// TODO: Re-enable when broadcast service is rewritten
-// import { createBroadcast, updateBroadcast, deleteBroadcast, getBroadcastErrorMessage, isBroadcastError } from '../services';
+import { createBroadcast, updateBroadcast, deleteBroadcast, getBroadcastErrorMessage, isBroadcastError } from '../services/broadcastClient';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   // User state management
@@ -144,16 +143,15 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setIsAddBroadcastModalOpen(false);
     
     try {
-      // TODO: Re-enable when broadcast service is rewritten
       // Determine whether to create or update broadcast
-      // if (originalBroadcast) {
-      //   await updateBroadcast({ message: broadcast.trim() });
-      // } else {
-      //   await createBroadcast({ message: broadcast.trim() });
-      // }
+      if (originalBroadcast) {
+        await updateBroadcast({ message: broadcast.trim() });
+      } else {
+        await createBroadcast({ message: broadcast.trim() });
+      }
       
       // Success: broadcast is already updated optimistically
-      console.log('Broadcast saved successfully (mock):', broadcast);
+      console.log('Broadcast saved successfully:', broadcast);
       
     } catch (error) {
       console.error('Failed to save broadcast:', error);

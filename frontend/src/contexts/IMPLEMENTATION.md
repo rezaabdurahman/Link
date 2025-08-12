@@ -64,7 +64,7 @@ This document summarizes the implementation of the AuthContext system as request
 - ✅ Automatic cleanup on logout/refresh failure
 
 ### Integration:
-- ✅ Uses existing `authService.ts` for API calls
+- ✅ Uses existing `authClient.ts` for API calls
 - ✅ Integrates with existing `types/index.ts` definitions
 - ✅ Compatible with current backend auth structure
 - ✅ TypeScript strict mode compliance
@@ -84,7 +84,7 @@ This document summarizes the implementation of the AuthContext system as request
 - **Storage Sync**: Immediate persistence of new tokens
 
 ### Error Handling:
-- **Service Layer**: Comprehensive error mapping from authService
+- **Service Layer**: Comprehensive error mapping from authClient
 - **User Experience**: User-friendly error messages
 - **Recovery**: Graceful degradation on storage/network failures
 - **Type Safety**: Strict TypeScript error types

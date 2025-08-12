@@ -15,7 +15,7 @@ import {
   AuthResponse,
   getErrorMessage,
   apiClient
-} from '../services/authService';
+} from '../services/authClient';
 import secureTokenStorage from '../utils/secureTokenStorage';
 
 // Context types

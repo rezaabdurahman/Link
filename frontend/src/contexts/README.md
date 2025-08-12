@@ -23,7 +23,7 @@ The authentication system provides:
 
 ### Dependencies
 
-- Uses existing `authService.ts` for API calls
+- Uses existing `authClient.ts` for API calls
 - Integrates with existing type definitions in `types/index.ts`
 - Compatible with current backend authentication structure
 

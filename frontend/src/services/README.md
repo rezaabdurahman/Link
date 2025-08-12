@@ -2,7 +2,7 @@
 
 This directory contains service layer modules that handle API interactions and business logic.
 
-## Auth Service (`authService.ts`)
+## Auth Service (`authClient.ts`)
 
 The auth service provides a typed API layer for authentication operations including user registration, login, token refresh, and logout.
 
@@ -25,7 +25,7 @@ import {
   AuthServiceError,
   isAuthError,
   getErrorMessage 
-} from '@/services/authService';
+} from '@/services/authClient';
 
 // Register a new user
 try {
