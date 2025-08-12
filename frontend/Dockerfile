@@ -1,5 +1,27 @@
 # Frontend Dockerfile - Multi-stage build for production optimization
 
+# Test stage
+FROM node:18-alpine AS test
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies for testing)
+RUN npm ci
+
+# Copy source code and test environment
+COPY . .
+COPY .env.test.example .env.test
+
+# Set NODE_ENV for testing
+ENV NODE_ENV=test
+
+# Run tests
+RUN npm run test
+
 # Build stage
 FROM node:18-alpine AS builder
 

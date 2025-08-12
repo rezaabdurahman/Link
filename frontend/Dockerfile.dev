@@ -10,8 +10,9 @@ COPY package*.json ./
 # Install all dependencies (including dev dependencies)
 RUN npm install
 
-# Copy source code
+# Copy source code and test environment
 COPY . .
+COPY .env.test.example .env.test
 
 # Expose port for Vite dev server
 EXPOSE 3000

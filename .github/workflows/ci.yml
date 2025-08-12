@@ -39,8 +39,16 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Setup test environment
+        run: |
+          cd frontend
+          cp .env.test.example .env.test
+        env:
+          NODE_ENV: test
       - name: Run tests with coverage
         run: npm run test:coverage
+        env:
+          NODE_ENV: test
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

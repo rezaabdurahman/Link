@@ -14,9 +14,9 @@
     "lint": "eslint frontend/src --ext ts,tsx --report-unused-disable-directives --max-warnings 200",
     "lint:fix": "eslint frontend/src --ext ts,tsx --fix",
     "type-check": "cd frontend && npm run type-check",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "cd frontend && npm run test",
+    "test:watch": "cd frontend && npm run test:watch",
+    "test:coverage": "cd frontend && npm run test:coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -52,51 +52,5 @@
     "ts-jest": "^29.1.1",
     "typescript": "^5.2.2",
     "vite": "^5.0.8"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "jsdom",
-    "setupFilesAfterEnv": [
-      "<rootDir>/frontend/src/setupTests.ts"
-    ],
-    "testTimeout": 5000,
-    "forceExit": true,
-    "detectOpenHandles": false,
-    "maxWorkers": 1,
-    "bail": true,
-    "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/frontend/src/$1"
-    },
-    "collectCoverageFrom": [
-      "frontend/src/**/*.{ts,tsx}",
-      "!frontend/src/**/*.d.ts",
-      "!frontend/src/main.tsx",
-      "!frontend/src/vite-env.d.ts",
-      "!frontend/src/**/*.test.{ts,tsx}",
-      "!frontend/src/**/__tests__/**"
-    ],
-    "testMatch": [
-      "<rootDir>/frontend/src/**/__tests__/**/*.{ts,tsx}",
-      "<rootDir>/frontend/src/**/*.{test,spec}.{ts,tsx}"
-    ],
-    "transformIgnorePatterns": [
-      "node_modules/(?!(msw|@mswjs|.*\\.mjs$))"
-    ],
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js",
-      "jsx",
-      "json",
-      "node"
-    ],
-    "transform": {
-      "^.+\\.(ts|tsx)$": [
-        "ts-jest",
-        {
-          "tsconfig": "frontend/tsconfig.json"
-        }
-      ]
-    }
   }
 }
