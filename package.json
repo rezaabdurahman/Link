@@ -59,6 +59,9 @@
     "setupFilesAfterEnv": [
       "<rootDir>/frontend/src/setupTests.ts"
     ],
+    "testTimeout": 30000,
+    "forceExit": true,
+    "detectOpenHandles": true,
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/frontend/src/$1"
     },

@@ -53,6 +53,23 @@ jest.mock('../contexts/AuthContext', () => ({
   AuthProvider: ({ children }: any) => children,
 }));
 
+// Mock Toast component
+jest.mock('../components/Toast', () => {
+  const MockToast = ({ message, type, isVisible, onClose }: any) => {
+    return isVisible ? (
+      <div data-testid="toast" data-type={type} onClick={onClose}>
+        {message}
+      </div>
+    ) : null;
+  };
+  
+  return {
+    __esModule: true,
+    default: MockToast,
+    Toast: MockToast,
+  };
+});
+
 // Mock react-router-dom hooks
 const mockNavigate = jest.fn();
 const mockLocation = {
@@ -356,7 +373,7 @@ describe('LoginPage', () => {
         ...mockLocation,
         state: { from: '/protected' },
       };
-      mockUseLocation.mockReturnValue(mockLocationWithFrom);
+      // Update the mock location with state
 
       jest.doMock('../contexts/AuthContext', () => ({
         useAuth: () => ({

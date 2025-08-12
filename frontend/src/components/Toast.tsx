@@ -174,4 +174,5 @@ const Toast: React.FC<ToastProps> = ({
   );
 };
 
+export { Toast };
 export default Toast;

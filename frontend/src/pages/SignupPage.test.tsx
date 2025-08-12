@@ -41,12 +41,18 @@ jest.mock('../utils/secureTokenStorage', () => ({
 
 // Mock Toast component
 jest.mock('../components/Toast', () => {
-  return function MockToast({ message, type, isVisible, onClose }: any) {
+  const MockToast = ({ message, type, isVisible, onClose }: any) => {
     return isVisible ? (
       <div data-testid="toast" data-type={type} onClick={onClose}>
         {message}
       </div>
     ) : null;
+  };
+  
+  return {
+    __esModule: true,
+    default: MockToast,
+    Toast: MockToast,
   };
 });
 
