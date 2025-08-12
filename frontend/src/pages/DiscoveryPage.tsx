@@ -9,6 +9,7 @@ import AddBroadcastModal from '../components/AddBroadcastModal';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
+import { searchAvailableUsers, SearchUsersRequest, isSearchError, getSearchErrorMessage } from '../services/searchClient';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   // User state management
@@ -32,6 +33,20 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   // Loading state for broadcast operations
   const [isBroadcastSubmitting, setIsBroadcastSubmitting] = useState<boolean>(false);
 
+  // Search and filter state
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [hasSearched, setHasSearched] = useState<boolean>(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<{
+    distance?: number;
+    interests: string[];
+  }>({ interests: [] });
+  const [availableInterests] = useState<string[]>([
+    'Art', 'Music', 'Travel', 'Food', 'Fitness', 'Technology',
+    'Books', 'Movies', 'Gaming', 'Photography', 'Nature', 'Business'
+  ]);
+
   // Handle initial animation state if user is already available
   useEffect(() => {
     if (isAvailable && !showFeedAnimation) {
@@ -42,13 +57,27 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     }
   }, [isAvailable, showFeedAnimation]);
 
-  const filteredUsers = nearbyUsers.filter(user =>
+  // Auto-search when filters change (only if we've already searched once)
+  useEffect(() => {
+    if (hasSearched && (activeFilters.distance || activeFilters.interests.length > 0)) {
+      // Debounce the search to avoid too many API calls
+      const timeoutId = setTimeout(() => {
+        performSearch();
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeFilters.distance, activeFilters.interests, hasSearched]);
+
+  // Determine which users to display: search results if searched, otherwise nearby users with basic filtering
+  const displayUsers = hasSearched ? searchResults : nearbyUsers.filter(user =>
     !hiddenUserIds.has(user.id) && // Exclude hidden users
-    (user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.interests.some(interest => 
-      interest.toLowerCase().includes(searchQuery.toLowerCase())
-    ) ||
-    user.bio.toLowerCase().includes(searchQuery.toLowerCase()))
+    (searchQuery === '' || 
+     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     user.interests.some(interest => 
+       interest.toLowerCase().includes(searchQuery.toLowerCase())
+     ) ||
+     user.bio.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const toggleAvailability = (): void => {
@@ -181,6 +210,86 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     console.log('User hidden:', userId);
   };
 
+  // Search functionality
+  const performSearch = async (): Promise<void> => {
+    if (isSearching) return; // Prevent multiple concurrent searches
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      const searchRequest: SearchUsersRequest = {
+        query: searchQuery.trim() || undefined,
+        distance: activeFilters.distance,
+        interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
+        limit: 50, // Reasonable limit for mobile UI
+      };
+
+      const response = await searchAvailableUsers(searchRequest);
+      
+      // Filter out hidden users from search results
+      const filteredResults = response.users.filter(user => !hiddenUserIds.has(user.id));
+      
+      setSearchResults(filteredResults);
+      setHasSearched(true);
+
+      // Show success message if query was provided
+      if (searchQuery.trim()) {
+        setToast({
+          isVisible: true,
+          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''}`,
+          type: 'success'
+        });
+      }
+    } catch (error) {
+      console.error('Search failed:', error);
+      
+      let errorMessage = 'Search failed. Please try again.';
+      if (isSearchError(error)) {
+        errorMessage = getSearchErrorMessage(error);
+      }
+      
+      setSearchError(errorMessage);
+      setToast({
+        isVisible: true,
+        message: errorMessage,
+        type: 'error'
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchEnter = (): void => {
+    performSearch();
+  };
+
+  // Filter management
+  const handleDistanceFilterChange = (distance: number | undefined): void => {
+    setActiveFilters(prev => ({ ...prev, distance }));
+  };
+
+  const handleInterestToggle = (interest: string): void => {
+    setActiveFilters(prev => ({
+      ...prev,
+      interests: prev.interests.includes(interest)
+        ? prev.interests.filter(i => i !== interest)
+        : [...prev.interests, interest]
+    }));
+  };
+
+  const clearFilters = (): void => {
+    setActiveFilters({ interests: [] });
+  };
+
+  const clearSearch = (): void => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setHasSearched(false);
+    setSearchError(null);
+    clearFilters();
+  };
+
   return (
     <div className="min-h-screen">
       {/* Fixed Header Section */}
@@ -272,6 +381,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
               <AnimatedSearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
+                onEnter={handleSearchEnter}
                 suggestions={[
                   'find me a blond guy above 6 ft',
                   'find me another solo traveler',
@@ -283,6 +393,88 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 ]}
                 className=""
               />
+              
+              {/* Filter Chips */}
+              {(activeFilters.distance || activeFilters.interests.length > 0 || hasSearched) && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {/* Distance filter */}
+                  {activeFilters.distance && (
+                    <button
+                      onClick={() => handleDistanceFilterChange(undefined)}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-aqua/10 text-aqua text-xs rounded-full border border-aqua/20 hover:bg-aqua/20 transition-colors"
+                    >
+                      <span>{activeFilters.distance} mi</span>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  
+                  {/* Interest filters */}
+                  {activeFilters.interests.map(interest => (
+                    <button
+                      key={interest}
+                      onClick={() => handleInterestToggle(interest)}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-aqua/10 text-aqua text-xs rounded-full border border-aqua/20 hover:bg-aqua/20 transition-colors"
+                    >
+                      <span>{interest}</span>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  ))}
+                  
+                  {/* Clear all filters */}
+                  {(activeFilters.distance || activeFilters.interests.length > 0) && (
+                    <button
+                      onClick={clearFilters}
+                      className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-gray-200 transition-colors"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                  
+                  {/* Clear search */}
+                  {hasSearched && (
+                    <button
+                      onClick={clearSearch}
+                      className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-gray-200 transition-colors"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </div>
+              )}
+              
+              {/* Quick filter suggestions */}
+              {!hasSearched && activeFilters.interests.length === 0 && !activeFilters.distance && (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500 mb-2">Quick filters:</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleDistanceFilterChange(5)}
+                      className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-aqua/10 hover:text-aqua transition-colors"
+                    >
+                      Within 5 mi
+                    </button>
+                    <button
+                      onClick={() => handleDistanceFilterChange(10)}
+                      className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-aqua/10 hover:text-aqua transition-colors"
+                    >
+                      Within 10 mi
+                    </button>
+                    {availableInterests.slice(0, 4).map(interest => (
+                      <button
+                        key={interest}
+                        onClick={() => handleInterestToggle(interest)}
+                        className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-aqua/10 hover:text-aqua transition-colors"
+                      >
+                        {interest}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -293,76 +485,131 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (
           <div className={isGridView ? 'max-w-sm mx-auto px-4' : 'flex flex-col'}>
-            {isGridView ? (
-              // Grid View - Instagram Discover-like layout with even gaps
-              <div className="grid grid-cols-3 gap-1 mb-24">
-                {filteredUsers.map((user, index) => {
-                  const baseDelay = 100;
-                  const staggerDelay = index * 50; // Faster for grid
-                  const totalDelay = baseDelay + staggerDelay;
-                  
-                  // Determine if user has video or image
-                  const hasVideo = user.profileMedia?.type === 'video';
-                  const mediaSource = hasVideo ? user.profileMedia?.thumbnail : user.profilePicture;
-                  
-                  return (
-                    <div
-                      key={user.id}
-                      className={`opacity-0 ${showFeedAnimation ? 'animate-card-entrance' : ''}`}
-                      style={{
-                        animationDelay: showFeedAnimation ? `${totalDelay}ms` : '0ms',
-                        animationFillMode: 'forwards'
-                      }}
-                    >
-                      <button
-                        onClick={() => handleUserClick(user)}
-                        className="relative w-full aspect-square overflow-hidden bg-gray-100 hover:scale-[1.02] transition-transform duration-200"
-                      >
-                        <img
-                          src={mediaSource}
-                          alt={user.name}
-                          className="w-full h-full object-cover"
-                        />
-                        {/* Video indicator for profiles with video */}
-                        {hasVideo && (
-                          <div className="absolute top-2 right-2 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center">
-                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z"/>
-                            </svg>
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
+            {/* Loading State */}
+            {isSearching && (
+              <div className="flex flex-col items-center justify-center py-16 mb-24">
+                <div className="w-8 h-8 border-2 border-aqua border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-sm text-gray-500">Searching for users...</p>
               </div>
-            ) : (
-              // Feed View - Vertical cards
-              <div className="flex flex-col mb-24">
-                {filteredUsers.map((user, index) => {
-                  // Staggered animation timing
-                  const baseDelay = 100;
-                  const staggerDelay = index * 80; // Slightly longer for vertical stack
-                  const totalDelay = baseDelay + staggerDelay;
-                  
-                  return (
-                    <div
-                      key={user.id}
-                      className={`opacity-0 ${showFeedAnimation ? 'animate-card-entrance' : ''}`}
-                      style={{
-                        animationDelay: showFeedAnimation ? `${totalDelay}ms` : '0ms',
-                        animationFillMode: 'forwards'
-                      }}
-                    >
-                      <UserCard
-                        user={user}
-                        onClick={() => handleUserClick(user)}
-                        isVerticalLayout={true}
-                      />
-                    </div>
-                  );
-                })}
+            )}
+            
+            {/* No Results State */}
+            {!isSearching && hasSearched && displayUsers.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 mb-24 px-5">
+                <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No users found</h3>
+                <p className="text-sm text-gray-500 text-center">
+                  Try adjusting your search query or filters
+                </p>
+                <button
+                  onClick={clearSearch}
+                  className="mt-3 px-4 py-2 bg-aqua text-white text-sm rounded-full hover:bg-aqua/90 transition-colors"
+                >
+                  Clear search
+                </button>
               </div>
+            )}
+            
+            {/* Error State */}
+            {!isSearching && searchError && (
+              <div className="flex flex-col items-center justify-center py-16 mb-24 px-5">
+                <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                  <svg className="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">Search failed</h3>
+                <p className="text-sm text-gray-500 text-center mb-3">
+                  {searchError}
+                </p>
+                <button
+                  onClick={performSearch}
+                  className="px-4 py-2 bg-aqua text-white text-sm rounded-full hover:bg-aqua/90 transition-colors"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            
+            {/* Users Grid/Feed */}
+            {!isSearching && !searchError && displayUsers.length > 0 && (
+              <>            
+                {isGridView ? (
+                  // Grid View - Instagram Discover-like layout with even gaps
+                  <div className="grid grid-cols-3 gap-1 mb-24">
+                    {displayUsers.map((user, index) => {
+                      const baseDelay = 100;
+                      const staggerDelay = index * 50; // Faster for grid
+                      const totalDelay = baseDelay + staggerDelay;
+                      
+                      // Determine if user has video or image
+                      const hasVideo = user.profileMedia?.type === 'video';
+                      const mediaSource = hasVideo ? user.profileMedia?.thumbnail : user.profilePicture;
+                      
+                      return (
+                        <div
+                          key={user.id}
+                          className={`opacity-0 ${showFeedAnimation ? 'animate-card-entrance' : ''}`}
+                          style={{
+                            animationDelay: showFeedAnimation ? `${totalDelay}ms` : '0ms',
+                            animationFillMode: 'forwards'
+                          }}
+                        >
+                          <button
+                            onClick={() => handleUserClick(user)}
+                            className="relative w-full aspect-square overflow-hidden bg-gray-100 hover:scale-[1.02] transition-transform duration-200"
+                          >
+                            <img
+                              src={mediaSource}
+                              alt={user.name}
+                              className="w-full h-full object-cover"
+                            />
+                            {/* Video indicator for profiles with video */}
+                            {hasVideo && (
+                              <div className="absolute top-2 right-2 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center">
+                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z"/>
+                                </svg>
+                              </div>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // Feed View - Vertical cards
+                  <div className="flex flex-col mb-24">
+                    {displayUsers.map((user, index) => {
+                      // Staggered animation timing
+                      const baseDelay = 100;
+                      const staggerDelay = index * 80; // Slightly longer for vertical stack
+                      const totalDelay = baseDelay + staggerDelay;
+                      
+                      return (
+                        <div
+                          key={user.id}
+                          className={`opacity-0 ${showFeedAnimation ? 'animate-card-entrance' : ''}`}
+                          style={{
+                            animationDelay: showFeedAnimation ? `${totalDelay}ms` : '0ms',
+                            animationFillMode: 'forwards'
+                          }}
+                        >
+                          <UserCard
+                            user={user}
+                            onClick={() => handleUserClick(user)}
+                            isVerticalLayout={true}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
