@@ -299,6 +299,30 @@ make docs                # Generate API documentation
 make security-scan       # Run security scan with gosec
 ```
 
+### API Documentation
+
+The chat service includes comprehensive OpenAPI 3.0 specification and generated HTML documentation.
+
+**View API Documentation:**
+- **OpenAPI Spec**: `backend/chat-svc/api/openapi.yaml`
+- **HTML Documentation**: `backend/chat-svc/docs/api.html`
+- **Generated with**: `redoc-cli build api/openapi.yaml --output docs/api.html`
+
+**API Documentation Includes:**
+- All REST endpoints with detailed parameters
+- Request/response schemas and examples
+- WebSocket message formats and types
+- Authentication requirements
+- Error response formats
+- Interactive API explorer
+
+**Regenerate Documentation:**
+```bash
+cd backend/chat-svc
+npm install -g redoc-cli  # or use: npx @redocly/cli build-docs
+redoc-cli build api/openapi.yaml --output docs/api.html
+```
+
 ## 🔧 Configuration
 
 ### Environment Variables
