@@ -12,7 +12,7 @@ jest.mock('react-router-dom', () => ({
 }));
 
 // Mock the auth service
-jest.mock('../services/authService', () => ({
+jest.mock('../services/authClient', () => ({
   login: jest.fn(),
   register: jest.fn(),
   logout: jest.fn(),

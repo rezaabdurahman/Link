@@ -9,7 +9,7 @@ import GuestOnly from '../GuestOnly';
 import { AuthProvider } from '../../contexts/AuthContext';
 
 // Mock the auth service to avoid actual API calls
-jest.mock('../../services/authService', () => ({
+jest.mock('../../services/authClient', () => ({
   login: jest.fn(),
   register: jest.fn(),
   logout: jest.fn(),

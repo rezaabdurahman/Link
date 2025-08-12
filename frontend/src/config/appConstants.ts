@@ -22,6 +22,11 @@ export const APP_CONFIG = {
   }
 } as const;
 
+// API Configuration
+export const API_CONFIG = {
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080',
+} as const;
+
 // Type exports for better TypeScript support
 export type AppConfigKey = keyof typeof APP_CONFIG;
 export type MetaConfigKey = keyof typeof APP_CONFIG.meta;

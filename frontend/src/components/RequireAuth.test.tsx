@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import RequireAuth from './RequireAuth';
 
 // Mock the auth service to avoid import.meta issues
-jest.mock('../services/authService', () => ({
+jest.mock('../services/authClient', () => ({
   login: jest.fn(),
   register: jest.fn(),
   logout: jest.fn(),

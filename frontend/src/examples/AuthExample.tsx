@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LoginRequest, RegisterRequest } from '../services/authService';
+import { LoginRequest, RegisterRequest } from '../services/authClient';
 
 /**
  * Example component showing how to use the AuthContext
