@@ -30,7 +30,7 @@ func GetJWTConfig() *JWTConfig {
 		CookieName:       getEnv("JWT_COOKIE_NAME", "link_auth"),
 		CookieSecure:     getEnv("ENVIRONMENT", "development") == "production",
 		CookieHTTPOnly:   true,
-		CookieSameSite:   getEnv("JWT_COOKIE_SAMESITE", "lax"),
+		CookieSameSite:   getEnv("JWT_COOKIE_SAMESITE", "strict"),
 	}
 }
 

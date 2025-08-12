@@ -1,0 +1,9 @@
+GET /api/admin/users HTTP/1.1
+Host: localhost:8080
+X-User-Role: admin
+X-User-Permissions: all
+X-Admin: true
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMzQ1IiwiaWF0IjoxNjQwOTk1MjAwLCJleHAiOjE2NDA5OTg4MDB9.signature
+Accept: application/json
+
+# Testing if role headers can elevate privileges

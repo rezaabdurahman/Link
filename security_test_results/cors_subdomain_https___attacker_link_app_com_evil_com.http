@@ -1,0 +1,6 @@
+GET /api/health HTTP/1.1
+Host: localhost:8080
+Origin: https://attacker.link-app.com.evil.com
+Accept: application/json
+
+# Testing origin: https://attacker.link-app.com.evil.com

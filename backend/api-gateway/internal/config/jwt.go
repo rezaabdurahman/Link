@@ -30,7 +30,7 @@ func GetJWTConfig() *JWTConfig {
 		CookieName:       getEnv("JWT_COOKIE_NAME", "link_auth"),
 		CookieSecure:     getEnv("ENVIRONMENT", "development") == "production",
 		CookieHTTPOnly:   true,
-		CookieSameSite:   getEnv("JWT_COOKIE_SAMESITE", "lax"),
+		CookieSameSite:   getEnv("JWT_COOKIE_SAMESITE", "strict"),
 	}
 }
 
@@ -61,7 +61,7 @@ func (j *JWTValidator) ValidateAccessToken(tokenString string) (*Claims, error) 
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(j.config.Secret), nil
-	})
+	}, jwt.WithIssuer(j.config.Issuer), jwt.WithAudience("link-app"))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)

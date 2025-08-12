@@ -1,54 +1,65 @@
-# Link - iOS Frontend Mockup
+# Link - Social Discovery App
 
-**Tagline:** *"Turn proximity into possibility. AI-powered connections, in real life."*
-
-Link is an AI-powered social app that facilitates real-life connections and helps maintain friendships through intelligent suggestions, proximity-based discovery, and proactive relationship building.
-
-## 🎯 Project Vision
-
-Link bridges the real-life social gap by providing:
-- **Context-driven connections** - Discover nearby people with AI-suggested conversation starters
-- **Living friendship maintenance** - Replace small talk with AI-curated life updates
-- **Memory enhancement** - Never lose touch with important details that matter
-- **Proactive relationship building** - Get nudges to connect before relationships fade
+A modern social discovery app with location-based features, built with React frontend and Go microservices backend.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v18 or higher)
-- npm or yarn package manager
 
-### Installation
+- **Docker & Docker Compose** (for backend services)
+- **Node.js 18+** (for frontend development)
+- **Go 1.21+** (for backend development)
 
-1. **Clone and navigate to the project:**
-   ```bash
-   cd /Users/RezaAbdurahman/Desktop/Projects/Link
-   ```
+### 1. Start Backend Services
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+```bash
+cd backend
+docker-compose up -d
+```
 
-3. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
+This will start:
+- **API Gateway** on port 8080 (main entry point)
+- **User Service** on port 8081 (direct access for debugging)
+- **PostgreSQL** on port 5432
+- **Redis** on port 6379
 
-4. **Open your browser:**
-   Navigate to `http://localhost:3000`
+### 2. Start Frontend Development
 
-### Available Scripts
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-- `npm run lint:fix` - Fix ESLint issues
-- `npm run type-check` - Run TypeScript type checking
-- `npm run test` - Run tests
-- `npm run test:watch` - Run tests in watch mode
-- `npm run test:coverage` - Run tests with coverage
+The frontend will be available at `http://localhost:5173`
+
+## 🏗️ Architecture Overview
+
+### Backend Services
+
+The backend follows a microservices architecture with:
+
+- **API Gateway** - Central entry point, handles JWT authentication, routes requests
+- **User Service** - User management, authentication, friend system
+- **Location Service** - Location tracking and proximity features (planned)
+- **Chat Service** - Real-time messaging (planned)
+- **Discovery Service** - Broadcasts and user discovery (planned)
+
+### Frontend
+
+- **React 18** with TypeScript
+- **Tailwind CSS** for styling
+- **React Hook Form** with Zod validation
+- **JWT-based authentication** with secure token storage
+
+## 🔐 Authentication Flow
+
+1. **Registration/Login** → Frontend sends credentials to API Gateway
+2. **API Gateway** → Validates request, forwards to User Service
+3. **User Service** → Creates user/validates credentials, returns JWT
+4. **API Gateway** → Sets secure HTTP-only cookie, returns user data
+5. **Frontend** → Stores user data in context, makes authenticated requests
+6. **API Gateway** → Validates JWT, sets user context headers for downstream services
 
 ## 📱 Features Implemented
 
@@ -92,22 +103,25 @@ Link bridges the real-life social gap by providing:
 ## 📁 Project Structure
 
 ```
-src/
-├── components/          # Reusable UI components
-│   ├── TabBar.tsx      # Bottom navigation
-│   ├── UserCard.tsx    # Discovery user cards
-│   ├── ChatListItem.tsx # Chat list items
-│   ├── StoriesBar.tsx  # Stories component
-│   └── OpportunityCard.tsx # Opportunity suggestions
-├── pages/              # Main page components
-│   ├── DiscoveryPage.tsx
-│   ├── ChatPage.tsx
-│   ├── OpportunitiesPage.tsx
-│   └── ProfilePage.tsx
-├── types/              # TypeScript type definitions
-├── data/               # Mock data and API functions
-├── hooks/              # Custom React hooks
-└── utils/              # Utility functions
+Link/
+├── backend/
+│   ├── api-gateway/          # API Gateway service
+│   ├── user-svc/             # User management service
+│   ├── location-svc/         # Location service (planned)
+│   ├── chat-svc/             # Chat service (planned)
+│   ├── discovery-svc/        # Discovery service (partial)
+│   └── docker-compose.yml    # Backend services orchestration
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # Reusable UI components
+│   │   ├── contexts/         # React contexts (Auth, etc.)
+│   │   ├── pages/            # Page components
+│   │   ├── services/         # API service layer
+│   │   ├── types/            # TypeScript type definitions
+│   │   └── utils/            # Utility functions
+│   ├── .env.local            # Local development configuration
+│   └── package.json
+└── README.md
 ```
 
 ## 🎨 Design System
@@ -127,19 +141,83 @@ The app follows iOS Human Interface Guidelines with:
 - **Native-like interactions** with proper touch targets
 - **Blur effects** and translucent backgrounds
 
-## 🧪 Testing
+## 🧪 Testing the Authentication
 
-The project includes:
-- **Component testing** with React Testing Library
-- **Type safety** with TypeScript strict mode
-- **Linting** with comprehensive ESLint rules
-- **Coverage reporting** for quality assurance
+1. **Start the backend**: `cd backend && docker-compose up -d`
+2. **Start the frontend**: `cd frontend && npm run dev`
+3. **Open** `http://localhost:5173`
+4. **Sign up** with a new account:
+   - Username, first name, last name, email, password
+   - Form validates input in real-time
+5. **Automatic login** after successful registration
+6. **Try logout** and login again with the same credentials
 
-Run tests with:
+## 📊 API Endpoints
+
+All requests go through the API Gateway at `http://localhost:8080`:
+
+### Authentication (Public)
+- `POST /auth/register` - User registration
+- `POST /auth/login` - User login
+- `POST /auth/refresh` - Token refresh
+
+### User Management (Protected)
+- `GET /users/profile` - Get current user profile
+- `PUT /users/profile` - Update user profile
+- `DELETE /auth/logout` - User logout
+- `GET /users/search` - Search users
+
+### Health Check
+- `GET /health` - Service health status
+
+## 🔧 Configuration
+
+### Environment Variables
+
+#### Frontend (.env.local)
 ```bash
-npm run test
-npm run test:coverage
+VITE_API_BASE_URL=http://localhost:8080
 ```
+
+#### Backend (docker-compose.yml)
+- JWT_SECRET - Should be changed in production
+- Database credentials
+- Service URLs and timeouts
+- CORS origins
+
+## 🐛 Troubleshooting
+
+### Backend Issues
+
+1. **Services not starting**: Check Docker logs
+   ```bash
+   docker-compose logs api-gateway
+   docker-compose logs user-svc
+   ```
+
+2. **Database connection issues**: Ensure PostgreSQL is healthy
+   ```bash
+   docker-compose ps postgres
+   ```
+
+3. **JWT errors**: Ensure JWT_SECRET is the same across API Gateway and User Service
+
+### Frontend Issues
+
+1. **CORS errors**: API Gateway handles CORS, check if backend is running
+2. **Authentication errors**: Check browser dev tools for detailed error messages
+3. **Network errors**: Ensure API Gateway is accessible at `http://localhost:8080`
+
+## 🗺️ Roadmap
+
+- [ ] **Location Service** - GPS tracking and proximity features
+- [ ] **Chat Service** - Real-time messaging with WebSocket support
+- [ ] **Discovery Service** - User discovery and broadcast features
+- [ ] **AI Service** - Intelligent matching and recommendations
+- [ ] **Stories Service** - Social stories and media sharing
+- [ ] **Mobile App** - React Native implementation
+- [ ] **Push Notifications** - Real-time notifications
+- [ ] **Advanced Security** - Rate limiting, security headers, etc.
 
 ## 🔒 Privacy & Security
 

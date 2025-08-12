@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: link_app
+      POSTGRES_USER: link_user
+      POSTGRES_PASSWORD: link_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U link_user -d link_app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # User Service
+  user-svc:
+    build:
+      context: ./user-svc
+      dockerfile: Dockerfile
+    environment:
+      # Database configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: link_user
+      DB_PASSWORD: link_pass
+      DB_NAME: link_app
+      DB_SSLMODE: disable
+      
+      # JWT configuration
+      JWT_SECRET: your-secret-key-change-this-in-production-make-it-very-long-and-complex
+      JWT_ISSUER: user-svc
+      JWT_ACCESS_TOKEN_EXPIRY: 1h
+      JWT_REFRESH_TOKEN_EXPIRY: 24h
+      
+      # Server configuration
+      PORT: 8080
+      ENVIRONMENT: development
+      
+      # Redis configuration
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8081:8080"  # Expose on different port to avoid conflict with gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    environment:
+      # Server configuration
+      PORT: 8080
+      ENVIRONMENT: development
+      
+      # JWT configuration (must match user service)
+      JWT_SECRET: your-secret-key-change-this-in-production-make-it-very-long-and-complex
+      JWT_ISSUER: user-svc
+      JWT_COOKIE_NAME: link_auth
+      JWT_COOKIE_SAMESITE: lax
+      
+      # Service URLs
+      USER_SVC_URL: http://user-svc:8080
+      USER_SVC_HEALTH_URL: http://user-svc:8080/health
+      USER_SVC_TIMEOUT: 30
+      
+      LOCATION_SVC_URL: http://location-svc:8080
+      LOCATION_SVC_HEALTH_URL: http://location-svc:8080/health
+      LOCATION_SVC_TIMEOUT: 30
+      
+      CHAT_SVC_URL: http://chat-svc:8080
+      CHAT_SVC_HEALTH_URL: http://chat-svc:8080/health
+      CHAT_SVC_TIMEOUT: 30
+      
+      AI_SVC_URL: http://ai-svc:8000
+      AI_SVC_HEALTH_URL: http://ai-svc:8000/health
+      AI_SVC_TIMEOUT: 60
+      
+      DISCOVERY_SVC_URL: http://discovery-svc:8080
+      DISCOVERY_SVC_HEALTH_URL: http://discovery-svc:8080/health
+      DISCOVERY_SVC_TIMEOUT: 30
+      
+      STORIES_SVC_URL: http://stories-svc:8080
+      STORIES_SVC_HEALTH_URL: http://stories-svc:8080/health
+      STORIES_SVC_TIMEOUT: 30
+      
+      OPPORTUNITIES_SVC_URL: http://opportunities-svc:8080
+      OPPORTUNITIES_SVC_HEALTH_URL: http://opportunities-svc:8080/health
+      OPPORTUNITIES_SVC_TIMEOUT: 30
+    ports:
+      - "8080:8080"  # Main gateway port
+    depends_on:
+      user-svc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: link-network

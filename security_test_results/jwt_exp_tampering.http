@@ -1,0 +1,6 @@
+GET /api/user/profile HTTP/1.1
+Host: localhost:8080
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMzQ1IiwiaWF0IjoxNjQwOTk1MjAwLCJleHAiOjk5OTk5OTk5OTl9.invalid_signature
+Accept: application/json
+
+# This token has extended expiration (exp: 9999999999) but invalid signature

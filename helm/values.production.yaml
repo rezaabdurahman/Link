@@ -1,0 +1,478 @@
+# Production Helm values for Link App with security hardening
+
+global:
+  environment: production
+  domain: your-domain.com
+  monitoring:
+    enabled: true
+  security:
+    podSecurityStandards: restricted
+
+# Image configuration
+image:
+  registry: your-registry.com
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: registry-secret
+
+# API Gateway configuration
+apiGateway:
+  replicaCount: 3
+  image:
+    repository: link/api-gateway
+    tag: "v1.0.0"
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 1001
+    fsGroupChangePolicy: "OnRootMismatch"
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Resources
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  # Environment variables
+  env:
+    ENVIRONMENT: production
+    BCRYPT_COST: "12"
+    PASSWORD_HASH_ALGO: bcrypt
+    JWT_COOKIE_SAMESITE: strict
+    RATE_LIMIT_REQUESTS_PER_MINUTE: "100"
+    RATE_LIMIT_BURST: "20"
+  
+  # Secrets (managed via Kubernetes secrets)
+  secrets:
+    - name: jwt-secret
+      env: JWT_SECRET
+    - name: service-secret
+      env: SERVICE_SECRET
+    - name: database-credentials
+      env: DB_PASSWORD
+    - name: redis-credentials
+      env: REDIS_PASSWORD
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  
+  # Ingress configuration
+  ingress:
+    enabled: true
+    className: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.middlewares: "link-security-headers@kubernetescrd"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: api.your-domain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: api-tls
+        hosts:
+          - api.your-domain.com
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+# User Service configuration
+userService:
+  replicaCount: 2
+  image:
+    repository: link/user-service
+    tag: "v1.0.0"
+  
+  # Security context (same as API Gateway)
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Environment variables
+  env:
+    ENVIRONMENT: production
+    BCRYPT_COST: "12"
+    PASSWORD_HASH_ALGO: bcrypt
+    JWT_ACCESS_TOKEN_EXPIRY: 1h
+    JWT_REFRESH_TOKEN_EXPIRY: 24h
+  
+  # Resources
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# PostgreSQL configuration (using Bitnami Helm chart)
+postgresql:
+  enabled: true
+  auth:
+    enablePostgresUser: true
+    postgresPassword: "" # Will be set via secret
+    username: linkuser
+    password: "" # Will be set via secret
+    database: linkdb
+  
+  # Security configuration
+  primary:
+    securityContext:
+      enabled: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+    
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      runAsNonRoot: true
+      readOnlyRootFilesystem: false
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    
+    # SSL/TLS configuration
+    tls:
+      enabled: true
+      certificatesSecret: postgresql-tls
+      certFilename: tls.crt
+      certKeyFilename: tls.key
+      certCAFilename: ca.crt
+    
+    # PostgreSQL configuration
+    pgHbaConfiguration: |
+      # TYPE  DATABASE        USER            ADDRESS                 METHOD
+      local   all             all                                     scram-sha-256
+      host    all             all             127.0.0.1/32            scram-sha-256
+      host    all             all             ::1/128                 scram-sha-256
+      hostssl all             all             0.0.0.0/0               scram-sha-256
+    
+    extendedConfiguration: |
+      # Logging
+      log_statement = 'all'
+      log_min_duration_statement = 1000
+      log_connections = on
+      log_disconnections = on
+      log_line_prefix = '%m [%p] %u@%d '
+      
+      # Security
+      ssl = on
+      shared_preload_libraries = 'pg_stat_statements'
+      
+      # Performance
+      max_connections = 100
+      shared_buffers = 256MB
+      effective_cache_size = 1GB
+    
+    # Persistence
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: "fast-ssd"
+    
+    # Resource limits
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+
+# Redis configuration (using Bitnami Helm chart)
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "" # Will be set via secret
+  
+  # Security configuration
+  securityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+  
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # TLS configuration
+  tls:
+    enabled: true
+    certificatesSecret: redis-tls
+    certFilename: tls.crt
+    certKeyFilename: tls.key
+    certCAFilename: ca.crt
+  
+  # Redis configuration
+  commonConfiguration: |
+    # Security
+    protected-mode yes
+    port 0
+    tls-port 6380
+    
+    # Disable dangerous commands
+    rename-command FLUSHALL ""
+    rename-command FLUSHDB ""
+    rename-command CONFIG ""
+    rename-command DEBUG ""
+    rename-command EVAL ""
+    
+    # Memory management
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+  
+  # Persistence
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: "fast-ssd"
+  
+  # Resource limits
+  master:
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Frontend configuration
+frontend:
+  replicaCount: 2
+  image:
+    repository: link/frontend
+    tag: "v1.0.0"
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Environment variables
+  env:
+    NODE_ENV: production
+    VITE_REQUIRE_AUTH: "true"
+  
+  # Resources
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+  
+  # Service
+  service:
+    type: ClusterIP
+    port: 3000
+  
+  # Ingress
+  ingress:
+    enabled: true
+    className: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.middlewares: "link-security-headers@kubernetescrd"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: your-domain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: frontend-tls
+        hosts:
+          - your-domain.com
+
+# Network Policies
+networkPolicies:
+  enabled: true
+  defaultDeny: true
+  
+  # Define allowed traffic
+  policies:
+    - name: api-gateway-ingress
+      podSelector:
+        matchLabels:
+          app: api-gateway
+      policyTypes:
+        - Ingress
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  name: traefik-system
+          ports:
+            - protocol: TCP
+              port: 8080
+    
+    - name: database-access
+      podSelector:
+        matchLabels:
+          app: postgresql
+      policyTypes:
+        - Ingress
+      ingress:
+        - from:
+            - podSelector:
+                matchLabels:
+                  app: api-gateway
+            - podSelector:
+                matchLabels:
+                  app: user-service
+          ports:
+            - protocol: TCP
+              port: 5432
+
+# Pod Security Policies / Pod Security Standards
+podSecurityPolicy:
+  enabled: true
+  name: restricted-psp
+  spec:
+    privileged: false
+    allowPrivilegeEscalation: false
+    requiredDropCapabilities:
+      - ALL
+    volumes:
+      - 'configMap'
+      - 'emptyDir'
+      - 'projected'
+      - 'secret'
+      - 'downwardAPI'
+      - 'persistentVolumeClaim'
+    runAsUser:
+      rule: 'MustRunAsNonRoot'
+    seLinux:
+      rule: 'RunAsAny'
+    fsGroup:
+      rule: 'RunAsAny'
+
+# Monitoring and observability
+monitoring:
+  enabled: true
+  
+  # Prometheus ServiceMonitor
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+    labels:
+      prometheus: kube-prometheus
+  
+  # Grafana dashboards
+  dashboards:
+    enabled: true
+    
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *" # Daily at 2 AM
+  retention: "30d"
+  
+  postgresql:
+    enabled: true
+  
+  redis:
+    enabled: true
+
+# Resource quotas and limits
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "2"
+    requests.memory: "4Gi"
+    limits.cpu: "4"
+    limits.memory: "8Gi"
+    persistentvolumeclaims: "10"
+
+limitRange:
+  enabled: true
+  limits:
+    - default:
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      type: Container

@@ -110,17 +110,22 @@ export interface AuthToken {
 }
 
 /**
- * Authentication user data mirroring backend UserResponse
+ * Authentication user data mirroring backend ProfileUser structure
  * Uses readonly properties where appropriate for immutability
  */
 export interface AuthUser {
   readonly id: string;
-  readonly name: string;
   readonly email: string;
-  readonly profilePicture: string | null;
-  readonly emailVerified: boolean;
-  readonly createdAt: string;
-  readonly updatedAt: string;
+  readonly username: string;
+  readonly first_name: string;
+  readonly last_name: string;
+  readonly date_of_birth?: string; // ISO string format
+  readonly profile_picture?: string | null;
+  readonly bio?: string | null;
+  readonly location?: string | null;
+  readonly email_verified: boolean;
+  readonly created_at: string; // ISO string format
+  readonly updated_at: string; // ISO string format
 }
 
 /**

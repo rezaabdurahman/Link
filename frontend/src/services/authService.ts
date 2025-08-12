@@ -4,21 +4,24 @@
 // Base API URL from environment variables
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-// API endpoints
+// API endpoints (clean URLs through API Gateway)
 const AUTH_ENDPOINTS = {
-  register: '/api/auth/register',
-  login: '/api/auth/login', 
-  refresh: '/api/auth/refresh',
-  logout: '/api/auth/logout',
-  me: '/api/me',
+  register: '/auth/register',
+  login: '/auth/login', 
+  refresh: '/auth/refresh',
+  logout: '/auth/logout',
+  me: '/users/profile',
 } as const;
 
 // Request/Response types
 export interface RegisterRequest {
-  name: string;
   email: string;
+  username: string;
+  first_name: string;
+  last_name: string;
   password: string;
   confirmPassword?: string;
+  date_of_birth?: string; // ISO string format
 }
 
 export interface LoginRequest {
@@ -29,9 +32,17 @@ export interface LoginRequest {
 export interface AuthResponse {
   user: {
     id: string;
-    name: string;
     email: string;
-    profilePicture?: string;
+    username: string;
+    first_name: string;
+    last_name: string;
+    date_of_birth?: string; // ISO string format
+    profile_picture?: string | null;
+    bio?: string | null;
+    location?: string | null;
+    email_verified: boolean;
+    created_at: string; // ISO string format
+    updated_at: string; // ISO string format
   };
   token?: string; // Optional for token-based auth fallback
   message: string;
@@ -45,12 +56,17 @@ export interface RefreshResponse {
 // User profile response from /me endpoint
 export interface MeResponse {
   id: string;
-  name: string;
   email: string;
-  profilePicture: string | null;
-  emailVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth?: string; // ISO string format
+  profile_picture?: string | null;
+  bio?: string | null;
+  location?: string | null;
+  email_verified: boolean;
+  created_at: string; // ISO string format
+  updated_at: string; // ISO string format
 }
 
 // Backend ErrorResponse mapped to discriminated union

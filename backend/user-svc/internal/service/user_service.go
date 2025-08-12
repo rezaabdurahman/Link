@@ -10,7 +10,7 @@ import (
 	"github.com/link-app/user-svc/internal/config"
 	"github.com/link-app/user-svc/internal/models"
 	"github.com/link-app/user-svc/internal/repository"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/link-app/user-svc/internal/security"
 	"gorm.io/gorm"
 )
 
@@ -90,15 +90,20 @@ type UserService interface {
 }
 
 type userService struct {
-	userRepo   repository.UserRepository
-	jwtService *config.JWTService
+	userRepo       repository.UserRepository
+	jwtService     *config.JWTService
+	passwordHasher *security.PasswordHasher
 }
 
 // NewUserService creates a new user service
 func NewUserService(userRepo repository.UserRepository, jwtService *config.JWTService) UserService {
+	passwordConfig := security.GetPasswordConfig()
+	passwordHasher := security.NewPasswordHasher(passwordConfig)
+	
 	return &userService{
-		userRepo:   userRepo,
-		jwtService: jwtService,
+		userRepo:       userRepo,
+		jwtService:     jwtService,
+		passwordHasher: passwordHasher,
 	}
 }
 
@@ -118,8 +123,8 @@ func (s *userService) RegisterUser(req RegisterUserRequest) (*AuthResponse, erro
 		return nil, fmt.Errorf("failed to check username uniqueness: %w", err)
 	}
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	// Hash password using enhanced hasher
+	hashedPassword, err := s.passwordHasher.HashPassword(req.Password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
@@ -131,7 +136,7 @@ func (s *userService) RegisterUser(req RegisterUserRequest) (*AuthResponse, erro
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,
 		DateOfBirth:  req.DateOfBirth,
-		PasswordHash: string(hashedPassword),
+		PasswordHash: hashedPassword,
 		IsActive:     true,
 	}
 
@@ -169,9 +174,28 @@ func (s *userService) LoginUser(req LoginRequest) (*AuthResponse, *models.Sessio
 		return nil, nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	// Verify password using enhanced hasher
+	isValid, err := s.passwordHasher.VerifyPassword(req.Password, user.PasswordHash)
+	if err != nil {
+		return nil, nil, fmt.Errorf("password verification failed: %w", err)
+	}
+	if !isValid {
 		return nil, nil, ErrInvalidCredentials
+	}
+
+	// Check if password should be rehashed with updated parameters
+	if s.passwordHasher.ShouldRehash(user.PasswordHash) {
+		// Rehash password with current parameters
+		newHash, err := s.passwordHasher.HashPassword(req.Password)
+		if err == nil {
+			user.PasswordHash = newHash
+			// Update in database asynchronously (don't fail login if this fails)
+			go func() {
+				if updateErr := s.userRepo.UpdateUser(user); updateErr != nil {
+					fmt.Printf("Failed to update password hash for user %s: %v\n", user.ID, updateErr)
+				}
+			}()
+		}
 	}
 
 	// Generate JWT token

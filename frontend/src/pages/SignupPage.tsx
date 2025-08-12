@@ -96,7 +96,9 @@ const SignupPage: React.FC = (): JSX.Element => {
     try {
       // Transform the form data to match the RegisterRequest interface
       const registerData = {
-        name: `${data.firstName} ${data.lastName}`,
+        username: data.username,
+        first_name: data.firstName,
+        last_name: data.lastName,
         email: data.email,
         password: data.password,
         confirmPassword: data.confirmPassword,

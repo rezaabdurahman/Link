@@ -1,0 +1,9 @@
+GET /api/user/profile HTTP/1.1
+Host: localhost:8080
+Authorization: Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OSwicm9sZSI6ImFkbWluIiwidXNlcl9pZCI6IjEifQ.
+Accept: application/json
+
+# This token has:
+# Header: {"alg":"none","typ":"JWT"}
+# Payload: {"sub":"admin","exp":9999999999,"role":"admin","user_id":"1"}
+# Signature: (empty)

@@ -1,0 +1,8 @@
+GET /api/user/profile HTTP/1.1
+Host: localhost:8080
+X-User-ID: admin
+X-Real-User-ID: 999
+X-Forwarded-User: administrator
+Accept: application/json
+
+# Attempting to access user profile using only spoofed headers (no JWT)

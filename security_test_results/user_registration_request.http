@@ -1,0 +1,13 @@
+POST /api/auth/register HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "testuser@security.test",
+  "password": "SecurePassword123!",
+  "username": "securitytester",
+  "firstName": "Security",
+  "lastName": "Tester",
+  "dateOfBirth": "1990-01-01"
+}

@@ -80,7 +80,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         user: {
           ...state.user,
           ...action.payload.user,
-          updatedAt: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
       };
 
@@ -224,12 +224,14 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
             // Use stored dev user data or create fallback
             const authUser: AuthUser = devUser || {
               id: 'dev-user',
-              name: 'Dev User',
               email: 'dev@example.com',
-              profilePicture: null,
-              emailVerified: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+              username: 'devuser',
+              first_name: 'Dev',
+              last_name: 'User',
+              profile_picture: null,
+              email_verified: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
             };
 
             dispatch({
@@ -267,12 +269,17 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
               // Convert MeResponse to AuthUser format
               const realUser: AuthUser = {
                 id: userResponse.id,
-                name: userResponse.name,
                 email: userResponse.email,
-                profilePicture: userResponse.profilePicture,
-                emailVerified: userResponse.emailVerified,
-                createdAt: userResponse.createdAt,
-                updatedAt: userResponse.updatedAt,
+                username: userResponse.username,
+                first_name: userResponse.first_name,
+                last_name: userResponse.last_name,
+                date_of_birth: userResponse.date_of_birth,
+                profile_picture: userResponse.profile_picture,
+                bio: userResponse.bio,
+                location: userResponse.location,
+                email_verified: userResponse.email_verified,
+                created_at: userResponse.created_at,
+                updated_at: userResponse.updated_at,
               };
 
               dispatch({

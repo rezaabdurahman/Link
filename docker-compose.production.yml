@@ -1,0 +1,339 @@
+version: '3.8'
+
+services:
+  # Database Services with SSL and security hardening
+  postgres:
+    image: postgres:16-alpine
+    container_name: link_postgres
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Enable SSL connections
+      POSTGRES_SSL_MODE: require
+      # Performance and security tunning
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+    command: [
+      "postgres",
+      "-c", "ssl=on",
+      "-c", "ssl_cert_file=/var/lib/postgresql/server.crt",
+      "-c", "ssl_key_file=/var/lib/postgresql/server.key",
+      "-c", "log_statement=all",
+      "-c", "log_min_duration_statement=1000",
+      "-c", "shared_preload_libraries=pg_stat_statements",
+      # Security settings
+      "-c", "log_connections=on",
+      "-c", "log_disconnections=on",
+      "-c", "log_line_prefix='%m [%p] %u@%d '",
+      # Performance settings
+      "-c", "max_connections=100",
+      "-c", "shared_buffers=256MB",
+      "-c", "effective_cache_size=1GB"
+    ]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_ssl:/var/lib/postgresql/ssl
+      - ./backend/infrastructure/database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - link_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    container_name: link_redis
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: redis
+    command: [
+      "redis-server",
+      "--requirepass", "${REDIS_PASSWORD}",
+      "--appendonly", "yes",
+      "--appendfsync", "everysec",
+      # Security settings
+      "--protected-mode", "yes",
+      "--port", "0",  # Disable insecure port
+      "--tls-port", "6380",
+      "--tls-cert-file", "/tls/redis.crt",
+      "--tls-key-file", "/tls/redis.key",
+      "--tls-ca-cert-file", "/tls/ca.crt",
+      # Disable dangerous commands
+      "--rename-command", "FLUSHALL", "",
+      "--rename-command", "FLUSHDB", "",
+      "--rename-command", "CONFIG", "",
+      "--rename-command", "DEBUG", "",
+      "--rename-command", "EVAL", "",
+      "--maxmemory", "512mb",
+      "--maxmemory-policy", "allkeys-lru"
+    ]
+    volumes:
+      - redis_data:/data
+      - redis_tls:/tls:ro
+    networks:
+      - link_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "--tls", "--cert", "/tls/redis.crt", "--key", "/tls/redis.key", "--cacert", "/tls/ca.crt", "-p", "6380", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend Services with security hardening
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+      target: production
+    container_name: link_api_gateway
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev,size=50m
+    environment:
+      # Database configuration
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSLMODE=require
+      
+      # Redis configuration
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_SSL=true
+      
+      # JWT configuration (use strong secrets)
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ISSUER=user-svc
+      - JWT_COOKIE_SAMESITE=strict
+      
+      # Security configuration
+      - ENVIRONMENT=production
+      - BCRYPT_COST=12
+      - PASSWORD_HASH_ALGO=bcrypt
+      - SERVICE_SECRET=${SERVICE_SECRET}
+      - SERVICE_ID=api-gateway
+      
+      # Rate limiting
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=100
+      - RATE_LIMIT_BURST=20
+      
+      # CORS
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_internal
+      - link_external
+    ports:
+      - "8080:8080"
+    volumes:
+      - api_gateway_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  user-svc:
+    build:
+      context: ./backend/user-svc
+      dockerfile: Dockerfile
+      target: production
+    container_name: link_user_svc
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev,size=50m
+    environment:
+      # Database configuration
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSLMODE=require
+      
+      # Redis configuration  
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_SSL=true
+      
+      # JWT configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ISSUER=user-svc
+      - JWT_ACCESS_TOKEN_EXPIRY=1h
+      - JWT_REFRESH_TOKEN_EXPIRY=24h
+      
+      # Password hashing
+      - BCRYPT_COST=12
+      - PASSWORD_HASH_ALGO=bcrypt
+      
+      # Service configuration
+      - ENVIRONMENT=production
+      - SERVICE_SECRET=${SERVICE_SECRET}
+      - SERVICE_ID=user-svc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - link_internal
+    volumes:
+      - user_svc_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Frontend with security headers
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: link_frontend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    read_only: true
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=https://api.${DOMAIN_NAME}
+      - VITE_REQUIRE_AUTH=true
+    depends_on:
+      - api-gateway
+    networks:
+      - link_external
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Reverse proxy with Traefik
+  traefik:
+    image: traefik:v3.0
+    container_name: link_traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}
+      - CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN}
+    command:
+      # Global configuration
+      - --global.checkNewVersion=false
+      - --global.sendAnonymousUsage=false
+      
+      # API and dashboard
+      - --api.dashboard=false
+      - --api.insecure=false
+      
+      # Entry points
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      
+      # HTTP to HTTPS redirect
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      
+      # Docker provider
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=link_external
+      
+      # SSL/TLS configuration
+      - --certificatesresolvers.cloudflare.acme.tlschallenge=false
+      - --certificatesresolvers.cloudflare.acme.dnschallenge=true
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.cloudflare.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.cloudflare.acme.storage=/letsencrypt/acme.json
+      
+      # Security improvements
+      - --entrypoints.websecure.http.middlewares=security-headers@docker
+      - --entrypoints.websecure.http.tls.options=modern@file
+      
+      # Logging
+      - --log.level=INFO
+      - --accesslog=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    networks:
+      - link_external
+    labels:
+      # Security middleware
+      - traefik.http.middlewares.security-headers.headers.frameDeny=true
+      - traefik.http.middlewares.security-headers.headers.sslRedirect=true
+      - traefik.http.middlewares.security-headers.headers.browserXssFilter=true
+      - traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.security-headers.headers.forceSTSHeader=true
+      - traefik.http.middlewares.security-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.security-headers.headers.stsPreload=true
+      - traefik.http.middlewares.security-headers.headers.customRequestHeaders.X-Forwarded-Proto=https
+
+networks:
+  link_external:
+    name: link_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+  link_internal:
+    name: link_internal
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  postgres_ssl:
+    driver: local
+  redis_data:
+    driver: local  
+  redis_tls:
+    driver: local
+  letsencrypt:
+    driver: local
+  api_gateway_logs:
+    driver: local
+  user_svc_logs:
+    driver: local

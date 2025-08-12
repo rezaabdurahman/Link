@@ -1,0 +1,6 @@
+GET /api/health HTTP/1.1
+Host: localhost:8080
+Origin: https://test.link-app.com
+Accept: application/json
+
+# Testing origin: https://test.link-app.com

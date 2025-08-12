@@ -1,0 +1,8 @@
+GET /api/health HTTP/1.1
+Host: localhost:8080
+X-Forwarded-For: 127.0.0.1, 10.0.0.1
+X-Real-IP: 192.168.1.100
+X-Originating-IP: 8.8.8.8
+Accept: application/json
+
+# Testing if rate limiting can be bypassed with IP spoofing

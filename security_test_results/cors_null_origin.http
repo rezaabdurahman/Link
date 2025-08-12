@@ -1,0 +1,9 @@
+POST /api/auth/login HTTP/1.1
+Host: localhost:8080
+Origin: null
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password"
+}

@@ -1,0 +1,34 @@
+Component Type,File Path,Responsibility,Data Stored/Processed,Trust Boundary,Dependencies,Security Risk Level
+Backend Go,backend/api-gateway/internal/config/jwt.go,JWT validation configuration,JWT secrets; token validation; cookie settings,API Gateway - validates all incoming requests,JWT_SECRET; JWT_ISSUER; JWT_COOKIE_NAME,HIGH
+Backend Go,backend/api-gateway/internal/middleware/auth.go,API Gateway authentication middleware,JWT tokens; user context headers; CORS settings,Entry point - first auth validation layer,jwt.go config,HIGH
+Backend Go,backend/user-svc/internal/config/jwt.go,User service JWT token generation,JWT creation; token signing; refresh token logic,User service - token creation authority,JWT_SECRET; JWT_ISSUER,HIGH
+Backend Go,backend/user-svc/internal/handlers/user_handler.go,Authentication endpoints handler,Login/register requests; password validation; session cookies,User service endpoints,user service; JWT config,HIGH
+Backend Go,backend/user-svc/internal/models/user.go,User data models,Password hashes; user profiles; sessions; friend requests,Database models - sensitive user data,Database storage,HIGH
+Backend Go,backend/user-svc/internal/middleware/context.go,User context extraction middleware,User headers from API Gateway; request context,Internal service boundary,API Gateway headers,MEDIUM
+Backend Go,backend/location-svc/internal/middleware/auth.go,Location service auth middleware,JWT tokens; user ID context,Location service - validates user access,JWT_SECRET,MEDIUM
+Frontend TS,frontend/src/contexts/AuthContext.tsx,Global authentication state management,User state; JWT tokens; auth status,Frontend auth context - all components trust this,React Context,HIGH
+Frontend TS,frontend/src/services/authService.ts,API authentication service,HTTP auth requests; token management; error handling,API communication layer,HTTP requests with credentials,HIGH
+Frontend TS,frontend/src/utils/secureTokenStorage.ts,Secure token persistence,Encrypted JWT tokens; expiration validation,Client-side storage - sensitive data protection,LocalStorage (encrypted) + in-memory fallback,HIGH
+Frontend TS,frontend/src/components/RequireAuth.tsx,Route authentication guard,Authentication status; route protection,Route-level access control,React Router,MEDIUM
+Frontend TS,frontend/src/utils/devAuth.ts,Development authentication helper,Mock user data; dev tokens,Development boundary only,LocalStorage (dev mode),LOW
+Frontend TS,frontend/src/config/index.ts,Authentication configuration,Auth requirements; demo mode settings,Configuration boundary,Environment variables,LOW
+Frontend TS,frontend/src/types/index.ts,Authentication type definitions,Type safety for auth data structures,Type boundary - ensures data integrity,TypeScript compiler,LOW
+Environment Variable,JWT_SECRET,JWT token signing and validation,Cryptographic key material,CRITICAL - Token security foundation,All services,CRITICAL
+Environment Variable,JWT_ISSUER,JWT token issuer identification,Token validation scope,Token validation scope,API Gateway; User Service,MEDIUM
+Environment Variable,JWT_COOKIE_NAME,HTTP cookie name for JWT,Session management,Session management,API Gateway,LOW
+Environment Variable,JWT_COOKIE_SAMESITE,Cookie SameSite policy,CSRF protection,CSRF protection,API Gateway,MEDIUM
+Environment Variable,JWT_ACCESS_TOKEN_EXPIRY,Access token lifetime,Session security,Session security,User Service,MEDIUM
+Environment Variable,JWT_REFRESH_TOKEN_EXPIRY,Refresh token lifetime,Long-term session security,Long-term session security,User Service,MEDIUM
+Environment Variable,ENVIRONMENT,Environment detection,Cookie security flags,Cookie security flags,All services,MEDIUM
+Environment Variable,DB_USER,Database authentication,Database access control,Database access control,All backend services,HIGH
+Environment Variable,DB_PASSWORD,Database authentication,Database access control,Database access control,All backend services,HIGH
+Environment Variable,VITE_REQUIRE_AUTH,Authentication requirement toggle,Frontend auth bypass,Frontend auth bypass,Frontend,MEDIUM
+Environment Variable,VITE_AUTO_LOGIN,Automatic login in demo mode,Demo security,Demo security,Frontend,LOW
+Environment Variable,VITE_MOCK_USER,Mock user authentication,Development security,Development security,Frontend,LOW
+Container,api-gateway:8080,Primary auth enforcement,HTTP requests; JWT validation; CORS; rate limiting,External entry point,JWT validation; CORS; rate limiting,HIGH
+Container,user-svc:8081,Auth authority,JWT creation; password hashing; sessions,Internal auth service,JWT creation; password hashing; sessions,HIGH
+Container,location-svc:8082,Auth consumer,JWT validation via middleware,Internal service,JWT validation via middleware,MEDIUM
+Container,discovery-svc:8087,Auth consumer,User context from gateway,Internal service,User context from gateway,MEDIUM
+Container,postgres:5432,Auth data storage,User credentials; sessions; tokens,Internal database,User credentials; sessions; tokens,HIGH
+Container,redis:6379,Session storage,Session data; rate limiting,Internal cache,Session data; rate limiting,MEDIUM
+Container,frontend:3000,Auth UI/UX,Token storage; auth forms,External frontend,Token storage; auth forms,MEDIUM
