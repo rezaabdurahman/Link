@@ -16,6 +16,7 @@ if (typeof global.TextDecoder === 'undefined') {
 
 // Ensure fetch globals are available before importing MSW
 if (typeof global.fetch === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const fetch = require('cross-fetch');
   global.fetch = fetch;
   global.Request = fetch.Request;

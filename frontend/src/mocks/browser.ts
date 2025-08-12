@@ -1,4 +1,4 @@
-import { setupWorker } from 'msw/browser';
+import { setupWorker } from 'msw';
 import { broadcastHandlers } from './handlers';
 
 // Setup the service worker with our handlers
