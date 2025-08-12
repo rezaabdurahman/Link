@@ -311,6 +311,176 @@ include_search_scores (optional): Include search relevance scores (default: fals
 }
 ```
 
+### Discovery Service Ranking API
+
+#### 1. Get Current Ranking Weights
+
+**Service Route**: `GET /api/v1/ranking/weights`  
+**Gateway Route**: `GET /discovery/ranking/weights`  
+**Authentication**: Required via JWT token
+
+##### Response (Success - 200)
+```json
+{
+  "data": {
+    "semantic_similarity": "float - Weight for embedding similarity (0.0-1.0)",
+    "interest_overlap": "float - Weight for shared interests (0.0-1.0)",
+    "geo_proximity": "float - Weight for geographic distance (0.0-1.0)",
+    "recent_activity": "float - Weight for last seen time (0.0-1.0)"
+  },
+  "status": "success"
+}
+```
+
+##### Example Response
+```json
+{
+  "data": {
+    "semantic_similarity": 0.6,
+    "interest_overlap": 0.2,
+    "geo_proximity": 0.1,
+    "recent_activity": 0.1
+  },
+  "status": "success"
+}
+```
+
+#### 2. Update Ranking Weights
+
+**Service Route**: `PUT /api/v1/ranking/weights`  
+**Gateway Route**: `PUT /discovery/ranking/weights`  
+**Authentication**: Required via JWT token (admin only)
+
+##### Request Body
+```json
+{
+  "semantic_similarity": "float (optional) - Weight for embedding similarity",
+  "interest_overlap": "float (optional) - Weight for shared interests",
+  "geo_proximity": "float (optional) - Weight for geographic distance",
+  "recent_activity": "float (optional) - Weight for last seen time"
+}
+```
+
+##### Validation Rules
+- All weights must be between 0.0 and 1.0
+- Total sum of all weights must equal 1.0 (±0.01)
+- At least one weight must be provided
+
+##### Response (Success - 200)
+```json
+{
+  "data": {
+    "semantic_similarity": 0.5,
+    "interest_overlap": 0.3,
+    "geo_proximity": 0.1,
+    "recent_activity": 0.1
+  },
+  "status": "success",
+  "message": "Ranking weights updated successfully"
+}
+```
+
+##### Error Responses
+- **400 Bad Request**: Invalid weights or validation failure
+- **401 Unauthorized**: Missing or invalid authentication
+- **403 Forbidden**: Insufficient permissions (non-admin user)
+- **500 Internal Server Error**: Database or service failure
+
+#### 3. Reset Ranking Weights to Defaults
+
+**Service Route**: `POST /api/v1/ranking/weights/reset`  
+**Gateway Route**: `POST /discovery/ranking/weights/reset`  
+**Authentication**: Required via JWT token (admin only)
+
+##### Response (Success - 200)
+```json
+{
+  "data": {
+    "semantic_similarity": 0.6,
+    "interest_overlap": 0.2,
+    "geo_proximity": 0.1,
+    "recent_activity": 0.1
+  },
+  "status": "success",
+  "message": "Ranking weights reset to defaults"
+}
+```
+
+#### 4. Validate Ranking Weights
+
+**Service Route**: `GET /api/v1/ranking/weights/validate`  
+**Gateway Route**: `GET /discovery/ranking/weights/validate`  
+**Authentication**: Required via JWT token
+
+##### Response (Success - 200)
+```json
+{
+  "valid": true,
+  "status": "validation_passed",
+  "weights": {
+    "semantic_similarity": 0.6,
+    "interest_overlap": 0.2,
+    "geo_proximity": 0.1,
+    "recent_activity": 0.1
+  },
+  "sum": 1.0,
+  "message": "Ranking weights are valid"
+}
+```
+
+##### Response (Validation Failed - 400)
+```json
+{
+  "valid": false,
+  "error": "ranking weights sum to 1.05, expected ~1.0",
+  "status": "validation_failed"
+}
+```
+
+#### 5. Get Ranking Algorithm Information
+
+**Service Route**: `GET /api/v1/ranking/info`  
+**Gateway Route**: `GET /discovery/ranking/info`  
+**Authentication**: Required via JWT token
+
+##### Response (Success - 200)
+```json
+{
+  "algorithm": {
+    "version": "v1",
+    "formula": "Score = semantic_similarity_weight × semantic_similarity + interest_overlap_weight × interest_overlap + geo_proximity_weight × geo_proximity + recent_activity_weight × recent_activity",
+    "components": {
+      "semantic_similarity": {
+        "description": "Cosine similarity from pgvector",
+        "weight": 0.6
+      },
+      "interest_overlap": {
+        "description": "Jaccard coefficient over interests (pre-computed bitset)",
+        "weight": 0.2
+      },
+      "geo_proximity": {
+        "description": "Normalized distance within 10 mi radius",
+        "weight": 0.1
+      },
+      "recent_activity": {
+        "description": "Inverse of minutes since last heartbeat",
+        "weight": 0.1
+      }
+    }
+  },
+  "current_weights": {
+    "semantic_similarity": 0.6,
+    "interest_overlap": 0.2,
+    "geo_proximity": 0.1,
+    "recent_activity": 0.1
+  },
+  "weights_sum": 1.0,
+  "is_adjustable": true,
+  "is_ab_ready": true,
+  "status": "active"
+}
+```
+
 ### Service Communication Patterns
 
 #### discovery-svc → search-svc Flow

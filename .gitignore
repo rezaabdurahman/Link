@@ -51,6 +51,14 @@ out/
 *.dylib
 bin/
 vendor/
+# Go build artifacts
+*/main
+*/cmd/main
+*-svc
+*/coverage.out
+coverage.out
+*.test
+*.prof
 
 # Python
 __pycache__/
