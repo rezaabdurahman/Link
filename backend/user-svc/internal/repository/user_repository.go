@@ -1,0 +1,299 @@
+package repository
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/link-app/user-svc/internal/models"
+	"gorm.io/gorm"
+)
+
+// UserRepository interface defines user data operations
+type UserRepository interface {
+	// User CRUD operations
+	CreateUser(user *models.User) error
+	GetUserByID(id uuid.UUID) (*models.User, error)
+	GetUserByEmail(email string) (*models.User, error)
+	GetUserByUsername(username string) (*models.User, error)
+	UpdateUser(user *models.User) error
+	UpdateLastLogin(userID uuid.UUID) error
+	DeactivateUser(userID uuid.UUID) error
+
+	// Friend operations
+	GetUserFriends(userID uuid.UUID, limit, offset int) ([]models.PublicUser, error)
+	GetFriendRequests(userID uuid.UUID, limit, offset int) ([]models.FriendRequest, error)
+	GetSentFriendRequests(userID uuid.UUID, limit, offset int) ([]models.FriendRequest, error)
+	CreateFriendRequest(friendRequest *models.FriendRequest) error
+	UpdateFriendRequest(requestID uuid.UUID, status models.FriendRequestStatus) error
+	GetFriendRequest(requestID uuid.UUID) (*models.FriendRequest, error)
+	AreFriends(userID1, userID2 uuid.UUID) (bool, error)
+	HasPendingFriendRequest(requesterID, requesteeID uuid.UUID) (bool, error)
+	CreateFriendship(userID1, userID2 uuid.UUID) error
+	DeleteFriendship(userID1, userID2 uuid.UUID) error
+	GetMutualFriendsCount(userID1, userID2 uuid.UUID) (int64, error)
+
+	// Session operations
+	CreateSession(session *models.Session) error
+	GetSessionByToken(token string) (*models.Session, error)
+	DeleteSession(token string) error
+	DeleteAllUserSessions(userID uuid.UUID) error
+	CleanupExpiredSessions() error
+
+	// Search operations
+	SearchUsers(query string, excludeUserID uuid.UUID, limit, offset int) ([]models.PublicUser, error)
+}
+
+type userRepository struct {
+	db *gorm.DB
+}
+
+// NewUserRepository creates a new user repository
+func NewUserRepository(db *gorm.DB) UserRepository {
+	return &userRepository{
+		db: db,
+	}
+}
+
+// CreateUser creates a new user
+func (r *userRepository) CreateUser(user *models.User) error {
+	return r.db.Create(user).Error
+}
+
+// GetUserByID retrieves a user by ID
+func (r *userRepository) GetUserByID(id uuid.UUID) (*models.User, error) {
+	var user models.User
+	err := r.db.Where("id = ? AND is_active = ?", id, true).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserByEmail retrieves a user by email
+func (r *userRepository) GetUserByEmail(email string) (*models.User, error) {
+	var user models.User
+	err := r.db.Where("email = ? AND is_active = ?", email, true).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserByUsername retrieves a user by username
+func (r *userRepository) GetUserByUsername(username string) (*models.User, error) {
+	var user models.User
+	err := r.db.Where("username = ? AND is_active = ?", username, true).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpdateUser updates a user
+func (r *userRepository) UpdateUser(user *models.User) error {
+	return r.db.Save(user).Error
+}
+
+// UpdateLastLogin updates the user's last login timestamp
+func (r *userRepository) UpdateLastLogin(userID uuid.UUID) error {
+	now := time.Now()
+	return r.db.Model(&models.User{}).
+		Where("id = ?", userID).
+		Update("last_login_at", now).Error
+}
+
+// DeactivateUser deactivates a user account
+func (r *userRepository) DeactivateUser(userID uuid.UUID) error {
+	return r.db.Model(&models.User{}).
+		Where("id = ?", userID).
+		Update("is_active", false).Error
+}
+
+// GetUserFriends retrieves a user's friends
+func (r *userRepository) GetUserFriends(userID uuid.UUID, limit, offset int) ([]models.PublicUser, error) {
+	var friends []models.PublicUser
+	
+	// Query friendships where user is either user1 or user2
+	query := `
+		SELECT DISTINCT u.id, u.username, u.first_name, u.last_name, u.profile_picture, 
+		       u.bio, u.location, u.created_at, u.last_login_at
+		FROM users u
+		INNER JOIN friendships f ON (
+			(f.user1_id = ? AND f.user2_id = u.id) OR 
+			(f.user2_id = ? AND f.user1_id = u.id)
+		)
+		WHERE u.is_active = true
+		ORDER BY f.created_at DESC
+		LIMIT ? OFFSET ?
+	`
+	
+	err := r.db.Raw(query, userID, userID, limit, offset).Scan(&friends).Error
+	return friends, err
+}
+
+// GetFriendRequests retrieves friend requests received by the user
+func (r *userRepository) GetFriendRequests(userID uuid.UUID, limit, offset int) ([]models.FriendRequest, error) {
+	var requests []models.FriendRequest
+	err := r.db.Where("requestee_id = ? AND status = ?", userID, models.FriendRequestPending).
+		Preload("Requester").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&requests).Error
+	return requests, err
+}
+
+// GetSentFriendRequests retrieves friend requests sent by the user
+func (r *userRepository) GetSentFriendRequests(userID uuid.UUID, limit, offset int) ([]models.FriendRequest, error) {
+	var requests []models.FriendRequest
+	err := r.db.Where("requester_id = ?", userID).
+		Preload("Requestee").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&requests).Error
+	return requests, err
+}
+
+// CreateFriendRequest creates a new friend request
+func (r *userRepository) CreateFriendRequest(friendRequest *models.FriendRequest) error {
+	return r.db.Create(friendRequest).Error
+}
+
+// UpdateFriendRequest updates the status of a friend request
+func (r *userRepository) UpdateFriendRequest(requestID uuid.UUID, status models.FriendRequestStatus) error {
+	return r.db.Model(&models.FriendRequest{}).
+		Where("id = ?", requestID).
+		Update("status", status).Error
+}
+
+// GetFriendRequest retrieves a friend request by ID
+func (r *userRepository) GetFriendRequest(requestID uuid.UUID) (*models.FriendRequest, error) {
+	var request models.FriendRequest
+	err := r.db.Where("id = ?", requestID).
+		Preload("Requester").
+		Preload("Requestee").
+		First(&request).Error
+	if err != nil {
+		return nil, err
+	}
+	return &request, nil
+}
+
+// AreFriends checks if two users are friends
+func (r *userRepository) AreFriends(userID1, userID2 uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Friendship{}).
+		Where("(user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)",
+			userID1, userID2, userID2, userID1).
+		Count(&count).Error
+	return count > 0, err
+}
+
+// HasPendingFriendRequest checks if there's a pending friend request between users
+func (r *userRepository) HasPendingFriendRequest(requesterID, requesteeID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.FriendRequest{}).
+		Where("((requester_id = ? AND requestee_id = ?) OR (requester_id = ? AND requestee_id = ?)) AND status = ?",
+			requesterID, requesteeID, requesteeID, requesterID, models.FriendRequestPending).
+		Count(&count).Error
+	return count > 0, err
+}
+
+// CreateFriendship creates a friendship between two users
+func (r *userRepository) CreateFriendship(userID1, userID2 uuid.UUID) error {
+	friendship := &models.Friendship{
+		User1ID: userID1,
+		User2ID: userID2,
+	}
+	return r.db.Create(friendship).Error
+}
+
+// DeleteFriendship removes a friendship between two users
+func (r *userRepository) DeleteFriendship(userID1, userID2 uuid.UUID) error {
+	return r.db.Where("(user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)",
+		userID1, userID2, userID2, userID1).
+		Delete(&models.Friendship{}).Error
+}
+
+// GetMutualFriendsCount gets the count of mutual friends between two users
+func (r *userRepository) GetMutualFriendsCount(userID1, userID2 uuid.UUID) (int64, error) {
+	var count int64
+	
+	// Complex query to find mutual friends
+	query := `
+		SELECT COUNT(DISTINCT mutual_friend_id) as count FROM (
+			-- Get friends of user1
+			SELECT 
+				CASE 
+					WHEN f1.user1_id = ? THEN f1.user2_id 
+					ELSE f1.user1_id 
+				END as mutual_friend_id
+			FROM friendships f1 
+			WHERE f1.user1_id = ? OR f1.user2_id = ?
+		) user1_friends
+		INNER JOIN (
+			-- Get friends of user2
+			SELECT 
+				CASE 
+					WHEN f2.user1_id = ? THEN f2.user2_id 
+					ELSE f2.user1_id 
+				END as mutual_friend_id
+			FROM friendships f2 
+			WHERE f2.user1_id = ? OR f2.user2_id = ?
+		) user2_friends ON user1_friends.mutual_friend_id = user2_friends.mutual_friend_id
+	`
+	
+	err := r.db.Raw(query, userID1, userID1, userID1, userID2, userID2, userID2).Scan(&count).Error
+	return count, err
+}
+
+// CreateSession creates a new user session
+func (r *userRepository) CreateSession(session *models.Session) error {
+	return r.db.Create(session).Error
+}
+
+// GetSessionByToken retrieves a session by token
+func (r *userRepository) GetSessionByToken(token string) (*models.Session, error) {
+	var session models.Session
+	err := r.db.Where("token = ? AND expires_at > ?", token, time.Now()).
+		Preload("User").
+		First(&session).Error
+	if err != nil {
+		return nil, err
+	}
+	return &session, nil
+}
+
+// DeleteSession deletes a session by token
+func (r *userRepository) DeleteSession(token string) error {
+	return r.db.Where("token = ?", token).Delete(&models.Session{}).Error
+}
+
+// DeleteAllUserSessions deletes all sessions for a user
+func (r *userRepository) DeleteAllUserSessions(userID uuid.UUID) error {
+	return r.db.Where("user_id = ?", userID).Delete(&models.Session{}).Error
+}
+
+// CleanupExpiredSessions removes expired sessions
+func (r *userRepository) CleanupExpiredSessions() error {
+	return r.db.Where("expires_at < ?", time.Now()).Delete(&models.Session{}).Error
+}
+
+// SearchUsers searches for users by name or username
+func (r *userRepository) SearchUsers(query string, excludeUserID uuid.UUID, limit, offset int) ([]models.PublicUser, error) {
+	var users []models.PublicUser
+	
+	searchQuery := "%" + query + "%"
+	err := r.db.Model(&models.User{}).
+		Select("id, username, first_name, last_name, profile_picture, bio, location, created_at, last_login_at").
+		Where("(first_name ILIKE ? OR last_name ILIKE ? OR username ILIKE ?) AND id != ? AND is_active = ?",
+			searchQuery, searchQuery, searchQuery, excludeUserID, true).
+		Order("first_name, last_name").
+		Limit(limit).
+		Offset(offset).
+		Find(&users).Error
+	
+	return users, err
+}
