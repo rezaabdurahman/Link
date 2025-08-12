@@ -5,7 +5,7 @@ import React, { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
-import { OnboardingStepType, getStepDisplayName } from '../services/onboardingClient';
+import { OnboardingStepType } from '../services/onboardingClient';
 
 // Step Components
 import ProfilePictureStep from '../components/onboarding/ProfilePictureStep';
@@ -143,12 +143,14 @@ const OnboardingPage: React.FC = (): JSX.Element => {
 
   return (
     <OnboardingLayout>
-      <div className="max-w-4xl mx-auto">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-16">
         {/* Progress Bar */}
-        <OnboardingProgressBar progress={progress} />
+        <div className="w-full max-w-none">
+          <OnboardingProgressBar progress={progress} />
+        </div>
         
         {/* Current Step Component */}
-        <div className="bg-white rounded-lg shadow-sm p-8 min-h-[500px] mt-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 sm:p-10 lg:p-12 min-h-[600px] mt-6 backdrop-blur-sm">
           {renderStepComponent(status.current_step)}
         </div>
       </div>

@@ -34,6 +34,7 @@ src/
 ├── components/     # Reusable UI components
 ├── pages/         # Page-level components
 ├── hooks/         # Custom React hooks
+├── services/      # API service layer and data fetching
 ├── types/         # TypeScript type definitions
 ├── config/        # Configuration files
 ├── data/          # Static data and mock data
@@ -48,6 +49,7 @@ src/
 - **React Router** for navigation
 - **Jest** for testing
 - **ESLint** for code quality
+- **Service Layer Architecture** for API communication
 
 ## Development Guidelines
 
@@ -137,3 +139,74 @@ To maintain consistency across environments:
 4. **Production**: Use secure environment variable management
 
 **Important**: Never commit sensitive data like API keys or secrets to git. Use environment variables and ensure `.env.local` and `.env.test` are in `.gitignore`.
+
+## Services
+
+The application uses a service layer architecture for API communication, providing separation of concerns and consistent error handling.
+
+### User Client
+
+The `userClient` provides functions for user profile operations:
+
+#### `getUserProfile(userId: string): Promise<UserProfileResponse>`
+
+Fetches a user profile by user ID with comprehensive error handling.
+
+**Features:**
+- Parameter validation
+- Consistent error handling with `AuthServiceError`
+- Support for extended profile data (friend status, privacy settings, etc.)
+- Integration with existing auth client patterns
+
+**Usage:**
+```typescript
+import { getUserProfile, getProfileErrorMessage } from '../services/userClient';
+
+try {
+  const profile = await getUserProfile('user-123');
+  // Handle successful profile data
+} catch (error) {
+  const errorMessage = getProfileErrorMessage(error.error, userId);
+  // Handle error with user-friendly message
+}
+```
+
+**Error Handling:**
+- `VALIDATION_ERROR` - Invalid or missing user ID
+- `AUTHORIZATION_ERROR` - Access denied to private profiles
+- `AUTHENTICATION_ERROR` - User not logged in
+- `SERVER_ERROR` - Network or server issues
+
+**Helper Functions:**
+- `getProfileErrorMessage(error, userId?)` - Get user-friendly error messages
+- `isProfileAccessible(error)` - Check if profile access error is recoverable
+
+### Service Integration
+
+Services are integrated with React components using standard patterns:
+
+1. **Loading States** - Components show skeleton loaders during API calls
+2. **Error Handling** - User-friendly error messages with retry options
+3. **Type Safety** - Full TypeScript support with proper interfaces
+4. **Consistent Patterns** - All services follow the same error handling approach
+
+**Example Integration:**
+```typescript
+const [loading, setLoading] = useState(false);
+const [error, setError] = useState<string>();
+
+useEffect(() => {
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const data = await getUserProfile(userId);
+      // Handle success
+    } catch (err) {
+      setError(getProfileErrorMessage(err.error, userId));
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchData();
+}, [userId]);
+```

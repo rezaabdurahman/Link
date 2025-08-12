@@ -18,15 +18,12 @@ interface OnboardingLayoutProps {
 const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
   children,
   showBackButton = true,
-  showSkipButton = true,
   onBack,
-  onSkip,
 }): JSX.Element => {
   const { user } = useAuth();
   const { 
     canGoPrevious, 
-    goToPreviousStep, 
-    skipOnboardingFlow,
+    goToPreviousStep,
     isLoading 
   } = useOnboarding();
 
@@ -42,24 +39,13 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
     }
   };
 
-  const handleSkip = async (): Promise<void> => {
-    if (onSkip) {
-      onSkip();
-    } else {
-      try {
-        await skipOnboardingFlow();
-      } catch (error) {
-        console.error('Failed to skip onboarding:', error);
-      }
-    }
-  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center py-6">
             {/* Left side - Back button */}
             <div className="flex items-center space-x-4">
               {showBackButton && canGoPrevious && (

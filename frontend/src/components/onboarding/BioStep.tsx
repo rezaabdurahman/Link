@@ -2,7 +2,7 @@
 // Allows users to write a bio/description about themselves
 
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, User, Lightbulb } from 'lucide-react';
+import { ArrowRight, Lightbulb } from 'lucide-react';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
@@ -83,17 +83,16 @@ const BioStep: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <User className="w-8 h-8 text-blue-600" />
+    <div className="w-full space-y-10">
+      {/* Step Header */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-full text-sm font-medium mb-4">
+          <span className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold">2</span>
+          <span>Step 2 of 7</span>
         </div>
-        <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-          Tell Us About Yourself
-        </h2>
-        <p className="text-gray-600">
-          Write a short bio to help others get to know you. What makes you unique?
+        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">Tell us about yourself</h1>
+        <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          Write a short bio to help others get to know you. What makes you unique and interesting?
         </p>
       </div>
 
@@ -106,51 +105,54 @@ const BioStep: React.FC = (): JSX.Element => {
         />
       )}
 
-      {/* Bio Input */}
-      <div className="space-y-4">
-        <div className="relative">
-          <textarea
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="I'm passionate about... I love to... You can find me..."
-            className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            maxLength={maxLength}
-            disabled={isLoading || isSubmitting}
-          />
-          <div className={`absolute bottom-3 right-3 text-sm ${
-            remainingChars < 20 ? 'text-red-500' : 'text-gray-400'
-          }`}>
-            {remainingChars} characters left
+      {/* Bio Input - Two Column Layout */}
+      <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+        {/* Left Column - Bio Input */}
+        <div className="space-y-6">
+          <div className="relative">
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="I'm passionate about... I love to... You can find me..."
+              className="w-full h-48 px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-lg leading-relaxed transition-all duration-200 bg-white shadow-sm"
+              maxLength={maxLength}
+              disabled={isLoading || isSubmitting}
+            />
+            <div className={`absolute bottom-4 right-4 text-sm font-medium px-2 py-1 rounded-full ${
+              remainingChars < 20 ? 'text-red-600 bg-red-50' : 'text-gray-500 bg-gray-50'
+            }`}>
+              {remainingChars} left
+            </div>
           </div>
-        </div>
 
-        {/* Tips */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <Lightbulb className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-blue-800 mb-1">Tips for a great bio:</p>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Share your hobbies and interests</li>
-                <li>• Mention what you're looking for in connections</li>
-                <li>• Keep it friendly and authentic</li>
-                <li>• Add some personality with emojis if you'd like</li>
-              </ul>
+          {/* Tips */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+            <div className="flex items-start space-x-4">
+              <Lightbulb className="w-6 h-6 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-base font-semibold text-blue-800 mb-3">Tips for a great bio:</p>
+                <ul className="text-sm text-blue-700 space-y-2">
+                  <li>• Share your hobbies and interests</li>
+                  <li>• Mention what you're looking for in connections</li>
+                  <li>• Keep it friendly and authentic</li>
+                  <li>• Add some personality with emojis if you'd like</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Suggestions */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-700">
+        {/* Right Column - Suggestions */}
+        <div className="space-y-6">
+          <h3 className="text-lg font-semibold text-gray-800">
             Need inspiration? Try one of these:
           </h3>
-          <div className="grid gap-2">
-            {suggestions.slice(0, 3).map((suggestion, index) => (
+          <div className="space-y-4">
+            {suggestions.map((suggestion, index) => (
               <button
                 key={index}
                 onClick={() => handleUseSuggestion(suggestion)}
-                className="text-left p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors text-sm text-gray-700"
+                className="w-full text-left p-4 border-2 border-gray-200 rounded-2xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 text-base text-gray-700 hover:shadow-md"
                 disabled={isLoading || isSubmitting}
               >
                 "{suggestion}"
@@ -161,11 +163,11 @@ const BioStep: React.FC = (): JSX.Element => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-between items-center pt-6">
+      <div className="flex justify-between items-center pt-8">
         <button
           onClick={handleSkip}
           disabled={isLoading || isSubmitting}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+          className="px-6 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all duration-200 disabled:opacity-50 font-medium"
         >
           Skip this step
         </button>
@@ -173,7 +175,7 @@ const BioStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleContinue}
           disabled={isLoading || isSubmitting}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg hover:shadow-xl font-semibold text-lg"
         >
           {isSubmitting ? (
             <>

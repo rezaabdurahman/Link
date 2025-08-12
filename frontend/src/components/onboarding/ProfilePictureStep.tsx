@@ -5,7 +5,6 @@ import React, { useState, useCallback } from 'react';
 import { Upload, Camera, User, ArrowRight } from 'lucide-react';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getStepNumber, getStepDisplayName } from '../../services/onboardingClient';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorMessage from '../ui/ErrorMessage';
 
@@ -13,7 +12,6 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
   const { user } = useAuth();
   const {
     goToNextStep,
-    skipCurrentStep,
     updateUserProfile,
     currentStepData,
     setStepData,
@@ -132,14 +130,6 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
   };
 
   // Skip this step
-  const handleSkip = async (): Promise<void> => {
-    try {
-      clearError();
-      await skipCurrentStep();
-    } catch (error) {
-      console.error('Failed to skip profile picture step:', error);
-    }
-  };
 
   // Remove selected image
   const handleRemove = (): void => {
@@ -148,20 +138,17 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-10">
       {/* Step Header */}
-      <div className="text-center mb-4">
-        <p className="text-sm text-gray-500 mb-2">Step 1 of 7</p>
-        <h1 className="text-2xl font-semibold text-gray-800">Profile Picture</h1>
-      </div>
-      
-      {/* Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-medium text-gray-800 mb-2">
-          Add Your Profile Picture
-        </h2>
-        <p className="text-gray-600">
-          A profile picture is required to help others recognize you. You can always change this later.
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-full text-sm font-medium mb-4">
+          <span className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+          <span>Step 1 of 7</span>
+        </div>
+        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">Let's add your profile picture</h1>
+        <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          A great profile picture helps others recognize you and makes a strong first impression. 
+          Don't worry - you can always change it later.
         </p>
       </div>
 
@@ -175,9 +162,9 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
       )}
 
       {/* Upload Area */}
-      <div className="max-w-lg mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div
-          className="relative border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors"
+          className="relative border-2 border-dashed border-gray-300 rounded-2xl p-16 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-300 bg-gradient-to-b from-gray-50 to-white"
           onDrop={handleDrop}
           onDragOver={handleDragOver}
         >
@@ -250,11 +237,11 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-center items-center pt-6">
+      <div className="flex justify-center items-center pt-8">
         <button
           onClick={handleContinue}
           disabled={isLoading || isUploading || (!selectedFile && !previewUrl)}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg hover:shadow-xl font-semibold text-lg"
         >
           {isUploading ? (
             <>
