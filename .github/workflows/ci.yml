@@ -13,7 +13,6 @@ jobs:
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
-    if: false  # Temporarily disabled to allow merging
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ env.NODE_VERSION }}
@@ -31,7 +30,6 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    if: false  # Temporarily disabled - tests take too long
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ env.NODE_VERSION }}
@@ -41,8 +39,16 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Setup test environment
+        run: |
+          cd frontend
+          cp .env.test.example .env.test
+        env:
+          NODE_ENV: test
       - name: Run tests with coverage
         run: npm run test:coverage
+        env:
+          NODE_ENV: test
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -53,7 +59,7 @@ jobs:
 
   build:
     name: Build
-    # needs: [lint-and-typecheck]  # Temporarily removed since lint job is disabled
+    needs: [lint-and-typecheck, test]
     runs-on: ubuntu-latest
     strategy:
       matrix:

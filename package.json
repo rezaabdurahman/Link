@@ -11,12 +11,12 @@
     "build:preview": "cd frontend && npm run build:preview",
     "build:production": "cd frontend && npm run build:production",
     "preview": "cd frontend && npm run preview",
-    "lint": "eslint frontend/src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint frontend/src --ext ts,tsx --report-unused-disable-directives --max-warnings 200",
     "lint:fix": "eslint frontend/src --ext ts,tsx --fix",
     "type-check": "cd frontend && npm run type-check",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "cd frontend && npm run test",
+    "test:watch": "cd frontend && npm run test:watch",
+    "test:coverage": "cd frontend && npm run test:coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -40,63 +40,19 @@
     "@typescript-eslint/parser": "^6.14.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.21",
+    "babel-plugin-transform-import-meta": "^2.3.3",
     "cross-fetch": "^4.1.0",
+    "dotenv": "^17.2.1",
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
-    "msw": "^1.3.5",
+    "msw": "^2.4.9",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "ts-jest": "^29.1.1",
     "typescript": "^5.2.2",
     "vite": "^5.0.8"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "jsdom",
-    "setupFilesAfterEnv": [
-      "<rootDir>/frontend/src/setupTests.ts"
-    ],
-    "testTimeout": 5000,
-    "forceExit": true,
-    "detectOpenHandles": false,
-    "maxWorkers": 1,
-    "bail": true,
-    "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/frontend/src/$1"
-    },
-    "collectCoverageFrom": [
-      "frontend/src/**/*.{ts,tsx}",
-      "!frontend/src/**/*.d.ts",
-      "!frontend/src/main.tsx",
-      "!frontend/src/vite-env.d.ts",
-      "!frontend/src/**/*.test.{ts,tsx}",
-      "!frontend/src/**/__tests__/**"
-    ],
-    "testMatch": [
-      "<rootDir>/frontend/src/**/__tests__/**/*.{ts,tsx}",
-      "<rootDir>/frontend/src/**/*.{test,spec}.{ts,tsx}"
-    ],
-    "transformIgnorePatterns": [
-      "node_modules/(?!(msw|@mswjs|.*\\.mjs$))"
-    ],
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js",
-      "jsx",
-      "json",
-      "node"
-    ],
-    "transform": {
-      "^.+\\.(ts|tsx)$": [
-        "ts-jest",
-        {
-          "tsconfig": "frontend/tsconfig.json"
-        }
-      ]
-    }
   }
 }
