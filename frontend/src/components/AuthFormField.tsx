@@ -15,7 +15,7 @@ interface AuthFormFieldProps {
   showPasswordToggle?: boolean;
   showPassword?: boolean;
   onTogglePassword?: () => void;
-  register: any; // react-hook-form register function
+  register: (name: string) => object; // react-hook-form register function
   rightElement?: React.ReactNode;
 }
 

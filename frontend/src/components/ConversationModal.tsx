@@ -43,7 +43,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (): void => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -105,7 +105,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     }
   }, [isOpen, chat, initialMessage]);
 
-  const generateBotSummary = (user: any): string => {
+  const generateBotSummary = (user: { name: string }): string => {
     const summaries = [
       `Here's what ${user.name} has been up to since your last chat:`,
       `Catching you up on ${user.name}'s recent activities:`,
@@ -151,11 +151,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     return shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
+  const handleSuggestionClick = (suggestion: string): void => {
     setNewMessage(suggestion);
   };
 
-  const handleToggleContext = (messageId: string) => {
+  const handleToggleContext = (messageId: string): void => {
     setSavedContexts(prev => {
       const newSet = new Set(prev);
       if (newSet.has(messageId)) {
@@ -167,7 +167,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     });
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = (): void => {
     if (newMessage.trim() && chat) {
       const messageContent = newMessage.trim();
       const currentUserName = 'Alex Thompson'; // In real app, get from current user context
@@ -269,7 +269,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     }
   };
   
-  const handlePermissionResponse = (permissionMessageId: string, approved: boolean, queuedMessageId: string) => {
+  const handlePermissionResponse = (permissionMessageId: string, approved: boolean, queuedMessageId: string): void => {
     // Update the permission request message to show response
     setMessages(prev => prev.map(msg => {
       if (msg.id === permissionMessageId && 'permissionData' in msg) {
@@ -340,7 +340,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     }, 500);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: React.KeyboardEvent): void => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();

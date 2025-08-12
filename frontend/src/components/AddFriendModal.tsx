@@ -13,7 +13,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
 
-  const handleAddByEmail = async () => {
+  const handleAddByEmail = async (): Promise<void> => {
     if (!email.trim()) return;
     
     setIsLoading(true);
@@ -32,7 +32,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
     }, 1000);
   };
 
-  const handleImportContacts = async () => {
+  const handleImportContacts = async (): Promise<void> => {
     setIsLoading(true);
     
     // Simulate contact import
