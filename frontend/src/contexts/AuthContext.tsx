@@ -27,6 +27,8 @@ interface AuthContextType extends AuthState {
   refresh: () => Promise<void>;
   updateUser: (userData: Partial<AuthUser>) => void;
   clearError: () => void;
+  // Computed properties
+  isAuthenticated: boolean;
 }
 
 // Action types for reducer
@@ -478,6 +480,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     refresh,
     updateUser,
     clearError,
+    isAuthenticated: !!state.user && !!state.token && !state.isLoading,
   };
 
   return (

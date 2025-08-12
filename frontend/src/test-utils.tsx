@@ -9,7 +9,6 @@ import { AuthProvider } from './contexts/AuthContext';
 // Router configuration with future flags to suppress warnings
 const routerConfig = {
   future: {
-    v7_startTransition: true,
     v7_relativeSplatPath: true,
   },
 };
@@ -41,14 +40,19 @@ export const TestWrapper: React.FC<{
   routerOptions?: TestRouterOptions;
 }> = ({ children, routerOptions = {} }) => {
   const router = createTestRouter(
-    [{ path: '*', element: <>{children}</> }],
+    [{ 
+      path: '*', 
+      element: (
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      )
+    }],
     routerOptions
   );
 
   return (
-    <RouterProvider router={router}>
-      <AuthProvider>{/* Content will be rendered via router */}</AuthProvider>
-    </RouterProvider>
+    <RouterProvider router={router} />
   );
 };
 

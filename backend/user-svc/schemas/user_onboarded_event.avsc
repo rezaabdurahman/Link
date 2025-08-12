@@ -1,0 +1,64 @@
+{
+  "type": "record",
+  "name": "UserOnboardedEvent",
+  "namespace": "com.linkapp.events",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string"
+    },
+    {
+      "name": "event_type",
+      "type": "string"
+    },
+    {
+      "name": "aggregate_id",
+      "type": "string"
+    },
+    {
+      "name": "occurred_at",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    },
+    {
+      "name": "data",
+      "type": {
+        "type": "record",
+        "name": "UserOnboardedEventData",
+        "fields": [
+          {
+            "name": "user_id",
+            "type": "string"
+          },
+          {
+            "name": "completed_at",
+            "type": {
+              "type": "long",
+              "logicalType": "timestamp-millis"
+            }
+          },
+          {
+            "name": "started_at",
+            "type": {
+              "type": "long",
+              "logicalType": "timestamp-millis"
+            }
+          },
+          {
+            "name": "duration",
+            "type": "string"
+          },
+          {
+            "name": "completed_steps",
+            "type": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

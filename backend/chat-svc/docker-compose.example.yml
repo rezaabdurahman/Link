@@ -1,0 +1,171 @@
+# Example Docker Compose configuration for chat-svc with health checks
+# This demonstrates how to use the health endpoints for service orchestration
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: chat_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chat_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Chat Service
+  chat-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Database configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: chat_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_SSL_MODE: disable
+      
+      # Redis configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      
+      # Server configuration
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      
+      # JWT configuration
+      JWT_SECRET: your_jwt_secret_key_here
+      
+      # Logging
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+      
+      # CORS
+      CORS_ALLOWED_ORIGINS: "*"
+      
+      # Environment
+      ENVIRONMENT: docker
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # Optional: Load Balancer/Gateway that can use health endpoints
+  # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #   depends_on:
+  #     chat-svc:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres_data:
+  redis_data:
+
+# Health Endpoint Usage:
+#
+# Primary health check (includes DB & Redis checks):
+# GET http://localhost:8080/health
+# - Returns 200 if all services are healthy
+# - Returns 503 if any service is unhealthy
+# - Includes detailed status of each component
+#
+# Kubernetes readiness probe:
+# GET http://localhost:8080/health/readiness
+# - Lightweight check for traffic readiness
+# - Used by K8s to determine if pod can receive traffic
+#
+# Kubernetes liveness probe:
+# GET http://localhost:8080/health/liveness
+# - Basic check that service is running
+# - Used by K8s to determine if pod should be restarted
+#
+# Example responses:
+#
+# Healthy response (HTTP 200):
+# {
+#   "status": "healthy",
+#   "service": "chat-svc",
+#   "version": "1.0.0",
+#   "checks": {
+#     "database": {
+#       "status": "healthy",
+#       "message": "Database connection successful",
+#       "timestamp": "2024-01-15T10:30:00Z"
+#     },
+#     "redis": {
+#       "status": "healthy", 
+#       "message": "Redis connection successful",
+#       "timestamp": "2024-01-15T10:30:00Z"
+#     },
+#     "system": {
+#       "status": "healthy",
+#       "message": "Service is running",
+#       "timestamp": "2024-01-15T10:30:00Z"
+#     }
+#   }
+# }
+#
+# Unhealthy response (HTTP 503):
+# {
+#   "status": "unhealthy",
+#   "service": "chat-svc", 
+#   "version": "1.0.0",
+#   "checks": {
+#     "database": {
+#       "status": "unhealthy",
+#       "message": "Database connection failed: connection refused",
+#       "timestamp": "2024-01-15T10:30:00Z"
+#     },
+#     "redis": {
+#       "status": "healthy",
+#       "message": "Redis connection successful", 
+#       "timestamp": "2024-01-15T10:30:00Z"
+#     },
+#     "system": {
+#       "status": "healthy",
+#       "message": "Service is running",
+#       "timestamp": "2024-01-15T10:30:00Z"
+#     }
+#   }
+# }

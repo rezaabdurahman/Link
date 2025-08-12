@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/link-app/user-svc/internal/auth"
 	"github.com/link-app/user-svc/internal/config"
-	"github.com/link-app/user-svc/internal/handlers"
+	"github.com/link-app/user-svc/internal/events"
 	"github.com/link-app/user-svc/internal/middleware"
+	"github.com/link-app/user-svc/internal/onboarding"
+	"github.com/link-app/user-svc/internal/profile"
 	"github.com/link-app/user-svc/internal/repository"
-	"github.com/link-app/user-svc/internal/service"
 )
 
 func main() {
@@ -22,17 +24,31 @@ func main() {
 	}
 
 	// Initialize JWT service (for token generation only)
-	jwtConfig := config.GetJWTConfig()
-	jwtService := config.NewJWTService(jwtConfig)
+	jwtConfig := auth.GetJWTConfig()
+	jwtService := auth.NewJWTService(jwtConfig)
 
-	// Initialize repository
+	// Initialize event bus
+	eventBus := events.NewInMemoryEventBus()
+
+	// Register example event handlers (for demonstration)
+	// In production, these would be in separate services
+	if err := events.RegisterExampleHandlers(eventBus); err != nil {
+		log.Printf("Warning: Failed to register example event handlers: %v", err)
+	}
+
+	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
+	onboardingRepo := onboarding.NewGormRepository(db)
 
-	// Initialize service
-	userService := service.NewUserService(userRepo, jwtService)
+	// Initialize services
+	authService := auth.NewAuthService(userRepo, jwtService)
+	profileService := profile.NewProfileService(userRepo)
+	onboardingService := onboarding.NewService(onboardingRepo, eventBus)
 
 	// Initialize handlers
-	userHandler := handlers.NewUserHandler(userService)
+	authHandler := auth.NewAuthHandler(authService)
+	profileHandler := profile.NewProfileHandler(profileService)
+	onboardingHandler := onboarding.NewHandler(onboardingService)
 
 	// Initialize Gin router
 	router := gin.Default()
@@ -51,43 +67,19 @@ func main() {
 		})
 	})
 
-	// API routes
+	// API routes - using modular routers
 	v1 := router.Group("/api/v1")
 	{
-		// Public authentication endpoints
-		auth := v1.Group("/auth")
-		{
-			auth.POST("/register", userHandler.RegisterUser)
-			auth.POST("/login", userHandler.LoginUser)
-			auth.POST("/refresh", userHandler.RefreshToken)
-			auth.POST("/logout", userHandler.LogoutUser)
-		}
-
-		// User profile endpoints
-		users := v1.Group("/users")
-		{
-			// Current user profile (requires auth via gateway)
-			users.GET("/profile", userHandler.GetCurrentUserProfile)
-			users.PUT("/profile", userHandler.UpdateUserProfile)
-
-			// Public user profiles (no auth required for viewing public profiles)
-			users.GET("/profile/:userId", userHandler.GetUserProfile)
-
-			// Friends endpoints (require auth via gateway)
-			users.GET("/friends", userHandler.GetFriends)
-			users.GET("/friend-requests", userHandler.GetFriendRequests)
-			users.POST("/friend-requests", userHandler.SendFriendRequest)
-			users.PUT("/friend-requests/:requestId", userHandler.RespondToFriendRequest)
-
-			// Search endpoints (require auth via gateway)
-			users.GET("/search", userHandler.SearchUsers)
-		}
+		// Register individual domain routers
+		auth.RegisterRoutes(v1, authHandler)
+		profile.RegisterRoutes(v1, profileHandler)
+		onboarding.RegisterRoutes(v1, onboardingHandler)
 
 		// Admin endpoints (could be secured differently)
 		admin := v1.Group("/admin")
 		{
 			admin.POST("/cleanup-sessions", func(c *gin.Context) {
-				if err := userService.CleanupExpiredSessions(); err != nil {
+				if err := authService.CleanupExpiredSessions(); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"error":   "SERVER_ERROR",
 						"message": "Failed to cleanup sessions",
@@ -102,7 +94,7 @@ func main() {
 	}
 
 	// Start background cleanup routine
-	go startCleanupRoutine(userService)
+	go startCleanupRoutine(authService)
 
 	// Start server
 	port := os.Getenv("PORT")
@@ -138,7 +130,7 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 // startCleanupRoutine runs periodic cleanup tasks
-func startCleanupRoutine(userService service.UserService) {
+func startCleanupRoutine(authService auth.AuthService) {
 	ticker := time.NewTicker(1 * time.Hour) // Run cleanup every hour
 	defer ticker.Stop()
 
@@ -146,7 +138,7 @@ func startCleanupRoutine(userService service.UserService) {
 		select {
 		case <-ticker.C:
 			log.Println("Running session cleanup...")
-			if err := userService.CleanupExpiredSessions(); err != nil {
+			if err := authService.CleanupExpiredSessions(); err != nil {
 				log.Printf("Error during session cleanup: %v", err)
 			} else {
 				log.Println("Session cleanup completed successfully")

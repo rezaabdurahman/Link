@@ -17,7 +17,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [isAvailable, setIsAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
   
   // UI state management  
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
   const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
@@ -118,11 +118,11 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   };
 
   const handleUserClick = (user: User): void => {
-    setSelectedUser(user);
+    setSelectedUserId(user.id);
   };
 
   const handleCloseProfile = (): void => {
-    setSelectedUser(null);
+    setSelectedUserId(null);
   };
 
   const handleOpenAddCues = (): void => {
@@ -630,9 +630,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Profile Detail Modal */}
-      {selectedUser && (
+      {selectedUserId && (
         <ProfileDetailModal
-          user={selectedUser}
+          userId={selectedUserId}
           onClose={handleCloseProfile}
           onHide={handleHideUser}
         />

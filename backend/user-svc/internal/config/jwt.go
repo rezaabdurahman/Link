@@ -128,7 +128,14 @@ func (j *JWTService) ValidateRefreshToken(tokenString string) (*jwt.RegisteredCl
 
 	if claims, ok := token.Claims.(*jwt.RegisteredClaims); ok && token.Valid {
 		// Verify audience for refresh token
-		if !claims.VerifyAudience("link-app-refresh", true) {
+		valid := false
+		for _, aud := range claims.Audience {
+			if aud == "link-app-refresh" {
+				valid = true
+				break
+			}
+		}
+		if !valid {
 			return nil, fmt.Errorf("invalid token audience")
 		}
 		return claims, nil
