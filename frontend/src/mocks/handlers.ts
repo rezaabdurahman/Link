@@ -12,6 +12,7 @@ import {
   OnboardingStepType,
   OnboardingStatusType
 } from '../services/onboardingClient';
+import { currentUser, nearbyUsers } from '../data/mockData';
 
 // Helper to generate UUID
 const generateId = () => crypto.randomUUID();
@@ -628,7 +629,7 @@ export const onboardingHandlers = [
       mockOnboarding.set(userId, onboardingStatus);
 
       // Store step data in user profile
-      let userProfile = mockUserProfiles.get(userId) || {};
+      const userProfile = mockUserProfiles.get(userId) || {};
       if (body.step === 'bio' && body.data.bio) {
         userProfile.bio = body.data.bio;
       }
@@ -830,7 +831,7 @@ export const onboardingHandlers = [
     try {
       const body = await request.json();
       
-      let userProfile = mockUserProfiles.get(userId) || {
+      const userProfile = mockUserProfiles.get(userId) || {
         id: userId,
         email: `${userId}@example.com`,
         username: userId,
@@ -871,6 +872,85 @@ export const onboardingHandlers = [
         { status: 400 }
       );
     }
+  }),
+
+  // GET /users/profile/:userId - Get user profile by ID
+  http.get('*/users/profile/:userId', ({ params, request }) => {
+    const requestingUserId = extractUserId(request);
+    
+    if (!requestingUserId) {
+      return HttpResponse.json(
+        {
+          error: 'unauthorized',
+          message: 'Authentication required',
+          code: 401,
+          timestamp: now(),
+        },
+        { status: 401 }
+      );
+    }
+
+    const { userId } = params;
+    
+    // Check if requesting current user's profile from mockUserProfiles
+    if (userId === requestingUserId && mockUserProfiles.has(userId as string)) {
+      const user = mockUserProfiles.get(userId as string);
+      return HttpResponse.json(user, { status: 200 });
+    }
+    
+    // Check if user is the currentUser from mockData
+    if (userId === currentUser.id) {
+      return HttpResponse.json({
+        id: currentUser.id,
+        name: currentUser.name,
+        age: currentUser.age,
+        profile_picture: currentUser.profilePicture,
+        bio: currentUser.bio,
+        interests: currentUser.interests,
+        location: currentUser.location,
+        is_available: currentUser.isAvailable,
+        mutual_friends: currentUser.mutualFriends,
+        connection_priority: currentUser.connectionPriority,
+        last_seen: currentUser.lastSeen,
+        profile_type: currentUser.profileType,
+        created_at: now(),
+        updated_at: now(),
+      }, { status: 200 });
+    }
+    
+    // Look for user in nearbyUsers from mockData
+    const nearbyUser = nearbyUsers.find(user => user.id === userId);
+    if (nearbyUser) {
+      return HttpResponse.json({
+        id: nearbyUser.id,
+        name: nearbyUser.name,
+        age: nearbyUser.age,
+        profile_picture: nearbyUser.profilePicture,
+        profile_media: nearbyUser.profileMedia,
+        bio: nearbyUser.bio,
+        interests: nearbyUser.interests,
+        location: nearbyUser.location,
+        is_available: nearbyUser.isAvailable,
+        mutual_friends: nearbyUser.mutualFriends,
+        connection_priority: nearbyUser.connectionPriority,
+        last_seen: nearbyUser.lastSeen,
+        broadcast: nearbyUser.broadcast,
+        profile_type: nearbyUser.profileType,
+        created_at: now(),
+        updated_at: now(),
+      }, { status: 200 });
+    }
+    
+    // User not found - return 404 error with consistent format
+    return HttpResponse.json(
+      {
+        error: 'not_found',
+        message: 'User profile not found',
+        code: 404,
+        timestamp: now(),
+      },
+      { status: 404 }
+    );
   }),
 ];
 
