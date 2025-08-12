@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/link-app/user-svc/internal/models"
+	"github.com/link-app/user-svc/internal/onboarding"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -80,6 +81,8 @@ func ConnectDatabase() (*gorm.DB, error) {
 			&models.Friendship{},
 			&models.FriendRequest{},
 			&models.Session{},
+			&onboarding.OnboardingProgress{},
+			&onboarding.UserPreferences{},
 		); err != nil {
 			return nil, fmt.Errorf("failed to run auto migration: %w", err)
 		}
