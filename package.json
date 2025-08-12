@@ -8,8 +8,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "lint": "eslint frontend/src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint frontend/src --ext ts,tsx --fix",
     "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -50,13 +50,13 @@
     "preset": "ts-jest",
     "testEnvironment": "jsdom",
     "setupFilesAfterEnv": [
-      "<rootDir>/src/setupTests.ts"
+      "<rootDir>/frontend/src/setupTests.ts"
     ],
     "collectCoverageFrom": [
-      "src/**/*.{ts,tsx}",
-      "!src/**/*.d.ts",
-      "!src/main.tsx",
-      "!src/vite-env.d.ts"
+      "frontend/src/**/*.{ts,tsx}",
+      "!frontend/src/**/*.d.ts",
+      "!frontend/src/main.tsx",
+      "!frontend/src/vite-env.d.ts"
     ]
   }
 }

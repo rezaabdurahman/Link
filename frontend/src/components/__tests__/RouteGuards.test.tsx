@@ -39,8 +39,6 @@ const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </BrowserRouter>
 );
 
-// Test page component to verify routing
-const TestPage: React.FC = () => <div>Test Protected Content</div>;
 
 describe('Route Guards', () => {
   beforeEach(() => {

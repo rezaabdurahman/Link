@@ -4,7 +4,7 @@ import { currentUser } from '../data/mockData';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProfilePage: React.FC = (): JSX.Element => {
-  const { logout, isLoading, user } = useAuth();
+  const { logout } = useAuth();
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editedBio, setEditedBio] = useState<string>(currentUser.bio);
 

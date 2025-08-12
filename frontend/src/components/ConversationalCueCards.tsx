@@ -91,7 +91,7 @@ const ConversationalCueCards: React.FC<ConversationalCueCardsProps> = ({
     }
 
     // Location-based suggestions
-    if (user.location.proximityKm < 1) {
+    if (user.location.proximityMiles < 1) {
       suggestions.push({
         id: 'nearby1',
         prompt: 'Meet nearby',

@@ -59,13 +59,14 @@ const mockLocation = {
   pathname: '/login',
   search: '',
   hash: '',
-  state: null,
+  state: null as any,
 };
 
+const mockUseLocation = jest.fn(() => mockLocation);
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
-  useLocation: () => mockLocation,
+  useLocation: mockUseLocation,
 }));
 
 // Test wrapper with router
@@ -356,7 +357,7 @@ describe('LoginPage', () => {
         ...mockLocation,
         state: { from: '/protected' },
       };
-      (useLocation as jest.Mock).mockReturnValue(mockLocationWithFrom);
+      mockUseLocation.mockReturnValue(mockLocationWithFrom);
 
       jest.doMock('../contexts/AuthContext', () => ({
         useAuth: () => ({

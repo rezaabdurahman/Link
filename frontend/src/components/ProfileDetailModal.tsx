@@ -112,7 +112,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ user, onClose, 
               <div className="flex items-center gap-1">
                 <MapPin size={16} className="text-text-secondary" />
                 <span className="text-text-secondary text-sm">
-                  {user.location.proximityKm}km away
+                  {user.location.proximityMiles} miles away
                 </span>
               </div>
               
