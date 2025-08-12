@@ -8,7 +8,7 @@ import AddCuesModal from '../components/AddCuesModal';
 import AddBroadcastModal from '../components/AddBroadcastModal';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
-import { createBroadcast, updateBroadcast, deleteBroadcast, getBroadcastErrorMessage, isBroadcastError } from '../services/broadcastClient';
+import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   // User state management

@@ -11,12 +11,14 @@ import secureTokenStorage from './secureTokenStorage';
 export async function devLogin(userData?: Partial<AuthUser>): Promise<{ user: AuthUser; token: AuthToken }> {
   const mockUser: AuthUser = {
     id: userData?.id || 'dev-user-123',
-    name: userData?.name || 'Dev User',
     email: userData?.email || 'dev@example.com',
-    profilePicture: userData?.profilePicture || null,
-    emailVerified: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    username: userData?.username || 'devuser',
+    first_name: userData?.first_name || 'Dev',
+    last_name: userData?.last_name || 'User',
+    profile_picture: userData?.profile_picture || null,
+    email_verified: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 
   // Create a mock token that expires in 1 hour
@@ -49,21 +51,27 @@ export async function devLogin(userData?: Partial<AuthUser>): Promise<{ user: Au
 export const DEV_USERS = {
   john: {
     id: 'user-john',
-    name: 'John Doe',
+    first_name: 'John',
+    last_name: 'Doe',
     email: 'john@example.com',
-    profilePicture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    username: 'johndoe',
+    profile_picture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
   },
   jane: {
     id: 'user-jane', 
-    name: 'Jane Smith',
+    first_name: 'Jane',
+    last_name: 'Smith',
     email: 'jane@example.com',
-    profilePicture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+    username: 'janesmith',
+    profile_picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
   },
   dev: {
     id: 'dev-user',
-    name: 'Dev Tester',
+    first_name: 'Dev',
+    last_name: 'Tester',
     email: 'dev@test.com',
-    profilePicture: null,
+    username: 'devtester',
+    profile_picture: null,
   },
 } as const;
 

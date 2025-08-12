@@ -30,7 +30,9 @@ export function AuthExample(): JSX.Element {
   });
 
   const [registerForm, setRegisterForm] = useState<RegisterRequest>({
-    name: '',
+    first_name: '',
+    last_name: '',
+    username: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -81,8 +83,9 @@ export function AuthExample(): JSX.Element {
   // Handle user update
   const handleUpdateUser = () => {
     updateUser({
-      name: 'Updated Name',
-      profilePicture: 'https://example.com/new-avatar.jpg',
+      first_name: 'Updated',
+      last_name: 'Name',
+      profile_picture: 'https://example.com/new-avatar.jpg',
     });
   };
 
@@ -103,7 +106,7 @@ export function AuthExample(): JSX.Element {
       <div className="bg-gray-100 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-3">Authentication Status</h2>
         <div className="space-y-2">
-          <p><strong>User:</strong> {user ? user.name : 'Not authenticated'}</p>
+          <p><strong>User:</strong> {user ? `${user.first_name} ${user.last_name}` : 'Not authenticated'}</p>
           <p><strong>Email:</strong> {user?.email || 'N/A'}</p>
           <p><strong>Loading:</strong> {isLoading ? 'Yes' : 'No'}</p>
           <p><strong>Initialized:</strong> {isInitialized ? 'Yes' : 'No'}</p>
@@ -162,11 +165,31 @@ export function AuthExample(): JSX.Element {
             <h2 className="text-xl font-semibold mb-4">Register</h2>
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
+                <label className="block text-sm font-medium mb-1">First Name</label>
                 <input
                   type="text"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
+                  value={registerForm.first_name}
+                  onChange={(e) => setRegisterForm({ ...registerForm, first_name: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Last Name</label>
+                <input
+                  type="text"
+                  value={registerForm.last_name}
+                  onChange={(e) => setRegisterForm({ ...registerForm, last_name: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Username</label>
+                <input
+                  type="text"
+                  value={registerForm.username}
+                  onChange={(e) => setRegisterForm({ ...registerForm, username: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />

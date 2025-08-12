@@ -1,6 +1,6 @@
 import { API_CONFIG } from '../config/appConstants';
 import { AuthToken } from '../types';
-import { getStoredAuthToken } from '../utils/secureTokenStorage';
+import { getToken } from '../utils/secureTokenStorage';
 
 // Broadcast API response types
 export interface BroadcastResponse {
@@ -119,7 +119,7 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
  * @throws BroadcastError - If the request fails or user is not authenticated
  */
 export const getCurrentUserBroadcast = async (): Promise<BroadcastResponse> => {
-  const token = getStoredAuthToken();
+  const token = await getToken();
   if (!token) {
     throw new BroadcastError('Authentication required', 401);
   }
@@ -141,7 +141,7 @@ export const getCurrentUserBroadcast = async (): Promise<BroadcastResponse> => {
 export const createBroadcast = async (
   request: CreateBroadcastRequest
 ): Promise<BroadcastResponse> => {
-  const token = getStoredAuthToken();
+  const token = await getToken();
   if (!token) {
     throw new BroadcastError('Authentication required', 401);
   }
@@ -164,7 +164,7 @@ export const createBroadcast = async (
 export const updateBroadcast = async (
   request: UpdateBroadcastRequest
 ): Promise<BroadcastResponse> => {
-  const token = getStoredAuthToken();
+  const token = await getToken();
   if (!token) {
     throw new BroadcastError('Authentication required', 401);
   }
@@ -184,7 +184,7 @@ export const updateBroadcast = async (
  * @throws BroadcastError - If the request fails or user is not authenticated
  */
 export const deleteBroadcast = async (): Promise<void> => {
-  const token = getStoredAuthToken();
+  const token = await getToken();
   if (!token) {
     throw new BroadcastError('Authentication required', 401);
   }
