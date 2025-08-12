@@ -1,0 +1,802 @@
+{
+  "info": {
+    "name": "Chat Service API Tests",
+    "description": "API contract tests for the Chat Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set base URL if not already set",
+          "if (!pm.collectionVariables.get('base_url')) {",
+          "  pm.collectionVariables.set('base_url', 'http://localhost:8080');",
+          "}",
+          "",
+          "// Generate test user IDs",
+          "if (!pm.collectionVariables.get('user_id_1')) {",
+          "  pm.collectionVariables.set('user_id_1', pm.variables.replaceIn('{{$randomUUID}}'));",
+          "}",
+          "if (!pm.collectionVariables.get('user_id_2')) {",
+          "  pm.collectionVariables.set('user_id_2', pm.variables.replaceIn('{{$randomUUID}}'));",
+          "}",
+          "",
+          "// Generate JWT token for testing (in production, use real authentication)",
+          "if (!pm.collectionVariables.get('jwt_token')) {",
+          "  // This is a mock JWT token for testing purposes",
+          "  const mockJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzNDU2NzgtOTBhYi1jZGVmLTEyMzQtNTY3ODkwYWJjZGVmIiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIiwiZXhwIjo5OTk5OTk5OTk5fQ.test-signature';",
+          "  pm.collectionVariables.set('jwt_token', mockJwt);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 or 503', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+                  "});",
+                  "",
+                  "pm.test('Response has required health fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('status');",
+                  "    pm.expect(responseJson).to.have.property('service');",
+                  "    pm.expect(responseJson).to.have.property('checks');",
+                  "    pm.expect(responseJson.service).to.eql('chat-svc');",
+                  "});",
+                  "",
+                  "pm.test('Response has database and redis checks', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.checks).to.have.property('database');",
+                  "    pm.expect(responseJson.checks).to.have.property('redis');",
+                  "    pm.expect(responseJson.checks).to.have.property('system');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Readiness Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 or 503', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+                  "});",
+                  "",
+                  "pm.test('Response has readiness fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('status');",
+                  "    pm.expect(responseJson).to.have.property('service');",
+                  "    pm.expect(responseJson).to.have.property('checks');",
+                  "    pm.expect(responseJson.service).to.eql('chat-svc');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/readiness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "readiness"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Liveness Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has liveness fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('status');",
+                  "    pm.expect(responseJson).to.have.property('service');",
+                  "    pm.expect(responseJson).to.have.property('timestamp');",
+                  "    pm.expect(responseJson.status).to.eql('alive');",
+                  "    pm.expect(responseJson.service).to.eql('chat-svc');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/liveness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "liveness"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "Get Conversations - Empty List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has pagination fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('data');",
+                  "    pm.expect(responseJson).to.have.property('total');",
+                  "    pm.expect(responseJson).to.have.property('limit');",
+                  "    pm.expect(responseJson).to.have.property('offset');",
+                  "    pm.expect(responseJson).to.have.property('has_more');",
+                  "    pm.expect(responseJson.data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Conversations - With Pagination",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response respects pagination parameters', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.limit).to.eql(10);",
+                  "    pm.expect(responseJson.offset).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations?limit=10&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Group Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has conversation fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('name');",
+                  "    pm.expect(responseJson).to.have.property('type');",
+                  "    pm.expect(responseJson).to.have.property('created_by');",
+                  "    pm.expect(responseJson).to.have.property('created_at');",
+                  "    pm.expect(responseJson.type).to.eql('group');",
+                  "    pm.expect(responseJson.name).to.eql('Test Group Chat');",
+                  "});",
+                  "",
+                  "pm.test('Save conversation ID for later tests', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('conversation_id', responseJson.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Group Chat\",\n  \"description\": \"A test group conversation\",\n  \"type\": \"group\",\n  \"is_private\": false,\n  \"max_members\": 50,\n  \"participant_ids\": [\"{{user_id_2}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Direct Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has direct conversation fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('type');",
+                  "    pm.expect(responseJson).to.have.property('created_by');",
+                  "    pm.expect(responseJson.type).to.eql('direct');",
+                  "});",
+                  "",
+                  "pm.test('Save direct conversation ID', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('direct_conversation_id', responseJson.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"direct\",\n  \"participant_ids\": [\"{{user_id_2}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Conversation - Invalid Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Response has error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    pm.expect(responseJson).to.have.property('code');",
+                  "    pm.expect(responseJson.code).to.eql(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Chat\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Send Message to Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has message fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('content');",
+                  "    pm.expect(responseJson).to.have.property('message_type');",
+                  "    pm.expect(responseJson).to.have.property('conversation_id');",
+                  "    pm.expect(responseJson).to.have.property('user_id');",
+                  "    pm.expect(responseJson).to.have.property('created_at');",
+                  "    pm.expect(responseJson.content).to.eql('Hello from the API test!');",
+                  "    pm.expect(responseJson.message_type).to.eql('text');",
+                  "});",
+                  "",
+                  "pm.test('Save message ID', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('message_id', responseJson.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"content\": \"Hello from the API test!\",\n  \"message_type\": \"text\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "messages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Message - Invalid Content",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Response has error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    pm.expect(responseJson.error).to.include('content');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"content\": \"\",\n  \"message_type\": \"text\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "messages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Messages from Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has messages fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('data');",
+                  "    pm.expect(responseJson).to.have.property('total');",
+                  "    pm.expect(responseJson).to.have.property('limit');",
+                  "    pm.expect(responseJson).to.have.property('offset');",
+                  "    pm.expect(responseJson).to.have.property('has_more');",
+                  "    pm.expect(responseJson.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Messages have correct structure', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    if (responseJson.data.length > 0) {",
+                  "        const message = responseJson.data[0];",
+                  "        pm.expect(message).to.have.property('id');",
+                  "        pm.expect(message).to.have.property('content');",
+                  "        pm.expect(message).to.have.property('message_type');",
+                  "        pm.expect(message).to.have.property('conversation_id');",
+                  "        pm.expect(message).to.have.property('user_id');",
+                  "        pm.expect(message).to.have.property('created_at');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations/{{conversation_id}}/messages?limit=20&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations",
+                "{{conversation_id}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Messages - Invalid Conversation ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Response has error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    pm.expect(responseJson.error).to.include('Invalid conversation ID');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations/invalid-id/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations",
+                "invalid-id",
+                "messages"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Error Handling",
+      "item": [
+        {
+          "name": "Unauthorized Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Response has error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    pm.expect(responseJson.error).to.include('Unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Invalid JSON Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Response has error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ invalid json"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/chat/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "conversations"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "jwt_token",
+      "value": ""
+    },
+    {
+      "key": "user_id_1",
+      "value": ""
+    },
+    {
+      "key": "user_id_2", 
+      "value": ""
+    },
+    {
+      "key": "conversation_id",
+      "value": ""
+    },
+    {
+      "key": "direct_conversation_id",
+      "value": ""
+    },
+    {
+      "key": "message_id",
+      "value": ""
+    }
+  ]
+}

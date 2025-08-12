@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, UserPlus } from 'lucide-react';
-import { chats } from '../data/mockData';
 import { Chat } from '../types';
 import ChatListItem from '../components/ChatListItem';
 import IntelligentMessageBox from '../components/IntelligentMessageBox';
@@ -9,6 +8,8 @@ import { isFeatureEnabled } from '../config/featureFlags';
 import RankToggle from '../components/RankToggle';
 import ConversationModal from '../components/ConversationModal';
 import AddFriendModal from '../components/AddFriendModal';
+import { getConversations, conversationToChat } from '../services/chatClient';
+import { useAuth } from '../contexts/AuthContext';
 
 type SortOption = 'priority' | 'time' | 'unread' | 'discover';
 
@@ -19,6 +20,43 @@ const ChatPage: React.FC = (): JSX.Element => {
   const [conversationModalOpen, setConversationModalOpen] = useState<boolean>(false);
   const [initialMessage, setInitialMessage] = useState<string>('');
   const [addFriendModalOpen, setAddFriendModalOpen] = useState<boolean>(false);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  const { authState } = useAuth();
+  const { token } = authState;
+
+  // Fetch conversations on mount
+  useEffect(() => {
+    const fetchConversations = async () => {
+      if (!token) {
+        setError('Not authenticated');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await getConversations({ limit: 50 });
+        const convertedChats = response.data.map((conversation, index) => ({
+          ...conversationToChat(conversation),
+          priority: index + 1, // Set priority based on API order
+        }));
+        
+        setChats(convertedChats);
+      } catch (err) {
+        console.error('Failed to fetch conversations:', err);
+        setError('Failed to load conversations. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchConversations();
+  }, [token]);
 
   const filteredChats = chats.filter(chat => {
     // Text search filter
@@ -128,18 +166,50 @@ const ChatPage: React.FC = (): JSX.Element => {
         <RankToggle value={sortBy} onChange={setSortBy} />
       </div>
 
-      {/* Chat List */}
-      <div style={{ marginBottom: '140px' }}>
-        {sortedChats.map((chat) => (
-          <ChatListItem
-            key={chat.id}
-            chat={chat}
-            onClick={() => handleChatClick(chat)}
-          />
-        ))}
-      </div>
+      {/* Loading State */}
+      {loading && (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '40px 20px',
+          color: 'rgba(235, 235, 245, 0.6)'
+        }}>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-aqua mx-auto mb-4"></div>
+          <p>Loading conversations...</p>
+        </div>
+      )}
 
-      {sortedChats.length === 0 && searchQuery && (
+      {/* Error State */}
+      {error && !loading && (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '40px 20px',
+          color: '#ef4444'
+        }}>
+          <p>{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-aqua text-white rounded-lg hover:bg-aqua-dark transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Chat List */}
+      {!loading && !error && (
+        <div style={{ marginBottom: '140px' }}>
+          {sortedChats.map((chat) => (
+            <ChatListItem
+              key={chat.id}
+              chat={chat}
+              onClick={() => handleChatClick(chat)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && sortedChats.length === 0 && searchQuery && (
         <div style={{ 
           textAlign: 'center', 
           padding: '40px 20px',
@@ -147,6 +217,17 @@ const ChatPage: React.FC = (): JSX.Element => {
         }}>
           <Search size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
           <p>No conversations found matching "{searchQuery}"</p>
+        </div>
+      )}
+
+      {/* Empty Conversations State */}
+      {!loading && !error && sortedChats.length === 0 && !searchQuery && (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '40px 20px',
+          color: 'rgba(235, 235, 245, 0.6)'
+        }}>
+          <p>No conversations yet. Start chatting to see them here!</p>
         </div>
       )}
 
