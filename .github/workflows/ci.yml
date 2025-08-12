@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: '18'
-  GO_VERSION: '1.21'
+  GO_VERSION: '1.23'
   # Test environment variables
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key-for-ci' }}
   SERVICE_AUTH_TOKEN: test-service-token-for-ci
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [discovery-svc, search-svc, location-svc]
+        service: [api-gateway, chat-svc, discovery-svc, search-svc, user-svc]
         
     steps:
     - uses: actions/checkout@v4
