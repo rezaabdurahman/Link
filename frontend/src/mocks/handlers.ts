@@ -1,14 +1,45 @@
 import { http, HttpResponse } from 'msw';
 import { BroadcastResponse, PublicBroadcastResponse } from '../services/broadcastClient';
-
-// Mock database for broadcasts
-let mockBroadcasts: Map<string, BroadcastResponse> = new Map();
+import { AvailabilityResponse, PublicAvailabilityResponse, AvailableUsersResponse, HeartbeatResponse } from '../services/availabilityClient';
 
 // Helper to generate UUID
 const generateId = () => crypto.randomUUID();
 
 // Helper to get current timestamp
 const now = () => new Date().toISOString();
+
+// Mock database for broadcasts
+let mockBroadcasts: Map<string, BroadcastResponse> = new Map();
+
+// Mock database for availability
+let mockAvailability: Map<string, AvailabilityResponse> = new Map();
+
+// Initialize some demo availability data
+mockAvailability.set('demo-user-1', {
+  id: generateId(),
+  user_id: 'demo-user-1',
+  is_available: false,
+  created_at: now(),
+  updated_at: now(),
+});
+
+mockAvailability.set('demo-user-2', {
+  id: generateId(),
+  user_id: 'demo-user-2', 
+  is_available: true,
+  last_available_at: now(),
+  created_at: now(),
+  updated_at: now(),
+});
+
+mockAvailability.set('demo-user-3', {
+  id: generateId(),
+  user_id: 'demo-user-3',
+  is_available: true,
+  last_available_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(), // 10 minutes ago
+  created_at: now(),
+  updated_at: now(),
+});
 
 // Helper to calculate expiration time
 const getExpirationTime = (hours: number = 24) => {
@@ -347,5 +378,254 @@ export const broadcastHandlers = [
     };
 
     return HttpResponse.json(publicBroadcast, { status: 200 });
+  }),
+];
+
+export const availabilityHandlers = [
+  // GET /availability - Get current user's availability
+  http.get('*/availability', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to view your availability',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    let availability = mockAvailability.get(userId);
+    
+    // Create default availability record if it doesn't exist
+    if (!availability) {
+      availability = {
+        id: generateId(),
+        user_id: userId,
+        is_available: false,
+        created_at: now(),
+        updated_at: now(),
+      };
+      mockAvailability.set(userId, availability);
+    }
+
+    return HttpResponse.json(availability, { status: 200 });
+  }),
+
+  // PUT /availability - Update current user's availability
+  http.put('*/availability', async ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to update your availability',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    try {
+      const body = await request.json() as { is_available: boolean };
+      
+      if (typeof body.is_available !== 'boolean') {
+        return HttpResponse.json(
+          {
+            error: 'Invalid request body',
+            message: 'is_available must be a boolean',
+            code: 'INVALID_BODY',
+          },
+          { status: 400 }
+        );
+      }
+
+      let availability = mockAvailability.get(userId);
+      
+      if (!availability) {
+        availability = {
+          id: generateId(),
+          user_id: userId,
+          is_available: body.is_available,
+          created_at: now(),
+          updated_at: now(),
+        };
+      } else {
+        availability = {
+          ...availability,
+          is_available: body.is_available,
+          updated_at: now(),
+        };
+      }
+
+      // Set last_available_at when becoming available
+      if (body.is_available) {
+        availability.last_available_at = now();
+      }
+
+      mockAvailability.set(userId, availability);
+      
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      return HttpResponse.json(availability, { status: 200 });
+    } catch (error) {
+      return HttpResponse.json(
+        {
+          error: 'Invalid request body',
+          message: 'Failed to parse request body',
+          code: 'INVALID_BODY',
+        },
+        { status: 400 }
+      );
+    }
+  }),
+
+  // GET /availability/:userId - Get specific user's availability
+  http.get('*/availability/:userId', ({ params, request }) => {
+    const requestingUserId = extractUserId(request);
+    
+    if (!requestingUserId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to view user availability',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    const { userId } = params;
+    const availability = mockAvailability.get(userId as string);
+
+    if (!availability) {
+      return HttpResponse.json(
+        {
+          error: 'Availability information not found',
+          message: 'Unable to retrieve user availability at this time',
+          code: 'SERVICE_ERROR',
+        },
+        { status: 404 }
+      );
+    }
+
+    // Return public availability data (no internal IDs)
+    const publicAvailability: PublicAvailabilityResponse = {
+      user_id: availability.user_id,
+      is_available: availability.is_available,
+      last_available_at: availability.last_available_at,
+    };
+
+    return HttpResponse.json(publicAvailability, { status: 200 });
+  }),
+
+  // GET /available-users - Get list of available users
+  http.get('*/available-users', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to discover available users',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get('limit');
+    const offsetParam = url.searchParams.get('offset');
+    
+    const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100) : 50;
+    const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+
+    // Get available users (excluding the requesting user)
+    const availableUsers = Array.from(mockAvailability.values())
+      .filter(availability => 
+        availability.is_available && 
+        availability.user_id !== userId
+      )
+      .sort((a, b) => {
+        // Sort by last_available_at descending
+        const aTime = a.last_available_at ? new Date(a.last_available_at).getTime() : 0;
+        const bTime = b.last_available_at ? new Date(b.last_available_at).getTime() : 0;
+        return bTime - aTime;
+      });
+
+    const totalCount = availableUsers.length;
+    const paginatedUsers = availableUsers.slice(offset, offset + limit);
+
+    // Convert to public responses
+    const publicResponses: PublicAvailabilityResponse[] = paginatedUsers.map(availability => ({
+      user_id: availability.user_id,
+      is_available: availability.is_available,
+      last_available_at: availability.last_available_at,
+    }));
+
+    const response: AvailableUsersResponse = {
+      data: publicResponses,
+      pagination: {
+        total: totalCount,
+        limit,
+        offset,
+        has_more: offset + limit < totalCount,
+        total_pages: Math.ceil(totalCount / limit),
+      },
+    };
+
+    return HttpResponse.json(response, { status: 200 });
+  }),
+
+  // POST /availability/heartbeat - Send heartbeat
+  http.post('*/availability/heartbeat', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'User ID not found in context',
+          message: 'Authentication required',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    let availability = mockAvailability.get(userId);
+    
+    if (!availability) {
+      // Create new availability record as available
+      availability = {
+        id: generateId(),
+        user_id: userId,
+        is_available: true,
+        last_available_at: now(),
+        created_at: now(),
+        updated_at: now(),
+      };
+    } else {
+      // Update existing record
+      availability = {
+        ...availability,
+        is_available: true,
+        last_available_at: now(),
+        updated_at: now(),
+      };
+    }
+
+    mockAvailability.set(userId, availability);
+
+    const response: HeartbeatResponse = {
+      status: 'success',
+      availability,
+    };
+
+    return HttpResponse.json(response, { status: 200 });
   }),
 ];
