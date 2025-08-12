@@ -2,8 +2,8 @@
 // Verifies RequireAuth and GuestOnly components redirect appropriately based on auth state
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import RequireAuth from '../RequireAuth';
 import GuestOnly from '../GuestOnly';
 import { AuthProvider } from '../../contexts/AuthContext';
@@ -14,6 +14,7 @@ jest.mock('../../services/authClient', () => ({
   register: jest.fn(),
   logout: jest.fn(),
   refresh: jest.fn(),
+  me: jest.fn(),
   AuthServiceError: jest.fn(),
   getErrorMessage: jest.fn(),
   apiClient: {
@@ -21,7 +22,7 @@ jest.mock('../../services/authClient', () => ({
   },
 }));
 
-// Mock secure token storage
+// Mock secure token storage with delayed responses
 jest.mock('../../utils/secureTokenStorage', () => ({
   default: {
     getToken: jest.fn().mockResolvedValue(null),
@@ -30,14 +31,42 @@ jest.mock('../../utils/secureTokenStorage', () => ({
   },
 }));
 
-// Test wrapper component
-const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <BrowserRouter>
-    <AuthProvider>
-      {children}
-    </AuthProvider>
-  </BrowserRouter>
-);
+// Mock config module to ensure predictable auth requirements
+jest.mock('../../config', () => ({
+  isAuthRequired: jest.fn().mockReturnValue(true),
+}));
+
+// Helper to wait for auth initialization
+const waitForAuthInitialization = () => new Promise(resolve => setTimeout(resolve, 150));
+
+// Test wrapper that renders components within proper router context
+const renderWithRouter = (component: React.ReactElement, initialRoute = '/') => {
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/',
+        element: (
+          <AuthProvider>
+            {component}
+          </AuthProvider>
+        ),
+      },
+      {
+        path: '/login',
+        element: <div data-testid="login-page">Login Page</div>,
+      },
+    ],
+    {
+      initialEntries: [initialRoute],
+      future: {
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      },
+    }
+  );
+  
+  return render(<RouterProvider router={router} />);
+};
 
 
 describe('Route Guards', () => {
@@ -47,58 +76,84 @@ describe('Route Guards', () => {
   });
 
   describe('RequireAuth', () => {
-    it('shows loading spinner while auth is loading', async () => {
-      render(
-        <TestWrapper>
-          <RequireAuth />
-        </TestWrapper>
-      );
+    it('shows loading spinner while auth is loading', () => {
+      // Render synchronously without waiting
+      renderWithRouter(<RequireAuth />);
 
-      // Should show loading spinner initially
-      expect(screen.getByRole('status', { hidden: true })).toBeInTheDocument();
+      // Check if loading spinner is present immediately before any async operations complete
+      const loadingElement = screen.getByRole('status');
+      expect(loadingElement).toBeInTheDocument();
+      expect(loadingElement).toHaveAttribute('aria-label', 'Loading authentication status');
     });
 
     it('redirects to login when user is not authenticated', async () => {
-      // Wait for auth state to initialize
-      render(
-        <TestWrapper>
-          <RequireAuth />
-        </TestWrapper>
-      );
+      await act(async () => {
+        renderWithRouter(<RequireAuth />);
+      });
 
-      // Wait for auth initialization
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for auth initialization to complete
+      await act(async () => {
+        await waitForAuthInitialization();
+      });
 
-      // Should redirect to login - in a real scenario this would be handled by Navigate component
-      // For testing purposes, we verify the component structure
-      expect(screen.queryByText('Test Protected Content')).not.toBeInTheDocument();
+      // After auth resolves to unauthenticated, should redirect to login
+      await waitFor(() => {
+        expect(screen.getByTestId('login-page')).toBeInTheDocument();
+      });
     });
   });
 
   describe('GuestOnly', () => {
-    it('shows loading spinner while auth is loading', async () => {
-      render(
-        <TestWrapper>
-          <GuestOnly />
-        </TestWrapper>
-      );
+    it('shows loading spinner while auth is loading', () => {
+      renderWithRouter(<GuestOnly />);
 
-      // Should show loading spinner initially
-      expect(screen.getByRole('status', { hidden: true })).toBeInTheDocument();
+      // Check if loading spinner is present initially
+      const loadingElement = screen.getByRole('status');
+      expect(loadingElement).toBeInTheDocument();
+      expect(loadingElement).toHaveAttribute('aria-label', 'Loading authentication status');
     });
 
     it('allows access to guest-only content when user is not authenticated', async () => {
-      render(
-        <TestWrapper>
-          <GuestOnly />
-        </TestWrapper>
+      const TestContent = () => <div data-testid="guest-content">Guest Only Content</div>;
+      
+      const router = createMemoryRouter(
+        [
+          {
+            path: '/',
+            element: (
+              <AuthProvider>
+                <GuestOnly />
+              </AuthProvider>
+            ),
+            children: [
+              {
+                index: true,
+                element: <TestContent />,
+              },
+            ],
+          },
+        ],
+        {
+          future: {
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          },
+        }
       );
 
-      // Wait for auth initialization
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await act(async () => {
+        render(<RouterProvider router={router} />);
+      });
 
-      // Should render the outlet content when not authenticated
-      // In a real scenario, this would render the login/signup form
+      // Wait for auth initialization to complete
+      await act(async () => {
+        await waitForAuthInitialization();
+      });
+
+      // Should show guest content when not authenticated
+      await waitFor(() => {
+        expect(screen.getByTestId('guest-content')).toBeInTheDocument();
+      });
     });
   });
 });

@@ -36,7 +36,7 @@ module.exports = {
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
       tsconfig: '<rootDir>/tsconfig.json',
-      // Disable Babel processing
+      // Enable isolated modules for better performance
       isolatedModules: true
     }]
   },
@@ -61,13 +61,5 @@ module.exports = {
   forceExit: true,
   detectOpenHandles: false,
   maxWorkers: 1,
-  bail: true,
-  
-  // Ensure ts-jest is used (not babel-jest)
-  globals: {
-    'ts-jest': {
-      isolatedModules: true,
-      tsconfig: '<rootDir>/tsconfig.json'
-    }
-  }
+  bail: true
 };
