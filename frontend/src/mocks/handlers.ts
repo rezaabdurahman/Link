@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import { BroadcastResponse, PublicBroadcastResponse } from '../services/broadcastClient';
+import { BroadcastResponse } from '../services/broadcastClient';
 import { AvailabilityResponse, PublicAvailabilityResponse, AvailableUsersResponse, HeartbeatResponse } from '../services/availabilityClient';
 
 // Helper to generate UUID
@@ -9,10 +9,10 @@ const generateId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 
 // Mock database for broadcasts
-let mockBroadcasts: Map<string, BroadcastResponse> = new Map();
+const mockBroadcasts: Map<string, BroadcastResponse> = new Map();
 
 // Mock database for availability
-let mockAvailability: Map<string, AvailabilityResponse> = new Map();
+const mockAvailability: Map<string, AvailabilityResponse> = new Map();
 
 // Initialize some demo availability data
 mockAvailability.set('demo-user-1', {

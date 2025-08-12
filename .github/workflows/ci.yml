@@ -13,7 +13,6 @@ jobs:
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
-    if: false  # Temporarily disabled to allow merging
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ env.NODE_VERSION }}
@@ -31,7 +30,6 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    if: false  # Temporarily disabled - tests take too long
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ env.NODE_VERSION }}
@@ -53,7 +51,7 @@ jobs:
 
   build:
     name: Build
-    # needs: [lint-and-typecheck]  # Temporarily removed since lint job is disabled
+    needs: [lint-and-typecheck, test]
     runs-on: ubuntu-latest
     strategy:
       matrix:
