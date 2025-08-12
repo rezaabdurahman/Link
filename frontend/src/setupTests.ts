@@ -26,6 +26,7 @@ if (typeof global.fetch === 'undefined') {
 
 // Conditional MSW setup - only import if module is available
 try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { server } = require('./mocks/server');
   
   // MSW test setup
