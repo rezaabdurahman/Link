@@ -4,6 +4,8 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^msw/node$': '<rootDir>/../node_modules/msw/lib/node/index.js',
+    '^msw/browser$': '<rootDir>/../node_modules/msw/lib/browser/index.js',
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
@@ -33,7 +35,7 @@ module.exports = {
     }]
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(.*\\.mjs$))'
+    'node_modules/(?!(msw|@mswjs|.*\\.mjs$))'
   ],
   globals: {
     'ts-jest': {

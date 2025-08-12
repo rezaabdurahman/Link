@@ -5,12 +5,12 @@ import { server } from './mocks/server';
 import { TextEncoder, TextDecoder } from 'util';
 
 if (typeof global.TextEncoder === 'undefined') {
-  // @ts-expect-error
+  // @ts-expect-error - Node.js util TextEncoder not compatible with DOM TextEncoder type
   global.TextEncoder = TextEncoder;
 }
 
 if (typeof global.TextDecoder === 'undefined') {
-  // @ts-expect-error
+  // @ts-expect-error - Node.js util TextDecoder not compatible with DOM TextDecoder type
   global.TextDecoder = TextDecoder;
 }
 
