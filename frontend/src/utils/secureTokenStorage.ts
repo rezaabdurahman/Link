@@ -15,7 +15,7 @@ interface InMemoryStorage {
   refreshToken: string | null;
 }
 
-let inMemoryStorage: InMemoryStorage = {
+const inMemoryStorage: InMemoryStorage = {
   authToken: null,
   refreshToken: null,
 };

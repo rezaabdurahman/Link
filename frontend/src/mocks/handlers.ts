@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw';
 import { BroadcastResponse, PublicBroadcastResponse } from '../services/broadcastClient';
 
 // Mock database for broadcasts
-let mockBroadcasts: Map<string, BroadcastResponse> = new Map();
+const mockBroadcasts: Map<string, BroadcastResponse> = new Map();
 
 // Helper to generate UUID
 const generateId = () => crypto.randomUUID();
