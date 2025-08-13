@@ -36,6 +36,13 @@ const OnboardingPage: React.FC = (): JSX.Element => {
     progress
   } = useOnboarding();
 
+  // Auto-start onboarding if user hasn't started yet
+  useEffect(() => {
+    if (isInitialized && status?.status === 'not_started') {
+      startOnboardingFlow().catch(console.error);
+    }
+  }, [isInitialized, status?.status, startOnboardingFlow]);
+
   // Redirect if not authenticated
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
@@ -45,13 +52,6 @@ const OnboardingPage: React.FC = (): JSX.Element => {
   if (isInitialized && (isCompleted || isSkipped)) {
     return <Navigate to="/discovery" replace />;
   }
-
-  // Auto-start onboarding if user hasn't started yet
-  useEffect(() => {
-    if (isInitialized && status?.status === 'not_started') {
-      startOnboardingFlow().catch(console.error);
-    }
-  }, [isInitialized, status?.status, startOnboardingFlow]);
 
   // Show loading while initializing
   if (!isInitialized) {

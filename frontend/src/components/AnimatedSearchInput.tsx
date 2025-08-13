@@ -5,6 +5,7 @@ import { useTypingAnimation } from '../hooks/useTypingAnimation';
 interface AnimatedSearchInputProps {
   value: string;
   onChange: (value: string) => void;
+  onEnter?: () => void;
   suggestions?: string[];
   className?: string;
 }
@@ -12,6 +13,7 @@ interface AnimatedSearchInputProps {
 const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
   value,
   onChange,
+  onEnter,
   suggestions = [
     'find me a tall guy with blue eyes',
     'find me a venture capitalist',
@@ -29,6 +31,12 @@ const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
     loop: true
   });
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter' && onEnter) {
+      onEnter();
+    }
+  };
+
   return (
     <div className={`relative ${className}`}>
       <Search 
@@ -40,6 +48,7 @@ const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         className="ios-text-field w-full pl-11 pr-4 py-2.5 bg-surface-hover/60 border-none rounded-ios text-black placeholder:text-transparent focus:ring-2 focus:ring-aqua/50 relative z-0"
       />
       

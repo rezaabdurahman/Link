@@ -1,0 +1,476 @@
+openapi: 3.0.3
+info:
+  title: Search Service API
+  description: |
+    Intelligent user search and matching service using OpenAI embeddings.
+    This service provides semantic search capabilities for user profiles
+    and maintains search indexes for optimal performance.
+  version: 1.0.0
+  contact:
+    name: Link App Team
+    email: dev@linkapp.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8083/api/v1
+    description: Development server
+  - url: https://api.linkapp.com/search/v1
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the search service
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /search:
+    post:
+      summary: Perform semantic search
+      description: |
+        Search for users using natural language queries. Returns ranked results
+        based on semantic similarity to user profiles.
+      operationId: searchUsers
+      tags:
+        - Search
+      security:
+        - BearerAuth: []
+        - ServiceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+            examples:
+              basic_search:
+                summary: Basic text search
+                value:
+                  query: "software engineer with React experience"
+                  limit: 10
+              filtered_search:
+                summary: Search with user ID filtering
+                value:
+                  query: "data scientist in San Francisco"
+                  limit: 5
+                  user_ids: ["uuid1", "uuid2", "uuid3"]
+                  exclude_user_id: "current-user-uuid"
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              examples:
+                search_results:
+                  summary: Typical search results
+                  value:
+                    results:
+                      - user_id: "uuid1"
+                        score: 0.89
+                        match_reasons: ["React experience", "Software engineer role"]
+                      - user_id: "uuid2"
+                        score: 0.76
+                        match_reasons: ["JavaScript skills", "Frontend development"]
+                    query_processed: "software engineer react experience"
+                    total_candidates: 150
+                    search_time_ms: 45
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /reindex:
+    post:
+      summary: Trigger reindexing (Internal)
+      description: |
+        Trigger reindexing of user profile embeddings. This is an internal
+        endpoint that requires service-level authentication.
+      operationId: triggerReindex
+      tags:
+        - Reindex
+      security:
+        - ServiceToken: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReindexRequest'
+            examples:
+              full_reindex:
+                summary: Full reindex of all users
+                value:
+                  force: true
+              partial_reindex:
+                summary: Reindex specific users
+                value:
+                  user_ids: ["uuid1", "uuid2"]
+                  force: false
+      responses:
+        '202':
+          description: Reindex job queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReindexResponse'
+              examples:
+                reindex_started:
+                  summary: Reindex job created
+                  value:
+                    job_id: "reindex-job-uuid"
+                    status: "queued"
+                    users_queued: 1250
+                    estimated_completion: "2024-01-15T14:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /reindex/{jobId}:
+    get:
+      summary: Get reindex job status (Internal)
+      description: Check the status of a reindex job
+      operationId: getReindexStatus
+      tags:
+        - Reindex
+      security:
+        - ServiceToken: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The reindex job ID to check
+      responses:
+        '200':
+          description: Reindex job status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReindexStatusResponse'
+              examples:
+                in_progress:
+                  summary: Job in progress
+                  value:
+                    job_id: "reindex-job-uuid"
+                    status: "in_progress"
+                    users_total: 1250
+                    users_processed: 342
+                    users_failed: 2
+                    started_at: "2024-01-15T14:00:00Z"
+                completed:
+                  summary: Job completed
+                  value:
+                    job_id: "reindex-job-uuid"
+                    status: "completed"
+                    users_total: 1250
+                    users_processed: 1248
+                    users_failed: 2
+                    started_at: "2024-01-15T14:00:00Z"
+                    completed_at: "2024-01-15T14:28:30Z"
+        '404':
+          description: Reindex job not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for user authentication
+    ServiceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Service-to-service authentication token
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+        - timestamp
+        - version
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Service health status
+        service:
+          type: string
+          example: "search-svc"
+          description: Service name
+        timestamp:
+          type: string
+          format: date-time
+          description: Current server timestamp
+        version:
+          type: string
+          example: "1.0.0"
+          description: Service version
+
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Natural language search query
+          example: "software engineer with React experience"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+          description: Maximum number of results to return
+        user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 1000
+          description: Filter search to specific user IDs
+        exclude_user_id:
+          type: string
+          format: uuid
+          description: Exclude specific user from results
+
+    SearchResponse:
+      type: object
+      required:
+        - results
+        - query_processed
+        - total_candidates
+        - search_time_ms
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+          description: Ranked search results
+        query_processed:
+          type: string
+          description: Processed version of the original query
+          example: "software engineer react experience"
+        total_candidates:
+          type: integer
+          minimum: 0
+          description: Total number of users considered for search
+        search_time_ms:
+          type: integer
+          minimum: 0
+          description: Search execution time in milliseconds
+
+    SearchResult:
+      type: object
+      required:
+        - user_id
+        - score
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: User identifier
+        score:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          description: Relevance score (0.0-1.0)
+        match_reasons:
+          type: array
+          items:
+            type: string
+          description: Explanation of why this user matched the query
+
+    ReindexRequest:
+      type: object
+      properties:
+        user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 10000
+          description: Specific users to reindex (omit for full reindex)
+        force:
+          type: boolean
+          default: false
+          description: Force reindex even if embeddings exist
+
+    ReindexResponse:
+      type: object
+      required:
+        - job_id
+        - status
+        - users_queued
+        - estimated_completion
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the reindex job
+        status:
+          type: string
+          enum: [queued, in_progress, completed, failed]
+          description: Current status of the reindex job
+        users_queued:
+          type: integer
+          minimum: 0
+          description: Number of users queued for reindexing
+        estimated_completion:
+          type: string
+          format: date-time
+          description: Estimated completion time
+
+    ReindexStatusResponse:
+      type: object
+      required:
+        - job_id
+        - status
+        - users_total
+        - users_processed
+        - users_failed
+        - started_at
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the reindex job
+        status:
+          type: string
+          enum: [queued, in_progress, completed, failed]
+          description: Current status of the reindex job
+        users_total:
+          type: integer
+          minimum: 0
+          description: Total number of users to process
+        users_processed:
+          type: integer
+          minimum: 0
+          description: Number of users successfully processed
+        users_failed:
+          type: integer
+          minimum: 0
+          description: Number of users that failed processing
+        started_at:
+          type: string
+          format: date-time
+          description: When the job started
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the job completed (null if still running)
+        error_message:
+          type: string
+          nullable: true
+          description: Error message if the job failed
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "INVALID_REQUEST"
+            message: "Query parameter is required"
+
+    Unauthorized:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Invalid or expired token"
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          description: Request limit per hour
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Requests remaining in current window
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: Time when rate limit resets (Unix timestamp)
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "RATE_LIMIT_EXCEEDED"
+            message: "Search rate limit exceeded. Try again later."
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "INTERNAL_ERROR"
+            message: "An unexpected error occurred"
+
+tags:
+  - name: Health
+    description: Service health and status endpoints
+  - name: Search
+    description: User search and matching operations
+  - name: Reindex
+    description: Index management operations (internal use)

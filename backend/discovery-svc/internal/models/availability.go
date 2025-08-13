@@ -86,3 +86,44 @@ func (a *Availability) ToPublicResponse() PublicAvailabilityResponse {
 		LastAvailableAt: a.LastAvailableAt,
 	}
 }
+
+// SearchAvailableUsersRequest represents the request to search available users
+type SearchAvailableUsersRequest struct {
+	Query  string `json:"query" form:"query" binding:"required,min=1,max=500"`
+	Limit  *int   `json:"limit,omitempty" form:"limit" binding:"omitempty,min=1,max=100"`
+	Offset *int   `json:"offset,omitempty" form:"offset" binding:"omitempty,min=0"`
+}
+
+// SearchAvailableUsersResponse represents the response for searching available users
+type SearchAvailableUsersResponse struct {
+	Data       []EnhancedPublicAvailabilityResponse `json:"data"`
+	Pagination PaginationResponse                   `json:"pagination"`
+	SearchMeta SearchMetaResponse                   `json:"search_meta,omitempty"`
+	Warnings   []string                             `json:"warnings,omitempty"`
+}
+
+// EnhancedPublicAvailabilityResponse includes search scoring information
+type EnhancedPublicAvailabilityResponse struct {
+	UserID          uuid.UUID  `json:"user_id"`
+	IsAvailable     bool       `json:"is_available"`
+	LastAvailableAt *time.Time `json:"last_available_at,omitempty"`
+	SearchScore     *float64   `json:"search_score,omitempty"`
+	MatchReasons    []string   `json:"match_reasons,omitempty"`
+}
+
+// PaginationResponse represents pagination metadata
+type PaginationResponse struct {
+	Total      int64 `json:"total"`
+	Limit      int   `json:"limit"`
+	Offset     int   `json:"offset"`
+	HasMore    bool  `json:"has_more"`
+	TotalPages int64 `json:"total_pages"`
+}
+
+// SearchMetaResponse represents search metadata
+type SearchMetaResponse struct {
+	QueryProcessed  string `json:"query_processed"`
+	TotalCandidates int    `json:"total_candidates"`
+	SearchTimeMs    int    `json:"search_time_ms"`
+	SearchEnabled   bool   `json:"search_enabled"`
+}
