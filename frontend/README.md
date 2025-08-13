@@ -17,15 +17,22 @@ npm run build
 
 ## Scripts
 
+### Development
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
 - `npm run lint:fix` - Fix ESLint issues
 - `npm run type-check` - Run TypeScript type checking
-- `npm run test` - Run tests
-- `npm run test:watch` - Run tests in watch mode
-- `npm run test:coverage` - Run tests with coverage
+
+### Testing
+- `npm run test` - Run unit tests
+- `npm run test:watch` - Run unit tests in watch mode
+- `npm run test:coverage` - Run unit tests with coverage
+- `npm run test:e2e` - Run E2E tests headlessly
+- `npm run test:e2e:dev` - Open Cypress test runner
+- `npm run cypress:open` - Open Cypress test runner
+- `npm run cypress:run` - Run Cypress tests headlessly
 
 ## Project Structure
 
@@ -139,6 +146,65 @@ To maintain consistency across environments:
 4. **Production**: Use secure environment variable management
 
 **Important**: Never commit sensitive data like API keys or secrets to git. Use environment variables and ensure `.env.local` and `.env.test` are in `.gitignore`.
+
+## Features
+
+### Friend Search in Chat
+
+The chat interface includes intelligent friend search functionality that provides mixed search results combining existing conversations and discoverable friends.
+
+**Key Features:**
+- **Real-time Search**: Debounced search with 300ms delay for optimal performance
+- **Mixed Results**: Combines existing chat conversations with friend search results
+- **Smart Prioritization**: Existing conversations appear first, followed by new friends
+- **Loading States**: Skeleton shimmer animations during search
+- **Error Handling**: Graceful fallback when friend search API fails
+- **Empty States**: Clear messaging when no results are found
+- **One-tap Chat**: Click any friend result to start a new conversation
+
+**Technical Implementation:**
+- Uses `searchFriends` API from `userClient` service
+- Creates pseudo-chat objects for friends without existing conversations
+- Integrates with existing conversation management system
+- Supports conversation creation via `createConversation` API
+- Real-time UI updates with optimistic rendering
+
+**User Experience:**
+1. User types in the search input
+2. System shows loading skeleton after 300ms debounce
+3. Existing conversations are filtered by participant name/summary
+4. Friend search API is called for additional results
+5. Mixed results are displayed with clear visual distinction
+6. Clicking any result opens conversation (creates new one if needed)
+
+### E2E Testing
+
+Comprehensive end-to-end testing with Cypress covers the friend search functionality:
+
+**Test Coverage:**
+- Mixed search results display
+- Loading states and debouncing
+- Empty states and error handling
+- Friend result click-to-chat functionality
+- Mobile responsiveness
+- API error graceful degradation
+
+**Running E2E Tests:**
+```bash
+# Interactive test runner (recommended for development)
+npm run test:e2e:dev
+
+# Headless test execution (for CI/CD)
+npm run test:e2e
+
+# Open Cypress test runner
+npm run cypress:open
+```
+
+**Test Files:**
+- `cypress/e2e/friend-search-in-chat.cy.ts` - Main friend search test suite
+- `cypress/support/commands.ts` - Custom Cypress commands
+- `cypress/support/e2e.ts` - Global test configuration
 
 ## Services
 

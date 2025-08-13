@@ -92,5 +92,15 @@ func (h *SearchHandler) validateSearchRequest(req *dto.SearchRequest) error {
 		return fmt.Errorf("cannot filter by more than 1000 user IDs")
 	}
 
+	// Validate scope if provided
+	if req.Scope != nil {
+		switch *req.Scope {
+		case "friends", "discovery":
+			// Valid scopes
+		default:
+			return fmt.Errorf("scope must be 'friends' or 'discovery'")
+		}
+	}
+
 	return nil
 }

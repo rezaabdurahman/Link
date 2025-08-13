@@ -14,6 +14,7 @@ import (
 // UserClient handles communication with user-svc
 type UserClient interface {
 	GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserProfile, error)
+	GetUserFriends(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
 
 type userClient struct {
@@ -80,6 +81,63 @@ func (c *userClient) GetUserProfile(ctx context.Context, userID uuid.UUID) (*Use
 	}
 
 	return &profile, nil
+}
+
+// FriendsResponse represents the friends response from user-svc
+type FriendsResponse struct {
+	Friends []Friend `json:"friends"`
+	Page    int      `json:"page"`
+	Limit   int      `json:"limit"`
+	Count   int      `json:"count"`
+}
+
+// Friend represents a friend object from user-svc
+type Friend struct {
+	ID       uuid.UUID `json:"id"`
+	Username string    `json:"username"`
+	Bio      string    `json:"bio,omitempty"`
+}
+
+// GetUserFriends fetches a user's friends from user-svc
+func (c *userClient) GetUserFriends(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	url := fmt.Sprintf("%s/api/v1/users/friends", c.baseURL)
+	
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add service auth header and user context
+	if c.authToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
+	}
+	// Set user context headers (simulate API gateway behavior)
+	req.Header.Set("X-User-ID", userID.String())
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request to user-svc: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("user-svc returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var response FriendsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Extract friend IDs
+	friendIDs := make([]uuid.UUID, len(response.Friends))
+	for i, friend := range response.Friends {
+		friendIDs[i] = friend.ID
+	}
+
+	return friendIDs, nil
 }
 
 // ProfileToText converts user profile to searchable text for embedding

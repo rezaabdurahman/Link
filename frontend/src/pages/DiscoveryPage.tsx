@@ -9,7 +9,10 @@ import AddBroadcastModal from '../components/AddBroadcastModal';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
-import { searchAvailableUsers, SearchUsersRequest, isSearchError, getSearchErrorMessage } from '../services/searchClient';
+import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, UnifiedSearchRequest } from '../services/unifiedSearchClient';
+// Legacy import - this will show deprecation warnings in console
+import { searchAvailableUsers, isSearchError, getSearchErrorMessage, SearchUsersRequest } from '../services/searchClient';
+import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   // User state management
@@ -210,7 +213,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     console.log('User hidden:', userId);
   };
 
-  // Search functionality
+  // Search functionality - NEW unified search implementation
   const performSearch = async (): Promise<void> => {
     if (isSearching) return; // Prevent multiple concurrent searches
 
@@ -218,14 +221,21 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setSearchError(null);
 
     try {
-      const searchRequest: SearchUsersRequest = {
+      // Use the new unified search with 'discovery' scope
+      const searchRequest: UnifiedSearchRequest = {
         query: searchQuery.trim() || undefined,
-        distance: activeFilters.distance,
-        interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
-        limit: 50, // Reasonable limit for mobile UI
+        scope: 'discovery', // Search for discoverable users
+        filters: {
+          distance: activeFilters.distance,
+          interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
+          available_only: true, // Only search available users in discovery
+        },
+        pagination: {
+          limit: 50, // Reasonable limit for mobile UI
+        },
       };
 
-      const response = await searchAvailableUsers(searchRequest);
+      const response = await unifiedSearch(searchRequest);
       
       // Filter out hidden users from search results
       const filteredResults = response.users.filter(user => !hiddenUserIds.has(user.id));
@@ -237,15 +247,24 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       if (searchQuery.trim()) {
         setToast({
           isVisible: true,
-          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''}`,
+          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`,
           type: 'success'
         });
       }
+      
+      // Log metadata for debugging
+      if (response.metadata) {
+        console.log('Search metadata:', response.metadata);
+      }
+      
     } catch (error) {
       console.error('Search failed:', error);
       
       let errorMessage = 'Search failed. Please try again.';
-      if (isSearchError(error)) {
+      if (isUnifiedSearchError(error)) {
+        errorMessage = getUnifiedSearchErrorMessage(error);
+      } else if (isSearchError(error)) {
+        // Fallback to legacy error handling
         errorMessage = getSearchErrorMessage(error);
       }
       
@@ -392,6 +411,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                   'find me a book lover'
                 ]}
                 className=""
+                loading={isSearching}
+                aria-label="Search for people nearby with interests, appearance, or profession"
+                aria-describedby="discovery-search-help"
               />
               
               {/* Filter Chips */}
@@ -485,11 +507,20 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (
           <div className={isGridView ? 'max-w-sm mx-auto px-4' : 'flex flex-col'}>
-            {/* Loading State */}
+            {/* Loading State with Skeleton */}
             {isSearching && (
-              <div className="flex flex-col items-center justify-center py-16 mb-24">
-                <div className="w-8 h-8 border-2 border-aqua border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="text-sm text-gray-500">Searching for users...</p>
+              <div className="mb-24" role="region" aria-label="User search results loading">
+                {isGridView ? (
+                  <div className="grid grid-cols-3 gap-1">
+                    {Array.from({ length: 9 }).map((_, index) => (
+                      <div key={index} className="aspect-square">
+                        <div className="bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] animate-shimmer w-full h-full rounded-sm" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <SearchResultsSkeleton count={5} />
+                )}
               </div>
             )}
             

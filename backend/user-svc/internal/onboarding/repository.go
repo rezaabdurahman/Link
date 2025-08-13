@@ -2,7 +2,6 @@ package onboarding
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"

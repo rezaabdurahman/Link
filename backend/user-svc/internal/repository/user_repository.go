@@ -21,6 +21,7 @@ type UserRepository interface {
 
 	// Friend operations
 	GetUserFriends(userID uuid.UUID, limit, offset int) ([]models.PublicUser, error)
+	GetFriendIDs(userID uuid.UUID) ([]uuid.UUID, error)
 	GetFriendRequests(userID uuid.UUID, limit, offset int) ([]models.FriendRequest, error)
 	GetSentFriendRequests(userID uuid.UUID, limit, offset int) ([]models.FriendRequest, error)
 	CreateFriendRequest(friendRequest *models.FriendRequest) error
@@ -129,6 +130,25 @@ func (r *userRepository) GetUserFriends(userID uuid.UUID, limit, offset int) ([]
 	
 	err := r.db.Raw(query, userID, userID, limit, offset).Scan(&friends).Error
 	return friends, err
+}
+
+// GetFriendIDs retrieves just the friend IDs for a user (read-only, IDs-only query)
+func (r *userRepository) GetFriendIDs(userID uuid.UUID) ([]uuid.UUID, error) {
+	var friendIDs []uuid.UUID
+	
+	// Efficient query to get only friend IDs without joining user data
+	query := `
+		SELECT DISTINCT 
+			CASE 
+				WHEN f.user1_id = ? THEN f.user2_id 
+				ELSE f.user1_id 
+			END as friend_id
+		FROM friendships f 
+		WHERE f.user1_id = ? OR f.user2_id = ?
+	`
+	
+	err := r.db.Raw(query, userID, userID, userID).Scan(&friendIDs).Error
+	return friendIDs, err
 }
 
 // GetFriendRequests retrieves friend requests received by the user

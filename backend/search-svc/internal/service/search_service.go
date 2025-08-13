@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/link-app/search-svc/internal/client"
 	"github.com/link-app/search-svc/internal/config"
 	"github.com/link-app/search-svc/internal/dto"
 	"github.com/link-app/search-svc/internal/models"
@@ -32,6 +33,8 @@ type SearchService interface {
 type searchService struct {
 	repo              repository.SearchRepository
 	embeddingProvider config.EmbeddingProvider
+	userClient        client.UserClient
+	discoveryClient   client.DiscoveryClient
 	disableAnalytics  bool // For testing purposes
 }
 
@@ -40,6 +43,16 @@ func NewSearchService(repo repository.SearchRepository, embeddingProvider config
 	return &searchService{
 		repo:              repo,
 		embeddingProvider: embeddingProvider,
+	}
+}
+
+// NewSearchServiceWithClients creates a new search service with external service clients
+func NewSearchServiceWithClients(repo repository.SearchRepository, embeddingProvider config.EmbeddingProvider, userClient client.UserClient, discoveryClient client.DiscoveryClient) SearchService {
+	return &searchService{
+		repo:              repo,
+		embeddingProvider: embeddingProvider,
+		userClient:        userClient,
+		discoveryClient:   discoveryClient,
 	}
 }
 
@@ -62,14 +75,20 @@ func (s *searchService) Search(ctx context.Context, userID uuid.UUID, req *dto.S
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
 	
+	// Handle scope-based filtering
+	userIDFilter, err := s.buildUserIDFilter(ctx, userID, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build user ID filter: %w", err)
+	}
+	
 	// Get total candidates count for analytics
-	totalCandidates, err := s.repo.GetTotalUserCount(ctx, req.UserIDs, req.ExcludeUserID)
+	totalCandidates, err := s.repo.GetTotalUserCount(ctx, userIDFilter, req.ExcludeUserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total candidates count: %w", err)
 	}
 	
 	// Perform vector similarity search
-	embeddings, scores, err := s.repo.SearchSimilarUsers(ctx, queryEmbedding, limit, req.UserIDs, req.ExcludeUserID)
+	embeddings, scores, err := s.repo.SearchSimilarUsers(ctx, queryEmbedding, limit, userIDFilter, req.ExcludeUserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search similar users: %w", err)
 	}
@@ -299,4 +318,56 @@ func (s *searchService) StartAvailabilityCleanup(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// buildUserIDFilter constructs the user ID filter based on scope and existing filters
+func (s *searchService) buildUserIDFilter(ctx context.Context, userID uuid.UUID, req *dto.SearchRequest) ([]uuid.UUID, error) {
+	// If explicit UserIDs are provided, use them (takes precedence over scope)
+	if len(req.UserIDs) > 0 {
+		return req.UserIDs, nil
+	}
+	
+	// Handle scope-based filtering
+	if req.Scope != nil {
+		switch *req.Scope {
+		case "friends":
+			// Search only within user's friends
+			if s.userClient == nil {
+				return nil, fmt.Errorf("user client not configured - cannot retrieve friends for scope filtering")
+			}
+			
+			friendIDs, err := s.userClient.GetUserFriends(ctx, userID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get user friends: %w", err)
+			}
+			
+			// If user has no friends, return empty slice (no results)
+			if len(friendIDs) == 0 {
+				return []uuid.UUID{}, nil
+			}
+			
+			return friendIDs, nil
+			
+		case "discovery":
+			// Search among available users for discovery
+			if s.discoveryClient == nil {
+				return nil, fmt.Errorf("discovery client not configured - cannot retrieve available users for scope filtering")
+			}
+			
+			availableUserIDs, err := s.discoveryClient.GetAvailableUsers(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get available users: %w", err)
+			}
+			
+			// If no users are available, return empty slice (no results)
+			if len(availableUserIDs) == 0 {
+				return []uuid.UUID{}, nil
+			}
+			
+			return availableUserIDs, nil
+		}
+	}
+	
+	// No scope specified - search all users (default behavior)
+	return nil, nil
 }

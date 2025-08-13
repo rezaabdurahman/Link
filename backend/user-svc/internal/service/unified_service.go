@@ -36,7 +36,6 @@ type ProfileService interface {
 	GetFriendRequests(userID uuid.UUID, page, limit int) ([]models.FriendRequest, error)
 	SendFriendRequest(requesterID uuid.UUID, req profile.SendFriendRequestRequest) error
 	RespondToFriendRequest(requestID, userID uuid.UUID, accept bool) error
-	SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
 }
 
 // OnboardingService interface defines onboarding operations
@@ -117,10 +116,6 @@ func (s *unifiedUserService) SendFriendRequest(requesterID uuid.UUID, req profil
 
 func (s *unifiedUserService) RespondToFriendRequest(requestID, userID uuid.UUID, accept bool) error {
 	return s.profileService.RespondToFriendRequest(requestID, userID, accept)
-}
-
-func (s *unifiedUserService) SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error) {
-	return s.profileService.SearchUsers(query, userID, page, limit)
 }
 
 // Onboarding methods - delegate to onboarding service

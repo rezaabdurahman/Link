@@ -4,11 +4,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/link-app/discovery-svc/internal/client"
 	"github.com/link-app/discovery-svc/internal/handlers"
 	"github.com/link-app/discovery-svc/internal/migrations"
 	"github.com/link-app/discovery-svc/internal/models"
@@ -47,26 +45,11 @@ func main() {
 	availabilityRepo := repository.NewAvailabilityRepository(db)
 	rankingConfigRepo := repository.NewRankingConfigRepository(db)
 
-	// Initialize search client and feature flag
-	searchServiceURL := getEnv("SEARCH_SERVICE_URL", "http://search-svc:8080")
-	searchEnabled, _ := strconv.ParseBool(getEnv("SEARCH_ENABLED", "false"))
-	var searchClient *client.SearchClient
-	if searchEnabled {
-		searchClient = client.NewSearchClient(searchServiceURL)
-		log.Printf("Search integration enabled - connecting to %s", searchServiceURL)
-	} else {
-		log.Println("Search integration disabled")
-	}
 
 	// Initialize services
 	broadcastService := service.NewBroadcastService(broadcastRepo)
 	rankingService := service.NewRankingService(rankingConfigRepo)
-	var availabilityService *service.AvailabilityService
-	if searchEnabled && searchClient != nil {
-		availabilityService = service.NewAvailabilityServiceWithSearchAndRanking(availabilityRepo, searchClient, searchEnabled, rankingService)
-	} else {
-		availabilityService = service.NewAvailabilityServiceWithRanking(availabilityRepo, rankingService)
-	}
+	availabilityService := service.NewAvailabilityService(availabilityRepo)
 
 	// Initialize handlers
 	broadcastHandler := handlers.NewBroadcastHandler(broadcastService)
@@ -137,7 +120,6 @@ func main() {
 		v1.POST("/availability/heartbeat", availabilityHandler.HandleHeartbeat)     // Send heartbeat to stay available
 		v1.GET("/availability/:userId", availabilityHandler.GetUserAvailability)    // Check another user's availability
 		v1.GET("/available-users", availabilityHandler.GetAvailableUsers)           // Browse available users for discovery
-		v1.GET("/available-users/search", availabilityHandler.SearchAvailableUsers) // Search available users with semantic ranking
 
 		// Ranking configuration routes (A/B testing ready)
 		v1.GET("/ranking/info", rankingHandler.GetRankingWeightsInfo)               // Get ranking algorithm information

@@ -7,6 +7,7 @@ import { AuthUser } from '../types/index';
 // API endpoints
 const USER_ENDPOINTS = {
   profile: (userId: string) => `/users/${userId}/profile`,
+  searchFriends: '/api/v1/users/friends/search',
 } as const;
 
 // User Profile Response Interface
@@ -21,6 +22,13 @@ export interface UserProfileResponse extends AuthUser {
     readonly show_location: boolean;
     readonly show_mutual_friends: boolean;
   };
+}
+
+// Public User Interface for search results
+export interface PublicUser extends AuthUser {
+  readonly is_friend?: boolean;
+  readonly mutual_friends_count?: number;
+  readonly last_active?: string; // ISO string format
 }
 
 /**
@@ -57,6 +65,20 @@ export async function getUserProfile(userId: string): Promise<UserProfileRespons
       code: 'INTERNAL_SERVER_ERROR',
     });
   }
+}
+
+/**
+ * Search for friends with optional pagination
+ * @param query - The search query string
+ * @param options - Optional pagination parameters
+ * @returns Promise resolving to search results with friends array
+ * @throws AuthServiceError with detailed error information
+ */
+export async function searchFriends(query: string, options?: {page?: number; limit?: number}) {
+  const params = new URLSearchParams({ q: query.trim() });
+  if (options?.page) params.append('page', options.page.toString());
+  if (options?.limit) params.append('limit', options.limit.toString());
+  return apiClient.get<{friends: PublicUser[]}>(`${USER_ENDPOINTS.searchFriends}?${params}`);
 }
 
 // Re-export shared error handling utilities for consistency

@@ -16,7 +16,7 @@ const RankToggle: React.FC<RankToggleProps> = ({ value, onChange }): JSX.Element
   ];
 
   return (
-    <div className="flex bg-surface-hover/30 rounded-lg p-1 gap-1">
+    <div className="flex bg-surface-hover/30 rounded-lg p-1 gap-1" data-testid="rank-toggle">
       {options.map((option) => (
         <button
           key={option.value}
