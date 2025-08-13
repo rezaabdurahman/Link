@@ -183,55 +183,6 @@ func (h *AvailabilityHandler) GetAvailableUsers(c *gin.Context) {
 	})
 }
 
-// SearchAvailableUsers searches available users with optional semantic ranking
-func (h *AvailabilityHandler) SearchAvailableUsers(c *gin.Context) {
-	// Verify the requesting user is authenticated
-	userIDStr, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "Authentication required",
-			"message": "You must be logged in to search available users",
-			"code":    "AUTH_REQUIRED",
-		})
-		return
-	}
-
-	userID, err := uuid.Parse(userIDStr.(string))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid user ID format",
-			"message": "The provided user ID is not valid",
-			"code":    "INVALID_USER_ID",
-		})
-		return
-	}
-
-	// Parse and validate request
-	var req models.SearchAvailableUsersRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request parameters",
-			"message": "The provided search parameters are not valid",
-			"code":    "INVALID_PARAMS",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Perform search
-	response, err := h.availabilityService.SearchAvailableUsers(c.Request.Context(), userID, &req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Search failed",
-			"message": "Unable to search available users at this time",
-			"code":    "SERVICE_ERROR",
-		})
-		return
-	}
-
-	// Return search response
-	c.JSON(http.StatusOK, response)
-}
 
 // HandleHeartbeat handles heartbeat requests to keep users available
 func (h *AvailabilityHandler) HandleHeartbeat(c *gin.Context) {

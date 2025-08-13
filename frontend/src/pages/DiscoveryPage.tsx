@@ -9,7 +9,9 @@ import AddBroadcastModal from '../components/AddBroadcastModal';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
-import { searchAvailableUsers, SearchUsersRequest, isSearchError, getSearchErrorMessage } from '../services/searchClient';
+import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, UnifiedSearchRequest } from '../services/unifiedSearchClient';
+// Legacy import - this will show deprecation warnings in console
+import { searchAvailableUsers, isSearchError, getSearchErrorMessage, SearchUsersRequest } from '../services/searchClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
@@ -211,7 +213,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     console.log('User hidden:', userId);
   };
 
-  // Search functionality
+  // Search functionality - NEW unified search implementation
   const performSearch = async (): Promise<void> => {
     if (isSearching) return; // Prevent multiple concurrent searches
 
@@ -219,14 +221,21 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setSearchError(null);
 
     try {
-      const searchRequest: SearchUsersRequest = {
+      // Use the new unified search with 'discovery' scope
+      const searchRequest: UnifiedSearchRequest = {
         query: searchQuery.trim() || undefined,
-        distance: activeFilters.distance,
-        interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
-        limit: 50, // Reasonable limit for mobile UI
+        scope: 'discovery', // Search for discoverable users
+        filters: {
+          distance: activeFilters.distance,
+          interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
+          available_only: true, // Only search available users in discovery
+        },
+        pagination: {
+          limit: 50, // Reasonable limit for mobile UI
+        },
       };
 
-      const response = await searchAvailableUsers(searchRequest);
+      const response = await unifiedSearch(searchRequest);
       
       // Filter out hidden users from search results
       const filteredResults = response.users.filter(user => !hiddenUserIds.has(user.id));
@@ -238,15 +247,24 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       if (searchQuery.trim()) {
         setToast({
           isVisible: true,
-          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''}`,
+          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`,
           type: 'success'
         });
       }
+      
+      // Log metadata for debugging
+      if (response.metadata) {
+        console.log('Search metadata:', response.metadata);
+      }
+      
     } catch (error) {
       console.error('Search failed:', error);
       
       let errorMessage = 'Search failed. Please try again.';
-      if (isSearchError(error)) {
+      if (isUnifiedSearchError(error)) {
+        errorMessage = getUnifiedSearchErrorMessage(error);
+      } else if (isSearchError(error)) {
+        // Fallback to legacy error handling
         errorMessage = getSearchErrorMessage(error);
       }
       

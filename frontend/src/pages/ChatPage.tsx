@@ -9,6 +9,8 @@ import RankToggle from '../components/RankToggle';
 import ConversationModal from '../components/ConversationModal';
 import AddFriendModal from '../components/AddFriendModal';
 import { getConversations, conversationToChat, createConversation } from '../services/chatClient';
+import { unifiedSearch, UnifiedSearchRequest, isUnifiedSearchError, getUnifiedSearchErrorMessage } from '../services/unifiedSearchClient';
+// Legacy import - this will show deprecation warnings in console
 import { searchFriends, PublicUser } from '../services/userClient';
 import { useAuth } from '../contexts/AuthContext';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
@@ -55,7 +57,7 @@ const ChatPage: React.FC = (): JSX.Element => {
     isFriend: true
   });
 
-  // Debounced search effect for friend results
+  // Debounced search effect for friend results - NEW unified search implementation
   useEffect(() => {
     const searchFriendsDebounced = async (query: string) => {
       if (!query.trim()) {
@@ -65,11 +67,54 @@ const ChatPage: React.FC = (): JSX.Element => {
 
       try {
         setSearchLoading(true);
-        const response = await searchFriends(query, { limit: 20 });
-        setFriendResults(response.friends);
+        
+        // Use the new unified search with 'friends' scope
+        const searchRequest: UnifiedSearchRequest = {
+          query: query.trim(),
+          scope: 'friends', // Search within user's friends only
+          pagination: {
+            limit: 20,
+          },
+        };
+
+        const response = await unifiedSearch(searchRequest);
+        
+        // Convert User[] to PublicUser[] for backward compatibility
+        const friends: PublicUser[] = response.users.map(user => ({
+          id: user.id,
+          first_name: user.name.split(' ')[0],
+          last_name: user.name.split(' ')[1] || '',
+          profile_picture: user.profilePicture,
+          bio: user.bio,
+          interests: user.interests,
+          is_friend: true,
+          mutual_friends_count: user.mutualFriends?.length || 0,
+          last_active: user.lastSeen?.toISOString(),
+        }));
+        
+        setFriendResults(friends);
+        
+        // Log search metadata for debugging
+        if (response.metadata) {
+          console.log('Friend search metadata:', response.metadata);
+        }
+        
       } catch (err) {
         console.error('Failed to search friends:', err);
-        setFriendResults([]);
+        
+        // Fallback to legacy search on error
+        if (isUnifiedSearchError(err)) {
+          console.warn('Unified search failed, falling back to legacy search:', getUnifiedSearchErrorMessage(err));
+          try {
+            const response = await searchFriends(query, { limit: 20 });
+            setFriendResults(response.friends);
+          } catch (legacyErr) {
+            console.error('Legacy search also failed:', legacyErr);
+            setFriendResults([]);
+          }
+        } else {
+          setFriendResults([]);
+        }
       } finally {
         setSearchLoading(false);
       }

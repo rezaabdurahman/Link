@@ -19,8 +19,5 @@ func RegisterRoutes(router *gin.RouterGroup, profileHandler *ProfileHandler) {
 		users.POST("/friend-requests", profileHandler.SendFriendRequest)
 		users.PUT("/friend-requests/:requestId", profileHandler.RespondToFriendRequest)
 
-		// Search endpoints (require auth via gateway)
-		users.GET("/search", profileHandler.SearchUsers)
-		users.GET("/friends/search", profileHandler.SearchFriends)
 	}
 }

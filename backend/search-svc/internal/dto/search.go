@@ -10,6 +10,7 @@ type SearchRequest struct {
 	Limit          *int        `json:"limit,omitempty" binding:"omitempty,min=1,max=100"`
 	UserIDs        []uuid.UUID `json:"user_ids,omitempty" binding:"omitempty,max=1000"`
 	ExcludeUserID  *uuid.UUID  `json:"exclude_user_id,omitempty"`
+	Scope          *string     `json:"scope,omitempty" binding:"omitempty,oneof=friends discovery"`
 }
 
 // SearchResponse represents the response payload for semantic search

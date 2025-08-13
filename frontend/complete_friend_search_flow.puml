@@ -1,0 +1,87 @@
+@startuml Complete Friend Search Flow - "find me a friend who's into volley ball"
+
+title Complete Friend Search Flow: Backend Processing Detail
+participant "User" as User
+participant "ChatPage" as ChatPage  
+participant "userClient" as UserClient
+participant "ProfileHandler" as Handler
+participant "ProfileService" as Service
+participant "UserRepository" as Repository
+participant "PostgreSQL" as DB
+participant "Search Service" as SearchSvc
+participant "SearchResultsSkeleton" as Skeleton
+
+== Frontend Processing ==
+User -> ChatPage: Types "find me a friend who's into volley ball"
+ChatPage -> ChatPage: setSearchQuery(query)
+ChatPage -> ChatPage: Debounce timer (300ms)
+ChatPage -> Skeleton: Show loading skeleton
+Skeleton -> User: Display shimmer animation
+
+== API Request ==
+ChatPage -> UserClient: searchFriends("find me a friend who's into volley ball", {limit: 20})
+UserClient -> Handler: GET /api/v1/users/friends/search?q=find%20me%20a%20friend%20who's%20into%20volley%20ball&limit=20
+note over UserClient, Handler: Authorization: Bearer <JWT_TOKEN>
+
+== Backend Authentication & Validation ==
+Handler -> Handler: Extract userID from JWT token
+Handler -> Handler: Validate query parameter (non-empty)
+Handler -> Handler: Parse pagination (page=1, limit=20)
+
+== Service Layer Processing ==
+Handler -> Service: SearchFriends(userID, query, page=1, limit=20)
+Service -> Service: Sanitize query: strings.TrimSpace(query)
+
+note over Service: Query validation passed\nquery = "find me a friend who's into volley ball"
+
+== Friend ID Retrieval ==
+Service -> Repository: GetFriendIDs(userID)
+Repository -> DB: SQL Query:\nSELECT DISTINCT CASE\n  WHEN f.user1_id = ? THEN f.user2_id\n  ELSE f.user1_id END as friend_id\nFROM friendships f\nWHERE f.user1_id = ? OR f.user2_id = ?
+
+alt User Has Friends
+    DB -> Repository: Returns: ["uuid-123", "uuid-456", "uuid-789", ...]
+    Repository -> Service: friendIDs = [uuid-123, uuid-456, uuid-789, ...]
+    
+    == External Search Service Call ==
+    Service -> Service: Build SearchServiceRequest:\n{\n  "query": "find me a friend who's into volley ball",\n  "friend_ids": ["uuid-123", "uuid-456", "uuid-789"],\n  "page": 1,\n  "limit": 20\n}
+    
+    Service -> SearchSvc: POST /api/v1/search/friends\nContent-Type: application/json\nTimeout: 30s
+    
+    note over SearchSvc: Search Service Processing:\n1. Parse query for keywords: "volleyball", "volley", "ball", "sports"\n2. Search user profiles, bios, interests\n3. Filter by friend_ids only\n4. Rank by relevance\n5. Return matches
+    
+    alt Search Service Success
+        SearchSvc -> Service: 200 OK\n{\n  "users": [\n    {\n      "id": "uuid-456",\n      "username": "sarah_v",\n      "first_name": "Sarah",\n      "last_name": "Johnson", \n      "bio": "Volleyball enthusiast, beach player",\n      "profile_picture": "https://...",\n      ...\n    },\n    {\n      "id": "uuid-789",\n      "username": "mike_coach",\n      "first_name": "Mike",\n      "last_name": "Chen",\n      "bio": "Volleyball coach and trainer",\n      ...\n    }\n  ],\n  "total": 2\n}
+        
+        == Response Mapping ==
+        Service -> Service: Map SearchServiceUser to models.PublicUser\nSet IsFriend = true for all results
+        Service -> Handler: Return []models.PublicUser (2 friends found)
+        
+        == Response to Frontend ==
+        Handler -> UserClient: 200 OK\n{\n  "friends": [\n    {\n      "id": "uuid-456",\n      "first_name": "Sarah",\n      "last_name": "Johnson",\n      "bio": "Volleyball enthusiast, beach player",\n      "is_friend": true,\n      ...\n    },\n    {\n      "id": "uuid-789", \n      "first_name": "Mike",\n      "last_name": "Chen",\n      "bio": "Volleyball coach and trainer",\n      "is_friend": true,\n      ...\n    }\n  ]\n}
+        
+    else Search Service Error
+        SearchSvc -> Service: 500 Internal Server Error\nor 503 Service Unavailable
+        Service -> Handler: ErrSearchServiceUnavailable
+        Handler -> UserClient: 503 Service Unavailable\n{\n  "error": "SERVICE_UNAVAILABLE",\n  "message": "Search service is currently unavailable"\n}
+    end
+    
+else User Has No Friends  
+    DB -> Repository: Returns: []
+    Repository -> Service: friendIDs = []
+    Service -> Service: Early return: []models.PublicUser{}
+    Service -> Handler: Return empty slice
+    Handler -> UserClient: 200 OK\n{\n  "friends": []\n}
+end
+
+== Frontend Result Processing ==
+UserClient -> ChatPage: Return search results or error
+ChatPage -> ChatPage: setFriendResults(results)
+ChatPage -> ChatPage: setSearchLoading(false)
+
+== UI Update ==
+ChatPage -> ChatPage: combinedList memo recalculates\nCombines existing chats + friend results
+ChatPage -> ChatPage: Create pseudo-chats for new friends:\ncreateePseudoChat(friend) {\n  id: "", // No existing conversation\n  participantName: "Sarah Johnson",\n  lastMessage: "Start a conversation",\n  isFriend: true,\n  priority: 999\n}
+
+ChatPage -> User: Display search results:\n- Sarah Johnson (Volleyball enthusiast)\n- Mike Chen (Volleyball coach)\n- Option to start conversation with each
+
+@enduml

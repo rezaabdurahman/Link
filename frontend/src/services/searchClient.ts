@@ -139,7 +139,7 @@ export const searchAvailableUsers = async (
     queryParams.append('offset', request.offset.toString());
   }
 
-  const url = `${API_CONFIG.BASE_URL}/available-users/search${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  const url = `${API_CONFIG.BASE_URL}/discovery/available-users/search${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 
   const response = await fetch(url, {
     method: 'GET',

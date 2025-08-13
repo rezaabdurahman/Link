@@ -356,85 +356,6 @@ func (h *UserHandler) RespondToFriendRequest(c *gin.Context) {
 	})
 }
 
-// SearchUsers searches for users
-func (h *UserHandler) SearchUsers(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromHeader(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "AUTHENTICATION_ERROR",
-			"message": "User context required",
-			"code":    "MISSING_USER_CONTEXT",
-		})
-		return
-	}
-
-	query := c.Query("q")
-	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "VALIDATION_ERROR",
-			"message": "Search query required",
-			"code":    "MISSING_QUERY",
-		})
-		return
-	}
-
-	// Parse pagination parameters
-	page, limit := h.getPaginationParams(c)
-
-	users, err := h.userService.SearchUsers(query, userID, page, limit)
-	if err != nil {
-		h.handleServiceError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"users": users,
-		"query": query,
-		"page":  page,
-		"limit": limit,
-		"count": len(users),
-	})
-}
-
-// SearchFriends searches within the user's friends list
-func (h *UserHandler) SearchFriends(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromHeader(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "AUTHENTICATION_ERROR",
-			"message": "User context required",
-			"code":    "MISSING_USER_CONTEXT",
-		})
-		return
-	}
-
-	query := c.Query("q")
-	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "VALIDATION_ERROR",
-			"message": "Search query required",
-			"code":    "MISSING_QUERY",
-		})
-		return
-	}
-
-	// Parse pagination parameters
-	page, limit := h.getPaginationParams(c)
-
-	friends, err := h.userService.SearchFriends(userID, query, page, limit)
-	if err != nil {
-		h.handleServiceError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"friends": friends,
-		"query":   query,
-		"page":    page,
-		"limit":   limit,
-		"count":   len(friends),
-	})
-}
 
 // getPaginationParams extracts pagination parameters from request
 func (h *UserHandler) getPaginationParams(c *gin.Context) (int, int) {
@@ -518,12 +439,6 @@ func (h *UserHandler) handleServiceError(c *gin.Context, err error) {
 			"error":   "AUTHORIZATION_ERROR",
 			"message": "Unauthorized action",
 			"code":    "UNAUTHORIZED",
-		})
-	case errors.Is(err, profile.ErrSearchServiceUnavailable):
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":   "SERVICE_UNAVAILABLE",
-			"message": "Search service is temporarily unavailable",
-			"code":    "SEARCH_SERVICE_UNAVAILABLE",
 		})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{
