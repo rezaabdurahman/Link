@@ -21,5 +21,6 @@ func RegisterRoutes(router *gin.RouterGroup, profileHandler *ProfileHandler) {
 
 		// Search endpoints (require auth via gateway)
 		users.GET("/search", profileHandler.SearchUsers)
+		users.GET("/friends/search", profileHandler.SearchFriends)
 	}
 }

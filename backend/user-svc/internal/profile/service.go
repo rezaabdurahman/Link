@@ -1,8 +1,13 @@
 package profile
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -20,6 +25,7 @@ var (
 	ErrCannotSendToSelf       = errors.New("cannot send friend request to yourself")
 	ErrFriendRequestNotFound  = errors.New("friend request not found")
 	ErrUnauthorized           = errors.New("unauthorized action")
+	ErrSearchServiceUnavailable = errors.New("search service unavailable")
 )
 
 // DTO types for profile service
@@ -37,6 +43,31 @@ type SendFriendRequestRequest struct {
 	Message     *string   `json:"message,omitempty" validate:"omitempty,max=200"`
 }
 
+// Search service DTOs
+type SearchServiceRequest struct {
+	Query     string      `json:"query"`
+	FriendIDs []uuid.UUID `json:"friend_ids,omitempty"`
+	Page      int         `json:"page"`
+	Limit     int         `json:"limit"`
+}
+
+type SearchServiceUser struct {
+	ID             uuid.UUID  `json:"id"`
+	Username       string     `json:"username"`
+	FirstName      string     `json:"first_name"`
+	LastName       string     `json:"last_name"`
+	ProfilePicture *string    `json:"profile_picture"`
+	Bio            *string    `json:"bio"`
+	Location       *string    `json:"location"`
+	CreatedAt      time.Time  `json:"created_at"`
+	LastLoginAt    *time.Time `json:"last_login_at"`
+}
+
+type SearchServiceResponse struct {
+	Users []SearchServiceUser `json:"users"`
+	Total int                `json:"total"`
+}
+
 // ProfileService interface defines user profile operations
 type ProfileService interface {
 	// User profile
@@ -52,6 +83,7 @@ type ProfileService interface {
 	
 	// Search
 	SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
+	SearchFriends(userID uuid.UUID, q string, page, limit int) ([]models.PublicUser, error)
 }
 
 type profileService struct {
@@ -267,4 +299,112 @@ func (s *profileService) SearchUsers(query string, userID uuid.UUID, page, limit
 	}
 
 	return users, nil
+}
+
+// SearchFriends searches for users within the user's friend list
+func (s *profileService) SearchFriends(userID uuid.UUID, q string, page, limit int) ([]models.PublicUser, error) {
+	// Validate and sanitize query
+	query := strings.TrimSpace(q)
+	if query == "" {
+		return []models.PublicUser{}, nil
+	}
+
+	// a. Fetch friendIDs via repo helper
+	friendIDs, err := s.userRepo.GetFriendIDs(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get friend IDs: %w", err)
+	}
+
+	// b. If len(friendIDs)==0 → return empty slice
+	if len(friendIDs) == 0 {
+		return []models.PublicUser{}, nil
+	}
+
+	// c. Call search-svc with query string and friendIDs filter (HTTP client with timeout)
+	searchReq := SearchServiceRequest{
+		Query:     query,
+		FriendIDs: friendIDs,
+		Page:      page,
+		Limit:     limit,
+	}
+
+	searchResponse, err := s.callSearchService(searchReq)
+	if err != nil {
+		return nil, fmt.Errorf("search service call failed: %w", err)
+	}
+
+	// d. Map search-svc JSON to models.PublicUser
+	result := make([]models.PublicUser, 0, len(searchResponse.Users))
+	for _, searchUser := range searchResponse.Users {
+		publicUser := models.PublicUser{
+			ID:             searchUser.ID,
+			Username:       searchUser.Username,
+			FirstName:      searchUser.FirstName,
+			LastName:       searchUser.LastName,
+			ProfilePicture: searchUser.ProfilePicture,
+			Bio:            searchUser.Bio,
+			Location:       searchUser.Location,
+			CreatedAt:      searchUser.CreatedAt,
+			LastLoginAt:    searchUser.LastLoginAt,
+			IsFriend:       true, // All results are friends since we filtered by friendIDs
+		}
+		result = append(result, publicUser)
+	}
+
+	// e. Return slice
+	return result, nil
+}
+
+// callSearchService makes HTTP request to search service
+func (s *profileService) callSearchService(req SearchServiceRequest) (*SearchServiceResponse, error) {
+	// Get search service URL from environment, default to localhost for development
+	searchServiceURL := os.Getenv("SEARCH_SERVICE_URL")
+	if searchServiceURL == "" {
+		searchServiceURL = "http://localhost:8080" // Default for development
+	}
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Marshal request to JSON
+	jsonData, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", searchServiceURL+"/api/v1/search/friends", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("User-Agent", "user-svc/1.0")
+
+	// Make the request
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrSearchServiceUnavailable, err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: status code %d", ErrSearchServiceUnavailable, resp.StatusCode)
+	}
+
+	// Parse response
+	var searchResponse SearchServiceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&searchResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &searchResponse, nil
 }

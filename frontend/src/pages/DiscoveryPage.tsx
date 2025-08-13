@@ -10,6 +10,7 @@ import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
 import { searchAvailableUsers, SearchUsersRequest, isSearchError, getSearchErrorMessage } from '../services/searchClient';
+import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   // User state management
@@ -392,6 +393,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                   'find me a book lover'
                 ]}
                 className=""
+                loading={isSearching}
+                aria-label="Search for people nearby with interests, appearance, or profession"
+                aria-describedby="discovery-search-help"
               />
               
               {/* Filter Chips */}
@@ -485,11 +489,20 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (
           <div className={isGridView ? 'max-w-sm mx-auto px-4' : 'flex flex-col'}>
-            {/* Loading State */}
+            {/* Loading State with Skeleton */}
             {isSearching && (
-              <div className="flex flex-col items-center justify-center py-16 mb-24">
-                <div className="w-8 h-8 border-2 border-aqua border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="text-sm text-gray-500">Searching for users...</p>
+              <div className="mb-24" role="region" aria-label="User search results loading">
+                {isGridView ? (
+                  <div className="grid grid-cols-3 gap-1">
+                    {Array.from({ length: 9 }).map((_, index) => (
+                      <div key={index} className="aspect-square">
+                        <div className="bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] animate-shimmer w-full h-full rounded-sm" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <SearchResultsSkeleton count={5} />
+                )}
               </div>
             )}
             

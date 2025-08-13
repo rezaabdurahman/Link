@@ -22,9 +22,14 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
     return date.toLocaleDateString();
   };
 
+  // Create accessible description for screen readers
+  const accessibleLabel = `${chat.participantName}, ${
+    chat.unreadCount > 0 ? `${chat.unreadCount} unread message${chat.unreadCount > 1 ? 's' : ''}, ` : ''
+  }last message: ${chat.lastMessage.content}, ${formatTime(chat.lastMessage.timestamp)}`;
+
   return (
-    <div 
-      className="haptic-light"
+    <article 
+      className="haptic-light focus:outline-none focus:ring-2 focus:ring-aqua/50 focus:ring-offset-2 rounded-lg"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -34,6 +39,16 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
         cursor: 'pointer'
       }}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-label={accessibleLabel}
+      aria-describedby={`chat-summary-${chat.id || chat.participantId}`}
     >
       {/* Profile Picture */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -127,15 +142,18 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
           margin: 0,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          // Add italic styling for pseudo-chats (blank conversations)
+          fontStyle: (!chat.id && chat.lastMessage.content === 'Start a conversation') ? 'italic' : 'normal',
+          opacity: (!chat.id && chat.lastMessage.content === 'Start a conversation') ? 0.7 : 1
         }}>
-          {chat.lastMessage.senderId !== '1' && (
+          {chat.lastMessage.senderId !== '1' && chat.lastMessage.content !== 'Start a conversation' && (
             <span style={{ fontWeight: '500' }}>{chat.participantName}: </span>
           )}
           {chat.lastMessage.content}
         </p>
       </div>
-    </div>
+    </article>
   );
 };
 

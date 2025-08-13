@@ -278,6 +278,45 @@ func (h *ProfileHandler) SearchUsers(c *gin.Context) {
 	})
 }
 
+// SearchFriends searches within the user's friends list
+func (h *ProfileHandler) SearchFriends(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Search query required",
+			"code":    "MISSING_QUERY",
+		})
+		return
+	}
+
+	// Parse pagination parameters
+	page, limit := h.getPaginationParams(c)
+
+	friends, err := h.profileService.SearchFriends(userID, query, page, limit)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"friends": friends,
+		"page":    page,
+		"limit":   limit,
+		"count":   len(friends),
+	})
+}
+
 // getPaginationParams extracts pagination parameters from request
 func (h *ProfileHandler) getPaginationParams(c *gin.Context) (int, int) {
 	page := 1
@@ -336,6 +375,12 @@ func (h *ProfileHandler) handleServiceError(c *gin.Context, err error) {
 			"error":   "AUTHORIZATION_ERROR",
 			"message": "Unauthorized action",
 			"code":    "UNAUTHORIZED",
+		})
+	case errors.Is(err, ErrSearchServiceUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "SERVICE_UNAVAILABLE",
+			"message": "Search service is currently unavailable",
+			"code":    "SEARCH_SERVICE_UNAVAILABLE",
 		})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{

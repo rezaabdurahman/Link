@@ -8,7 +8,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/link-app/user-svc/internal/auth"
 	"github.com/link-app/user-svc/internal/middleware"
+	"github.com/link-app/user-svc/internal/profile"
 	"github.com/link-app/user-svc/internal/service"
 )
 
@@ -25,7 +27,7 @@ func NewUserHandler(userService service.UserService) *UserHandler {
 
 // RegisterUser handles user registration
 func (h *UserHandler) RegisterUser(c *gin.Context) {
-	var req service.RegisterUserRequest
+	var req auth.RegisterUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "VALIDATION_ERROR",
@@ -46,7 +48,7 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 
 // LoginUser handles user login
 func (h *UserHandler) LoginUser(c *gin.Context) {
-	var req service.LoginRequest
+	var req auth.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "VALIDATION_ERROR",
@@ -195,7 +197,7 @@ func (h *UserHandler) UpdateUserProfile(c *gin.Context) {
 		return
 	}
 
-	var req service.UpdateProfileRequest
+	var req profile.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "VALIDATION_ERROR",
@@ -284,7 +286,7 @@ func (h *UserHandler) SendFriendRequest(c *gin.Context) {
 		return
 	}
 
-	var req service.SendFriendRequestRequest
+	var req profile.SendFriendRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "VALIDATION_ERROR",
@@ -394,6 +396,46 @@ func (h *UserHandler) SearchUsers(c *gin.Context) {
 	})
 }
 
+// SearchFriends searches within the user's friends list
+func (h *UserHandler) SearchFriends(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Search query required",
+			"code":    "MISSING_QUERY",
+		})
+		return
+	}
+
+	// Parse pagination parameters
+	page, limit := h.getPaginationParams(c)
+
+	friends, err := h.userService.SearchFriends(userID, query, page, limit)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"friends": friends,
+		"query":   query,
+		"page":    page,
+		"limit":   limit,
+		"count":   len(friends),
+	})
+}
+
 // getPaginationParams extracts pagination parameters from request
 func (h *UserHandler) getPaginationParams(c *gin.Context) (int, int) {
 	page := 1
@@ -417,65 +459,71 @@ func (h *UserHandler) getPaginationParams(c *gin.Context) (int, int) {
 // handleServiceError maps service errors to HTTP responses
 func (h *UserHandler) handleServiceError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, service.ErrUserNotFound):
+	case errors.Is(err, profile.ErrUserNotFound):
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "NOT_FOUND",
 			"message": "User not found",
 			"code":    "USER_NOT_FOUND",
 		})
-	case errors.Is(err, service.ErrInvalidCredentials):
+	case errors.Is(err, auth.ErrInvalidCredentials):
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":   "AUTHENTICATION_ERROR",
 			"message": "Invalid email or password",
 			"code":    "INVALID_CREDENTIALS",
 		})
-	case errors.Is(err, service.ErrEmailAlreadyExists):
+	case errors.Is(err, auth.ErrEmailAlreadyExists):
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "CONFLICT_ERROR",
 			"message": "Email already exists",
 			"code":    "EMAIL_ALREADY_EXISTS",
 		})
-	case errors.Is(err, service.ErrUsernameAlreadyExists):
+	case errors.Is(err, auth.ErrUsernameAlreadyExists):
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "CONFLICT_ERROR",
 			"message": "Username already exists",
 			"code":    "USERNAME_ALREADY_EXISTS",
 		})
-	case errors.Is(err, service.ErrInvalidToken):
+	case errors.Is(err, auth.ErrInvalidToken):
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":   "AUTHENTICATION_ERROR",
 			"message": "Invalid or expired token",
 			"code":    "INVALID_TOKEN",
 		})
-	case errors.Is(err, service.ErrFriendRequestExists):
+	case errors.Is(err, profile.ErrFriendRequestExists):
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "CONFLICT_ERROR",
 			"message": "Friend request already exists",
 			"code":    "FRIEND_REQUEST_EXISTS",
 		})
-	case errors.Is(err, service.ErrAlreadyFriends):
+	case errors.Is(err, profile.ErrAlreadyFriends):
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "CONFLICT_ERROR",
 			"message": "Users are already friends",
 			"code":    "ALREADY_FRIENDS",
 		})
-	case errors.Is(err, service.ErrCannotSendToSelf):
+	case errors.Is(err, profile.ErrCannotSendToSelf):
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "VALIDATION_ERROR",
 			"message": "Cannot send friend request to yourself",
 			"code":    "CANNOT_SEND_TO_SELF",
 		})
-	case errors.Is(err, service.ErrFriendRequestNotFound):
+	case errors.Is(err, profile.ErrFriendRequestNotFound):
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "NOT_FOUND",
 			"message": "Friend request not found",
 			"code":    "FRIEND_REQUEST_NOT_FOUND",
 		})
-	case errors.Is(err, service.ErrUnauthorized):
+	case errors.Is(err, profile.ErrUnauthorized):
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "AUTHORIZATION_ERROR",
 			"message": "Unauthorized action",
 			"code":    "UNAUTHORIZED",
+		})
+	case errors.Is(err, profile.ErrSearchServiceUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "SERVICE_UNAVAILABLE",
+			"message": "Search service is temporarily unavailable",
+			"code":    "SEARCH_SERVICE_UNAVAILABLE",
 		})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{

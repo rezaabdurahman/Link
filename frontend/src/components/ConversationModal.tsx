@@ -84,6 +84,13 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const loadConversationMessages = async () => {
     if (!chat || !token) return;
     
+    // If chat doesn't have an ID, it's a new conversation - skip loading messages
+    if (!chat.id) {
+      setLoading(false);
+      setMessages([]);
+      return;
+    }
+    
     try {
       setLoading(true);
       const response = await getConversationMessages(chat.id, { limit: 50 });
@@ -120,6 +127,12 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   // Setup WebSocket connection
   const setupWebSocket = () => {
     if (!chat || !token?.token) return;
+    
+    // If chat doesn't have an ID, it's a new conversation - skip WebSocket setup
+    if (!chat.id) {
+      console.log('Skipping WebSocket setup for new conversation');
+      return;
+    }
     
     // Setup WebSocket event handlers
     chatWebSocket.onMessage = (event) => {
@@ -289,15 +302,19 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         setNewMessage('');
         
         // Send via WebSocket if connected, otherwise use REST API
-        if (chatWebSocket.isConnected()) {
+        if (chat.id && chatWebSocket.isConnected()) {
           chatWebSocket.sendMessage(messageContent);
-        } else {
-          // Fallback to REST API
+        } else if (chat.id) {
+          // Fallback to REST API for existing conversations
           await sendApiMessage({
             conversation_id: chat.id,
             content: messageContent,
             message_type: 'text'
           });
+        } else {
+          // For new conversations without ID, we can't send actual messages yet
+          // In a real implementation, this would trigger conversation creation
+          console.log('Cannot send message to conversation without ID');
         }
         
         // Remove optimistic message and let WebSocket/API response handle the real message
@@ -396,7 +413,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   if (!isOpen || !chat) return <>!</>;
 
   const modalContent = (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center" data-testid="conversation-modal">
       <div className="bg-surface-card rounded-t-3xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">

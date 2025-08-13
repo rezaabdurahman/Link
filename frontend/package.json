@@ -19,7 +19,12 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:env": "node -e \"require('dotenv').config({path:'.env.test'}); console.log('✅ .env.test loaded with', Object.keys(process.env).filter(k=>k.startsWith('VITE_')||k==='NODE_ENV').length, 'variables'); process.exit(0)\""
+    "test:env": "node -e \"require('dotenv').config({path:'.env.test'}); console.log('✅ .env.test loaded with', Object.keys(process.env).filter(k=>k.startsWith('VITE_')||k==='NODE_ENV').length, 'variables'); process.exit(0)\"",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "cypress:run:headless": "cypress run --headless",
+    "test:e2e": "cypress run --headless",
+    "test:e2e:dev": "cypress open"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -44,6 +49,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.21",
     "babel-plugin-transform-import-meta": "^2.3.3",
+    "cypress": "^14.5.4",
     "dotenv": "^17.2.1",
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",

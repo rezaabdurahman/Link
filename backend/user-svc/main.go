@@ -41,9 +41,10 @@ func main() {
 	onboardingRepo := onboarding.NewGormRepository(db)
 
 	// Initialize services
-	authService := auth.NewAuthService(userRepo, jwtService)
-	profileService := profile.NewProfileService(userRepo)
 	onboardingService := onboarding.NewService(onboardingRepo, eventBus)
+	onboardingInterface := onboarding.NewOnboardingInterface(onboardingService)
+	authService := auth.NewAuthService(userRepo, jwtService, eventBus, onboardingInterface)
+	profileService := profile.NewProfileService(userRepo)
 
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)

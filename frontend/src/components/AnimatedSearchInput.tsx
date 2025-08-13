@@ -8,6 +8,11 @@ interface AnimatedSearchInputProps {
   onEnter?: () => void;
   suggestions?: string[];
   className?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  loading?: boolean;
+  'aria-label'?: string;
+  'aria-describedby'?: string;
 }
 
 const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
@@ -21,7 +26,12 @@ const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
     'find me a coffee enthusiast',
     'find me a creative soul'
   ],
-  className = ''
+  className = '',
+  placeholder = 'Search...',
+  disabled = false,
+  loading = false,
+  'aria-label': ariaLabel = 'Search input with animated suggestions',
+  'aria-describedby': ariaDescribedBy
 }): JSX.Element => {
   const { displayText } = useTypingAnimation({
     texts: suggestions,
@@ -49,7 +59,17 @@ const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="ios-text-field w-full pl-11 pr-4 py-2.5 bg-surface-hover/60 border-none rounded-ios text-black placeholder:text-transparent focus:ring-2 focus:ring-aqua/50 relative z-0"
+        className={`ios-text-field w-full pl-11 pr-4 py-2.5 bg-surface-hover/60 border-none rounded-ios text-black placeholder:text-transparent focus:ring-2 focus:ring-aqua/50 relative z-0 ${
+          disabled ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
+        placeholder={value ? '' : placeholder}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        aria-busy={loading}
+        role="searchbox"
+        autoComplete="off"
+        spellCheck={false}
       />
       
       {/* Animated placeholder overlay */}
