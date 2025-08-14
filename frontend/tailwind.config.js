@@ -72,6 +72,7 @@ module.exports = {
         'search-slide-down': 'searchSlideDown 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         'word-cycle': 'wordCycle 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
         'word-glow': 'wordGlow 2s ease-in-out infinite',
+        'shimmer': 'shimmer 2s linear infinite',
       },
       keyframes: {
         fadeIn: {
@@ -162,6 +163,10 @@ module.exports = {
           '50%': { 
             textShadow: '0 0 20px rgba(6, 182, 212, 0.6), 0 0 30px rgba(6, 182, 212, 0.4)'
           },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
         }
       }
     },

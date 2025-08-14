@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database with pgvector
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15-v0.5.1
     environment:
       POSTGRES_DB: link_app
       POSTGRES_USER: link_user
@@ -66,6 +66,43 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Search Service
+  search-svc:
+    build:
+      context: ./search-svc
+      dockerfile: Dockerfile
+    environment:
+      # Database configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: link_user
+      DB_PASSWORD: link_pass
+      DB_NAME: link_app
+      DB_SSLMODE: disable
+      
+      # Embedding configuration
+      EMBEDDING_PROVIDER: openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_EMBEDDING_MODEL: text-embedding-3-small
+      
+      # Service authentication
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-search-service-token-change-in-production}
+      
+      # Server configuration
+      PORT: 8080
+      ENVIRONMENT: development
+    ports:
+      - "8083:8080"  # Expose on different port to avoid conflict
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -157,6 +194,10 @@ services:
       DISCOVERY_SVC_URL: http://discovery-svc:8080
       DISCOVERY_SVC_HEALTH_URL: http://discovery-svc:8080/health
       DISCOVERY_SVC_TIMEOUT: 30
+      
+      SEARCH_SVC_URL: http://search-svc:8080
+      SEARCH_SVC_HEALTH_URL: http://search-svc:8080/health
+      SEARCH_SVC_TIMEOUT: 30
       
       STORIES_SVC_URL: http://stories-svc:8080
       STORIES_SVC_HEALTH_URL: http://stories-svc:8080/health

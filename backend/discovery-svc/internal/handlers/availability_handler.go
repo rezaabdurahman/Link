@@ -183,6 +183,7 @@ func (h *AvailabilityHandler) GetAvailableUsers(c *gin.Context) {
 	})
 }
 
+
 // HandleHeartbeat handles heartbeat requests to keep users available
 func (h *AvailabilityHandler) HandleHeartbeat(c *gin.Context) {
 	// Get user ID from context (set by auth middleware)

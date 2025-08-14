@@ -86,3 +86,4 @@ func (a *Availability) ToPublicResponse() PublicAvailabilityResponse {
 		LastAvailableAt: a.LastAvailableAt,
 	}
 }
+

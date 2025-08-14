@@ -3,7 +3,6 @@ package profile
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +36,7 @@ type SendFriendRequestRequest struct {
 	Message     *string   `json:"message,omitempty" validate:"omitempty,max=200"`
 }
 
+
 // ProfileService interface defines user profile operations
 type ProfileService interface {
 	// User profile
@@ -50,8 +50,6 @@ type ProfileService interface {
 	SendFriendRequest(requesterID uuid.UUID, req SendFriendRequestRequest) error
 	RespondToFriendRequest(requestID, userID uuid.UUID, accept bool) error
 	
-	// Search
-	SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
 }
 
 type profileService struct {
@@ -254,17 +252,3 @@ func (s *profileService) RespondToFriendRequest(requestID, userID uuid.UUID, acc
 	return nil
 }
 
-// SearchUsers searches for users by name or username
-func (s *profileService) SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error) {
-	if strings.TrimSpace(query) == "" {
-		return []models.PublicUser{}, nil
-	}
-
-	offset := (page - 1) * limit
-	users, err := s.userRepo.SearchUsers(strings.TrimSpace(query), userID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search users: %w", err)
-	}
-
-	return users, nil
-}

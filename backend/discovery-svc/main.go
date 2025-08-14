@@ -35,7 +35,7 @@ func main() {
 	log.Println("Database migrations completed successfully")
 
 	// Auto-migrate models (for any GORM schema changes)
-	err = db.AutoMigrate(&models.Broadcast{}, &models.Availability{})
+	err = db.AutoMigrate(&models.Broadcast{}, &models.Availability{}, &models.RankingConfig{})
 	if err != nil {
 		log.Fatal("Failed to auto-migrate models:", err)
 	}
@@ -43,14 +43,18 @@ func main() {
 	// Initialize repositories
 	broadcastRepo := repository.NewBroadcastRepository(db)
 	availabilityRepo := repository.NewAvailabilityRepository(db)
+	rankingConfigRepo := repository.NewRankingConfigRepository(db)
+
 
 	// Initialize services
 	broadcastService := service.NewBroadcastService(broadcastRepo)
+	rankingService := service.NewRankingService(rankingConfigRepo)
 	availabilityService := service.NewAvailabilityService(availabilityRepo)
 
 	// Initialize handlers
 	broadcastHandler := handlers.NewBroadcastHandler(broadcastService)
 	availabilityHandler := handlers.NewAvailabilityHandler(availabilityService)
+	rankingHandler := handlers.NewRankingHandler(rankingService)
 
 	// Initialize Gin router
 	router := gin.Default()
@@ -116,6 +120,14 @@ func main() {
 		v1.POST("/availability/heartbeat", availabilityHandler.HandleHeartbeat)     // Send heartbeat to stay available
 		v1.GET("/availability/:userId", availabilityHandler.GetUserAvailability)    // Check another user's availability
 		v1.GET("/available-users", availabilityHandler.GetAvailableUsers)           // Browse available users for discovery
+
+		// Ranking configuration routes (A/B testing ready)
+		v1.GET("/ranking/info", rankingHandler.GetRankingWeightsInfo)               // Get ranking algorithm information
+		v1.GET("/ranking/weights", rankingHandler.GetRankingWeights)                // Get current ranking weights
+		v1.PUT("/ranking/weights", rankingHandler.UpdateRankingWeights)             // Update ranking weights (A/B testing)
+		v1.POST("/ranking/weights/reset", rankingHandler.ResetRankingWeights)       // Reset to default weights
+		v1.GET("/ranking/weights/validate", rankingHandler.ValidateRankingWeights)  // Validate current weights
+		v1.GET("/ranking/config", rankingHandler.GetRankingConfig)                  // Get all config (admin/debug)
 	}
 
 	// Start cleanup goroutine

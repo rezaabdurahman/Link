@@ -1,7 +1,7 @@
 // Basic test for userService to verify functionality
 // Tests the getUserProfile function with various scenarios
 
-import { getUserProfile, AuthServiceError, ApiError, getProfileErrorMessage } from './userService';
+import { getUserProfile, AuthServiceError, ApiError, getProfileErrorMessage } from './userClient';
 import { apiClient } from './authClient';
 
 // Mock the apiClient

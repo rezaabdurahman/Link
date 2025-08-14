@@ -149,6 +149,7 @@ func (s *AvailabilityService) CleanupStaleAvailability(staleThreshold time.Durat
 	return nil
 }
 
+
 // RemoveUserAvailability removes the availability record for a user (e.g., when user is deleted)
 func (s *AvailabilityService) RemoveUserAvailability(userID uuid.UUID) error {
 	err := s.availabilityRepo.DeleteByUserID(userID)

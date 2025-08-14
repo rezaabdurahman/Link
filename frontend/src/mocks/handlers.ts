@@ -368,6 +368,361 @@ export const availabilityHandlers = [
     return HttpResponse.json(publicAvailability, { status: 200 });
   }),
 
+  // POST /api/v1/search - Unified search endpoint (NEW)
+  http.post('*/api/v1/search', async ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to search for users',
+          code: 401,
+        },
+        { status: 401 }
+      );
+    }
+
+    try {
+      const body = await request.json();
+      const { query, scope, filters, pagination } = body;
+
+      // Validate required scope parameter
+      if (!scope || !['friends', 'discovery', 'all'].includes(scope)) {
+        return HttpResponse.json(
+          {
+            error: 'Invalid scope',
+            message: 'Scope must be "friends", "discovery", or "all"',
+            code: 400,
+          },
+          { status: 400 }
+        );
+      }
+
+      const limit = Math.min(Math.max(pagination?.limit || 50, 1), 100);
+      const offset = Math.max(pagination?.offset || 0, 0);
+      
+      let searchResults = [];
+      
+      if (scope === 'friends') {
+        // Mock friends search - simulate having friends who match
+        const mockFriends = nearbyUsers.filter(user => {
+          // Simulate friend relationship for some users
+          const isFriend = ['user-2', 'user-3', 'user-5'].includes(user.id);
+          if (!isFriend) return false;
+          
+          // Apply search query if provided
+          if (query && query.trim()) {
+            const searchTerm = query.toLowerCase();
+            return (
+              user.name.toLowerCase().includes(searchTerm) ||
+              user.bio?.toLowerCase().includes(searchTerm) ||
+              user.interests?.some(interest => 
+                interest.toLowerCase().includes(searchTerm)
+              )
+            );
+          }
+          return true;
+        });
+        searchResults = mockFriends;
+      } else if (scope === 'discovery') {
+        // Discovery search - available users only
+        let availableUsers = Array.from(mockAvailability.values())
+          .filter(availability => 
+            availability.is_available && 
+            availability.user_id !== userId
+          );
+
+        // Apply search query
+        if (query && query.trim()) {
+          const mockUsers = nearbyUsers.filter(user =>
+            user.name.toLowerCase().includes(query.toLowerCase()) ||
+            user.bio?.toLowerCase().includes(query.toLowerCase()) ||
+            user.interests?.some(interest =>
+              interest.toLowerCase().includes(query.toLowerCase())
+            )
+          );
+          
+          availableUsers = availableUsers.filter(availability =>
+            mockUsers.some(user => user.id === availability.user_id)
+          );
+        }
+
+        // Convert to user objects
+        searchResults = availableUsers.map(availability => {
+          const mockUser = nearbyUsers.find(user => user.id === availability.user_id);
+          return mockUser || {
+            id: availability.user_id,
+            name: `User ${availability.user_id}`,
+            age: 25,
+            profilePicture: null,
+            bio: 'Mock user for testing',
+            interests: ['test'],
+            location: 'Unknown',
+            isAvailable: availability.is_available,
+            mutualFriends: 0,
+            connectionPriority: 'medium' as const,
+            lastSeen: availability.last_available_at,
+            profileType: 'standard' as const,
+          };
+        });
+      } else {
+        // 'all' scope - combine friends and discovery
+        // This would be more complex in real implementation
+        searchResults = nearbyUsers.filter(user => user.id !== userId);
+        
+        if (query && query.trim()) {
+          const searchTerm = query.toLowerCase();
+          searchResults = searchResults.filter(user =>
+            user.name.toLowerCase().includes(searchTerm) ||
+            user.bio?.toLowerCase().includes(searchTerm) ||
+            user.interests?.some(interest => 
+              interest.toLowerCase().includes(searchTerm)
+            )
+          );
+        }
+      }
+
+      // Apply filters
+      if (filters?.distance) {
+        searchResults = searchResults.filter(user => 
+          user.location?.proximityMiles <= filters.distance
+        );
+      }
+
+      if (filters?.interests?.length > 0) {
+        searchResults = searchResults.filter(user =>
+          user.interests?.some(interest =>
+            filters.interests.includes(interest)
+          )
+        );
+      }
+
+      if (filters?.available_only) {
+        searchResults = searchResults.filter(user => {
+          const availability = mockAvailability.get(user.id);
+          return availability?.is_available;
+        });
+      }
+
+      // Sort by relevance (mock ranking)
+      searchResults.sort((a, b) => {
+        // Simple mock ranking - prioritize users with matching interests
+        if (query) {
+          const aScore = a.interests?.filter(i => 
+            i.toLowerCase().includes(query.toLowerCase())
+          ).length || 0;
+          const bScore = b.interests?.filter(i => 
+            i.toLowerCase().includes(query.toLowerCase())
+          ).length || 0;
+          return bScore - aScore;
+        }
+        return 0;
+      });
+
+      const totalCount = searchResults.length;
+      const paginatedResults = searchResults.slice(offset, offset + limit);
+
+      const response = {
+        users: paginatedResults,
+        total: totalCount,
+        hasMore: offset + limit < totalCount,
+        scope,
+        query,
+        filters: {
+          maxDistance: 50,
+          availableInterests: ['technology', 'sports', 'music', 'art', 'travel'],
+          appliedFilters: filters || {},
+        },
+        metadata: {
+          searchTime: Math.floor(Math.random() * 100) + 50, // Mock search time
+          source: 'semantic_search' as const,
+          relevanceScores: paginatedResults.reduce((acc, user, index) => {
+            acc[user.id] = Math.max(0.95 - index * 0.1, 0.1);
+            return acc;
+          }, {} as Record<string, number>),
+        },
+      };
+
+      return HttpResponse.json(response, { status: 200 });
+    } catch (error) {
+      return HttpResponse.json(
+        {
+          error: 'Invalid request body',
+          message: 'Failed to parse request body',
+          code: 400,
+        },
+        { status: 400 }
+      );
+    }
+  }),
+
+  // GET /discovery/available-users/search - Search available users with semantic ranking (DEPRECATED)
+  http.get('*/discovery/available-users/search', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to search for users',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const query = url.searchParams.get('q');
+    const limitParam = url.searchParams.get('limit');
+    const offsetParam = url.searchParams.get('offset');
+    
+    const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100) : 50;
+    const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+
+    // Get available users (excluding the requesting user)
+    let availableUsers = Array.from(mockAvailability.values())
+      .filter(availability => 
+        availability.is_available && 
+        availability.user_id !== userId
+      );
+
+    // If there's a search query, simulate search filtering
+    if (query && query.trim()) {
+      // Simple mock search - filter users based on mock user data
+      const mockUsers = nearbyUsers.filter(user => 
+        user.name.toLowerCase().includes(query.toLowerCase()) ||
+        user.bio?.toLowerCase().includes(query.toLowerCase()) ||
+        user.interests?.some(interest => 
+          interest.toLowerCase().includes(query.toLowerCase())
+        )
+      );
+      
+      // Filter availability records to match search results
+      availableUsers = availableUsers.filter(availability =>
+        mockUsers.some(user => user.id === availability.user_id)
+      );
+    }
+
+    // Sort by last_available_at descending (most recent first)
+    availableUsers.sort((a, b) => {
+      const aTime = a.last_available_at ? new Date(a.last_available_at).getTime() : 0;
+      const bTime = b.last_available_at ? new Date(b.last_available_at).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    const totalCount = availableUsers.length;
+    const paginatedUsers = availableUsers.slice(offset, offset + limit);
+
+    // Convert to SearchUsersResponse format with User objects
+    const users = paginatedUsers.map(availability => {
+      const mockUser = nearbyUsers.find(user => user.id === availability.user_id);
+      return mockUser || {
+        id: availability.user_id,
+        name: `User ${availability.user_id}`,
+        age: 25,
+        profilePicture: null,
+        bio: 'Mock user for testing',
+        interests: ['test'],
+        location: 'Unknown',
+        isAvailable: availability.is_available,
+        mutualFriends: 0,
+        connectionPriority: 'medium' as const,
+        lastSeen: availability.last_available_at,
+        profileType: 'standard' as const,
+      };
+    });
+
+    const response = {
+      users,
+      total: totalCount,
+      hasMore: offset + limit < totalCount,
+      filters: {
+        maxDistance: 25,
+        availableInterests: ['technology', 'sports', 'music', 'art', 'travel']
+      },
+      deprecationWarning: 'This endpoint is deprecated. Please use POST /api/v1/search with scope: "discovery" instead.'
+    };
+
+    // Add deprecation warning header
+    const headers = new Headers({
+      'X-Deprecation-Warning': 'This endpoint is deprecated. Please use POST /api/v1/search with scope: "discovery" instead.',
+      'X-Deprecation-Sunset': '2025-12-31', // Example sunset date
+    });
+
+    return HttpResponse.json(response, { status: 200, headers });
+  }),
+
+  // GET /api/v1/users/friends/search - Search friends (DEPRECATED)
+  http.get('*/api/v1/users/friends/search', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to search friends',
+          code: 401,
+        },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const query = url.searchParams.get('q') || '';
+    const pageParam = url.searchParams.get('page');
+    const limitParam = url.searchParams.get('limit');
+    
+    const page = pageParam ? parseInt(pageParam, 10) : 1;
+    const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100) : 20;
+    
+    // Mock friends search - simulate having friends who match
+    const mockFriends = nearbyUsers.filter(user => {
+      // Simulate friend relationship for some users
+      const isFriend = ['user-2', 'user-3', 'user-5'].includes(user.id);
+      if (!isFriend) return false;
+      
+      // Apply search query if provided
+      if (query.trim()) {
+        const searchTerm = query.toLowerCase();
+        return (
+          user.name.toLowerCase().includes(searchTerm) ||
+          user.bio?.toLowerCase().includes(searchTerm) ||
+          user.interests?.some(interest => 
+            interest.toLowerCase().includes(searchTerm)
+          )
+        );
+      }
+      return true;
+    });
+
+    // Convert to the expected format for friends search
+    const friends = mockFriends.map(user => ({
+      id: user.id,
+      first_name: user.name.split(' ')[0],
+      last_name: user.name.split(' ')[1] || '',
+      profile_picture: user.profilePicture,
+      bio: user.bio,
+      interests: user.interests,
+      is_friend: true,
+      mutual_friends_count: user.mutualFriends?.length || 0,
+      last_active: user.lastSeen,
+    }));
+
+    const response = {
+      friends,
+      deprecationWarning: 'This endpoint is deprecated. Please use POST /api/v1/search with scope: "friends" instead.'
+    };
+
+    // Add deprecation warning header
+    const headers = new Headers({
+      'X-Deprecation-Warning': 'This endpoint is deprecated. Please use POST /api/v1/search with scope: "friends" instead.',
+      'X-Deprecation-Sunset': '2025-12-31', // Example sunset date
+    });
+
+    return HttpResponse.json(response, { status: 200, headers });
+  }),
+
   // GET /available-users - Get list of available users
   http.get('*/available-users', ({ request }) => {
     const userId = extractUserId(request);

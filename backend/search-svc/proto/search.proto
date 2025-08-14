@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package search;
+
+option go_package = "github.com/link-app/search-svc/pkg/pb";
+
+// Search service definition
+service SearchService {
+  // Perform semantic search on user profiles
+  rpc Search(SearchRequest) returns (SearchResponse);
+  
+  // Trigger reindexing of user profiles
+  rpc Reindex(ReindexRequest) returns (ReindexResponse);
+  
+  // Get reindex job status
+  rpc GetReindexStatus(ReindexStatusRequest) returns (ReindexStatusResponse);
+}
+
+// Search request message
+message SearchRequest {
+  string query = 1;                    // Natural language query
+  optional int32 limit = 2;            // Max results (default: 10)
+  repeated string user_ids = 3;        // Filter to specific users
+  optional string exclude_user_id = 4; // Exclude specific user
+}
+
+// Search response message
+message SearchResponse {
+  repeated SearchResult results = 1;
+  string query_processed = 2;
+  int32 total_candidates = 3;
+  int32 search_time_ms = 4;
+}
+
+// Individual search result
+message SearchResult {
+  string user_id = 1;
+  float score = 2;
+  repeated string match_reasons = 3;
+}
+
+// Reindex request message
+message ReindexRequest {
+  repeated string user_ids = 1;  // Specific users, empty for all
+  optional bool force = 2;       // Force reindex
+}
+
+// Reindex response message
+message ReindexResponse {
+  string job_id = 1;
+  string status = 2;
+  int32 users_queued = 3;
+  string estimated_completion = 4; // ISO8601
+}
+
+// Reindex status request
+message ReindexStatusRequest {
+  string job_id = 1;
+}
+
+// Reindex status response
+message ReindexStatusResponse {
+  string job_id = 1;
+  string status = 2;
+  int32 users_total = 3;
+  int32 users_processed = 4;
+  int32 users_failed = 5;
+  string started_at = 6;     // ISO8601
+  optional string completed_at = 7; // ISO8601
+  optional string error_message = 8;
+}
