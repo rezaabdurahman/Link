@@ -36,6 +36,9 @@ type ProfileService interface {
 	GetFriendRequests(userID uuid.UUID, page, limit int) ([]models.FriendRequest, error)
 	SendFriendRequest(requesterID uuid.UUID, req profile.SendFriendRequestRequest) error
 	RespondToFriendRequest(requestID, userID uuid.UUID, accept bool) error
+	CancelFriendRequest(requesterID, requesteeID uuid.UUID) error
+	RemoveFriend(userID, friendID uuid.UUID) error
+	SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
 }
 
 // OnboardingService interface defines onboarding operations
@@ -118,6 +121,17 @@ func (s *unifiedUserService) RespondToFriendRequest(requestID, userID uuid.UUID,
 	return s.profileService.RespondToFriendRequest(requestID, userID, accept)
 }
 
+func (s *unifiedUserService) CancelFriendRequest(requesterID, requesteeID uuid.UUID) error {
+	return s.profileService.CancelFriendRequest(requesterID, requesteeID)
+}
+
+func (s *unifiedUserService) RemoveFriend(userID, friendID uuid.UUID) error {
+	return s.profileService.RemoveFriend(userID, friendID)
+}
+
+func (s *unifiedUserService) SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error) {
+	return s.profileService.SearchUsers(query, userID, page, limit)
+}
 // Onboarding methods - delegate to onboarding service
 func (s *unifiedUserService) StartOnboarding(ctx context.Context, userID uuid.UUID) (*onboarding.OnboardingStatusResponse, error) {
 	return s.onboardingService.StartOnboarding(ctx, userID)

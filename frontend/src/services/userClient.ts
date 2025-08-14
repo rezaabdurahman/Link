@@ -6,7 +6,7 @@ import { AuthUser } from '../types/index';
 
 // API endpoints
 const USER_ENDPOINTS = {
-  profile: (userId: string) => `/users/${userId}/profile`,
+  profile: (userId: string) => `/users/profile/${userId}`,
   searchFriends: '/api/v1/users/friends/search',
 } as const;
 

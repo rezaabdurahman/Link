@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
 import { User } from '../types';
 import UserCard from '../components/UserCard';
@@ -13,8 +14,12 @@ import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, Unif
 // Legacy import - this will show deprecation warnings in console
 import { searchAvailableUsers, isSearchError, getSearchErrorMessage, SearchUsersRequest } from '../services/searchClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
+import { usePendingReceivedRequestsCount } from '../hooks/useFriendRequests';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
+  const navigate = useNavigate();
+  const friendRequestsBadgeCount = usePendingReceivedRequestsCount();
+
   // User state management
   const [currentUser, setCurrentUser] = useState<User>(initialCurrentUser);
   const [isAvailable, setIsAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
@@ -310,10 +315,10 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Fixed Header Section */}
-      <div className="fixed top-0 left-0 right-0 z-10 bg-white/95 backdrop-blur-ios border-b border-gray-100">
-        <div className="max-w-sm mx-auto px-4" style={{ paddingTop: 'env(safe-area-inset-top, 44px)' }}>
+      <div className="flex-shrink-0 bg-white/95 backdrop-blur-ios border-b border-gray-100 z-10">
+        <div className="max-w-sm mx-auto px-4 pt-12">
         {/* Header */}
         <div className="flex justify-between items-center py-3">
           <div>
@@ -389,6 +394,22 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                     </svg>
                   </button>
                 )}
+                {/* Friend Requests Icon */}
+                <button
+                  onClick={() => navigate('/friend-requests')}
+                  className="relative w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
+                  title="Friend Requests"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                  {/* Badge */}
+                  {friendRequestsBadgeCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center px-1">
+                      {friendRequestsBadgeCount > 99 ? '99+' : friendRequestsBadgeCount}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
           </div>
@@ -468,48 +489,20 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 </div>
               )}
               
-              {/* Quick filter suggestions */}
-              {!hasSearched && activeFilters.interests.length === 0 && !activeFilters.distance && (
-                <div className="mt-3">
-                  <p className="text-xs text-gray-500 mb-2">Quick filters:</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => handleDistanceFilterChange(5)}
-                      className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-aqua/10 hover:text-aqua transition-colors"
-                    >
-                      Within 5 mi
-                    </button>
-                    <button
-                      onClick={() => handleDistanceFilterChange(10)}
-                      className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-aqua/10 hover:text-aqua transition-colors"
-                    >
-                      Within 10 mi
-                    </button>
-                    {availableInterests.slice(0, 4).map(interest => (
-                      <button
-                        key={interest}
-                        onClick={() => handleInterestToggle(interest)}
-                        className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-aqua/10 hover:text-aqua transition-colors"
-                      >
-                        {interest}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
       </div>
 
       {/* Scrollable Content Area */}
-      <div style={{ paddingTop: isAvailable ? '90px' : '80px', paddingBottom: 'env(safe-area-inset-bottom, 34px)' }}>
+      <div className="flex-1 overflow-y-auto pb-20">
+        <div className="pt-4 px-4">
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (
           <div className={isGridView ? 'max-w-sm mx-auto px-4' : 'flex flex-col'}>
             {/* Loading State with Skeleton */}
             {isSearching && (
-              <div className="mb-24" role="region" aria-label="User search results loading">
+              <div className="mb-6" role="region" aria-label="User search results loading">
                 {isGridView ? (
                   <div className="grid grid-cols-3 gap-1">
                     {Array.from({ length: 9 }).map((_, index) => (
@@ -526,7 +519,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             
             {/* No Results State */}
             {!isSearching && hasSearched && displayUsers.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 mb-24 px-5">
+              <div className="flex flex-col items-center justify-center py-16 mb-6 px-5">
                 <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                   <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -547,7 +540,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             
             {/* Error State */}
             {!isSearching && searchError && (
-              <div className="flex flex-col items-center justify-center py-16 mb-24 px-5">
+              <div className="flex flex-col items-center justify-center py-16 mb-6 px-5">
                 <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4">
                   <svg className="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -565,13 +558,12 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 </button>
               </div>
             )}
-            
             {/* Users Grid/Feed */}
             {!isSearching && !searchError && displayUsers.length > 0 && (
               <>            
                 {isGridView ? (
                   // Grid View - Instagram Discover-like layout with even gaps
-                  <div className="grid grid-cols-3 gap-1 mb-24">
+                  <div className="grid grid-cols-3 gap-1 mb-6">
                     {displayUsers.map((user, index) => {
                       const baseDelay = 100;
                       const staggerDelay = index * 50; // Faster for grid
@@ -614,7 +606,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                   </div>
                 ) : (
                   // Feed View - Vertical cards
-                  <div className="flex flex-col mb-24">
+                  <div className="flex flex-col mb-6">
                     {displayUsers.map((user, index) => {
                       // Staggered animation timing
                       const baseDelay = 100;
@@ -645,19 +637,26 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
           </div>
         ) : (
           <div className="max-w-sm mx-auto">
-            <div className="flex flex-col items-center justify-center py-16 mb-24 px-5">
+            <div className="flex flex-col items-center justify-center py-16 mb-6 px-5">
               <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                 <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-gray-700 mb-2">You're not discoverable</h3>
-              <p className="text-sm text-gray-500 text-center px-6">
+              <p className="text-sm text-gray-500 text-center px-6 mb-4">
                 Switch to "Available" to see and be discovered by people nearby
               </p>
+              <button
+                onClick={() => navigate('/friend-requests')}
+                className="text-sm text-blue-600 hover:text-blue-700 underline"
+              >
+                Check your friend requests
+              </button>
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Profile Detail Modal */}

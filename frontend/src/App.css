@@ -1,12 +1,11 @@
 .app {
-  min-height: 100vh;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   position: relative;
 }
 
 .app-content {
-  min-height: calc(100vh - 80px);
-  padding-bottom: 20px;
+  flex: 1;
+  position: relative;
 }
 
 /* Modal Styles */

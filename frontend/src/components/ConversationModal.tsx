@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { X, Send, Bot, User as UserIcon, Clock, MapPin, UserPlus, Bookmark, Check, X as XIcon } from 'lucide-react';
 import { Chat, User, Message } from '../types';
 import ConversationalCueCards from './ConversationalCueCards';
+import FriendButton from './FriendButton';
+import { useFriendRequests } from '../hooks/useFriendRequests';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { 
   getConversationMessages, 
@@ -52,6 +54,30 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
   const { user: currentUser, token } = useAuth();
+  
+  // Use friendship hook to get real-time friendship status
+  const { getFriendshipStatus } = useFriendRequests();
+  const friendshipStatus = chat?.participantId ? getFriendshipStatus(chat.participantId).status : 'none';
+  
+  // Determine if users are friends based on real friendship status
+  const areFriends = friendshipStatus === 'friends';
+  const showFriendButton = chat && !areFriends && friendshipStatus !== 'blocked';
+  
+  const handleFriendAction = (action: string, success: boolean) => {
+    if (success) {
+      console.log(`Friend action ${action} completed successfully`);
+      // Update chat object to reflect new friendship status
+      if (chat && action === 'send') {
+        // After sending a friend request, we might want to update permissions
+        // This will be handled automatically by the friendship hook
+      } else if (chat && (action === 'accept' || friendshipStatus === 'friends')) {
+        // After accepting or becoming friends, enable additional features
+        chat.isFriend = true;
+        // Trigger any additional permission updates or UI changes here
+        console.log('Friendship established - new permissions available');
+      }
+    }
+  };
 
   const scrollToBottom = (): void => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -437,18 +463,15 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {onAddFriend && (
-              <button
-                onClick={onAddFriend}
-                className={`p-2 hover:bg-surface-hover rounded-full transition-colors ${
-                  isFriend 
-                    ? 'text-text-primary' 
-                    : 'text-aqua'
-                }`}
-                title={isFriend ? 'Friends' : 'Add Friend'}
-              >
-                <UserPlus size={16} />
-              </button>
+            {/* Show FriendButton only if not friends and not blocked */}
+            {showFriendButton && (
+              <FriendButton
+                userId={chat.participantId}
+                size="small"
+                showLabel={false}
+                onAction={handleFriendAction}
+                className="p-2"
+              />
             )}
             <button 
               onClick={onClose}

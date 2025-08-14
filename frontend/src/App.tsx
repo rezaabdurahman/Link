@@ -7,10 +7,12 @@ import OpportunitiesPage from './pages/OpportunitiesPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import FriendRequestsPage from './pages/FriendRequestsPage';
 import MainLayout from './components/MainLayout';
 import RequireAuth from './components/RequireAuth';
 import GuestOnly from './components/GuestOnly';
 import AuthExample from './examples/AuthExample';
+import UserCardDemo from './pages/UserCardDemo';
 import { AuthProvider } from './contexts/AuthContext';
 import { OnboardingProvider } from './contexts/OnboardingContext';
 import OnboardingPage from './pages/OnboardingPage';
@@ -22,8 +24,9 @@ const App: React.FC = (): JSX.Element => {
       <AuthProvider>
         <OnboardingProvider>
           <Routes>
-            {/* Development Route (remove in production) */}
+            {/* Development Routes (remove in production) */}
             <Route path="/dev" element={<AuthExample />} />
+            <Route path="/demo/usercard" element={<UserCardDemo />} />
             
             {/* Guest-only Auth Routes */}
             <Route element={<GuestOnly />}>
@@ -47,6 +50,8 @@ const App: React.FC = (): JSX.Element => {
                 <Route path="opportunities" element={<OpportunitiesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
               </Route>
+              {/* Friend Requests - separate layout */}
+              <Route path="friend-requests" element={<FriendRequestsPage />} />
             </Route>
           </Routes>
         </OnboardingProvider>

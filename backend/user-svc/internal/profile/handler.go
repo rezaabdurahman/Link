@@ -238,6 +238,121 @@ func (h *ProfileHandler) RespondToFriendRequest(c *gin.Context) {
 	})
 }
 
+// CancelFriendRequest cancels a sent friend request
+func (h *ProfileHandler) CancelFriendRequest(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	requesteeIDStr := c.Param("requesteeId")
+	requesteeID, err := uuid.Parse(requesteeIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid requestee ID format",
+			"code":    "INVALID_UUID",
+		})
+		return
+	}
+
+	if err := h.profileService.CancelFriendRequest(userID, requesteeID); err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Friend request cancelled successfully",
+	})
+}
+
+// RemoveFriend removes a friendship between users
+// @Summary Remove friend
+// @Description Remove a friendship between the authenticated user and another user
+// @Tags friends
+// @Accept json
+// @Produce json
+// @Param friendId path string true "Friend ID (UUID)"
+// @Success 204 "Friend removed successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request - validation error, users not friends, or cannot remove self"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 404 {object} map[string]interface{} "User not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /users/friends/{friendId} [delete]
+func (h *ProfileHandler) RemoveFriend(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	friendIDStr := c.Param("friendId")
+	friendID, err := uuid.Parse(friendIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid friend ID format",
+			"code":    "INVALID_UUID",
+		})
+		return
+	}
+
+	if err := h.profileService.RemoveFriend(userID, friendID); err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
+}
+
+// SearchUsers searches for users
+func (h *ProfileHandler) SearchUsers(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Search query required",
+			"code":    "MISSING_QUERY",
+		})
+		return
+	}
+
+	// Parse pagination parameters
+	page, limit := h.getPaginationParams(c)
+
+	users, err := h.profileService.SearchUsers(query, userID, page, limit)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"users": users,
+		"query": query,
+		"page":  page,
+		"limit": limit,
+		"count": len(users),
+	})
+}
 
 // getPaginationParams extracts pagination parameters from request
 func (h *ProfileHandler) getPaginationParams(c *gin.Context) (int, int) {
@@ -297,6 +412,12 @@ func (h *ProfileHandler) handleServiceError(c *gin.Context, err error) {
 			"error":   "AUTHORIZATION_ERROR",
 			"message": "Unauthorized action",
 			"code":    "UNAUTHORIZED",
+		})
+	case errors.Is(err, ErrNotFriends):
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Users are not friends",
+			"code":    "NOT_FRIENDS",
 		})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{
