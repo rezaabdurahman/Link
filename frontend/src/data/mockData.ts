@@ -403,6 +403,186 @@ export const chats: Chat[] = [
     conversationSummary: "Wine tasting dinner party invitation and food pairing tips",
     priority: 5,
     isFriend: false
+  },
+  {
+    id: 'chat6',
+    participantId: '6',
+    participantName: 'Sofia Martinez',
+    participantAvatar: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg6',
+      senderId: '6',
+      receiverId: '1',
+      content: "Want to come plant shopping this weekend? Found a great nursery!",
+      timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 1,
+    conversationSummary: "Weekend plant shopping plans and interior design tips",
+    priority: 6,
+    isFriend: true
+  },
+  {
+    id: 'chat7',
+    participantId: '7',
+    participantName: 'Ryan O\'Connor',
+    participantAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg7',
+      senderId: '1',
+      receiverId: '7',
+      content: "That craft beer recommendation was spot on! Thanks!",
+      timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 0,
+    conversationSummary: "Craft beer recommendations and coding project discussion",
+    priority: 7,
+    isFriend: true
+  },
+  {
+    id: 'chat8',
+    participantId: '9',
+    participantName: 'Alex Rivera',
+    participantAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg8',
+      senderId: '9',
+      receiverId: '1',
+      content: "Beach cleanup this Saturday - want to join us? 🌊",
+      timestamp: new Date(Date.now() - 15 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 3,
+    conversationSummary: "Ocean conservation activities and surfing plans",
+    priority: 8,
+    isFriend: false
+  },
+  {
+    id: 'chat9',
+    participantId: '10',
+    participantName: 'Maya Patel',
+    participantAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg9',
+      senderId: '10',
+      receiverId: '1',
+      content: "Marathon training group meets at 6am - you in?",
+      timestamp: new Date(Date.now() - 18 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 0,
+    conversationSummary: "Marathon training schedule and data science projects",
+    priority: 9,
+    isFriend: true
+  },
+  {
+    id: 'chat10',
+    participantId: '12',
+    participantName: 'Casey Brown',
+    participantAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg10',
+      senderId: '1',
+      receiverId: '12',
+      content: "Your design portfolio is incredible! Any tips for beginners?",
+      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 1,
+    conversationSummary: "Graphic design tips and skateboarding meetups",
+    priority: 10,
+    isFriend: false
+  },
+  {
+    id: 'chat11',
+    participantId: '13',
+    participantName: 'Aria Singh',
+    participantAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg11',
+      senderId: '13',
+      receiverId: '1',
+      content: "Violin recital next Friday - would love to see you there!",
+      timestamp: new Date(Date.now() - 30 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 2,
+    conversationSummary: "Classical music performances and medical school stories",
+    priority: 11,
+    isFriend: true
+  },
+  {
+    id: 'chat12',
+    participantId: '14',
+    participantName: 'Sam Cooper',
+    participantAvatar: 'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg12',
+      senderId: '14',
+      receiverId: '1',
+      content: "Dog park meetup tomorrow at 8am - bringing my golden retriever!",
+      timestamp: new Date(Date.now() - 36 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 0,
+    conversationSummary: "Dog walking schedules and podcast collaboration ideas",
+    priority: 12,
+    isFriend: false
+  },
+  {
+    id: 'chat13',
+    participantId: '15',
+    participantName: 'Luna Zhang',
+    participantAvatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg13',
+      senderId: '1',
+      receiverId: '15',
+      content: "Stargazing trip sounds amazing! When's the next clear night?",
+      timestamp: new Date(Date.now() - 42 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 1,
+    conversationSummary: "Astronomy observations and sci-fi book recommendations",
+    priority: 13,
+    isFriend: true
+  },
+  {
+    id: 'chat14',
+    participantId: '16',
+    participantName: 'River Jackson',
+    participantAvatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg14',
+      senderId: '16',
+      receiverId: '1',
+      content: "Environmental law seminar this weekend - interested in joining?",
+      timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 3,
+    conversationSummary: "Environmental activism and rock climbing adventures",
+    priority: 14,
+    isFriend: false
+  },
+  {
+    id: 'chat15',
+    participantId: '5',
+    participantName: '(anonymous)',
+    participantAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    lastMessage: {
+      id: 'msg15',
+      senderId: '5',
+      receiverId: '1',
+      content: "Philosophy discussion group meets Thursdays - you should come!",
+      timestamp: new Date(Date.now() - 54 * 60 * 60 * 1000),
+      type: 'text'
+    },
+    unreadCount: 0,
+    conversationSummary: "Philosophy discussions and book club recommendations",
+    priority: 15,
+    isFriend: false
   }
 ];
 

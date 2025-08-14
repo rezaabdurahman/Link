@@ -14,7 +14,7 @@ export const FixedHeader: React.FC<FixedHeaderProps> = ({
   className = "" 
 }) => {
   return (
-    <header className={`flex-shrink-0 bg-white/95 backdrop-blur-ios border-b border-gray-100 z-10 ${className}`}>
+    <header className={`fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-ios border-b border-gray-100 z-10 ${className}`}>
       <div className="max-w-sm mx-auto px-4 pt-12">
         {children}
       </div>

@@ -5,10 +5,11 @@ import { getConversationSummaryWithFallback } from '../services/aiClient';
 interface ChatListItemProps {
   chat: Chat;
   onClick: () => void;
+  onProfileClick?: (participantId: string) => void; // New prop for profile picture clicks
   enableAISummary?: boolean; // Optional prop to enable AI summary fetching
 }
 
-const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, enableAISummary = false }): JSX.Element => {
+const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, onProfileClick, enableAISummary = false }): JSX.Element => {
   const [aiSummary, setAiSummary] = useState<string>('');
   const [isLoadingAISummary, setIsLoadingAISummary] = useState<boolean>(false);
   
@@ -88,11 +89,29 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, enableAISumm
         <img
           src={chat.participantAvatar}
           alt={chat.participantName}
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent triggering the chat click
+            onProfileClick?.(chat.participantId);
+          }}
           style={{
             width: '56px',
             height: '56px',
             borderRadius: '50%',
-            objectFit: 'cover'
+            objectFit: 'cover',
+            cursor: onProfileClick ? 'pointer' : 'inherit',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (onProfileClick) {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 122, 255, 0.3)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (onProfileClick) {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = 'none';
+            }
           }}
         />
         {chat.priority === 1 && (
