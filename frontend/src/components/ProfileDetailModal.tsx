@@ -353,16 +353,16 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => setIsChatOpen(true)}
-                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1.5 px-2 rounded-md transition-colors duration-200 flex items-center justify-center gap-1 text-xs"
+                      className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 flex items-center justify-center gap-1 text-xs min-w-0"
                     >
                       <MessageCircle size={12} />
                       Message
                     </button>
                     <FriendButton
                       userId={user.id}
-                      size="small"
+                      size="medium"
                       variant="default"
-                      className="flex-1 bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-1.5 px-2 rounded-md transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-xs"
+                      className="bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-xs min-w-0 whitespace-nowrap"
                     />
                   </div>
                 </div>
