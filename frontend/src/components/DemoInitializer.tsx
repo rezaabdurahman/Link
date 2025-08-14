@@ -1,7 +1,7 @@
 // DemoInitializer - Automatically sets up demo authentication when in demo mode
 // This component handles auto-login for demo environments
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { APP_CONFIG } from '../config';
 import { devLogin, DEV_USERS } from '../utils/devAuth';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,13 +12,17 @@ import { useAuth } from '../contexts/AuthContext';
  */
 const DemoInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isInitialized } = useAuth();
+  const [demoSetupAttempted, setDemoSetupAttempted] = useState(false);
 
   useEffect(() => {
     const initializeDemo = async () => {
-      // Only auto-login in demo mode when no user is authenticated
-      if (APP_CONFIG.isDemo && APP_CONFIG.auth.autoLogin && isInitialized && !user) {
+      // Only use build-time environment variables for security
+      const isDemoMode = APP_CONFIG.isDemo;
+      
+      // Only auto-login in demo mode when no user is authenticated and we haven't tried yet
+      if (isDemoMode && !user && !demoSetupAttempted && isInitialized) {
         try {
-          console.log('🚀 Demo mode: Auto-logging in demo user...');
+          setDemoSetupAttempted(true);
           
           // Use the 'jane' demo user for a more realistic demo experience
           await devLogin(DEV_USERS.jane);
@@ -27,15 +31,19 @@ const DemoInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
           window.location.reload();
         } catch (error) {
           console.error('Failed to auto-login demo user:', error);
+          setDemoSetupAttempted(false); // Allow retry
         }
       }
     };
 
     initializeDemo();
-  }, [isInitialized, user]);
+  }, [isInitialized, user, demoSetupAttempted]);
 
+  // Only use build-time environment variables for security
+  const isDemoMode = APP_CONFIG.isDemo;
+  
   // Show loading state in demo mode while auto-login is happening
-  if (APP_CONFIG.isDemo && APP_CONFIG.auth.autoLogin && isInitialized && !user) {
+  if (isDemoMode && isInitialized && !user && !demoSetupAttempted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-aqua/5 to-accent-copper/5">
         <div className="text-center">
