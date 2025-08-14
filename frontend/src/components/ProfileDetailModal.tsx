@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users, EyeOff, Ban } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, EyeOff } from 'lucide-react';
+import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
@@ -11,7 +12,6 @@ interface ProfileDetailModalProps {
   userId: string;
   onClose: () => void;
   onHide?: (userId: string) => void;
-  onBlock?: (userId: string) => void;
 }
 
 // Helper function to convert UserProfileResponse to User type
@@ -38,7 +38,7 @@ const mapUserProfileToUser = (profile: UserProfileResponse): User => {
   };
 };
 
-const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose, onHide, onBlock }): JSX.Element => {
+const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose, onHide }): JSX.Element => {
   const [user, setUser] = useState<User | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -90,12 +90,6 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     }
   };
 
-  const handleBlockUser = (): void => {
-    if (onBlock && user) {
-      onBlock(user.id);
-      onClose(); // Close the modal after blocking
-    }
-  };
 
   const handleModalKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'Escape') {
@@ -126,12 +120,16 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   // We'll need the original profile response to get social links and photos
   const [profileResponse, setProfileResponse] = useState<UserProfileResponse | undefined>(undefined);
   
-  // Map social links from backend with appropriate icons
+  // Map social links from backend with appropriate brand icons
   const getSocialIcon = (platform: string) => {
     const platformLower = platform.toLowerCase();
-    if (platformLower.includes('instagram')) return Instagram;
-    if (platformLower.includes('twitter')) return Twitter;
-    if (platformLower.includes('facebook')) return Facebook;
+    if (platformLower.includes('instagram')) return FaInstagram;
+    if (platformLower.includes('twitter') || platformLower.includes('x.com')) return FaTwitter;
+    if (platformLower.includes('facebook')) return FaFacebook;
+    if (platformLower.includes('linkedin')) return FaLinkedin;
+    if (platformLower.includes('tiktok')) return FaTiktok;
+    if (platformLower.includes('snapchat')) return FaSnapchat;
+    if (platformLower.includes('youtube')) return FaYoutube;
     return MessageCircle; // fallback icon
   };
 
@@ -261,6 +259,31 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   )}
                 </div>
 
+                {/* Social Media Links - positioned next to mutual friends */}
+                {user.profileType === 'public' && socialLinks.length > 0 && (
+                  <div className="flex gap-3 justify-center mb-4">
+                    {socialLinks.map((social, index) => {
+                      const IconComponent = social.icon;
+                      return (
+                        <a
+                          key={index}
+                          href={social.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-10 h-10 rounded-full bg-surface-card hover:bg-aqua/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                          title={social.handle}
+                        >
+                          <IconComponent 
+                            size={20} 
+                            className="text-text-secondary group-hover:text-aqua transition-colors" 
+                          />
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Friend Button */}
                 <div className="flex justify-center mb-4">
                   <FriendButton
@@ -284,15 +307,6 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                       label="Hide user"
                       onClick={handleHideUser}
                       variant="secondary"
-                      size="large"
-                    />
-                  )}
-                  {onBlock && (
-                    <IconActionButton
-                      Icon={Ban}
-                      label="Block user"
-                      onClick={handleBlockUser}
-                      variant="danger"
                       size="large"
                     />
                   )}
@@ -330,34 +344,6 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
               </div>
 
-              {/* Social Media - only show for public profiles */}
-              {user.profileType === 'public' && socialLinks.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="text-lg font-semibold mb-3 text-text-primary text-center">
-                    Connect
-                  </h4>
-                  <div className="flex gap-3 justify-center">
-                    {socialLinks.map((social, index) => (
-                      <a
-                        key={index}
-                        href={social.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <IconActionButton
-                          Icon={social.icon}
-                          label={`Visit ${social.platform}`}
-                          onClick={() => window.open(social.url, '_blank', 'noopener,noreferrer')}
-                          variant="secondary"
-                          size="medium"
-                          title={social.handle}
-                        />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Photos - only show for public profiles */}
               {user.profileType === 'public' && additionalPhotos.length > 0 && (

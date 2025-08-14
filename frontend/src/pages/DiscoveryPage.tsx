@@ -220,17 +220,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     console.log('User hidden:', userId);
   };
 
-  const handleBlockUser = (userId: string): void => {
-    // Add user to hidden list to remove from UI
-    setHiddenUserIds(prev => new Set([...prev, userId]));
-    // Here you would typically save the blocked user to your backend
-    console.log('User blocked:', userId);
-    setToast({
-      isVisible: true,
-      message: 'User blocked successfully',
-      type: 'success'
-    });
-  };
 
   // Search functionality - NEW unified search implementation
   const performSearch = async (): Promise<void> => {
@@ -680,7 +669,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
           userId={selectedUserId}
           onClose={handleCloseProfile}
           onHide={handleHideUser}
-          onBlock={handleBlockUser}
         />
       )}
 
