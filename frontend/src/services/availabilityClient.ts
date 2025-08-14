@@ -71,14 +71,16 @@ const createAuthHeaders = (token?: AuthToken): Headers => {
     // SECURITY: Only add X-User-ID in development/demo for MSW
     const isDev = import.meta.env?.DEV;
     const isDemo = import.meta.env?.VITE_APP_MODE === 'demo';
-    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+    const enableMocking = import.meta.env?.VITE_ENABLE_MOCKING === 'true';
     
-    if ((isDev || isDemo) && hostname === 'localhost' && token.token.startsWith('dev-token-')) {
+    // In demo mode or development, add X-User-ID header for MSW
+    if ((isDev || isDemo || enableMocking) && token.token.startsWith('dev-token-')) {
       // Extract user ID from dev token (format: dev-token-{userId})
       const userId = token.token.replace('dev-token-', '');
       // SECURITY: Validate user ID format before adding header
       if (userId.match(/^[a-zA-Z0-9-]+$/)) {
         headers.set('X-User-ID', userId);
+        console.log('🔧 AvailabilityClient: Added X-User-ID header for demo/dev mode:', userId);
       }
     }
   }
@@ -145,15 +147,37 @@ export const getCurrentUserAvailability = async (): Promise<AvailabilityResponse
 export const setUserAvailability = async (
   isAvailable: boolean
 ): Promise<AvailabilityResponse> => {
+  console.log('🔄 AvailabilityClient: setUserAvailability called:', { isAvailable });
+  
   const token = await getToken();
+  console.log('🔐 AvailabilityClient: Token:', token ? 'present' : 'missing');
+  
   if (!token) {
+    console.error('❌ AvailabilityClient: No token available');
     throw new AvailabilityError('Authentication required', 401);
   }
 
-  const response = await fetch(`${API_CONFIG.BASE_URL}/availability`, {
+  const url = `${API_CONFIG.BASE_URL}/availability`;
+  const headers = createAuthHeaders(token);
+  const body = JSON.stringify({ is_available: isAvailable });
+  
+  console.log('📡 AvailabilityClient: Making request:', {
+    url,
     method: 'PUT',
-    headers: createAuthHeaders(token),
-    body: JSON.stringify({ is_available: isAvailable }),
+    headers: Object.fromEntries(headers.entries()),
+    body
+  });
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body,
+  });
+
+  console.log('📥 AvailabilityClient: Response received:', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok
   });
 
   return handleResponse<AvailabilityResponse>(response);

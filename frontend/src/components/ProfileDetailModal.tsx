@@ -380,7 +380,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 {user.interests && user.interests.length > 0 && (
                   <>
                     {/* Subtle divider line */}
-                    <div className="mb-2 border-t border-gray-300/30 -mx-4 px-4"></div>
+                    <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
                     <p className="text-text-primary text-sm mb-1 font-bold">
                       Interest Montages
                     </p>

@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Send, Bot, User as UserIcon, Clock, MapPin, Bookmark, Check, X as XIcon } from 'lucide-react';
-import { Chat, User, Message } from '../types';
-import ConversationalCueCards from './ConversationalCueCards';
-import FriendButton from './FriendButton';
+import { X, Send, Bot, Clock, MapPin, Bookmark, Check, X as XIcon } from 'lucide-react';
+import { Message, Chat, User } from '../types';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { 
@@ -13,6 +11,7 @@ import {
   chatWebSocket 
 } from '../services/chatClient';
 import { useAuth } from '../contexts/AuthContext';
+import ConversationalCueCards from './ConversationalCueCards';
 
 interface ConversationModalProps {
   isOpen: boolean;
@@ -59,8 +58,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const friendshipStatus = chat?.participantId ? getFriendshipStatus(chat.participantId).status : 'none';
   
   // Determine if users are friends based on real friendship status
-  const areFriends = friendshipStatus === 'friends';
-  const showFriendButton = chat && !areFriends;
+  // const areFriends = friendshipStatus === 'friends';
+  // const showFriendButton = chat && !areFriends;
 
   const scrollToBottom = (): void => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
