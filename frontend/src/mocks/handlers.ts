@@ -895,7 +895,9 @@ export const availabilityHandlers = [
 
   // PUT /availability - Update current user's availability
   http.put('*/availability', async ({ request }) => {
+    console.log('🔄 MSW: Availability PUT request received');
     const userId = extractUserId(request);
+    console.log('🔄 MSW: Extracted userId:', userId);
     
     if (!userId) {
       return HttpResponse.json(
