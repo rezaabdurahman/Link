@@ -1,0 +1,265 @@
+@startuml Gateway Sequence Diagrams
+
+title API Gateway Proxy Pattern - Sequence Diagrams
+
+!theme amiga
+
+' ==============================================================================
+' DIAGRAM A: Typical Authenticated Request /users/profile
+' ==============================================================================
+
+@startuml
+title A) Authenticated Request: GET /users/profile
+
+actor Client
+participant "API Gateway" as Gateway
+participant "Auth Middleware" as Auth
+participant "Proxy Handler" as Proxy
+participant "User Service" as UserSvc
+database "User DB" as DB
+
+Client -> Gateway: GET /users/profile\nAuthorization: Bearer <jwt_token>
+
+Gateway -> Auth: AuthMiddleware()
+activate Auth
+
+Auth -> Auth: ExtractTokenFromRequest()
+note right: Check Authorization header\nfor "Bearer <token>"
+
+Auth -> Auth: ValidateAccessToken(token)
+note right: Parse JWT claims\nValidate signature & expiry
+
+Auth -> Gateway: Set user context headers\n• X-User-ID: uuid\n• X-User-Email: user@example.com\n• X-User-Name: username
+deactivate Auth
+
+Gateway -> Proxy: ProxyRequest()
+activate Proxy
+
+Proxy -> Proxy: RouteToService("/users/profile")
+note right: Path "/users/" maps to\nUser Service
+
+Proxy -> Proxy: TransformPath("/users/profile")
+note right: Transform to\n"/api/v1/users/profile"
+
+Proxy -> Proxy: copyHeaders()
+note right: Filter hop-by-hop headers:\n• Connection\n• Keep-Alive\n• Transfer-Encoding\n• etc.
+
+Proxy -> Proxy: Add gateway headers
+note right: • X-Gateway-Request: true\n• X-Forwarded-For: client_ip\n• X-Forwarded-Proto: http
+
+Proxy -> UserSvc: GET /api/v1/users/profile\nHeaders:\n• X-User-ID: uuid\n• X-User-Email: user@example.com\n• X-Gateway-Request: true
+activate UserSvc
+
+UserSvc -> DB: SELECT * FROM users WHERE id = ?
+activate DB
+DB -> UserSvc: User profile data
+deactivate DB
+
+UserSvc -> Proxy: HTTP 200 OK\n{\n  "id": "uuid",\n  "email": "user@example.com",\n  "name": "Full Name",\n  "profile": {...}\n}
+deactivate UserSvc
+
+Proxy -> Proxy: copyHeaders()
+note right: Copy response headers\n(filter hop-by-hop)
+
+Proxy -> Gateway: Stream response body
+deactivate Proxy
+
+Gateway -> Client: HTTP 200 OK\nUser profile data
+
+note over Client, DB
+  **Success Flow:**
+  1. JWT validated successfully
+  2. User context propagated
+  3. Request proxied to User Service
+  4. Response streamed back to client
+  
+  **Timeout:** 30 seconds (USER_SVC_TIMEOUT)
+  **Path Transform:** /users/profile → /api/v1/users/profile
+end note
+
+@enduml
+
+' ==============================================================================
+' DIAGRAM B: WebSocket Upgrade Request /ws
+' ==============================================================================
+
+@startuml
+title B) WebSocket Upgrade: GET /ws
+
+actor Client
+participant "API Gateway" as Gateway
+participant "Auth Middleware" as Auth
+participant "Proxy Handler" as Proxy
+participant "Chat Service" as ChatSvc
+
+Client -> Gateway: GET /ws\nUpgrade: websocket\nConnection: Upgrade\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\nSec-WebSocket-Version: 13\nAuthorization: Bearer <jwt_token>
+
+Gateway -> Auth: AuthMiddleware()
+activate Auth
+
+Auth -> Auth: ValidateAccessToken(token)
+note right: Validate JWT for WebSocket\nconnection authorization
+
+Auth -> Gateway: Set user context headers\n• X-User-ID: uuid\n• X-User-Email: user@example.com\n• X-User-Name: username
+deactivate Auth
+
+Gateway -> Proxy: ProxyRequest()
+activate Proxy
+
+Proxy -> Proxy: RouteToService("/ws")
+note right: Path "/ws" maps to\nChat Service
+
+Proxy -> Proxy: TransformPath("/ws")
+note right: Transform to\n"/api/v1/ws"
+
+Proxy -> Proxy: copyHeaders()
+note right: Preserve WebSocket headers:\n• Upgrade: websocket\n• Connection: Upgrade\n• Sec-WebSocket-Key\n• Sec-WebSocket-Version\n\nFilter hop-by-hop headers\n(but keep Connection & Upgrade\nfor WebSocket)
+
+Proxy -> Proxy: Add context headers
+note right: • X-User-ID: uuid\n• X-User-Email: user@example.com\n• X-Gateway-Request: true\n• X-Forwarded-For: client_ip
+
+Proxy -> ChatSvc: GET /api/v1/ws\nUpgrade: websocket\nConnection: Upgrade\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\nX-User-ID: uuid\nX-User-Email: user@example.com
+activate ChatSvc
+
+ChatSvc -> ChatSvc: Validate WebSocket upgrade
+note right: Check Sec-WebSocket headers\nVerify user authorization
+
+ChatSvc -> Proxy: HTTP 101 Switching Protocols\nUpgrade: websocket\nConnection: Upgrade\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+
+Proxy -> Proxy: copyHeaders()
+note right: Copy WebSocket response headers\nPreserve upgrade headers
+
+Proxy -> Gateway: HTTP 101 Switching Protocols\n+ WebSocket headers
+deactivate Proxy
+
+Gateway -> Client: HTTP 101 Switching Protocols\nConnection upgraded to WebSocket
+
+note over Client, ChatSvc
+  **WebSocket Established**
+  All subsequent WebSocket frames are proxied transparently
+end note
+
+Client <--> Gateway: WebSocket frames
+Gateway <--> ChatSvc: WebSocket frames
+
+note over Client, ChatSvc
+  **WebSocket Connection Flow:**
+  1. HTTP upgrade request with JWT validation
+  2. WebSocket headers preserved through proxy
+  3. Chat service handles protocol upgrade
+  4. Transparent frame proxying established
+  5. User context available for chat authorization
+  
+  **Timeout:** 30 seconds for upgrade (CHAT_SVC_TIMEOUT)
+  **Path Transform:** /ws → /api/v1/ws
+  **Headers Preserved:** All WebSocket-specific headers
+end note
+
+@enduml
+
+' ==============================================================================
+' ERROR SCENARIOS
+' ==============================================================================
+
+@startuml
+title Error Scenarios
+
+actor Client
+participant "API Gateway" as Gateway
+participant "Auth Middleware" as Auth
+participant "Proxy Handler" as Proxy
+participant "Backend Service" as Service
+
+== Authentication Failure ==
+
+Client -> Gateway: GET /users/profile\n(No Authorization header)
+
+Gateway -> Auth: AuthMiddleware()
+Auth -> Auth: ExtractTokenFromRequest()
+Auth -> Gateway: HTTP 401 Unauthorized\n{\n  "error": "AUTHENTICATION_ERROR",\n  "message": "Authorization token required",\n  "code": "MISSING_TOKEN"\n}
+
+Gateway -> Client: HTTP 401 Unauthorized
+
+== Service Timeout ==
+
+Client -> Gateway: GET /ai/generate\nAuthorization: Bearer <jwt_token>
+
+Gateway -> Auth: AuthMiddleware() ✓
+Gateway -> Proxy: ProxyRequest()
+Proxy -> Service: GET /api/v1/ai/generate\n(60 second timeout)
+
+... 60 seconds later ...
+
+Service -x Proxy: ⚠️ Request timeout
+
+Proxy -> Gateway: HTTP 504 Gateway Timeout\n{\n  "error": "GATEWAY_TIMEOUT",\n  "message": "Service request timed out",\n  "code": "SERVICE_TIMEOUT",\n  "service": "http://ai-svc:8000"\n}
+
+Gateway -> Client: HTTP 504 Gateway Timeout
+
+== Service Unavailable ==
+
+Client -> Gateway: GET /users/profile\nAuthorization: Bearer <jwt_token>
+
+Gateway -> Auth: AuthMiddleware() ✓
+Gateway -> Proxy: ProxyRequest()
+Proxy -x Service: ⚠️ Connection refused
+
+Proxy -> Gateway: HTTP 502 Bad Gateway\n{\n  "error": "BAD_GATEWAY",\n  "message": "Failed to reach backend service",\n  "code": "SERVICE_UNAVAILABLE",\n  "service": "http://user-svc:8080"\n}
+
+Gateway -> Client: HTTP 502 Bad Gateway
+
+== Route Not Found ==
+
+Client -> Gateway: GET /unknown/endpoint\nAuthorization: Bearer <jwt_token>
+
+Gateway -> Auth: AuthMiddleware() ✓
+Gateway -> Proxy: ProxyRequest()
+Proxy -> Proxy: RouteToService("/unknown/endpoint")
+note right: No service mapping found
+
+Proxy -> Gateway: HTTP 404 Not Found\n{\n  "error": "NOT_FOUND",\n  "message": "Service not found for this endpoint",\n  "code": "SERVICE_NOT_FOUND",\n  "path": "/unknown/endpoint"\n}
+
+Gateway -> Client: HTTP 404 Not Found
+
+@enduml
+
+' ==============================================================================
+' HEALTH CHECK AGGREGATION
+' ==============================================================================
+
+@startuml
+title Health Check Aggregation
+
+actor "Load Balancer" as LB
+participant "API Gateway" as Gateway
+participant "User Service" as UserSvc
+participant "Chat Service" as ChatSvc
+participant "AI Service" as AISvc
+participant "Location Service" as LocSvc
+
+LB -> Gateway: GET /health
+
+Gateway -> Gateway: HealthHandler()
+
+par Parallel Health Checks (5s timeout each)
+  Gateway -> UserSvc: GET /health
+  UserSvc -> Gateway: HTTP 200 OK
+  
+  Gateway -> ChatSvc: GET /health  
+  ChatSvc -> Gateway: HTTP 200 OK
+  
+  Gateway -> AISvc: GET /health
+  AISvc -x Gateway: ⚠️ Timeout/Error
+  
+  Gateway -> LocSvc: GET /health
+  LocSvc -> Gateway: HTTP 200 OK
+end
+
+Gateway -> Gateway: Aggregate health status
+note right: Overall status = "degraded"\n(AI service unhealthy)
+
+Gateway -> LB: HTTP 503 Service Unavailable\n{\n  "status": "degraded",\n  "gateway": "healthy",\n  "services": {\n    "user-svc": "healthy",\n    "chat-svc": "healthy",\n    "ai-svc": "unhealthy",\n    "location-svc": "healthy"\n  }\n}
+
+@enduml
+
+@enduml

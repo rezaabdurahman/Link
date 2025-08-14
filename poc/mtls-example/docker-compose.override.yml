@@ -1,0 +1,99 @@
+version: '3.8'
+
+# mTLS Example Docker Compose Override
+# This file demonstrates how to configure services with mutual TLS authentication
+# Run with: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+services:
+  # mTLS Gateway - Acts as a client with certificate authentication
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: mtls-gateway
+    hostname: gateway
+    ports:
+      - "8080:8080"  # External access to gateway
+    volumes:
+      # Mount certificates for client authentication
+      - ./certs:/certs:ro
+    environment:
+      - SERVICE_URL=https://service:8443
+      - TLS_CERT_PATH=/certs/gateway.crt
+      - TLS_KEY_PATH=/certs/gateway.key
+      - CA_BUNDLE_PATH=/certs/ca-bundle.crt
+    depends_on:
+      - service
+    networks:
+      - mtls-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=false"  # Disable Traefik for this demo
+
+  # mTLS Service - Requires client certificates for authentication  
+  service:
+    build:
+      context: ./service
+      dockerfile: Dockerfile
+    container_name: mtls-service
+    hostname: service
+    ports:
+      - "8443:8443"  # HTTPS port with mTLS (internal network only in production)
+    volumes:
+      # Mount certificates for server authentication and client validation
+      - ./certs:/certs:ro
+    environment:
+      - TLS_CERT_PATH=/certs/service.crt
+      - TLS_KEY_PATH=/certs/service.key
+      - CA_BUNDLE_PATH=/certs/ca-bundle.crt
+      - TLS_CLIENT_AUTH=require
+      - LOG_LEVEL=info
+    networks:
+      - mtls-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--cert", "/certs/service.crt", "--key", "/certs/service.key", "--cacert", "/certs/ca-bundle.crt", "--fail", "--silent", "--show-error", "https://localhost:8443/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    labels:
+      - "traefik.enable=false"  # Disable Traefik for this demo
+
+networks:
+  mtls-network:
+    driver: bridge
+    name: mtls-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+    labels:
+      - "com.example.description=Isolated network for mTLS communication"
+
+# Additional volumes for certificate storage (if needed for persistence)
+volumes:
+  certs-data:
+    name: mtls-certs
+    labels:
+      - "com.example.description=Certificate storage for mTLS setup"
