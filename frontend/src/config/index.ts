@@ -9,7 +9,7 @@ const getEnv = (key: string, defaultValue?: string): string | undefined => {
   
   // In browser/Vite environment - direct access to import.meta.env
   if (typeof import.meta !== 'undefined' && import.meta.env) {
-    const value = import.meta.env[key];
+    const value = (import.meta.env as any)[key];
     if (value !== undefined) {
       return value;
     }

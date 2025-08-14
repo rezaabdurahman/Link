@@ -242,7 +242,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
           {user && !loading && !error && (
             <>
               {/* Profile Title & Block Button */}
-              <div className="flex justify-between items-center px-4 pt-0 pb-3">
+              <div className="flex justify-between items-center px-4 pt-0 pb-1">
                 <h2 className="text-xl font-bold m-0 text-gradient-aqua">
                   Profile
                 </h2>
@@ -258,17 +258,17 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
               </div>
 
               {/* Instagram-style Profile Header */}
-              <div className="flex gap-4 items-start px-4 mb-3">
+              <div className="flex gap-4 items-center px-4 mb-1">
                 {/* Profile Picture - Left Side */}
                 <div className="relative flex-shrink-0">
                   {user.profilePicture ? (
                     <img
                       src={user.profilePicture}
                       alt={user.name}
-                      className="w-20 h-20 rounded-full object-cover border-2 border-white/20 shadow-lg"
+                      className="w-24 h-24 rounded-full object-cover border-2 border-white/20 shadow-lg"
                     />
                   ) : (
-                    <div className="w-20 h-20 rounded-full bg-surface-hover border-2 border-white/20 shadow-lg flex items-center justify-center">
+                    <div className="w-24 h-24 rounded-full bg-surface-hover border-2 border-white/20 shadow-lg flex items-center justify-center">
                       <div className="text-text-muted text-xl font-bold">
                         {user.name.charAt(0).toUpperCase()}
                       </div>
@@ -282,17 +282,17 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 {/* Name, Age, Meta Info and Action Buttons - Right Side */}
                 <div className="flex-1 min-w-0">
                   {user.profileType === 'public' ? (
-                    <h3 className="text-lg font-bold mb-2 text-gradient-primary">
+                    <h3 className="text-lg font-bold mb-1 text-gradient-primary">
                       {user.name}, {user.age}
                     </h3>
                   ) : (
-                    <h3 className="text-lg font-bold mb-2 text-gradient-primary">
+                    <h3 className="text-lg font-bold mb-1 text-gradient-primary">
                       Private Profile
                     </h3>
                   )}
                   
                   {/* Distance, Mutual Friends & Social Links */}
-                  <div className="flex items-center gap-3 flex-wrap mb-3">
+                  <div className="flex items-center gap-3 flex-wrap mb-1">
                     {/* Distance */}
                     <div className="flex items-center gap-1">
                       <MapPin size={14} className="text-text-secondary" />
@@ -348,6 +348,13 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                       </div>
                     )}
                   </div>
+
+                  {/* Bio - moved here between meta info and action buttons */}
+                  <div className="mb-1">
+                    <p className="text-text-secondary text-sm leading-relaxed">
+                      {user.bio}
+                    </p>
+                  </div>
                   
                   {/* Action Buttons - Now inline with profile */}
                   <div className="flex gap-1.5">
@@ -368,15 +375,17 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
               </div>
 
-              {/* Bio - no header */}
-              <div className="px-4 mb-3">
-                <p className="text-text-secondary text-sm leading-relaxed">
-                  {user.bio}
-                </p>
-              </div>
-
-              {/* Interests - no header */}
-              <div className="px-4 mb-3">
+              {/* Interests */}
+              <div className="px-4 mb-1 mt-3">
+                {user.interests && user.interests.length > 0 && (
+                  <>
+                    {/* Subtle divider line */}
+                    <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
+                    <p className="text-text-primary text-sm mb-1 font-bold">
+                      Interest Montages
+                    </p>
+                  </>
+                )}
                 <div className="flex flex-wrap gap-1.5">
                   {user.interests && user.interests.length > 0 ? (
                     user.interests.map((interest, index) => (
@@ -397,9 +406,9 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
               {user.profileType === 'public' && additionalPhotos.length > 0 && (
                 <>
                   {/* Divider line before photos */}
-                  <div className="mx-4 mb-3 border-t border-white/10"></div>
+                  <div className="mx-4 mb-1 border-t border-white/10"></div>
                   
-                  <div className="px-4 mb-4">
+                  <div className="px-4 mb-2">
                     <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
                       <div className="grid grid-cols-2 gap-2">
                         {additionalPhotos.map((photo, index) => (

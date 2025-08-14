@@ -26,21 +26,34 @@ export const startMockWorker = async () => {
   const enableMocks = import.meta.env.VITE_ENABLE_MOCKING === 'true';
   const hostname = window.location.hostname;
   
-  // SECURITY: Strict production checks - NEVER run MSW in production
-  const isProduction = (
-    import.meta.env.PROD ||
-    nodeEnv === 'production' ||
-    mode === 'production' ||
-    hostname !== 'localhost' && hostname !== '127.0.0.1' && !hostname.includes('dev') && !hostname.includes('staging')
+  // SECURITY: Strict production checks - NEVER run MSW in actual production
+  // Allow MSW in demo builds even when PROD=true and on any hostname
+  const isActualProduction = (
+    (import.meta.env.PROD && !isDemo && !enableMocks) ||
+    (nodeEnv === 'production' && !isDemo && !enableMocks) ||
+    (mode === 'production' && !isDemo && !enableMocks)
   );
   
-  if (isProduction) {
+  // In demo mode, allow MSW to run on any hostname (including Vercel deployments)
+  console.log('🔍 MSW: Environment check:', {
+    isDev,
+    isDemo, 
+    enableMocks,
+    hostname,
+    mode,
+    nodeEnv,
+    PROD: import.meta.env.PROD,
+    isActualProduction
+  });
+  
+  if (isActualProduction) {
     console.warn('🚫 MSW: Blocked in production environment');
     return;
   }
 
   // Only start MSW in safe environments
-  if (isDev || (isDemo && hostname === 'localhost') || enableMocks) {
+  // Allow demo builds to run on localhost or when specifically enabled
+  if (isDev || isDemo || enableMocks) {
     try {
       await worker.start({
         onUnhandledRequest: 'bypass',
