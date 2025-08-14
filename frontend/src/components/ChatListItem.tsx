@@ -114,23 +114,6 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, onProfileCli
             }
           }}
         />
-        {chat.priority === 1 && (
-          <div style={{
-            position: 'absolute',
-            top: '-2px',
-            right: '-2px',
-            width: '16px',
-            height: '16px',
-            background: '#FF9500',
-            borderRadius: '50%',
-            border: '2px solid #000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <span style={{ fontSize: '8px', fontWeight: 'bold' }}>★</span>
-          </div>
-        )}
       </div>
 
       {/* Chat Content */}

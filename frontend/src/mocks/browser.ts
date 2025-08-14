@@ -44,12 +44,20 @@ export const startMockWorker = async () => {
     try {
       await worker.start({
         onUnhandledRequest: 'bypass',
-        quiet: !isDev, // Only show logs in development
+        quiet: false, // Always show logs in demo mode for debugging
       });
       
-      console.log('🔧 MSW: Mock Service Worker started');
-      console.log('📡 MSW: Mocking broadcast, availability, complete onboarding flow, auth, chat, friendship \u0026 user profile API endpoints');
-      console.log('🔒 MSW: Security checks passed - development environment confirmed');
+      console.log('🔧 MSW: Mock Service Worker started successfully');
+      console.log('📡 MSW: Intercepting API calls for:', {
+        'Auth': '/auth/login, /auth/register, /auth/me, /auth/refresh, /auth/logout',
+        'Chat': '/api/v1/chat/conversations, /api/v1/chat/messages',
+        'Users': '/users/profile/me, /users/profile/:id',
+        'Friends': '/friends/status, /friends/requests',
+        'Onboarding': '/onboarding/status, /onboarding/start, /onboarding/step',
+        'Availability': '/availability',
+        'Broadcasts': '/broadcasts'
+      });
+      console.log('🔒 MSW: All backend calls will be mocked - no real server needed');
     } catch (error) {
       console.error('❌ MSW: Failed to start Mock Service Worker:', error);
     }

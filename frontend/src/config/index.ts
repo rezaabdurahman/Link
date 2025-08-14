@@ -6,17 +6,30 @@ const getEnv = (key: string, defaultValue?: string): string | undefined => {
   if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
     return process.env[key] || defaultValue;
   }
-  // In browser/Vite environment - check for import.meta safely
+  
+  // In browser/Vite environment - direct access to import.meta.env
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    const value = import.meta.env[key];
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  
+  // Fallback for environments that don't support import.meta
   try {
     // This will be evaluated at runtime, so Jest won't parse import.meta
     const importMeta = eval('import.meta');
     if (importMeta && importMeta.env) {
-      return importMeta.env[key] || defaultValue;
+      const value = importMeta.env[key];
+      if (value !== undefined) {
+        return value;
+      }
     }
   } catch {
     // Ignore errors in environments that don't support import.meta
   }
-  // Fallback
+  
+  // Final fallback
   return defaultValue;
 };
 
