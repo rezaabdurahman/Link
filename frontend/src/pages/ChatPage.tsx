@@ -7,7 +7,7 @@ import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import { isFeatureEnabled } from '../config/featureFlags';
 import RankToggle from '../components/RankToggle';
 import ConversationModal from '../components/ConversationModal';
-import AddFriendModal from '../components/AddFriendModal';
+import AddMyContactModal from '../components/AddMyContactModal';
 import { getConversations, conversationToChat, createConversation } from '../services/chatClient';
 import { unifiedSearch, UnifiedSearchRequest, isUnifiedSearchError, getUnifiedSearchErrorMessage } from '../services/unifiedSearchClient';
 // Legacy import - this will show deprecation warnings in console
@@ -24,7 +24,7 @@ const ChatPage: React.FC = (): JSX.Element => {
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [conversationModalOpen, setConversationModalOpen] = useState<boolean>(false);
   const [initialMessage, setInitialMessage] = useState<string>('');
-  const [addFriendModalOpen, setAddFriendModalOpen] = useState<boolean>(false);
+  const [addMyContactModalOpen, setAddMyContactModalOpen] = useState<boolean>(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,11 +83,16 @@ const ChatPage: React.FC = (): JSX.Element => {
         // Convert User[] to PublicUser[] for backward compatibility
         const friends: PublicUser[] = response.users.map(user => ({
           id: user.id,
+          email: '', // Not available in unified search response
+          username: user.name.toLowerCase().replace(' ', '_'),
           first_name: user.name.split(' ')[0],
           last_name: user.name.split(' ')[1] || '',
           profile_picture: user.profilePicture,
           bio: user.bio,
           interests: user.interests,
+          social_links: {},
+          additional_photos: [],
+          privacy_settings: {},
           is_friend: true,
           mutual_friends_count: user.mutualFriends?.length || 0,
           last_active: user.lastSeen?.toISOString(),
@@ -193,16 +198,30 @@ const ChatPage: React.FC = (): JSX.Element => {
     return combinedItems;
   }, [chats, friendResults, searchQuery, sortBy]);
 
+  /**
+   * Sorts the combined chat list based on the selected sort option.
+   * 
+   * @description Sort behaviors:
+   * - priority: Lower number = higher priority (1 is highest priority)
+   * - time: Most recent messages first (descending timestamp)
+   * - unread: Highest unread count first (descending count)
+   * - discover: Non-friend conversations by recency (filtered in combinedList)
+   * 
+   * @see ChatPage-Sort-Logic.md for detailed documentation
+   */
   const sortedChats = [...combinedList].sort((a, b) => {
     switch (sortBy) {
       case 'priority':
+        // Lower priority number = higher importance (1 > 2 > 3...)
         return a.priority - b.priority;
       case 'time':
+        // Most recent messages first
         return b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime();
       case 'unread':
+        // Highest unread count first
         return b.unreadCount - a.unreadCount;
       case 'discover':
-        // For discover, sort by most recent messages from non-friends
+        // For discover mode, sort non-friends by most recent messages
         return b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime();
       default:
         return 0;
@@ -291,9 +310,9 @@ const ChatPage: React.FC = (): JSX.Element => {
             </p>
           </div>
           <button
-            onClick={() => setAddFriendModalOpen(true)}
+            onClick={() => setAddMyContactModalOpen(true)}
             className="w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
-            title="Add Friend"
+            title="Add to My Contacts"
           >
             <UserPlus size={16} />
           </button>
@@ -423,10 +442,10 @@ const ChatPage: React.FC = (): JSX.Element => {
         initialMessage={initialMessage}
       />
 
-      {/* Add Friend Modal */}
-      <AddFriendModal
-        isOpen={addFriendModalOpen}
-        onClose={() => setAddFriendModalOpen(false)}
+      {/* Add My Contact Modal */}
+      <AddMyContactModal
+        isOpen={addMyContactModalOpen}
+        onClose={() => setAddMyContactModalOpen(false)}
       />
     </div>
   );

@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserPlus, Mail, Users, Phone } from 'lucide-react';
 
-interface AddFriendModalProps {
+interface AddMyContactModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX.Element => {
+const AddMyContactModal: React.FC<AddMyContactModalProps> = ({ isOpen, onClose }): JSX.Element => {
   const [activeTab, setActiveTab] = useState<'email' | 'contacts'>('email');
   const [email, setEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -57,7 +57,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
       <div className="bg-surface-card rounded-2xl w-full max-w-md shadow-2xl slide-up">
         {/* Header */}
         <div className="flex items-center justify-between p-6 pb-4">
-          <h2 className="text-2xl font-bold text-gray-900">Add Friends</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Add to My Contacts</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 flex items-center justify-center hover-scale"
@@ -106,7 +106,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter friend's email address"
+                  placeholder="Enter contact's email address"
                   className="ios-text-field w-full px-4 py-3"
                   disabled={isLoading}
                 />
@@ -135,7 +135,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
                 ) : (
                   <>
                     <UserPlus size={16} />
-                    Send Invitation
+                    Add to Contacts
                   </>
                 )}
               </button>
@@ -148,7 +148,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
                   Import Contacts
                 </h3>
                 <p className="text-gray-600 text-sm mb-6">
-                  Find friends who are already on Link from your contact list
+                  Find people who are already on Link from your contact list
                 </p>
                 
                 {successMessage ? (
@@ -193,4 +193,4 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
   return createPortal(modalContent, document.body);
 };
 
-export default AddFriendModal;
+export default AddMyContactModal;
