@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
@@ -11,9 +11,10 @@ import AddBroadcastModal from '../components/AddBroadcastModal';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
+import { setUserAvailability, isAvailabilityError, getAvailabilityErrorMessage } from '../services/availabilityClient';
 import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, UnifiedSearchRequest } from '../services/unifiedSearchClient';
 // Legacy import - this will show deprecation warnings in console
-import { searchAvailableUsers, isSearchError, getSearchErrorMessage, SearchUsersRequest } from '../services/searchClient';
+import { isSearchError, getSearchErrorMessage } from '../services/searchClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import { usePendingReceivedRequestsCount } from '../hooks/useFriendRequests';
 import ViewTransition from '../components/ViewTransition';
@@ -31,7 +32,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
   const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
-  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
+  const [hiddenUserIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' }>({ 
     isVisible: false, 
     message: '', 
@@ -42,6 +43,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   
   // Loading state for broadcast operations
   const [isBroadcastSubmitting, setIsBroadcastSubmitting] = useState<boolean>(false);
+  
+  // Loading state for availability operations
+  const [isAvailabilitySubmitting, setIsAvailabilitySubmitting] = useState<boolean>(false);
 
   // Search and filter state
   const [searchResults, setSearchResults] = useState<User[]>([]);
@@ -52,10 +56,77 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     distance?: number;
     interests: string[];
   }>({ interests: [] });
-  const [availableInterests] = useState<string[]>([
-    'Art', 'Music', 'Travel', 'Food', 'Fitness', 'Technology',
-    'Books', 'Movies', 'Gaming', 'Photography', 'Nature', 'Business'
-  ]);
+  // Available interests for future filter functionality
+  // const [availableInterests] = useState<string[]>([
+  //   'Art', 'Music', 'Travel', 'Food', 'Fitness', 'Technology',
+  //   'Books', 'Movies', 'Gaming', 'Photography', 'Nature', 'Business'
+  // ]);
+
+  // Search functionality - NEW unified search implementation  
+  const performSearch = useCallback(async (): Promise<void> => {
+    if (isSearching) return; // Prevent multiple concurrent searches
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      // Use the new unified search with 'discovery' scope
+      const searchRequest: UnifiedSearchRequest = {
+        query: searchQuery.trim() || undefined,
+        scope: 'discovery', // Search for discoverable users
+        filters: {
+          distance: activeFilters.distance,
+          interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
+          available_only: true, // Only search available users in discovery
+        },
+        pagination: {
+          limit: 50, // Reasonable limit for mobile UI
+        },
+      };
+
+      const response = await unifiedSearch(searchRequest);
+      
+      // Filter out hidden users from search results
+      const filteredResults = response.users.filter(user => !hiddenUserIds.has(user.id));
+      
+      setSearchResults(filteredResults);
+      setHasSearched(true);
+
+      // Show success message if query was provided
+      if (searchQuery.trim()) {
+        setToast({
+          isVisible: true,
+          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`,
+          type: 'success'
+        });
+      }
+      
+      // Log metadata for debugging
+      if (response.metadata) {
+        console.log('Search metadata:', response.metadata);
+      }
+      
+    } catch (error) {
+      console.error('Search failed:', error);
+      
+      let errorMessage = 'Search failed. Please try again.';
+      if (isUnifiedSearchError(error)) {
+        errorMessage = getUnifiedSearchErrorMessage(error);
+      } else if (isSearchError(error)) {
+        // Fallback to legacy error handling
+        errorMessage = getSearchErrorMessage(error);
+      }
+      
+      setSearchError(errorMessage);
+      setToast({
+        isVisible: true,
+        message: errorMessage,
+        type: 'error'
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchQuery, activeFilters.distance, activeFilters.interests, hiddenUserIds, isSearching]);
 
   // Handle initial animation state if user is already available
   useEffect(() => {
@@ -77,7 +148,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
       return () => clearTimeout(timeoutId);
     }
-  }, [activeFilters.distance, activeFilters.interests, hasSearched]);
+  }, [activeFilters.distance, activeFilters.interests, hasSearched, performSearch]);
 
   // Determine which users to display: search results if searched, otherwise nearby users with basic filtering
   const displayUsers = hasSearched ? searchResults : nearbyUsers.filter(user =>
@@ -90,33 +161,75 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
      user.bio.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const toggleAvailability = (): void => {
-    const newAvailability = !isAvailable;
+  const toggleAvailability = async (): Promise<void> => {
+    if (isAvailabilitySubmitting) return; // Prevent multiple submissions
     
-    if (newAvailability) {
-      // Reset animation state first
-      setShowFeedAnimation(false);
-      setIsAvailable(newAvailability);
-      
-      // Trigger animation with slightly longer delay for smoother transition
+    // Capture current state for potential rollback
+    const prevAvailability = isAvailable;
+    const nextAvailability = !isAvailable;
+    
+    setIsAvailabilitySubmitting(true);
+    
+    // Immediate UI update for responsiveness
+    setIsAvailable(nextAvailability);
+    
+    // Handle animation smoothly without forcing resets
+    if (nextAvailability && !showFeedAnimation) {
+      // Only animate if we're going to available and not already animating
       setTimeout(() => {
         setShowFeedAnimation(true);
-      }, 100);
-    } else {
-      setIsAvailable(newAvailability);
+      }, 150); // Slightly longer delay for smoother feel
+    } else if (!nextAvailability) {
+      // Immediately hide animation when going to unavailable
       setShowFeedAnimation(false);
     }
     
-    // Show toast notification
-    const message = newAvailability 
-      ? "You're now discoverable by others nearby" 
-      : "You've been removed from the discovery feed";
-    
-    setToast({
-      isVisible: true,
-      message,
-      type: 'success'
-    });
+    try {
+      // Make API call to persist the availability change
+      await setUserAvailability(nextAvailability);
+      
+      // Success: show toast only after successful API call
+      const message = nextAvailability 
+        ? "You're now discoverable by others nearby" 
+        : "You've been removed from the discovery feed";
+      
+      setToast({
+        isVisible: true,
+        message,
+        type: 'success'
+      });
+      
+      console.log('Availability updated successfully:', nextAvailability);
+      
+    } catch (error) {
+      console.error('Failed to update availability:', error);
+      
+      // Revert UI state on failure
+      setIsAvailable(prevAvailability);
+      
+      // Revert animation state smoothly
+      if (prevAvailability && !showFeedAnimation) {
+        setTimeout(() => {
+          setShowFeedAnimation(true);
+        }, 150);
+      } else if (!prevAvailability) {
+        setShowFeedAnimation(false);
+      }
+      
+      // Show error toast
+      let errorMessage = 'Failed to update availability. Please try again.';
+      if (isAvailabilityError(error)) {
+        errorMessage = getAvailabilityErrorMessage(error);
+      }
+      
+      setToast({
+        isVisible: true,
+        message: errorMessage,
+        type: 'error'
+      });
+    } finally {
+      setIsAvailabilitySubmitting(false);
+    }
   };
 
   const toggleViewMode = (): void => {
@@ -214,78 +327,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     }
   };
 
-  const handleHideUser = (userId: string): void => {
-    setHiddenUserIds(prev => new Set([...prev, userId]));
-    // Here you would typically save the hidden user to your backend
-    console.log('User hidden:', userId);
-  };
-
-
-  // Search functionality - NEW unified search implementation
-  const performSearch = async (): Promise<void> => {
-    if (isSearching) return; // Prevent multiple concurrent searches
-
-    setIsSearching(true);
-    setSearchError(null);
-
-    try {
-      // Use the new unified search with 'discovery' scope
-      const searchRequest: UnifiedSearchRequest = {
-        query: searchQuery.trim() || undefined,
-        scope: 'discovery', // Search for discoverable users
-        filters: {
-          distance: activeFilters.distance,
-          interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
-          available_only: true, // Only search available users in discovery
-        },
-        pagination: {
-          limit: 50, // Reasonable limit for mobile UI
-        },
-      };
-
-      const response = await unifiedSearch(searchRequest);
-      
-      // Filter out hidden users from search results
-      const filteredResults = response.users.filter(user => !hiddenUserIds.has(user.id));
-      
-      setSearchResults(filteredResults);
-      setHasSearched(true);
-
-      // Show success message if query was provided
-      if (searchQuery.trim()) {
-        setToast({
-          isVisible: true,
-          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`,
-          type: 'success'
-        });
-      }
-      
-      // Log metadata for debugging
-      if (response.metadata) {
-        console.log('Search metadata:', response.metadata);
-      }
-      
-    } catch (error) {
-      console.error('Search failed:', error);
-      
-      let errorMessage = 'Search failed. Please try again.';
-      if (isUnifiedSearchError(error)) {
-        errorMessage = getUnifiedSearchErrorMessage(error);
-      } else if (isSearchError(error)) {
-        // Fallback to legacy error handling
-        errorMessage = getSearchErrorMessage(error);
-      }
-      
-      setSearchError(errorMessage);
-      setToast({
-        isVisible: true,
-        message: errorMessage,
-        type: 'error'
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   const handleSearchEnter = (): void => {
     performSearch();
@@ -338,10 +379,13 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             </span>
             <button
               onClick={toggleAvailability}
+              disabled={isAvailabilitySubmitting}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${
-                isAvailable 
-                  ? 'bg-aqua' 
-                  : 'bg-gray-300'
+                isAvailabilitySubmitting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : isAvailable 
+                    ? 'bg-aqua' 
+                    : 'bg-gray-300'
               }`}
             >
               <span
@@ -648,15 +692,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-gray-700 mb-2">You're not discoverable</h3>
-              <p className="text-sm text-gray-500 text-center px-6 mb-4">
+              <p className="text-sm text-gray-500 text-center px-6">
                 Switch to "Available" to see and be discovered by people nearby
               </p>
-              <button
-                onClick={() => navigate('/friend-requests')}
-                className="text-sm text-blue-600 hover:text-blue-700 underline"
-              >
-                Check your friend requests
-              </button>
             </div>
           </div>
         )}
@@ -668,7 +706,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         <ProfileDetailModal
           userId={selectedUserId}
           onClose={handleCloseProfile}
-          onHide={handleHideUser}
         />
       )}
 
