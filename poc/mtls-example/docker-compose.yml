@@ -1,0 +1,21 @@
+version: '3.8'
+
+# Base mTLS Example Configuration
+# Use with docker-compose.override.yml for full mTLS setup
+
+services:
+  gateway:
+    image: mtls-gateway:latest
+    container_name: mtls-gateway-base
+    networks:
+      - default
+
+  service:
+    image: mtls-service:latest  
+    container_name: mtls-service-base
+    networks:
+      - default
+
+networks:
+  default:
+    name: mtls-base-network

@@ -1,0 +1,40 @@
+# Certificate files (generated dynamically)
+certs/
+*.crt
+*.key
+*.csr
+*.pem
+*.p12
+*.pfx
+
+# Environment files (may contain sensitive configuration)
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+*.env
+
+# Go build artifacts  
+*/vendor/
+*/go.sum
+
+# Docker build cache
+.docker/
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
