@@ -540,7 +540,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="pt-72 pb-4 overflow-y-auto">
+      <div className="pt-48 pb-4 overflow-y-auto">
         <div className="px-4">
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (

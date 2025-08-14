@@ -82,26 +82,39 @@ const extractUserId = (req: any): string | null => {
   const authHeader = req.headers.get('Authorization');
   const userIdHeader = req.headers.get('X-User-ID');
   
-  // SECURITY: Strict authentication validation
-  if (!authHeader && !userIdHeader) {
-    return null;
-  }
+  console.log('🔍 MSW: Extracting user ID from headers:', {
+    authHeader: authHeader ? authHeader.substring(0, 20) + '...' : 'none',
+    userIdHeader: userIdHeader || 'none'
+  });
   
-  // SECURITY: In development, validate dev token format
+  // SECURITY: In development/demo, validate dev token format
   if (authHeader && authHeader.includes('dev-token-')) {
     const token = authHeader.replace('Bearer ', '');
     if (token.startsWith('dev-token-') && token.length > 10) {
-      return token.replace('dev-token-', '');
+      const userId = token.replace('dev-token-', '');
+      console.log('✅ MSW: Extracted user ID from dev token:', userId);
+      return userId;
     }
   }
   
   // SECURITY: Fallback to X-User-ID only in development/demo
   if (userIdHeader && userIdHeader.match(/^[a-zA-Z0-9-]+$/)) {
+    console.log('✅ MSW: Using X-User-ID header:', userIdHeader);
     return userIdHeader;
   }
   
-  // SECURITY: Default demo user for MSW testing
-  return 'demo-user-1';
+  // For demo mode, if no valid auth found, use default demo user
+  const isDemo = typeof window !== 'undefined' && 
+                 (window as any).__vite_import_meta_env__?.VITE_APP_MODE === 'demo';
+  
+  if (isDemo || (!authHeader && !userIdHeader)) {
+    const defaultUserId = 'user-jane'; // Use jane as default demo user
+    console.log('🎭 MSW: Using default demo user ID:', defaultUserId);
+    return defaultUserId;
+  }
+  
+  console.warn('❌ MSW: No valid user ID found in request');
+  return null;
 };
 
 export const broadcastHandlers = [
