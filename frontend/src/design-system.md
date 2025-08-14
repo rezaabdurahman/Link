@@ -3,53 +3,63 @@
 ## Overview
 We've implemented a modern, cohesive design system using **Tailwind CSS** with a beautiful **aqua & white** color palette that creates a fresh, welcoming, and premium feel.
 
-## 🎨 Color Palette
+## 🎨 Unified Color System
 
-### Primary Colors (Aqua Themed)
+### Primary Colors (Aqua Brand)
 ```css
 primary-50:  #f0fdfa   /* Very light aqua tint */
 primary-100: #ccfbf1   /* Light aqua tint */
 primary-200: #99f6e4   /* Lighter aqua */
 primary-300: #5eead4   /* Light aqua */
 primary-400: #2dd4bf   /* Main aqua (primary) */
-primary-500: #14b8a6   /* Standard aqua */
+primary-500: #14b8a6   /* Standard aqua - Main Brand Color */
 primary-600: #0d9488   /* Dark aqua */
 primary-700: #0f766e   /* Darker aqua */
 primary-800: #115e59   /* Very dark aqua */
 primary-900: #134e4a   /* Deepest aqua */
 ```
 
-### Aqua Variants
+### Simplified Aqua System (Unified)
 ```css
-aqua-light:  #7dd3fc   /* Light aqua for highlights */
-aqua:        #06b6d4   /* Main brand aqua */
-aqua-dark:   #0891b2   /* Dark aqua for hover states */
-aqua-deeper: #0e7490   /* Deeper aqua for emphasis */
+aqua-light:  #2dd4bf   /* Maps to primary-400 */
+aqua:        #14b8a6   /* Maps to primary-500 - MAIN BRAND */
+aqua-dark:   #0d9488   /* Maps to primary-600 */
+aqua-deeper: #0f766e   /* Maps to primary-700 */
 ```
 
-### Surface Colors
+### Semantic Colors (For States)
 ```css
-surface-dark: #0f172a  /* Main dark background */
-surface-card: #1e293b  /* Card backgrounds */
-surface-hover: #334155 /* Hover states */
+semantic-success: #22c55e  /* Green for success states */
+semantic-warning: #f59e0b  /* Amber for warnings */
+semantic-danger:  #ef4444  /* Red for errors/danger */
+semantic-info:    #3b82f6  /* Blue for info states */
 ```
 
-### Text Colors
+### Surface Colors (Light Theme)
 ```css
-text-primary:   #ffffff    /* Main text (white) */
-text-secondary: #cbd5e1    /* Secondary text (light gray) */
-text-muted:     #64748b    /* Muted text (gray) */
+surface-primary:   #ffffff  /* Main background */
+surface-secondary: #f8fafc  /* Secondary background */
+surface-card:      #ffffff  /* Card backgrounds */
+surface-hover:     #f1f5f9  /* Hover states */
+surface-border:    #e2e8f0  /* Border color */
 ```
 
-### Accent Colors
+### Text Colors (Light Theme)
 ```css
-accent-pink:   #ec4899    /* Pink accents */
-accent-copper: #b45309    /* Copper accents (main) */
-accent-copper-light: #d97706  /* Light copper for highlights */
-accent-copper-dark: #92400e   /* Dark copper for emphasis */
+text-primary:   #1f2937  /* Primary text (dark) */
+text-secondary: #4b5563  /* Secondary text */
+text-muted:     #6b7280  /* Muted text */
+text-inverse:   #ffffff  /* Inverse text (on dark backgrounds) */
 ```
 
-**Note:** We removed the green accent color to streamline the palette - all success states and positive indicators now use aqua for better brand coherence.
+### Enhanced Accent System
+```css
+accent-copper:       #b45309  /* Main copper brown */
+accent-copper-light: #d97706  /* Light copper */
+accent-copper-dark:  #92400e  /* Dark copper */
+accent-charcoal:     #374151  /* Charcoal gray */
+accent-pink:         #ec4899  /* Pink accent */
+```
 
 ## 🧩 Component System
 
@@ -61,6 +71,7 @@ accent-copper-dark: #92400e   /* Dark copper for emphasis */
 ### Buttons
 - **`.ios-button`** - Primary aqua buttons
 - **`.ios-button-secondary`** - Secondary transparent buttons
+- **`IconActionButton`** - Circular icon-only buttons with consistent styling
 - Hover effects with scaling and color transitions
 - **`.hover-glow`** - Adds aqua glow effect on hover
 
@@ -147,6 +158,50 @@ pulse-slow: /* Slow pulse for emphasis */
 <button className="bg-aqua hover:bg-aqua-dark text-white font-semibold py-3 px-6 rounded-ios transition-all duration-200 hover-glow">
   Action Button
 </button>
+```
+
+### IconActionButton
+```tsx
+import { MessageCircle, Ban, EyeOff } from 'lucide-react';
+
+// Primary action button
+<IconActionButton
+  Icon={MessageCircle}
+  label="Send message"
+  onClick={() => console.log('Message clicked')}
+  variant="primary"
+  size="large"
+/>
+
+// Secondary action button
+<IconActionButton
+  Icon={EyeOff}
+  label="Hide user"
+  onClick={() => console.log('Hide clicked')}
+  variant="secondary"
+  size="medium"
+/>
+
+// Danger action button
+<IconActionButton
+  Icon={Ban}
+  label="Block user"
+  onClick={() => console.log('Block clicked')}
+  variant="danger"
+  size="large"
+/>
+
+// Social media buttons with external links
+<a href="https://instagram.com/user" target="_blank" rel="noopener noreferrer">
+  <IconActionButton
+    Icon={Instagram}
+    label="Visit Instagram"
+    onClick={() => {}}
+    variant="secondary"
+    size="medium"
+    title="@username"
+  />
+</a>
 ```
 
 ### Status Indicator

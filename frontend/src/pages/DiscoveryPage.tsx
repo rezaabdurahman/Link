@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Users } from 'lucide-react';
 import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
 import { User } from '../types';
 import UserCard from '../components/UserCard';
@@ -219,6 +220,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     console.log('User hidden:', userId);
   };
 
+
   // Search functionality - NEW unified search implementation
   const performSearch = async (): Promise<void> => {
     if (isSearching) return; // Prevent multiple concurrent searches
@@ -401,9 +403,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                   className="relative w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
                   title="Friend Requests"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                  </svg>
+                  <Users size={16} />
                   {/* Badge */}
                   {friendRequestsBadgeCount > 0 && (
                     <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center px-1">

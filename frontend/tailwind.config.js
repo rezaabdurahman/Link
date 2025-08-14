@@ -7,46 +7,72 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Aqua & White Design System
+        // Unified Aqua & White Design System - Fixed Conflicts
         primary: {
-          50: '#f0fdfa',
-          100: '#ccfbf1', 
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2dd4bf', // Main aqua
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
+          50: '#f0fdfa',   // Very light aqua tint
+          100: '#ccfbf1',  // Light aqua tint
+          200: '#99f6e4',  // Lighter aqua
+          300: '#5eead4',  // Light aqua
+          400: '#2dd4bf',  // Main aqua (primary)
+          500: '#14b8a6',  // Standard aqua
+          600: '#0d9488',  // Dark aqua
+          700: '#0f766e',  // Darker aqua
+          800: '#115e59',  // Very dark aqua
+          900: '#134e4a',  // Deepest aqua
         },
+        // Simplified aqua system - remove duplicates
         aqua: {
-          light: '#7dd3fc', // Light aqua - use sparingly, poor contrast
-          DEFAULT: '#0e7490', // Main aqua - WCAG AA compliant (was #06b6d4)
-          dark: '#0891b2', // Dark aqua
-          deeper: '#0e7490', // Deeper aqua - WCAG AA compliant
-          accessible: '#0e7490', // Explicit WCAG AA compliant variant
+          light: '#2dd4bf',  // Maps to primary-400 for consistency
+          DEFAULT: '#14b8a6', // Maps to primary-500 - main brand color
+          dark: '#0d9488',   // Maps to primary-600
+          deeper: '#0f766e', // Maps to primary-700
         },
+        // Semantic color system
+        semantic: {
+          success: '#22c55e',    // Green for success states
+          warning: '#f59e0b',    // Amber for warnings  
+          danger: '#ef4444',     // Red for errors/danger
+          info: '#3b82f6',       // Blue for info states
+        },
+        // Fixed surface colors for light theme consistency
         surface: {
-          dark: '#f8fafc', // Light surface
-          card: '#ffffff', // Card background
-          hover: '#f1f5f9', // Hover state
+          primary: '#ffffff',    // Main background
+          secondary: '#f8fafc',  // Secondary background  
+          card: '#ffffff',       // Card backgrounds
+          hover: '#f1f5f9',      // Hover states
+          border: '#e2e8f0',     // Border color
         },
+        // Fixed text colors for light theme
         text: {
-          primary: '#1f2937', // Dark text for light background
-          secondary: '#4b5563', // Medium gray text
-          muted: '#6b7280', // Darker gray text for better contrast (was #9ca3af)
+          primary: '#1f2937',    // Primary text (dark)
+          secondary: '#4b5563',  // Secondary text
+          muted: '#6b7280',      // Muted text
+          inverse: '#ffffff',    // Inverse text (on dark backgrounds)
         },
+        // Enhanced accent system
         accent: {
-          copper: '#b45309',      // Main copper brown - WCAG AA compliant
-          'copper-light': '#b45309', // Use main copper for better contrast (was #d97706)
-          'copper-dark': '#92400e',  // Dark copper for emphasis - WCAG AAA compliant
-          charcoal: '#36454f',    // Charcoal gray for additional accent
-          // Streamlined palette: aqua + copper brown + charcoal
+          copper: '#b45309',         // Main copper brown
+          'copper-light': '#d97706', // Light copper
+          'copper-dark': '#92400e',  // Dark copper
+          charcoal: '#374151',       // Charcoal gray
+          pink: '#ec4899',           // Pink accent
         }
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'San Francisco', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'sans-serif'],
+      },
+      // Standardized size system for consistent component sizing
+      size: {
+        xs: '2rem',    // 32px - Extra small
+        sm: '2.5rem',  // 40px - Small  
+        md: '3rem',    // 48px - Medium (default)
+        lg: '3.5rem',  // 56px - Large
+        xl: '4rem',    // 64px - Extra large
+        '2xl': '5rem', // 80px - 2X Large
+      },
+      spacing: {
+        '18': '4.5rem',  // 72px
+        '22': '5.5rem',  // 88px
       },
       borderRadius: {
         'ios': '10px',

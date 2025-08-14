@@ -40,9 +40,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   isOpen, 
   onClose, 
   chat, 
-  initialMessage,
-  onAddFriend,
-  isFriend
+  initialMessage
 }): JSX.Element => {
   const [messages, setMessages] = useState<(Message | BotSummary)[]>([]);
   const [newMessage, setNewMessage] = useState<string>(initialMessage || '');
@@ -62,22 +60,6 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   // Determine if users are friends based on real friendship status
   const areFriends = friendshipStatus === 'friends';
   const showFriendButton = chat && !areFriends;
-  
-  const handleFriendAction = (action: string, success: boolean) => {
-    if (success) {
-      console.log(`Friend action ${action} completed successfully`);
-      // Update chat object to reflect new friendship status
-      if (chat && action === 'send') {
-        // After sending a friend request, we might want to update permissions
-        // This will be handled automatically by the friendship hook
-      } else if (chat && (action === 'accept' || friendshipStatus === 'friends')) {
-        // After accepting or becoming friends, enable additional features
-        chat.isFriend = true;
-        // Trigger any additional permission updates or UI changes here
-        console.log('Friendship established - new permissions available');
-      }
-    }
-  };
 
   const scrollToBottom = (): void => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

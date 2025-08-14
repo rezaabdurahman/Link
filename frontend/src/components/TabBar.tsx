@@ -45,41 +45,48 @@ const TabBar: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="tab-bar">
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-around', 
-        alignItems: 'center', 
-        padding: '12px 20px 0 20px',
-        height: '60px'
-      }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.path}
-            onClick={() => handleTabClick(tab.path)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '0',
-              minWidth: '60px',
-              color: location.pathname === tab.path ? '#06b6d4' : '#6b7280',
-              transition: 'color 0.2s ease'
-            }}
-            className="haptic-light hover-scale"
-          >
-            {tab.icon}
-            <span style={{ fontSize: '10px', fontWeight: '500' }}>
-              {tab.label}
-            </span>
-          </button>
-        ))}
+    <nav className="tab-bar" role="tablist" aria-label="Main navigation">
+      <div className="flex justify-around items-center px-5 pt-3 h-15">
+        {tabs.map((tab) => {
+          const isActive = location.pathname === tab.path;
+          return (
+            <button
+              key={tab.path}
+              onClick={() => handleTabClick(tab.path)}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`panel-${tab.path.slice(1)}`}
+              className={`
+                flex flex-col items-center gap-1 p-0 min-w-15 h-12
+                bg-transparent border-none cursor-pointer
+                transition-all duration-200 ease-in-out
+                haptic-light hover-scale focus-ring
+                ${
+                  isActive 
+                    ? 'text-aqua' 
+                    : 'text-text-muted hover:text-text-secondary'
+                }
+              `}
+            >
+              <div className="flex-shrink-0">
+                {tab.icon}
+              </div>
+              <span className="text-xs font-medium leading-none">
+                {tab.label}
+              </span>
+              {/* Active indicator */}
+              {isActive && (
+                <div className="absolute -bottom-1 w-1 h-1 bg-aqua rounded-full" />
+              )}
+              {/* Screen reader context */}
+              <span className="sr-only">
+                {isActive ? '(current page)' : ''}
+              </span>
+            </button>
+          );
+        })}
       </div>
-    </div>
+    </nav>
   );
 };
 

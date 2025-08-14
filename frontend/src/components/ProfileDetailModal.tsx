@@ -196,29 +196,14 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex justify-between items-center p-5 pb-0">
-          <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
-            Profile
-          </h2>
-          <div className="flex items-center gap-2">
-            {/* Only Hide and Close buttons in header */}
-            {user && onHide && (
-              <IconActionButton
-                Icon={EyeOff}
-                label="Hide user"
-                onClick={handleHideUser}
-                variant="secondary"
-                size="small"
-              />
-            )}
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
-            >
-              <X size={16} className="text-white" />
-            </button>
-          </div>
+        {/* Fixed Header - Only Close Button */}
+        <div className="flex justify-end items-center p-5 pb-0">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
+          >
+            <X size={16} className="text-white" />
+          </button>
         </div>
 
         {/* Scrollable Content */}
@@ -229,8 +214,24 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
           
           {user && !loading && !error && (
             <>
+              {/* Profile Title & Hide Button */}
+              <div className="flex justify-between items-center px-5 pt-0 pb-4">
+                <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
+                  Profile
+                </h2>
+                {onHide && (
+                  <IconActionButton
+                    Icon={EyeOff}
+                    label="Hide user"
+                    onClick={handleHideUser}
+                    variant="secondary"
+                    size="small"
+                  />
+                )}
+              </div>
+
               {/* Profile Header */}
-              <div className="text-center mb-4 p-5 pb-0">
+              <div className="text-center mb-4 px-5 pb-0">
                 <div className="relative inline-block mb-4">
                   {user.profilePicture ? (
                     <img
@@ -332,8 +333,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   <FriendButton
                     userId={user.id}
                     size="large"
-                    variant="outline"
-                    className="flex-1"
+                    variant="default"
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800"
                   />
                 </div>
               </div>
