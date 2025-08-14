@@ -61,6 +61,15 @@ mockAvailability.set('demo-user-3', {
   updated_at: now(),
 });
 
+// Add the demo user 'user-jane' for proper availability functionality
+mockAvailability.set('user-jane', {
+  id: generateId(),
+  user_id: 'user-jane',
+  is_available: false,
+  created_at: now(),
+  updated_at: now(),
+});
+
 // Helper to calculate expiration time
 const getExpirationTime = (hours: number = 24) => {
   const expiration = new Date();

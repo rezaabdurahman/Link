@@ -23,7 +23,7 @@ export async function devLogin(userData?: Partial<AuthUser>): Promise<{ user: Au
 
   // Create a mock token that expires in 1 hour
   const mockToken: AuthToken = {
-    token: 'dev-token-' + Date.now(),
+    token: 'dev-token-' + mockUser.id,
     expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour from now
     tokenType: 'Bearer' as const,
     issuedAt: new Date().toISOString(),
