@@ -426,17 +426,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            {user?.profilePicture ? (
-              <img 
-                src={user.profilePicture} 
-                alt={chat.participantName}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-aqua/20 flex items-center justify-center">
-                <UserIcon size={20} className="text-aqua" />
-              </div>
-            )}
+            <img 
+              src={chat.participantAvatar} 
+              alt={chat.participantName}
+              className="w-10 h-10 rounded-full object-cover"
+            />
             <div>
               <h3 className="font-semibold text-gray-900">{chat.participantName}</h3>
               <p className="text-xs text-gray-600">
@@ -445,14 +439,6 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Show FriendButton only if not friends and not blocked */}
-            {showFriendButton && (
-              <FriendButton
-                userId={chat.participantId}
-                size="small"
-                className="p-2"
-              />
-            )}
             <button 
               onClick={onClose}
               className="p-2 hover:bg-surface-hover rounded-full transition-colors"
@@ -476,11 +462,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               // Bot summary message
               return (
                 <div key={message.id} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-sm border border-accent-copper/40">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-md">
                     <Bot size={16} className="text-white drop-shadow-sm" />
                   </div>
                   <div className="flex-1">
-                    <div className="bg-accent-copper rounded-2xl rounded-tl-sm p-3">
+                    <div className="bg-accent-copper-light rounded-2xl rounded-tl-sm p-3">
                       <p className="text-sm text-white mb-3">{message.content}</p>
                       <div className="space-y-2">
                         {message.activities.map((activity, index) => (
@@ -521,11 +507,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                 // LinkBot system message
                 return (
                   <div key={msg.id} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-sm border border-accent-copper/40">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-md">
                       <Bot size={16} className="text-white drop-shadow-sm" />
                     </div>
                     <div className="flex-1">
-                      <div className="bg-accent-copper rounded-2xl rounded-tl-sm p-3">
+                      <div className="bg-accent-copper-light rounded-2xl rounded-tl-sm p-3">
                         <p className="text-sm text-white">{msg.content}</p>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 ml-3">
@@ -538,11 +524,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                 // Permission request from LinkBot
                 return (
                   <div key={msg.id} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-sm border border-accent-copper/40">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-md">
                       <Bot size={16} className="text-white drop-shadow-sm" />
                     </div>
                     <div className="flex-1">
-                      <div className="bg-accent-copper rounded-2xl rounded-tl-sm p-3">
+                      <div className="bg-accent-copper-light rounded-2xl rounded-tl-sm p-3">
                         <p className="text-sm text-white mb-3">{msg.content}</p>
                         {msg.permissionData && msg.permissionData.isApproved === undefined && (
                           <div className="flex gap-2 mt-3">
@@ -602,17 +588,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                 return (
                   <div key={msg.id} className={`flex gap-3 ${isFromCurrentUser ? 'flex-row-reverse' : ''}`}>
                     {!isFromCurrentUser && (
-                      <div className="w-8 h-8 rounded-full bg-surface-hover/50 flex items-center justify-center flex-shrink-0">
-                        {user?.profilePicture ? (
-                          <img 
-                            src={user.profilePicture} 
-                            alt={chat.participantName}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
-                        ) : (
-                          <UserIcon size={16} className="text-gray-600" />
-                        )}
-                      </div>
+                      <img 
+                        src={chat.participantAvatar} 
+                        alt={chat.participantName}
+                        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                      />
                     )}
                     <div className={`max-w-[80%] ${isFromCurrentUser ? 'text-right' : ''} flex items-start ${isFromCurrentUser ? 'flex-row-reverse' : ''} gap-2`}>
                       <div className="flex-1">
@@ -652,17 +632,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
           {/* Typing Indicator */}
           {typingUsers.size > 0 && (
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-surface-hover/50 flex items-center justify-center flex-shrink-0">
-                {user?.profilePicture ? (
-                  <img 
-                    src={user.profilePicture} 
-                    alt={chat.participantName}
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
-                ) : (
-                  <UserIcon size={16} className="text-gray-600" />
-                )}
-              </div>
+              <img 
+                src={chat.participantAvatar} 
+                alt={chat.participantName}
+                className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+              />
               <div className="flex-1">
                 <div className="bg-surface-hover text-gray-900 rounded-2xl rounded-bl-sm p-3 max-w-[80px]">
                   <div className="flex space-x-1">
