@@ -7,29 +7,29 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Unified Aqua & White Design System - Fixed Conflicts
+        // Unified Aqua & White Design System - Updated with #06b6d4 brand color
         primary: {
-          50: '#f0fdfa',   // Very light aqua tint
-          100: '#ccfbf1',  // Light aqua tint
-          200: '#99f6e4',  // Lighter aqua
-          300: '#5eead4',  // Light aqua
-          400: '#2dd4bf',  // Main aqua (primary)
-          500: '#14b8a6',  // Standard aqua
-          600: '#0d9488',  // Dark aqua
-          700: '#0f766e',  // Darker aqua
-          800: '#115e59',  // Very dark aqua
-          900: '#134e4a',  // Deepest aqua
+          50: '#f0f9ff',   // Very light cyan tint
+          100: '#e0f2fe',  // Light cyan tint
+          200: '#bae6fd',  // Lighter cyan
+          300: '#7dd3fc',  // Light cyan
+          400: '#38bdf8',  // Bright cyan
+          500: '#06b6d4',  // Main brand color - balanced cyan
+          600: '#0891b2',  // Dark cyan
+          700: '#0e7490',  // Darker cyan
+          800: '#155e75',  // Very dark cyan
+          900: '#164e63',  // Deepest cyan
         },
-        // Simplified aqua system - remove duplicates
+        // Simplified aqua system - updated to match new brand color
         aqua: {
-          light: '#2dd4bf',  // Maps to primary-400 for consistency
-          DEFAULT: '#14b8a6', // Maps to primary-500 - main brand color
-          dark: '#0d9488',   // Maps to primary-600
-          deeper: '#0f766e', // Maps to primary-700
+          light: '#38bdf8',  // Maps to primary-400 for consistency
+          DEFAULT: '#06b6d4', // Maps to primary-500 - main brand color
+          dark: '#0891b2',   // Maps to primary-600
+          deeper: '#0e7490', // Maps to primary-700
         },
         // Semantic color system
         semantic: {
-          success: '#14b8a6',    // Aqua for success states (consistent with brand)
+          success: '#06b6d4',    // Updated to new brand color for success states
           warning: '#f59e0b',    // Amber for warnings  
           danger: '#ef4444',     // Red for errors/danger
           info: '#3b82f6',       // Blue for info states
