@@ -3,14 +3,16 @@ import { MapPin, Users, Play, Volume2, VolumeX } from 'lucide-react';
 import { User } from '../types';
 import ScrollingText from './ScrollingText';
 import { currentUser } from '../data/mockData';
+import { FriendButtonMini } from './FriendButton';
 
 interface UserCardProps {
   user: User;
   onClick?: () => void;
   isVerticalLayout?: boolean;
+  showFriendButton?: boolean;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = false }): JSX.Element => {
+const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = false, showFriendButton = true }): JSX.Element => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -140,6 +142,16 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
             </div>
           )}
           
+          {/* Friend Button Overlay */}
+          {showFriendButton && (
+            <div 
+              className="absolute top-3 right-3 z-20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <FriendButtonMini userId={user.id} />
+            </div>
+          )}
+          
           {/* Gradient overlay for better text readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           
@@ -223,6 +235,15 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
           </div>
         )}
         
+        {/* Friend Button Overlay */}
+        {showFriendButton && (
+          <div 
+            className="absolute top-3 right-3 z-20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FriendButtonMini userId={user.id} />
+          </div>
+        )}
         
         {/* Bottom Overlay Content */}
         <div className="overlay-content absolute bottom-0 left-0 right-0 p-2 space-y-2">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
 import { User } from '../types';
 import UserCard from '../components/UserCard';
@@ -13,8 +14,12 @@ import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, Unif
 // Legacy import - this will show deprecation warnings in console
 import { searchAvailableUsers, isSearchError, getSearchErrorMessage, SearchUsersRequest } from '../services/searchClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
+import { usePendingReceivedRequestsCount } from '../hooks/useFriendRequests';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
+  const navigate = useNavigate();
+  const friendRequestsBadgeCount = usePendingReceivedRequestsCount();
+
   // User state management
   const [currentUser, setCurrentUser] = useState<User>(initialCurrentUser);
   const [isAvailable, setIsAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
@@ -389,6 +394,22 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                     </svg>
                   </button>
                 )}
+                {/* Friend Requests Icon */}
+                <button
+                  onClick={() => navigate('/friend-requests')}
+                  className="relative w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
+                  title="Friend Requests"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                  {/* Badge */}
+                  {friendRequestsBadgeCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center px-1">
+                      {friendRequestsBadgeCount > 99 ? '99+' : friendRequestsBadgeCount}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
           </div>
@@ -537,7 +558,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 </button>
               </div>
             )}
-            
             {/* Users Grid/Feed */}
             {!isSearching && !searchError && displayUsers.length > 0 && (
               <>            
@@ -624,9 +644,15 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-gray-700 mb-2">You're not discoverable</h3>
-              <p className="text-sm text-gray-500 text-center px-6">
+              <p className="text-sm text-gray-500 text-center px-6 mb-4">
                 Switch to "Available" to see and be discovered by people nearby
               </p>
+              <button
+                onClick={() => navigate('/friend-requests')}
+                className="text-sm text-blue-600 hover:text-blue-700 underline"
+              >
+                Check your friend requests
+              </button>
             </div>
           </div>
         )}

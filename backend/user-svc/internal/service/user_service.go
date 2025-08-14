@@ -112,6 +112,7 @@ type StandaloneUserService interface {
 	GetFriendRequests(userID uuid.UUID, page, limit int) ([]models.FriendRequest, error)
 	SendFriendRequest(requesterID uuid.UUID, req SendFriendRequestRequest) error
 	RespondToFriendRequest(requestID, userID uuid.UUID, accept bool) error
+	CancelFriendRequest(requesterID, requesteeID uuid.UUID) error
 	
 	// Search
 	SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
@@ -495,6 +496,39 @@ func (s *userService) RespondToFriendRequest(requestID, userID uuid.UUID, accept
 		if err := s.userRepo.CreateFriendship(friendRequest.RequesterID, friendRequest.RequesteeID); err != nil {
 			return fmt.Errorf("failed to create friendship: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// CancelFriendRequest cancels a pending friend request
+func (s *userService) CancelFriendRequest(requesterID, requesteeID uuid.UUID) error {
+	// Prevent canceling requests to self
+	if requesterID == requesteeID {
+		return ErrCannotSendToSelf
+	}
+
+	// Check if requestee exists
+	_, err := s.userRepo.GetUserByID(requesteeID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to get requestee: %w", err)
+	}
+
+	// Check if there's a pending friend request to cancel
+	hasPending, err := s.userRepo.HasPendingFriendRequest(requesterID, requesteeID)
+	if err != nil {
+		return fmt.Errorf("failed to check pending requests: %w", err)
+	}
+	if !hasPending {
+		return ErrFriendRequestNotFound
+	}
+
+	// Cancel the friend request
+	if err := s.userRepo.CancelFriendRequest(requesterID, requesteeID); err != nil {
+		return fmt.Errorf("failed to cancel friend request: %w", err)
 	}
 
 	return nil

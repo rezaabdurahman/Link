@@ -15,9 +15,11 @@ func RegisterRoutes(router *gin.RouterGroup, profileHandler *ProfileHandler) {
 
 		// Friends endpoints (require auth via gateway)
 		users.GET("/friends", profileHandler.GetFriends)
+		users.DELETE("/friends/:friendId", profileHandler.RemoveFriend)
 		users.GET("/friend-requests", profileHandler.GetFriendRequests)
 		users.POST("/friend-requests", profileHandler.SendFriendRequest)
 		users.PUT("/friend-requests/:requestId", profileHandler.RespondToFriendRequest)
+		users.DELETE("/friend-requests/:requesteeId", profileHandler.CancelFriendRequest)
 
 	}
 }

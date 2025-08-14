@@ -251,7 +251,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   /users/friend-requests/{requestId}:
-    put:
+    patch:
       summary: Respond to Friend Request
       description: Accept or decline a friend request
       operationId: respondToFriendRequest
@@ -271,6 +271,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/FriendRequestResponse'
+            example:
+              accept: true
       responses:
         '200':
           description: Friend request response processed
@@ -280,6 +282,29 @@ paths:
                 $ref: '#/components/schemas/FriendRequest'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/friends/{friendId}:
+    delete:
+      summary: Remove Friend
+      description: Remove/unfriend a user (idempotent operation)
+      operationId: removeFriend
+      tags:
+        - Social
+      parameters:
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID of the friend to remove
+      responses:
+        '204':
+          description: Friend removed successfully
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1123,10 +1148,10 @@ components:
     FriendRequestResponse:
       type: object
       properties:
-        action:
-          type: string
-          enum: [accept, decline]
-      required: [action]
+        accept:
+          type: boolean
+          description: true to accept the friend request, false to decline
+      required: [accept]
 
     # Chat Schemas
     Conversation:

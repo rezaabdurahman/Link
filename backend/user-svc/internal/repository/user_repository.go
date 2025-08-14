@@ -19,7 +19,7 @@ type UserRepository interface {
 	UpdateLastLogin(userID uuid.UUID) error
 	DeactivateUser(userID uuid.UUID) error
 
-	// Friend operations
+// Friend operations
 	GetUserFriends(userID uuid.UUID, limit, offset int) ([]models.PublicUser, error)
 	GetFriendIDs(userID uuid.UUID) ([]uuid.UUID, error)
 	GetFriendRequests(userID uuid.UUID, limit, offset int) ([]models.FriendRequest, error)
@@ -27,6 +27,7 @@ type UserRepository interface {
 	CreateFriendRequest(friendRequest *models.FriendRequest) error
 	UpdateFriendRequest(requestID uuid.UUID, status models.FriendRequestStatus) error
 	GetFriendRequest(requestID uuid.UUID) (*models.FriendRequest, error)
+	CancelFriendRequest(requesterID, requesteeID uuid.UUID) error
 	AreFriends(userID1, userID2 uuid.UUID) (bool, error)
 	HasPendingFriendRequest(requesterID, requesteeID uuid.UUID) (bool, error)
 	CreateFriendship(userID1, userID2 uuid.UUID) error
@@ -198,6 +199,13 @@ func (r *userRepository) GetFriendRequest(requestID uuid.UUID) (*models.FriendRe
 		return nil, err
 	}
 	return &request, nil
+}
+
+// CancelFriendRequest cancels a pending friend request
+func (r *userRepository) CancelFriendRequest(requesterID, requesteeID uuid.UUID) error {
+	return r.db.Where("requester_id = ? AND requestee_id = ? AND status = ?", 
+		requesterID, requesteeID, models.FriendRequestPending).
+		Delete(&models.FriendRequest{}).Error
 }
 
 // AreFriends checks if two users are friends

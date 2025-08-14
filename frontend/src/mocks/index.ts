@@ -5,4 +5,4 @@ export { worker, startMockWorker } from './browser';
 export { server } from './server';
 
 // Handlers (for custom usage)
-export { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers } from './handlers';
+export { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers, friendHandlers, userHandlers } from './handlers';

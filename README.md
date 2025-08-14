@@ -167,6 +167,20 @@ All requests go through the API Gateway at `http://localhost:8080`:
 - `PUT /users/profile` - Update user profile
 - `DELETE /auth/logout` - User logout
 - `GET /users/search` - Search users
+- `GET /users/profile/{userId}` - Get public user profile
+
+### Friend System (Protected)
+- `GET /users/friends` - Get user's friends list
+- `GET /users/friend-requests` - Get pending friend requests
+- `POST /users/friend-requests` - Send friend request
+  ```json
+  { "addressee_id": "user-uuid" }
+  ```
+- `PATCH /users/friend-requests/{requestId}` - Accept/decline friend request
+  ```json
+  { "accept": true }
+  ```
+- `DELETE /users/friends/{friendId}` - Remove friendship (idempotent)
 
 ### AI Service (Protected)
 - `POST /api/v1/ai/summarize` - Generate conversation summaries

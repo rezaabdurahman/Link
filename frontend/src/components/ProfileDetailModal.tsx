@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users, EyeOff } from 'lucide-react';
 import { User, Chat } from '../types';
 import ConversationModal from './ConversationModal';
+import FriendButton from './FriendButton';
+import { useFriendRequests } from '../hooks/useFriendRequests';
 import { getUserProfile, UserProfileResponse, getProfileErrorMessage } from '../services/userClient';
 
 interface ProfileDetailModalProps {
@@ -39,7 +41,10 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [isFriend, setIsFriend] = useState<boolean>(false);
+  
+  // Use the friendship hook to get real friendship status
+  const { getFriendshipStatus } = useFriendRequests();
+  const friendshipStatus = getFriendshipStatus(userId).status;
 
   // Fetch user profile data when modal mounts or userId changes
   useEffect(() => {
@@ -64,8 +69,15 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     fetchUserProfile();
   }, [userId]);
 
-  const handleAddFriend = (): void => {
-    setIsFriend(!isFriend);
+  // Determine if users are friends based on friendship status
+  const isFriend = friendshipStatus === 'friends';
+  
+  const handleFriendAction = (action: string, success: boolean) => {
+    if (success) {
+      console.log(`Friend action ${action} completed successfully`);
+      // The friendship hook will automatically update the status
+      // We can add any additional UI feedback here if needed
+    }
   };
 
   const handleHideUser = (): void => {
@@ -214,6 +226,14 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   )}
                 </div>
 
+                {/* Friend Button */}
+                <div className="flex justify-center mb-4">
+                  <FriendButton
+                    userId={user.id}
+                    size="large"
+                  />
+                </div>
+
                 {/* Action Buttons */}
                 <div className="flex gap-3 justify-center">
                   <button
@@ -341,7 +361,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
             isOpen={isChatOpen}
             onClose={() => setIsChatOpen(false)}
             chat={chatData}
-            onAddFriend={handleAddFriend}
+            onAddFriend={() => handleFriendAction('send', true)}
             isFriend={isFriend}
           />
         )}

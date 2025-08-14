@@ -1,5 +1,5 @@
 import { setupWorker } from 'msw/browser';
-import { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers } from './handlers';
+import { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers, friendHandlers, userHandlers } from './handlers';
 
 // Setup the service worker with our handlers
 export const worker = setupWorker(
@@ -7,7 +7,9 @@ export const worker = setupWorker(
   ...availabilityHandlers, 
   ...onboardingHandlers,
   ...authHandlers,
-  ...chatHandlers
+  ...chatHandlers,
+  ...friendHandlers,
+  ...userHandlers
 );
 
 // Start the worker in development/demo mode
@@ -46,7 +48,7 @@ export const startMockWorker = async () => {
       });
       
       console.log('🔧 MSW: Mock Service Worker started');
-      console.log('📡 MSW: Mocking broadcast, availability, onboarding, auth & chat API endpoints');
+      console.log('📡 MSW: Mocking broadcast, availability, complete onboarding flow, auth, chat, friendship \u0026 user profile API endpoints');
       console.log('🔒 MSW: Security checks passed - development environment confirmed');
     } catch (error) {
       console.error('❌ MSW: Failed to start Mock Service Worker:', error);

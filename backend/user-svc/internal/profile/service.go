@@ -3,6 +3,7 @@ package profile
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ var (
 	ErrCannotSendToSelf       = errors.New("cannot send friend request to yourself")
 	ErrFriendRequestNotFound  = errors.New("friend request not found")
 	ErrUnauthorized           = errors.New("unauthorized action")
+	ErrNotFriends             = errors.New("users are not friends")
 )
 
 // DTO types for profile service
@@ -44,11 +46,13 @@ type ProfileService interface {
 	GetPublicUserProfile(userID, viewerID uuid.UUID) (*models.PublicUser, error)
 	UpdateUserProfile(userID uuid.UUID, req UpdateProfileRequest) (*models.ProfileUser, error)
 	
-	// Friends
+// Friends
 	GetUserFriends(userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
 	GetFriendRequests(userID uuid.UUID, page, limit int) ([]models.FriendRequest, error)
 	SendFriendRequest(requesterID uuid.UUID, req SendFriendRequestRequest) error
 	RespondToFriendRequest(requestID, userID uuid.UUID, accept bool) error
+	CancelFriendRequest(requesterID, requesteeID uuid.UUID) error
+	RemoveFriend(userID, friendID uuid.UUID) error
 	
 }
 
@@ -252,3 +256,83 @@ func (s *profileService) RespondToFriendRequest(requestID, userID uuid.UUID, acc
 	return nil
 }
 
+// CancelFriendRequest cancels a pending friend request
+func (s *profileService) CancelFriendRequest(requesterID, requesteeID uuid.UUID) error {
+	// Prevent canceling requests to self
+	if requesterID == requesteeID {
+		return ErrCannotSendToSelf
+	}
+
+	// Check if requestee exists
+	_, err := s.userRepo.GetUserByID(requesteeID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to get requestee: %w", err)
+	}
+
+	// Check if there's a pending friend request to cancel
+	hasPending, err := s.userRepo.HasPendingFriendRequest(requesterID, requesteeID)
+	if err != nil {
+		return fmt.Errorf("failed to check pending requests: %w", err)
+	}
+	if !hasPending {
+		return ErrFriendRequestNotFound
+	}
+
+	// Cancel the friend request
+	if err := s.userRepo.CancelFriendRequest(requesterID, requesteeID); err != nil {
+		return fmt.Errorf("failed to cancel friend request: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveFriend removes a friendship between two users
+func (s *profileService) RemoveFriend(userID, friendID uuid.UUID) error {
+	// Prevent self-removal
+	if userID == friendID {
+		return ErrCannotSendToSelf // Reuse existing error for consistency
+	}
+
+	// Check if friend exists
+	_, err := s.userRepo.GetUserByID(friendID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to get friend: %w", err)
+	}
+
+	// Check if they are actually friends
+	areFriends, err := s.userRepo.AreFriends(userID, friendID)
+	if err != nil {
+		return fmt.Errorf("failed to check friendship: %w", err)
+	}
+	if !areFriends {
+		return ErrNotFriends
+	}
+
+	// Remove the friendship
+	if err := s.userRepo.DeleteFriendship(userID, friendID); err != nil {
+		return fmt.Errorf("failed to remove friendship: %w", err)
+	}
+
+	return nil
+}
+
+// SearchUsers searches for users by name or username
+func (s *profileService) SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error) {
+	if strings.TrimSpace(query) == "" {
+		return []models.PublicUser{}, nil
+	}
+
+	offset := (page - 1) * limit
+	users, err := s.userRepo.SearchUsers(strings.TrimSpace(query), userID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search users: %w", err)
+	}
+
+	return users, nil
+}
