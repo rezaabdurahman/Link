@@ -224,7 +224,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
         onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Fixed Header - Only Close Button */}
-        <div className="flex justify-end items-center p-3 pb-0">
+        <div className="flex justify-end items-center px-3 pt-2 pb-1">
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
