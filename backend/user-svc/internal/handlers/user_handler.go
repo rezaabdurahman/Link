@@ -139,8 +139,8 @@ func (h *UserHandler) LogoutUser(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserProfile gets the current user's profile
-func (h *UserHandler) GetCurrentUserProfile(c *gin.Context) {
+// GetMyProfile gets the authenticated user's own profile
+func (h *UserHandler) GetMyProfile(c *gin.Context) {
 	userID, exists := middleware.GetUserIDFromHeader(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{

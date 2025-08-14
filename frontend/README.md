@@ -15,6 +15,30 @@ npm run dev
 npm run build
 ```
 
+## Screenshots
+
+### Onboarding Flow
+![Onboarding Welcome](docs/screenshots/onboarding-welcome.png)
+*Welcome screen with step-by-step progress indicator*
+
+![Profile Setup](docs/screenshots/onboarding-profile.png)
+*Interactive profile picture and bio setup*
+
+![Interest Selection](docs/screenshots/onboarding-interests.png)
+*Tag-based interest selection with aqua theme*
+
+### Core App Experience
+![Discovery Page](docs/screenshots/discovery-page.png)
+*Clean discovery interface with user cards and filters*
+
+![Chat Interface](docs/screenshots/chat-interface.png)
+*iOS-style chat with search and conversation management*
+
+![User Profile](docs/screenshots/user-profile.png)
+*Detailed user profile with glass morphism design*
+
+*Note: Screenshots will be added as the UI is finalized. The current implementation focuses on functionality and responsive design.*
+
 ## Scripts
 
 ### Development
@@ -62,6 +86,38 @@ src/
 - **Jest** for testing
 - **ESLint** for code quality
 - **Service Layer Architecture** for API communication
+
+## Design System
+
+The application uses a comprehensive design system built with Tailwind CSS, featuring:
+
+### 🎨 Aqua & White Theme
+- Modern color palette with aqua (#06b6d4) as the primary brand color
+- Clean white backgrounds with subtle transparency effects
+- Removed green accents for better brand coherence
+
+### 🌟 Key Features
+- **Glass Morphism**: Backdrop blur effects and semi-transparent cards
+- **iOS-Style Interactions**: Haptic feedback simulation and smooth animations
+- **Responsive Design**: Mobile-first approach optimized for all devices
+- **Dark Mode Native**: Designed specifically for dark themes
+- **Accessibility First**: WCAG AA compliance with proper contrast ratios
+
+### 📖 Documentation
+Detailed design system documentation is available in:
+- `src/design-system.md` - Complete color palette, components, and usage examples
+- Includes onboarding flow examples and component patterns
+- Typography, spacing, and layout guidelines
+- Animation and interaction specifications
+
+### 🧩 Component Examples
+The design system includes examples for:
+- Onboarding step containers and progress indicators
+- User cards with hover effects and transitions
+- Button variants (primary, secondary, loading states)
+- Form inputs with focus states
+- Status indicators and badges
+- Navigation patterns
 
 ## Development Guidelines
 

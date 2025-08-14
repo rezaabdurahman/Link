@@ -7,23 +7,41 @@ import (
 	"gorm.io/gorm"
 )
 
+// SocialLink represents a social media link
+type SocialLink struct {
+	Platform string `json:"platform"`
+	URL      string `json:"url"`
+	Username string `json:"username,omitempty"`
+}
+
+// PrivacySettings represents user privacy preferences
+type PrivacySettings struct {
+	ShowAge           bool `json:"show_age"`
+	ShowLocation      bool `json:"show_location"`
+	ShowMutualFriends bool `json:"show_mutual_friends"`
+}
+
 // User represents a user in the system
 type User struct {
-	ID              uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Email           string     `json:"email" gorm:"uniqueIndex;not null"`
-	Username        string     `json:"username" gorm:"uniqueIndex;not null"`
-	FirstName       string     `json:"first_name" gorm:"not null"`
-	LastName        string     `json:"last_name" gorm:"not null"`
-	DateOfBirth     *time.Time `json:"date_of_birth" gorm:"type:date"`
-	ProfilePicture  *string    `json:"profile_picture" gorm:"type:text"`
-	Bio             *string    `json:"bio" gorm:"type:text"`
-	Location        *string    `json:"location" gorm:"type:varchar(255)"`
-	EmailVerified   bool       `json:"email_verified" gorm:"default:false"`
-	IsActive        bool       `json:"is_active" gorm:"default:true"`
-	PasswordHash    string     `json:"-" gorm:"not null"` // Never expose password hash
-	LastLoginAt     *time.Time `json:"last_login_at"`
-	CreatedAt       time.Time  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt       time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	ID              uuid.UUID        `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Email           string           `json:"email" gorm:"uniqueIndex;not null"`
+	Username        string           `json:"username" gorm:"uniqueIndex;not null"`
+	FirstName       string           `json:"first_name" gorm:"not null"`
+	LastName        string           `json:"last_name" gorm:"not null"`
+	DateOfBirth     *time.Time       `json:"date_of_birth" gorm:"type:date"`
+	ProfilePicture  *string          `json:"profile_picture" gorm:"type:text"`
+	Bio             *string          `json:"bio" gorm:"type:text"`
+	Location        *string          `json:"location" gorm:"type:varchar(255)"`
+	Interests       []string         `json:"interests" gorm:"type:text[];serializer:json"`
+	SocialLinks     []SocialLink     `json:"social_links" gorm:"type:jsonb;serializer:json"`
+	AdditionalPhotos []string        `json:"additional_photos" gorm:"type:text[];serializer:json"`
+	PrivacySettings PrivacySettings  `json:"privacy_settings" gorm:"type:jsonb;serializer:json;default:'{"show_age": true, "show_location": true, "show_mutual_friends": true}'"`
+	EmailVerified   bool             `json:"email_verified" gorm:"default:false"`
+	IsActive        bool             `json:"is_active" gorm:"default:true"`
+	PasswordHash    string           `json:"-" gorm:"not null"` // Never expose password hash
+	LastLoginAt     *time.Time       `json:"last_login_at"`
+	CreatedAt       time.Time        `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time        `json:"updated_at" gorm:"autoUpdateTime"`
 
 	// Relationships
 	SentFriendRequests     []FriendRequest `json:"-" gorm:"foreignKey:RequesterID"`
@@ -42,65 +60,128 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 
 // PublicUser represents user data safe for public viewing
 type PublicUser struct {
-	ID             uuid.UUID  `json:"id"`
-	Username       string     `json:"username"`
-	FirstName      string     `json:"first_name"`
-	LastName       string     `json:"last_name"`
-	ProfilePicture *string    `json:"profile_picture"`
-	Bio            *string    `json:"bio"`
-	Location       *string    `json:"location"`
-	CreatedAt      time.Time  `json:"created_at"`
-	LastLoginAt    *time.Time `json:"last_login_at,omitempty"`
-	IsFriend       bool       `json:"is_friend,omitempty"`       // Populated dynamically
-	MutualFriends  int        `json:"mutual_friends,omitempty"` // Populated dynamically
+	ID               uuid.UUID       `json:"id"`
+	Username         string          `json:"username"`
+	FirstName        string          `json:"first_name"`
+	LastName         string          `json:"last_name"`
+	Age              *int            `json:"age,omitempty"`              // Calculated from date of birth, respecting privacy
+	ProfilePicture   *string         `json:"profile_picture"`
+	Bio              *string         `json:"bio"`
+	Location         *string         `json:"location,omitempty"`         // Respecting privacy settings
+	Interests        []string        `json:"interests"`
+	SocialLinks      []SocialLink    `json:"social_links"`
+	AdditionalPhotos []string        `json:"additional_photos"`
+	PrivacySettings  PrivacySettings `json:"privacy_settings"`
+	CreatedAt        time.Time       `json:"created_at"`
+	LastLoginAt      *time.Time      `json:"last_login_at,omitempty"`
+	IsFriend         bool            `json:"is_friend,omitempty"`         // Populated dynamically
+	MutualFriends    *int            `json:"mutual_friends,omitempty"`    // Populated dynamically, respecting privacy
 }
 
 // ToPublicUser converts User to PublicUser
 func (u *User) ToPublicUser() PublicUser {
 	return PublicUser{
-		ID:             u.ID,
-		Username:       u.Username,
-		FirstName:      u.FirstName,
-		LastName:       u.LastName,
-		ProfilePicture: u.ProfilePicture,
-		Bio:            u.Bio,
-		Location:       u.Location,
-		CreatedAt:      u.CreatedAt,
-		LastLoginAt:    u.LastLoginAt,
+		ID:               u.ID,
+		Username:         u.Username,
+		FirstName:        u.FirstName,
+		LastName:         u.LastName,
+		ProfilePicture:   u.ProfilePicture,
+		Bio:              u.Bio,
+		Location:         u.Location,
+		Interests:        u.Interests,
+		SocialLinks:      u.SocialLinks,
+		AdditionalPhotos: u.AdditionalPhotos,
+		PrivacySettings:  u.PrivacySettings,
+		CreatedAt:        u.CreatedAt,
+		LastLoginAt:      u.LastLoginAt,
 	}
 }
 
 // ProfileUser represents user data for authenticated profile viewing
 type ProfileUser struct {
-	ID             uuid.UUID  `json:"id"`
-	Email          string     `json:"email"`
-	Username       string     `json:"username"`
-	FirstName      string     `json:"first_name"`
-	LastName       string     `json:"last_name"`
-	DateOfBirth    *time.Time `json:"date_of_birth"`
-	ProfilePicture *string    `json:"profile_picture"`
-	Bio            *string    `json:"bio"`
-	Location       *string    `json:"location"`
-	EmailVerified  bool       `json:"email_verified"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID               uuid.UUID       `json:"id"`
+	Email            string          `json:"email"`
+	Username         string          `json:"username"`
+	FirstName        string          `json:"first_name"`
+	LastName         string          `json:"last_name"`
+	DateOfBirth      *time.Time      `json:"date_of_birth"`
+	ProfilePicture   *string         `json:"profile_picture"`
+	Bio              *string         `json:"bio"`
+	Location         *string         `json:"location"`
+	Interests        []string        `json:"interests"`
+	SocialLinks      []SocialLink    `json:"social_links"`
+	AdditionalPhotos []string        `json:"additional_photos"`
+	PrivacySettings  PrivacySettings `json:"privacy_settings"`
+	EmailVerified    bool            `json:"email_verified"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+}
+
+// CalculateAge calculates age from date of birth
+func (u *User) CalculateAge() *int {
+	if u.DateOfBirth == nil {
+		return nil
+	}
+
+	now := time.Now()
+	age := now.Year() - u.DateOfBirth.Year()
+
+	// Adjust if birthday hasn't occurred this year yet
+	if now.YearDay() < u.DateOfBirth.YearDay() {
+		age--
+	}
+
+	return &age
+}
+
+// ToPublicUserWithPrivacy converts User to PublicUser respecting privacy settings
+func (u *User) ToPublicUserWithPrivacy() PublicUser {
+	publicUser := PublicUser{
+		ID:               u.ID,
+		Username:         u.Username,
+		FirstName:        u.FirstName,
+		LastName:         u.LastName,
+		ProfilePicture:   u.ProfilePicture,
+		Bio:              u.Bio,
+		Interests:        u.Interests,
+		SocialLinks:      u.SocialLinks,
+		AdditionalPhotos: u.AdditionalPhotos,
+		PrivacySettings:  u.PrivacySettings,
+		CreatedAt:        u.CreatedAt,
+		LastLoginAt:      u.LastLoginAt,
+	}
+
+	// Apply privacy settings
+	if u.PrivacySettings.ShowAge {
+		publicUser.Age = u.CalculateAge()
+	}
+
+	if u.PrivacySettings.ShowLocation {
+		publicUser.Location = u.Location
+	}
+
+	return publicUser
 }
 
 // ToProfileUser converts User to ProfileUser (for own profile)
 func (u *User) ToProfileUser() ProfileUser {
 	return ProfileUser{
-		ID:             u.ID,
-		Email:          u.Email,
-		Username:       u.Username,
-		FirstName:      u.FirstName,
-		LastName:       u.LastName,
-		DateOfBirth:    u.DateOfBirth,
-		ProfilePicture: u.ProfilePicture,
-		Bio:            u.Bio,
-		Location:       u.Location,
-		EmailVerified:  u.EmailVerified,
-		CreatedAt:      u.CreatedAt,
-		UpdatedAt:      u.UpdatedAt,
+		ID:               u.ID,
+		Email:            u.Email,
+		Username:         u.Username,
+		FirstName:        u.FirstName,
+		LastName:         u.LastName,
+		DateOfBirth:      u.DateOfBirth,
+		ProfilePicture:   u.ProfilePicture,
+		Bio:              u.Bio,
+		Location:         u.Location,
+		Interests:        u.Interests,
+		SocialLinks:      u.SocialLinks,
+		AdditionalPhotos: u.AdditionalPhotos,
+		PrivacySettings:  u.PrivacySettings,
+		EmailVerified:    u.EmailVerified,
+		CreatedAt:        u.CreatedAt,
+		UpdatedAt:        u.UpdatedAt,
 	}
 }
 

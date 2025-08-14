@@ -7,7 +7,7 @@ func RegisterRoutes(router *gin.RouterGroup, profileHandler *ProfileHandler) {
 	users := router.Group("/users")
 	{
 		// Current user profile (requires auth via gateway)
-		users.GET("/profile", profileHandler.GetCurrentUserProfile)
+		users.GET("/profile/me", profileHandler.GetMyProfile)
 		users.PUT("/profile", profileHandler.UpdateUserProfile)
 
 		// Public user profiles (no auth required for viewing public profiles)

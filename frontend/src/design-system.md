@@ -157,6 +157,109 @@ pulse-slow: /* Slow pulse for emphasis */
 </div>
 ```
 
+## 🎓 Onboarding Examples
+
+### Onboarding Step Container
+```tsx
+<div className="w-full space-y-10">
+  {/* Step Header */}
+  <div className="text-center mb-8">
+    <div className="inline-flex items-center space-x-2 bg-aqua/10 text-aqua px-3 py-2 rounded-full text-sm font-medium mb-4">
+      <span className="w-5 h-5 bg-aqua/20 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+      <span>Step 1 of 7</span>
+    </div>
+    <h1 className="text-3xl sm:text-4xl font-bold text-primary mb-4">Step Title</h1>
+    <p className="text-lg text-secondary max-w-2xl mx-auto">Step description text</p>
+  </div>
+</div>
+```
+
+### Progress Bar
+```tsx
+<div className="w-full bg-surface-card rounded-full h-3 overflow-hidden">
+  <div 
+    className="h-full bg-gradient-to-r from-aqua-light to-aqua transition-all duration-500 ease-out rounded-full"
+    style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+  />
+  <div className="absolute inset-0 rounded-full bg-aqua/20 animate-pulse-slow opacity-50" />
+</div>
+```
+
+### Onboarding Card Layout
+```tsx
+<div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 sm:p-10 lg:p-12 min-h-[600px] backdrop-blur-sm">
+  {/* Content goes here */}
+</div>
+```
+
+### Interest Tag Selection
+```tsx
+<div className="flex flex-wrap gap-3">
+  {interests.map(interest => (
+    <button
+      key={interest.id}
+      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+        selectedInterests.includes(interest.id)
+          ? 'bg-aqua text-white shadow-md hover-scale'
+          : 'bg-surface-card text-secondary border border-white/20 hover:border-aqua/30 hover-scale'
+      }`}
+    >
+      {interest.name}
+    </button>
+  ))}
+</div>
+```
+
+### Step Navigation Buttons
+```tsx
+<div className="flex justify-between items-center pt-8">
+  <button 
+    className="text-muted hover:text-secondary transition-colors disabled:opacity-50"
+    disabled={isFirstStep}
+  >
+    ← Previous
+  </button>
+  
+  <button className="bg-aqua hover:bg-aqua-dark text-white font-semibold py-3 px-8 rounded-ios transition-all duration-200 hover-glow disabled:opacity-50">
+    {isLastStep ? 'Complete Setup' : 'Continue →'}
+  </button>
+</div>
+```
+
+### Welcome Tutorial Features List
+```tsx
+<div className="bg-gradient-to-r from-primary-50 to-aqua/5 rounded-2xl p-8 space-y-6">
+  <h3 className="text-2xl font-bold text-primary mb-6">Here's what you can do now:</h3>
+  <div className="space-y-4">
+    {features.map((feature, index) => (
+      <div key={index} className="flex items-center space-x-4">
+        <div className="w-8 h-8 bg-aqua rounded-full flex items-center justify-center flex-shrink-0">
+          <Check className="w-5 h-5 text-white" />
+        </div>
+        <span className="text-lg text-secondary">{feature}</span>
+      </div>
+    ))}
+  </div>
+</div>
+```
+
+### Loading States in Onboarding
+```tsx
+{/* Loading Spinner */}
+<div className="flex items-center justify-center min-h-[400px]">
+  <LoadingSpinner size="lg" />
+</div>
+
+{/* Button Loading State */}
+<button 
+  disabled={isLoading}
+  className="bg-aqua hover:bg-aqua-dark text-white font-semibold py-3 px-8 rounded-ios transition-all duration-200 hover-glow disabled:opacity-50 flex items-center space-x-2"
+>
+  {isLoading && <LoadingSpinner size="sm" color="white" />}
+  <span>{isLoading ? 'Saving...' : 'Continue'}</span>
+</button>
+```
+
 ## 🎯 Design Principles
 
 1. **Consistency** - All components follow the same visual patterns

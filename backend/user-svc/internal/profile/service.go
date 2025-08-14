@@ -3,7 +3,6 @@ package profile
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,12 +24,16 @@ var (
 
 // DTO types for profile service
 type UpdateProfileRequest struct {
-	FirstName      *string    `json:"first_name,omitempty" validate:"omitempty,min=1,max=50"`
-	LastName       *string    `json:"last_name,omitempty" validate:"omitempty,min=1,max=50"`
-	Bio            *string    `json:"bio,omitempty" validate:"omitempty,max=500"`
-	Location       *string    `json:"location,omitempty" validate:"omitempty,max=100"`
-	ProfilePicture *string    `json:"profile_picture,omitempty"`
-	DateOfBirth    *time.Time `json:"date_of_birth,omitempty"`
+	FirstName        *string                   `json:"first_name,omitempty" validate:"omitempty,min=1,max=50"`
+	LastName         *string                   `json:"last_name,omitempty" validate:"omitempty,min=1,max=50"`
+	Bio              *string                   `json:"bio,omitempty" validate:"omitempty,max=500"`
+	Location         *string                   `json:"location,omitempty" validate:"omitempty,max=100"`
+	ProfilePicture   *string                   `json:"profile_picture,omitempty"`
+	DateOfBirth      *time.Time                `json:"date_of_birth,omitempty"`
+	Interests        []string                  `json:"interests,omitempty"`
+	SocialLinks      []models.SocialLink       `json:"social_links,omitempty"`
+	AdditionalPhotos []string                  `json:"additional_photos,omitempty"`
+	PrivacySettings  *models.PrivacySettings   `json:"privacy_settings,omitempty"`
 }
 
 type SendFriendRequestRequest struct {
@@ -91,7 +94,8 @@ func (s *profileService) GetPublicUserProfile(userID, viewerID uuid.UUID) (*mode
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	publicUser := user.ToPublicUser()
+	// Use privacy-aware conversion
+	publicUser := user.ToPublicUserWithPrivacy()
 
 	// Add friend status and mutual friends count if viewer is different
 	if viewerID != uuid.Nil && viewerID != userID {
@@ -101,11 +105,15 @@ func (s *profileService) GetPublicUserProfile(userID, viewerID uuid.UUID) (*mode
 		}
 		publicUser.IsFriend = isFriend
 
-		mutualCount, err := s.userRepo.GetMutualFriendsCount(viewerID, userID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get mutual friends count: %w", err)
+		// Only show mutual friends count if privacy settings allow
+		if user.PrivacySettings.ShowMutualFriends {
+			mutualCount, err := s.userRepo.GetMutualFriendsCount(viewerID, userID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get mutual friends count: %w", err)
+			}
+			mutualCountInt := int(mutualCount)
+			publicUser.MutualFriends = &mutualCountInt
 		}
-		publicUser.MutualFriends = int(mutualCount)
 	}
 
 	return &publicUser, nil
@@ -139,6 +147,18 @@ func (s *profileService) UpdateUserProfile(userID uuid.UUID, req UpdateProfileRe
 	}
 	if req.DateOfBirth != nil {
 		user.DateOfBirth = req.DateOfBirth
+	}
+	if req.Interests != nil {
+		user.Interests = req.Interests
+	}
+	if req.SocialLinks != nil {
+		user.SocialLinks = req.SocialLinks
+	}
+	if req.AdditionalPhotos != nil {
+		user.AdditionalPhotos = req.AdditionalPhotos
+	}
+	if req.PrivacySettings != nil {
+		user.PrivacySettings = *req.PrivacySettings
 	}
 
 	if err := s.userRepo.UpdateUser(user); err != nil {
@@ -322,17 +342,3 @@ func (s *profileService) RemoveFriend(userID, friendID uuid.UUID) error {
 	return nil
 }
 
-// SearchUsers searches for users by name or username
-func (s *profileService) SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error) {
-	if strings.TrimSpace(query) == "" {
-		return []models.PublicUser{}, nil
-	}
-
-	offset := (page - 1) * limit
-	users, err := s.userRepo.SearchUsers(strings.TrimSpace(query), userID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search users: %w", err)
-	}
-
-	return users, nil
-}

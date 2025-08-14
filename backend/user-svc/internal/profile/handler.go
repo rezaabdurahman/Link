@@ -21,8 +21,8 @@ func NewProfileHandler(profileService ProfileService) *ProfileHandler {
 	}
 }
 
-// GetCurrentUserProfile gets the current user's profile
-func (h *ProfileHandler) GetCurrentUserProfile(c *gin.Context) {
+// GetMyProfile gets the authenticated user's own profile
+func (h *ProfileHandler) GetMyProfile(c *gin.Context) {
 	userID, exists := middleware.GetUserIDFromHeader(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -314,45 +314,6 @@ func (h *ProfileHandler) RemoveFriend(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
-// SearchUsers searches for users
-func (h *ProfileHandler) SearchUsers(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromHeader(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "AUTHENTICATION_ERROR",
-			"message": "User context required",
-			"code":    "MISSING_USER_CONTEXT",
-		})
-		return
-	}
-
-	query := c.Query("q")
-	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "VALIDATION_ERROR",
-			"message": "Search query required",
-			"code":    "MISSING_QUERY",
-		})
-		return
-	}
-
-	// Parse pagination parameters
-	page, limit := h.getPaginationParams(c)
-
-	users, err := h.profileService.SearchUsers(query, userID, page, limit)
-	if err != nil {
-		h.handleServiceError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"users": users,
-		"query": query,
-		"page":  page,
-		"limit": limit,
-		"count": len(users),
-	})
-}
 
 // getPaginationParams extracts pagination parameters from request
 func (h *ProfileHandler) getPaginationParams(c *gin.Context) (int, int) {

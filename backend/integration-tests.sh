@@ -101,7 +101,7 @@ echo -e "${GREEN}✓ Authentication tests passed${NC}"
 # Test 3: User profile retrieval
 echo -e "${YELLOW}Testing user profile retrieval...${NC}"
 
-profile_response=$(curl -s -H "Authorization: Bearer $jwt_cookie" http://localhost:8080/users/profile)
+profile_response=$(curl -s -H "Authorization: Bearer $jwt_cookie" http://localhost:8080/users/profile/me)
 
 if ! echo "$profile_response" | grep -q "testuser"; then
     echo -e "${RED}Profile retrieval failed: $profile_response${NC}"
@@ -183,7 +183,7 @@ echo -e "${YELLOW}Testing rate limiting...${NC}"
 
 rate_limit_failed=false
 for i in {1..12}; do
-    response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer $jwt_cookie" http://localhost:8080/users/profile)
+    response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer $jwt_cookie" http://localhost:8080/users/profile/me)
     http_code=$(echo "$response" | tail -c 4)
     
     if [ "$http_code" = "429" ]; then
@@ -202,7 +202,7 @@ fi
 echo -e "${YELLOW}Testing error handling...${NC}"
 
 # Test with invalid token
-invalid_token_response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer invalid-token" http://localhost:8080/users/profile)
+invalid_token_response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer invalid-token" http://localhost:8080/users/profile/me)
 http_code=$(echo "$invalid_token_response" | tail -c 4)
 
 if [ "$http_code" != "401" ]; then
@@ -211,7 +211,7 @@ if [ "$http_code" != "401" ]; then
 fi
 
 # Test with missing token
-no_token_response=$(curl -s -w "%{http_code}" http://localhost:8080/users/profile)
+no_token_response=$(curl -s -w "%{http_code}" http://localhost:8080/users/profile/me)
 http_code=$(echo "$no_token_response" | tail -c 4)
 
 if [ "$http_code" != "401" ]; then
