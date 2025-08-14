@@ -43,6 +43,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
   
   // Use the friendship hook to get real friendship status
   const { getFriendshipStatus } = useFriendRequests();
@@ -140,8 +141,15 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     url: link.url
   })) || [];
 
-  // Use additional photos from backend
-  const additionalPhotos = profileResponse?.additional_photos?.filter(photo => photo) || [];
+  // Use additional photos from backend and filter out broken ones
+  const additionalPhotos = profileResponse?.additional_photos?.filter(photo => 
+    photo && !brokenImages.has(photo)
+  ) || [];
+
+  // Handle broken images
+  const handleImageError = (photoUrl: string) => {
+    setBrokenImages(prev => new Set([...prev, photoUrl]));
+  };
 
   // Loading skeleton component
   const ProfileSkeleton = () => (
@@ -188,29 +196,42 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex justify-between items-center p-5 pb-0">
-          <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
-            Profile
-          </h2>
+        {/* Fixed Header - Only Close Button */}
+        <div className="flex justify-end items-center p-5 pb-0">
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
           >
-            <X size={18} className="text-white" />
+            <X size={16} className="text-white" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-5 max-h-[70vh] overflow-y-auto scrollbar-hide">
+        {/* Scrollable Content */}
+        <div className="max-h-[80vh] overflow-y-auto scrollbar-hide">
           {loading && <ProfileSkeleton />}
           
           {error && <ErrorDisplay errorMessage={error} />}
           
           {user && !loading && !error && (
             <>
+              {/* Profile Title & Hide Button */}
+              <div className="flex justify-between items-center px-5 pt-0 pb-4">
+                <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
+                  Profile
+                </h2>
+                {onHide && (
+                  <IconActionButton
+                    Icon={EyeOff}
+                    label="Hide user"
+                    onClick={handleHideUser}
+                    variant="secondary"
+                    size="small"
+                  />
+                )}
+              </div>
+
               {/* Profile Header */}
-              <div className="text-center mb-6">
+              <div className="text-center mb-4 px-5 pb-0">
                 <div className="relative inline-block mb-4">
                   {user.profilePicture ? (
                     <img
@@ -240,95 +261,100 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   </h3>
                 )}
                 
-                {/* Distance and Mutual Friends */}
-                <div className="flex justify-center gap-4 mb-4">
+                {/* Distance, Mutual Friends & Social Links */}
+                <div className="flex justify-center items-center gap-4 mb-4 flex-wrap">
+                  {/* Distance */}
                   <div className="flex items-center gap-1">
                     <MapPin size={16} className="text-text-secondary" />
                     <span className="text-text-secondary text-sm">
-                      {user.location.proximityMiles} miles away
+                      {user.location.proximityMiles} mi
                     </span>
                   </div>
                   
+                  {/* Mutual Friends */}
                   {user.mutualFriends.length > 0 && (
                     <div className="flex items-center gap-1">
                       <Users size={16} className="text-aqua" />
                       <span className="text-aqua text-sm font-medium">
-                        {user.mutualFriends.length} mutual friends
+                        {user.mutualFriends.length} mutuals
                       </span>
                     </div>
                   )}
-                </div>
-
-                {/* Social Media Links - positioned next to mutual friends */}
-                {user.profileType === 'public' && socialLinks.length > 0 && (
-                  <div className="flex gap-3 justify-center mb-4">
-                    {socialLinks.map((social, index) => {
-                      const IconComponent = social.icon;
-                      return (
-                        <a
-                          key={index}
-                          href={social.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-10 h-10 rounded-full bg-surface-card hover:bg-aqua/20 flex items-center justify-center transition-all duration-200 hover-glow group"
-                          title={social.handle}
-                        >
-                          <IconComponent 
-                            size={20} 
-                            className="text-text-secondary group-hover:text-aqua transition-colors" 
-                          />
-                        </a>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Friend Button */}
-                <div className="flex justify-center mb-4">
-                  <FriendButton
-                    userId={user.id}
-                    size="large"
-                  />
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-4 justify-center">
-                  <IconActionButton
-                    Icon={MessageCircle}
-                    label="Send message"
-                    onClick={() => setIsChatOpen(true)}
-                    variant="primary"
-                    size="large"
-                  />
-                  {onHide && (
-                    <IconActionButton
-                      Icon={EyeOff}
-                      label="Hide user"
-                      onClick={handleHideUser}
-                      variant="secondary"
-                      size="large"
-                    />
+                  
+                  {/* Social Media Links - same row */}
+                  {user.profileType === 'public' && socialLinks.length > 0 && (
+                    <div className="flex gap-2">
+                      {socialLinks.map((social, index) => {
+                        const IconComponent = social.icon;
+                        const getSocialIconColor = (platform: string) => {
+                          const platformLower = platform.toLowerCase();
+                          if (platformLower.includes('instagram')) return 'text-pink-500 hover:text-pink-600';
+                          if (platformLower.includes('twitter') || platformLower.includes('x.com')) return 'text-blue-400 hover:text-blue-500';
+                          if (platformLower.includes('facebook')) return 'text-blue-600 hover:text-blue-700';
+                          if (platformLower.includes('linkedin')) return 'text-blue-700 hover:text-blue-800';
+                          if (platformLower.includes('tiktok')) return 'text-black hover:text-gray-800';
+                          if (platformLower.includes('snapchat')) return 'text-yellow-400 hover:text-yellow-500';
+                          if (platformLower.includes('youtube')) return 'text-red-600 hover:text-red-700';
+                          return 'text-aqua hover:text-aqua-dark';
+                        };
+                        
+                        return (
+                          <a
+                            key={index}
+                            href={social.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                            title={social.handle}
+                          >
+                            <IconComponent 
+                              size={16} 
+                              className={`${getSocialIconColor(social.platform)} transition-colors`}
+                            />
+                          </a>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
 
+              {/* Action Buttons */}
+              <div className="px-5 mb-4">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setIsChatOpen(true)}
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+                  >
+                    <MessageCircle size={18} />
+                    Send a message
+                  </button>
+                  <FriendButton
+                    userId={user.id}
+                    size="large"
+                    variant="default"
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800"
+                  />
+                </div>
+              </div>
+
               {/* Bio */}
-              <div className="mb-6">
-                <h4 className="text-lg font-semibold mb-3 text-text-primary">
+              <div className="px-5 mb-3">
+                <h4 className="text-lg font-semibold mb-2 text-text-primary">
                   About
                 </h4>
-                <p className="text-text-secondary text-base leading-relaxed text-center px-2">
+                <p className="text-text-secondary text-base leading-relaxed">
                   {user.bio}
                 </p>
               </div>
 
               {/* Interests */}
-              <div className="mb-6">
-                <h4 className="text-lg font-semibold mb-3 text-text-primary">
+              <div className="px-5 mb-3">
+                <h4 className="text-lg font-semibold mb-2 text-text-primary">
                   Interests
                 </h4>
-                <div className="flex flex-wrap gap-2 justify-center">
+                <div className="flex flex-wrap gap-2">
                   {user.interests && user.interests.length > 0 ? (
                     user.interests.map((interest, index) => (
                       <span
@@ -344,20 +370,20 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
               </div>
 
-
               {/* Photos - only show for public profiles */}
               {user.profileType === 'public' && additionalPhotos.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="text-lg font-semibold mb-3 text-text-primary text-center">
+                <div className="px-5 mb-5">
+                  <h4 className="text-lg font-semibold mb-2 text-text-primary">
                     Photos
                   </h4>
-                  <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto">
-                    {additionalPhotos.filter(photo => photo).map((photo, index) => (
+                  <div className="grid grid-cols-2 gap-3">
+                    {additionalPhotos.map((photo, index) => (
                       <img
-                        key={index}
+                        key={photo}
                         src={photo}
                         alt={`${user.name}'s photo ${index + 1}`}
                         className="w-full aspect-square rounded-xl object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
+                        onError={() => handleImageError(photo)}
                       />
                     ))}
                   </div>
