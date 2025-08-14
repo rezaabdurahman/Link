@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users, EyeOff } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, EyeOff } from 'lucide-react';
+import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
+import IconActionButton from './IconActionButton';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { getUserProfile, UserProfileResponse, getProfileErrorMessage } from '../services/userClient';
 
@@ -19,7 +21,7 @@ const mapUserProfileToUser = (profile: UserProfileResponse): User => {
     name: `${profile.first_name} ${profile.last_name}`.trim(),
     age: profile.age || (profile.date_of_birth ? 
       Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
-      undefined), // Use age from backend or calculate it
+      25), // Use age from backend or calculate it, fallback to 25
     profilePicture: profile.profile_picture || undefined,
     bio: profile.bio || 'No bio available',
     interests: profile.interests || [], // Use interests from backend
@@ -41,6 +43,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
   
   // Use the friendship hook to get real friendship status
   const { getFriendshipStatus } = useFriendRequests();
@@ -88,6 +91,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     }
   };
 
+
   const handleModalKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'Escape') {
       onClose();
@@ -117,12 +121,16 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   // We'll need the original profile response to get social links and photos
   const [profileResponse, setProfileResponse] = useState<UserProfileResponse | undefined>(undefined);
   
-  // Map social links from backend with appropriate icons
+  // Map social links from backend with appropriate brand icons
   const getSocialIcon = (platform: string) => {
     const platformLower = platform.toLowerCase();
-    if (platformLower.includes('instagram')) return Instagram;
-    if (platformLower.includes('twitter')) return Twitter;
-    if (platformLower.includes('facebook')) return Facebook;
+    if (platformLower.includes('instagram')) return FaInstagram;
+    if (platformLower.includes('twitter') || platformLower.includes('x.com')) return FaTwitter;
+    if (platformLower.includes('facebook')) return FaFacebook;
+    if (platformLower.includes('linkedin')) return FaLinkedin;
+    if (platformLower.includes('tiktok')) return FaTiktok;
+    if (platformLower.includes('snapchat')) return FaSnapchat;
+    if (platformLower.includes('youtube')) return FaYoutube;
     return MessageCircle; // fallback icon
   };
 
@@ -133,8 +141,15 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     url: link.url
   })) || [];
 
-  // Use additional photos from backend
-  const additionalPhotos = profileResponse?.additional_photos?.filter(photo => photo) || [];
+  // Use additional photos from backend and filter out broken ones
+  const additionalPhotos = profileResponse?.additional_photos?.filter(photo => 
+    photo && !brokenImages.has(photo)
+  ) || [];
+
+  // Handle broken images
+  const handleImageError = (photoUrl: string) => {
+    setBrokenImages(prev => new Set([...prev, photoUrl]));
+  };
 
   // Loading skeleton component
   const ProfileSkeleton = () => (
@@ -186,16 +201,28 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
           <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
             Profile
           </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
-          >
-            <X size={18} className="text-white" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Only Hide and Close buttons in header */}
+            {user && onHide && (
+              <IconActionButton
+                Icon={EyeOff}
+                label="Hide user"
+                onClick={handleHideUser}
+                variant="secondary"
+                size="small"
+              />
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
+            >
+              <X size={16} className="text-white" />
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="p-5 max-h-[70vh] overflow-y-auto scrollbar-hide">
+        {/* Scrollable Content */}
+        <div className="max-h-[80vh] overflow-y-auto scrollbar-hide">
           {loading && <ProfileSkeleton />}
           
           {error && <ErrorDisplay errorMessage={error} />}
@@ -203,7 +230,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
           {user && !loading && !error && (
             <>
               {/* Profile Header */}
-              <div className="text-center mb-6">
+              <div className="text-center mb-4 p-5 pb-0">
                 <div className="relative inline-block mb-4">
                   {user.profilePicture ? (
                     <img
@@ -233,85 +260,105 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   </h3>
                 )}
                 
-                {/* Distance and Mutual Friends */}
-                <div className="flex justify-center gap-4 mb-4">
+                {/* Distance, Mutual Friends & Social Links */}
+                <div className="flex justify-center items-center gap-4 mb-4 flex-wrap">
+                  {/* Distance */}
                   <div className="flex items-center gap-1">
                     <MapPin size={16} className="text-text-secondary" />
                     <span className="text-text-secondary text-sm">
-                      {user.location.proximityMiles} miles away
+                      {user.location.proximityMiles} mi
                     </span>
                   </div>
                   
+                  {/* Mutual Friends */}
                   {user.mutualFriends.length > 0 && (
                     <div className="flex items-center gap-1">
                       <Users size={16} className="text-aqua" />
                       <span className="text-aqua text-sm font-medium">
-                        {user.mutualFriends.length} mutual friends
+                        {user.mutualFriends.length} mutuals
                       </span>
                     </div>
                   )}
-                </div>
-
-                {/* Friend Button */}
-                <div className="flex justify-center mb-4">
-                  <FriendButton
-                    userId={user.id}
-                    size="large"
-                  />
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={() => setIsChatOpen(true)}
-                    className="flex-1 max-w-36 bg-aqua hover:bg-aqua-dark text-white font-semibold py-3 px-6 rounded-ios transition-all duration-200 flex items-center justify-center gap-2 hover-glow"
-                  >
-                    <MessageCircle size={16} />
-                    Message
-                  </button>
-                  {onHide && (
-                    <button
-                      onClick={handleHideUser}
-                      className="flex-1 max-w-36 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-ios transition-all duration-200 flex items-center justify-center gap-2"
-                    >
-                      <EyeOff size={16} />
-                      Hide
-                    </button>
+                  
+                  {/* Social Media Links - same row */}
+                  {user.profileType === 'public' && socialLinks.length > 0 && (
+                    <div className="flex gap-2">
+                      {socialLinks.map((social, index) => {
+                        const IconComponent = social.icon;
+                        const getSocialIconColor = (platform: string) => {
+                          const platformLower = platform.toLowerCase();
+                          if (platformLower.includes('instagram')) return 'text-pink-500 hover:text-pink-600';
+                          if (platformLower.includes('twitter') || platformLower.includes('x.com')) return 'text-blue-400 hover:text-blue-500';
+                          if (platformLower.includes('facebook')) return 'text-blue-600 hover:text-blue-700';
+                          if (platformLower.includes('linkedin')) return 'text-blue-700 hover:text-blue-800';
+                          if (platformLower.includes('tiktok')) return 'text-black hover:text-gray-800';
+                          if (platformLower.includes('snapchat')) return 'text-yellow-400 hover:text-yellow-500';
+                          if (platformLower.includes('youtube')) return 'text-red-600 hover:text-red-700';
+                          return 'text-aqua hover:text-aqua-dark';
+                        };
+                        
+                        return (
+                          <a
+                            key={index}
+                            href={social.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                            title={social.handle}
+                          >
+                            <IconComponent 
+                              size={16} 
+                              className={`${getSocialIconColor(social.platform)} transition-colors`}
+                            />
+                          </a>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
 
+              {/* Action Buttons */}
+              <div className="px-5 mb-4">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setIsChatOpen(true)}
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+                  >
+                    <MessageCircle size={18} />
+                    Send a message
+                  </button>
+                  <FriendButton
+                    userId={user.id}
+                    size="large"
+                    variant="outline"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
               {/* Bio */}
-              <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
+              <div className="px-5 mb-3">
+                <h4 className="text-lg font-semibold mb-2 text-text-primary">
                   About
                 </h4>
-                <p className="text-secondary" style={{ 
-                  fontSize: '16px', 
-                  lineHeight: '1.5'
-                }}>
+                <p className="text-text-secondary text-base leading-relaxed">
                   {user.bio}
                 </p>
               </div>
 
               {/* Interests */}
-              <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
+              <div className="px-5 mb-3">
+                <h4 className="text-lg font-semibold mb-2 text-text-primary">
                   Interests
                 </h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <div className="flex flex-wrap gap-2">
                   {user.interests && user.interests.length > 0 ? (
                     user.interests.map((interest, index) => (
                       <span
                         key={index}
-                        style={{
-                          background: 'rgba(0, 122, 255, 0.2)',
-                          color: '#007AFF',
-                          padding: '8px 16px',
-                          borderRadius: '20px',
-                          fontSize: '14px',
-                          fontWeight: '500'
-                        }}
+                        className="bg-aqua/20 text-aqua px-3 py-1.5 rounded-full text-sm font-medium backdrop-blur-sm"
                       >
                         {interest}
                       </span>
@@ -322,56 +369,20 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
               </div>
 
-              {/* Social Media - only show for public profiles */}
-              {user.profileType === 'public' && (
-                <div style={{ marginBottom: '24px' }}>
-                  <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
-                    Connect
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {socialLinks.map((social, index) => (
-                      <div
-                        key={index}
-                        className="ios-card"
-                        style={{
-                          padding: '12px 16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <social.icon size={20} className="text-accent" />
-                        <span style={{ fontSize: '16px' }}>{social.handle}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Photos - only show for public profiles */}
-              {user.profileType === 'public' && (
-                <div style={{ marginBottom: '24px' }}>
-                  <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
+              {user.profileType === 'public' && additionalPhotos.length > 0 && (
+                <div className="px-5 mb-5">
+                  <h4 className="text-lg font-semibold mb-2 text-text-primary">
                     Photos
                   </h4>
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(2, 1fr)', 
-                    gap: '12px' 
-                  }}>
-                    {additionalPhotos.filter(photo => photo).map((photo, index) => (
+                  <div className="grid grid-cols-2 gap-3">
+                    {additionalPhotos.map((photo, index) => (
                       <img
-                        key={index}
+                        key={photo}
                         src={photo}
                         alt={`${user.name}'s photo ${index + 1}`}
-                        style={{
-                          width: '100%',
-                          aspectRatio: '1',
-                          borderRadius: '12px',
-                          objectFit: 'cover',
-                          cursor: 'pointer'
-                        }}
+                        className="w-full aspect-square rounded-xl object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
+                        onError={() => handleImageError(photo)}
                       />
                     ))}
                   </div>
