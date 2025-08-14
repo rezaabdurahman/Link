@@ -12,7 +12,15 @@ import {
   OnboardingStepType,
   OnboardingStatusType
 } from '../services/onboardingClient';
-import { currentUser, nearbyUsers } from '../data/mockData';
+import {
+  ConversationsResponse,
+  Conversation,
+  ConversationParticipant,
+  ConversationMessage,
+  MessagesResponse,
+  CreateConversationRequest
+} from '../services/chatClient';
+import { currentUser, nearbyUsers, chats } from '../data/mockData';
 
 // Helper to generate UUID
 const generateId = () => crypto.randomUUID();
@@ -219,6 +227,242 @@ export const broadcastHandlers = [
           message: 'Invalid request data',
           code: 400,
           timestamp: now(),
+        },
+        { status: 400 }
+      );
+    }
+  }),
+];
+
+// Helper function to convert UI Chat to API Conversation
+const convertChatToConversation = (chat: typeof chats[0]): Conversation => {
+  // Find the participant user from nearbyUsers
+  const participant = nearbyUsers.find(user => user.id === chat.participantId);
+  
+  const conversationParticipant: ConversationParticipant = {
+    id: chat.participantId,
+    name: chat.participantName,
+    avatar: chat.participantAvatar,
+  };
+
+  return {
+    id: chat.id,
+    type: 'direct',
+    is_private: false,
+    created_by: '1', // Current user
+    participants: [conversationParticipant],
+    unread_count: chat.unreadCount,
+    last_message: {
+      id: chat.lastMessage.id,
+      content: chat.lastMessage.content,
+      message_type: chat.lastMessage.type as 'text',
+      sender_id: chat.lastMessage.senderId,
+      created_at: chat.lastMessage.timestamp.toISOString(),
+    },
+    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+    updated_at: chat.lastMessage.timestamp.toISOString(),
+  };
+};
+
+// Chat handlers
+export const chatHandlers = [
+  // GET /api/v1/chat/conversations - Get user's conversations
+  http.get('*/api/v1/chat/conversations', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to view conversations',
+          code: 401,
+        },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get('limit');
+    const offsetParam = url.searchParams.get('offset');
+    
+    const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100) : 50;
+    const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+
+    // Convert mock chats to API conversations
+    const conversations = chats.map(convertChatToConversation);
+    
+    const totalCount = conversations.length;
+    const paginatedConversations = conversations.slice(offset, offset + limit);
+
+    const response: ConversationsResponse = {
+      data: paginatedConversations,
+      total: totalCount,
+      limit,
+      offset,
+      has_more: offset + limit < totalCount,
+    };
+
+    return HttpResponse.json(response, { status: 200 });
+  }),
+
+  // POST /api/v1/chat/conversations - Create new conversation
+  http.post('*/api/v1/chat/conversations', async ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to create conversations',
+          code: 401,
+        },
+        { status: 401 }
+      );
+    }
+
+    try {
+      const body = await request.json() as CreateConversationRequest;
+      
+      // Create new conversation
+      const conversationId = generateId();
+      const participantId = body.participant_ids[0];
+      const participant = nearbyUsers.find(user => user.id === participantId);
+      
+      const conversation: Conversation = {
+        id: conversationId,
+        type: body.type,
+        name: body.name,
+        description: body.description,
+        is_private: body.is_private || false,
+        max_members: body.max_members,
+        created_by: userId,
+        participants: [{
+          id: participantId,
+          name: participant?.name || 'Unknown User',
+          avatar: participant?.profilePicture,
+        }],
+        unread_count: 0,
+        created_at: now(),
+        updated_at: now(),
+      };
+
+      return HttpResponse.json(conversation, { status: 201 });
+    } catch (error) {
+      return HttpResponse.json(
+        {
+          error: 'Invalid request body',
+          message: 'Failed to parse conversation creation request',
+          code: 400,
+        },
+        { status: 400 }
+      );
+    }
+  }),
+
+  // GET /api/v1/chat/conversations/:conversationId/messages - Get conversation messages
+  http.get('*/api/v1/chat/conversations/:conversationId/messages', ({ params, request }) => {
+    const userId = extractUserId(request);
+    const { conversationId } = params;
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to view messages',
+          code: 401,
+        },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get('limit');
+    const offsetParam = url.searchParams.get('offset');
+    
+    const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100) : 50;
+    const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+
+    // Mock messages for the conversation
+    const mockMessages: ConversationMessage[] = [
+      {
+        id: 'msg-1',
+        content: 'Hey there! How are you doing?',
+        message_type: 'text',
+        sender_id: conversationId === 'chat1' ? '2' : '4',
+        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: 'msg-2',
+        content: 'I\'m doing great! Thanks for asking. What about you?',
+        message_type: 'text',
+        sender_id: '1', // Current user
+        created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: 'msg-3',
+        content: 'Fantastic! Looking forward to hanging out soon.',
+        message_type: 'text',
+        sender_id: conversationId === 'chat1' ? '2' : '4',
+        created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      },
+    ];
+    
+    const totalCount = mockMessages.length;
+    const paginatedMessages = mockMessages.slice(offset, offset + limit);
+
+    const response: MessagesResponse = {
+      data: paginatedMessages,
+      total: totalCount,
+      limit,
+      offset,
+      has_more: offset + limit < totalCount,
+    };
+
+    return HttpResponse.json(response, { status: 200 });
+  }),
+
+  // POST /api/v1/chat/messages - Send a message
+  http.post('*/api/v1/chat/messages', async ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to send messages',
+          code: 401,
+        },
+        { status: 401 }
+      );
+    }
+
+    try {
+      const body = await request.json() as {
+        conversation_id: string;
+        content: string;
+        message_type: 'text';
+        parent_id?: string;
+      };
+      
+      const message: ConversationMessage = {
+        id: generateId(),
+        content: body.content,
+        message_type: body.message_type,
+        sender_id: userId,
+        created_at: now(),
+        parent_id: body.parent_id || null,
+      };
+
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      return HttpResponse.json(message, { status: 201 });
+    } catch (error) {
+      return HttpResponse.json(
+        {
+          error: 'Invalid request body',
+          message: 'Failed to parse message send request',
+          code: 400,
         },
         { status: 400 }
       );

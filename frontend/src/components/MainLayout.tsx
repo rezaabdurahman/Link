@@ -5,7 +5,7 @@ import { shouldShowDemoBanner, APP_CONFIG } from '../config';
 
 const MainLayout: React.FC = (): JSX.Element => {
   return (
-    <div className="app">
+    <div className="app flex flex-col min-h-screen">
       {/* Conditional Demo Banner */}
       {shouldShowDemoBanner() && (
         <div className="bg-yellow-100 border-b border-yellow-200 px-4 py-2">
@@ -15,7 +15,7 @@ const MainLayout: React.FC = (): JSX.Element => {
         </div>
       )}
       
-      <div className="app-content">
+      <div className="app-content flex-1">
         <Outlet />
       </div>
       <TabBar />
