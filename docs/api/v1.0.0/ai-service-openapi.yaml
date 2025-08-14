@@ -1,0 +1,808 @@
+openapi: 3.0.3
+info:
+  title: AI Conversation Summarization API
+  description: |
+    RESTful API for AI-powered conversation summarization services.
+    
+    This API provides intelligent summarization capabilities for conversation data,
+    allowing clients to generate concise summaries of chat conversations, meeting
+    transcripts, and other conversational content.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api-support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.example.com
+    description: Production server
+  - url: https://staging-api.example.com
+    description: Staging server
+  - url: http://localhost:8080
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/ai/summarize:
+    post:
+      summary: Generate conversation summary
+      description: |
+        Generates an AI-powered summary of a conversation based on the provided
+        conversation ID. The summary includes key topics, important decisions,
+        action items, and relevant context from the conversation history.
+        
+        The response includes metadata about when the summary was generated and
+        when it expires from cache.
+      operationId: summarizeConversation
+      tags:
+        - AI Summarization
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummarizationRequest'
+            examples:
+              basic_request:
+                summary: Basic summarization request
+                value:
+                  conversation_id: "conv_123456789"
+              with_limit:
+                summary: Request with message limit
+                value:
+                  conversation_id: "conv_123456789"
+                  limit: 50
+      responses:
+        '200':
+          description: Successfully generated conversation summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummarizationResponse'
+              examples:
+                success_response:
+                  summary: Successful summarization
+                  value:
+                    summary: |
+                      ## Key Topics Discussed
+                      - Product roadmap planning for Q2 2024
+                      - Budget allocation for new feature development
+                      - Team restructuring and hiring plans
+                      
+                      ## Decisions Made
+                      - Approved $100k budget for mobile app redesign
+                      - Decided to postpone internationalization until Q3
+                      
+                      ## Action Items
+                      - Sarah to draft technical specifications by Friday
+                      - Mike to schedule follow-up with design team
+                      - Team lead to present findings at next board meeting
+                    generated_at: "2024-01-15T10:30:00Z"
+                    expires_at: "2024-01-15T22:30:00Z"
+        '400':
+          description: Bad request - Invalid input parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_conversation_id:
+                  summary: Invalid conversation ID format
+                  value:
+                    error:
+                      code: "INVALID_CONVERSATION_ID"
+                      message: "The provided conversation ID format is invalid"
+                      details: "conversation_id must be a string starting with 'conv_'"
+                    request_id: "req_789012345"
+                    timestamp: "2024-01-15T10:30:00Z"
+                invalid_limit:
+                  summary: Invalid limit parameter
+                  value:
+                    error:
+                      code: "INVALID_LIMIT"
+                      message: "The limit parameter must be between 1 and 1000"
+                      details: "Provided limit: 1500. Maximum allowed: 1000"
+                    request_id: "req_789012346"
+                    timestamp: "2024-01-15T10:30:00Z"
+        '401':
+          description: Unauthorized - Invalid or missing authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_token:
+                  summary: Missing authentication token
+                  value:
+                    error:
+                      code: "MISSING_AUTH_TOKEN"
+                      message: "Authentication token is required"
+                      details: "Please provide a valid Bearer token in the Authorization header"
+                    request_id: "req_789012347"
+                    timestamp: "2024-01-15T10:30:00Z"
+                invalid_token:
+                  summary: Invalid authentication token
+                  value:
+                    error:
+                      code: "INVALID_AUTH_TOKEN"
+                      message: "The provided authentication token is invalid or expired"
+                      details: "Token validation failed"
+                    request_id: "req_789012348"
+                    timestamp: "2024-01-15T10:30:00Z"
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                insufficient_permissions:
+                  summary: Insufficient permissions
+                  value:
+                    error:
+                      code: "INSUFFICIENT_PERMISSIONS"
+                      message: "You don't have permission to access this conversation"
+                      details: "Access to conversation 'conv_123456789' requires SUMMARIZE permission"
+                    request_id: "req_789012349"
+                    timestamp: "2024-01-15T10:30:00Z"
+        '404':
+          description: Not found - Conversation does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                conversation_not_found:
+                  summary: Conversation not found
+                  value:
+                    error:
+                      code: "CONVERSATION_NOT_FOUND"
+                      message: "The specified conversation could not be found"
+                      details: "No conversation exists with ID 'conv_123456789'"
+                    request_id: "req_789012350"
+                    timestamp: "2024-01-15T10:30:00Z"
+        '429':
+          description: Too many requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                rate_limit_exceeded:
+                  summary: Rate limit exceeded
+                  value:
+                    error:
+                      code: "RATE_LIMIT_EXCEEDED"
+                      message: "Rate limit exceeded. Please try again later"
+                      details: "Maximum 100 requests per hour allowed. Reset at 2024-01-15T11:00:00Z"
+                    request_id: "req_789012351"
+                    timestamp: "2024-01-15T10:30:00Z"
+          headers:
+            Retry-After:
+              description: Number of seconds to wait before retrying
+              schema:
+                type: integer
+                example: 3600
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                internal_error:
+                  summary: Internal server error
+                  value:
+                    error:
+                      code: "INTERNAL_SERVER_ERROR"
+                      message: "An unexpected error occurred while processing your request"
+                      details: "Please try again later or contact support if the problem persists"
+                    request_id: "req_789012352"
+                    timestamp: "2024-01-15T10:30:00Z"
+        '503':
+          description: Service unavailable - AI service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                service_unavailable:
+                  summary: AI service unavailable
+                  value:
+                    error:
+                      code: "AI_SERVICE_UNAVAILABLE"
+                      message: "AI summarization service is temporarily unavailable"
+                      details: "The service is undergoing maintenance. Expected availability: 2024-01-15T12:00:00Z"
+                    request_id: "req_789012353"
+                    timestamp: "2024-01-15T10:30:00Z"
+          headers:
+            Retry-After:
+              description: Number of seconds to wait before retrying
+              schema:
+                type: integer
+                example: 7200
+
+  /api/v1/ai/consent:
+    get:
+      summary: Get user consent preferences
+      description: |
+        Retrieve the current AI processing consent settings for the authenticated user.
+        This endpoint is GDPR and CCPA compliant and provides transparency into
+        what data processing permissions the user has granted.
+      operationId: getUserConsent
+      tags:
+        - Privacy & Consent
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved user consent preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update user consent preferences
+      description: |
+        Update AI processing consent settings for the authenticated user.
+        Users can opt-in or opt-out of different types of data processing.
+        All changes are audited for compliance purposes.
+      operationId: updateUserConsent
+      tags:
+        - Privacy & Consent
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+      responses:
+        '200':
+          description: Successfully updated user consent preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Revoke all consent (GDPR right to withdraw)
+      description: |
+        Revoke all AI processing consent for the authenticated user.
+        This implements the GDPR right to withdraw consent and will
+        disable all AI processing for the user's data.
+      operationId: revokeAllConsent
+      tags:
+        - Privacy & Consent
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully revoked all consent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "All consent has been successfully revoked"
+                  user_id:
+                    type: string
+                    format: uuid
+                  revoked_at:
+                    type: string
+                    format: date-time
+                  gdpr_compliant:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/ai/consent/audit:
+    get:
+      summary: Get user audit logs
+      description: |
+        Retrieve audit logs for the authenticated user (GDPR/CCPA compliance).
+        This provides transparency into how the user's data has been processed
+        and accessed within the system.
+      operationId: getUserAuditLogs
+      tags:
+        - Privacy & Consent
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Limit number of results (default 50, max 200)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          description: Offset for pagination (default 0)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Successfully retrieved user audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audit_logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+                  user_id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/ai/consent/policy:
+    get:
+      summary: Get current privacy policy
+      description: |
+        Retrieve the current active privacy policy version.
+        This endpoint provides the privacy policy that users consented to.
+      operationId: getPrivacyPolicy
+      tags:
+        - Privacy & Consent
+      responses:
+        '200':
+          description: Successfully retrieved privacy policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivacyPolicyVersion'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Additional AI-powered endpoints can be added here:
+  # /api/v1/ai/analyze - Analyze conversation sentiment and topics
+  # /api/v1/ai/extract-actions - Extract action items from conversations
+  # /api/v1/ai/sentiment - Analyze conversation sentiment
+  # /api/v1/ai/topics - Extract key topics from conversations
+  # /api/v1/ai/participants - Analyze participant engagement
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT-based authentication. Include the token in the Authorization header
+        as: `Authorization: Bearer <token>`
+        
+        The JWT token should contain the following claims:
+        - `sub`: User ID
+        - `iat`: Issued at timestamp
+        - `exp`: Expiration timestamp
+        - `scope`: Permissions (e.g., "ai:summarize")
+
+  schemas:
+    SummarizationRequest:
+      type: object
+      required:
+        - conversation_id
+      properties:
+        conversation_id:
+          type: string
+          pattern: '^conv_[a-zA-Z0-9_-]+$'
+          description: |
+            Unique identifier for the conversation to be summarized.
+            Must start with 'conv_' prefix followed by alphanumeric characters,
+            underscores, or hyphens.
+          example: "conv_123456789"
+          minLength: 5
+          maxLength: 100
+        limit:
+          type: integer
+          description: |
+            Optional limit on the number of messages to include in the summarization.
+            If not provided, all available messages will be processed.
+            Maximum value is 1000 messages.
+          minimum: 1
+          maximum: 1000
+          default: 100
+          example: 50
+      additionalProperties: false
+
+    SummarizationResponse:
+      type: object
+      required:
+        - summary
+        - generated_at
+        - expires_at
+      properties:
+        summary:
+          type: string
+          description: |
+            AI-generated summary of the conversation in Markdown format.
+            Includes key topics, decisions made, action items, and important context.
+            The summary is structured with headings and bullet points for readability.
+          example: |
+            ## Key Topics Discussed
+            - Product roadmap planning for Q2 2024
+            - Budget allocation for new feature development
+            
+            ## Decisions Made
+            - Approved $100k budget for mobile app redesign
+            
+            ## Action Items
+            - Sarah to draft technical specifications by Friday
+          minLength: 1
+          maxLength: 5000
+        generated_at:
+          type: string
+          format: date-time
+          description: |
+            ISO 8601 timestamp indicating when the summary was generated.
+            This timestamp is in UTC timezone.
+          example: "2024-01-15T10:30:00Z"
+        expires_at:
+          type: string
+          format: date-time
+          description: |
+            ISO 8601 timestamp indicating when this summary expires from cache.
+            After this time, a new request will generate a fresh summary.
+            Typically set to 12 hours after generation.
+          example: "2024-01-15T22:30:00Z"
+      additionalProperties: false
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - request_id
+        - timestamp
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetails'
+        request_id:
+          type: string
+          description: |
+            Unique identifier for this request, useful for debugging and support.
+            Format: req_ followed by alphanumeric characters.
+          pattern: '^req_[a-zA-Z0-9]+$'
+          example: "req_789012345"
+        timestamp:
+          type: string
+          format: date-time
+          description: |
+            ISO 8601 timestamp when the error occurred (UTC timezone).
+          example: "2024-01-15T10:30:00Z"
+      additionalProperties: false
+
+    ErrorDetails:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: |
+            Machine-readable error code that categorizes the type of error.
+            Used for programmatic error handling.
+          enum:
+            - "INVALID_CONVERSATION_ID"
+            - "INVALID_LIMIT"
+            - "MISSING_AUTH_TOKEN"
+            - "INVALID_AUTH_TOKEN"
+            - "INSUFFICIENT_PERMISSIONS"
+            - "CONVERSATION_NOT_FOUND"
+            - "RATE_LIMIT_EXCEEDED"
+            - "INTERNAL_SERVER_ERROR"
+            - "AI_SERVICE_UNAVAILABLE"
+          example: "INVALID_CONVERSATION_ID"
+        message:
+          type: string
+          description: |
+            Human-readable error message describing what went wrong.
+            Safe to display to end users.
+          example: "The provided conversation ID format is invalid"
+          minLength: 1
+          maxLength: 200
+        details:
+          type: string
+          description: |
+            Optional additional details about the error.
+            May contain technical information useful for debugging.
+          example: "conversation_id must be a string starting with 'conv_'"
+          maxLength: 500
+      additionalProperties: false
+
+    ConsentRequest:
+      type: object
+      description: Request to update user consent preferences
+      properties:
+        ai_processing_consent:
+          type: boolean
+          description: Consent for AI processing of user data
+          example: true
+        data_anonymization_consent:
+          type: boolean
+          description: Consent for data anonymization
+          example: true
+        analytics_consent:
+          type: boolean
+          description: Consent for analytics and usage tracking
+          example: false
+        marketing_consent:
+          type: boolean
+          description: Consent for marketing communications
+          example: false
+      additionalProperties: false
+
+    ConsentResponse:
+      type: object
+      required:
+        - user_id
+        - ai_processing_consent
+        - data_anonymization_consent
+        - analytics_consent
+        - marketing_consent
+        - consent_version
+        - updated_at
+      description: User consent preferences response
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the user
+        ai_processing_consent:
+          type: boolean
+          description: Whether user has consented to AI processing
+        data_anonymization_consent:
+          type: boolean
+          description: Whether user has consented to data anonymization
+        analytics_consent:
+          type: boolean
+          description: Whether user has consented to analytics
+        marketing_consent:
+          type: boolean
+          description: Whether user has consented to marketing
+        consent_version:
+          type: string
+          description: Version of privacy policy user consented to
+          example: "1.0"
+        consent_given_at:
+          type: string
+          format: date-time
+          description: When consent was first given
+          nullable: true
+        consent_withdrawn_at:
+          type: string
+          format: date-time
+          description: When consent was withdrawn (if applicable)
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          description: When consent preferences were last updated
+      additionalProperties: false
+
+    AuditLog:
+      type: object
+      required:
+        - id
+        - action
+        - resource_type
+        - created_at
+        - expires_at
+      description: Audit log entry for compliance tracking
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the audit log entry
+        user_id:
+          type: string
+          format: uuid
+          description: User ID associated with the action
+          nullable: true
+        action:
+          type: string
+          description: Type of action performed
+          enum:
+            - "CONSENT_GIVEN"
+            - "CONSENT_WITHDRAWN"
+            - "CONSENT_UPDATED"
+            - "DATA_ANONYMIZED"
+            - "DATA_ACCESSED"
+            - "DATA_DELETED"
+            - "AI_REQUEST_PROCESSED"
+            - "USER_PROFILE_ACCESSED"
+            - "SYSTEM_ACCESS"
+            - "COMPLIANCE_CHECK"
+        resource_type:
+          type: string
+          description: Type of resource that was acted upon
+          example: "user_consent"
+        resource_id:
+          type: string
+          format: uuid
+          description: ID of the specific resource
+          nullable: true
+        details:
+          type: object
+          description: Additional details about the action
+          additionalProperties: true
+        ip_address:
+          type: string
+          description: IP address from which the action was performed
+          nullable: true
+        user_agent:
+          type: string
+          description: User agent string from the request
+          nullable: true
+        session_id:
+          type: string
+          description: Session identifier
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          description: When the audit log entry was created
+        expires_at:
+          type: string
+          format: date-time
+          description: When this audit log entry will be automatically deleted
+      additionalProperties: false
+
+    PrivacyPolicyVersion:
+      type: object
+      required:
+        - id
+        - version
+        - content
+        - effective_date
+        - created_at
+        - is_active
+      description: Privacy policy version information
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the policy version
+        version:
+          type: string
+          description: Version identifier
+          example: "1.0"
+        content:
+          type: string
+          description: Full text of the privacy policy
+        effective_date:
+          type: string
+          format: date-time
+          description: When this policy version became effective
+        created_at:
+          type: string
+          format: date-time
+          description: When this policy version was created
+        is_active:
+          type: boolean
+          description: Whether this is the currently active policy version
+      additionalProperties: false
+
+    PaginationInfo:
+      type: object
+      required:
+        - total_count
+        - limit
+        - offset
+        - returned
+        - has_next
+        - has_prev
+      description: Pagination information for list responses
+      properties:
+        total_count:
+          type: integer
+          description: Total number of items available
+          example: 150
+        limit:
+          type: integer
+          description: Maximum number of items per page
+          example: 50
+        offset:
+          type: integer
+          description: Number of items skipped
+          example: 0
+        returned:
+          type: integer
+          description: Number of items in current response
+          example: 50
+        has_next:
+          type: boolean
+          description: Whether there are more items available
+        has_prev:
+          type: boolean
+          description: Whether there are previous items available
+      additionalProperties: false
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "UNAUTHORIZED"
+              message: "Authentication required"
+            request_id: "req_123456789"
+            timestamp: "2024-01-15T10:30:00Z"
+
+    BadRequestError:
+      description: Bad request - Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "INVALID_REQUEST"
+              message: "Invalid request body"
+            request_id: "req_123456789"
+            timestamp: "2024-01-15T10:30:00Z"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "INTERNAL_SERVER_ERROR"
+              message: "An unexpected error occurred"
+            request_id: "req_123456789"
+            timestamp: "2024-01-15T10:30:00Z"
+
+tags:
+  - name: AI Summarization
+    description: |
+      AI-powered conversation analysis and summarization endpoints.
+      These endpoints use machine learning models to analyze conversational
+      data and generate intelligent summaries, extract action items,
+      and identify key topics and decisions.
+  - name: Privacy & Consent
+    description: |
+      Privacy and consent management endpoints for GDPR and CCPA compliance.
+      These endpoints allow users to manage their data processing preferences,
+      view audit logs, and exercise their data protection rights.

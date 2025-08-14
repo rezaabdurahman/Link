@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -267,11 +266,12 @@ func (p *ProxyHandler) NotFoundHandler(c *gin.Context) {
 			"/users/",
 			"/location/",
 			"/chat/",
-			"/ai/",
+			"/ai/" + " (including /ai/summarize)",
 			"/broadcasts/",
 			"/discovery/",
 			"/stories/",
 			"/opportunities/",
+			"/ws (WebSocket)",
 		},
 	})
 }

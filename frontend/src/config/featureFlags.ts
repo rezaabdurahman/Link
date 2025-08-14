@@ -3,6 +3,7 @@ export const FeatureFlags = {
   // Intelligent chat features
   CONVERSATION_CUE_CARDS: true, // Show conversation cue cards
   INTELLIGENT_MESSAGE_BOX: false, // Hide intelligent message search box
+  AI_CONVERSATION_SUMMARIES: true, // Enable AI-powered conversation summaries
   
   // Discovery page features
   DISCOVERY_CUES: true, // Enable social cues functionality

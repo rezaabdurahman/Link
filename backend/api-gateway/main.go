@@ -56,6 +56,7 @@ func main() {
 				"discovery":     "/broadcasts/*",
 				"stories":       "/stories/*",
 				"opportunities": "/opportunities/*",
+				"websocket":     "/ws",
 			},
 		})
 	})
@@ -92,7 +93,9 @@ func main() {
 		chatGroup.Any("/*path", proxyHandler.ProxyRequest)
 	}
 
-	// WebSocket endpoint for chat
+	// WebSocket endpoint for chat (current implementation)
+	// TODO: Implement dedicated WebSocket handling for real-time features
+	// This will include chat messaging, notifications, and live updates
 	router.Any("/ws", proxyHandler.ProxyRequest)
 
 	// AI routes (proxied to ai-service)

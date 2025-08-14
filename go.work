@@ -3,9 +3,10 @@ go 1.23.0
 toolchain go1.24.6
 
 use (
-    ./backend/api-gateway
-    ./backend/chat-svc
-    ./backend/discovery-svc
-    ./backend/search-svc
-    ./backend/user-svc
+	./backend/ai-svc
+	./backend/api-gateway
+	./backend/chat-svc
+	./backend/discovery-svc
+	./backend/search-svc
+	./backend/user-svc
 )

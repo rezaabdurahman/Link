@@ -1,12 +1,45 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Chat } from '../types';
+import { getConversationSummaryWithFallback } from '../services/aiClient';
 
 interface ChatListItemProps {
   chat: Chat;
   onClick: () => void;
+  enableAISummary?: boolean; // Optional prop to enable AI summary fetching
 }
 
-const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Element => {
+const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, enableAISummary = false }): JSX.Element => {
+  const [aiSummary, setAiSummary] = useState<string>('');
+  const [isLoadingAISummary, setIsLoadingAISummary] = useState<boolean>(false);
+  
+  // Fetch AI summary if enabled
+  useEffect(() => {
+    if (!enableAISummary) return;
+    
+    const fetchAISummary = async () => {
+      setIsLoadingAISummary(true);
+      try {
+        const summary = await getConversationSummaryWithFallback(
+          chat.id, 
+          chat.conversationSummary || 'No summary available'
+        );
+        setAiSummary(summary);
+      } catch (error) {
+        console.warn(`Failed to fetch AI summary for chat ${chat.id}:`, error);
+        setAiSummary(chat.conversationSummary || 'No summary available');
+      } finally {
+        setIsLoadingAISummary(false);
+      }
+    };
+    
+    fetchAISummary();
+  }, [chat.id, chat.conversationSummary, enableAISummary]);
+  
+  // Determine which summary to display
+  const displaySummary = enableAISummary 
+    ? (aiSummary || chat.conversationSummary || 'No summary available')
+    : (chat.conversationSummary || 'No summary available');
+  
   const formatTime = (date: Date): string => {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -130,9 +163,29 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick }): JSX.Eleme
           fontSize: '12px',
           color: '#06b6d4',
           margin: '0 0 6px 0',
-          fontWeight: '500'
+          fontWeight: '500',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
         }}>
-          Last: {chat.conversationSummary}
+          <span>Summary:</span>
+          {enableAISummary && isLoadingAISummary ? (
+            <span style={{ 
+              fontSize: '10px',
+              color: '#9ca3af',
+              fontStyle: 'italic'
+            }}>
+              Generating...
+            </span>
+          ) : (
+            <span style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {displaySummary}
+            </span>
+          )}
         </p>
 
         {/* Last Message */}

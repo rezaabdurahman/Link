@@ -626,6 +626,82 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # AI-Powered Features
+  /ai/summarize:
+    post:
+      summary: Generate Conversation Summary
+      description: |
+        Generates an AI-powered summary of a conversation based on the provided
+        conversation ID. The summary includes key topics, important decisions,
+        action items, and relevant context from the conversation history.
+        
+        The response includes metadata about when the summary was generated and
+        when it expires from cache.
+      operationId: summarizeConversation
+      tags:
+        - AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummarizationRequest'
+            examples:
+              basic_request:
+                summary: Basic summarization request
+                value:
+                  conversation_id: "conv_123456789"
+              with_limit:
+                summary: Request with message limit
+                value:
+                  conversation_id: "conv_123456789"
+                  limit: 50
+      responses:
+        '200':
+          description: Successfully generated conversation summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummarizationResponse'
+              example:
+                summary: |
+                  ## Key Topics Discussed
+                  - Product roadmap planning for Q2 2024
+                  - Budget allocation for new feature development
+                  - Team restructuring and hiring plans
+                  
+                  ## Decisions Made
+                  - Approved $100k budget for mobile app redesign
+                  - Decided to postpone internationalization until Q3
+                  
+                  ## Action Items
+                  - Sarah to draft technical specifications by Friday
+                  - Mike to schedule follow-up with design team
+                  - Team lead to present findings at next board meeting
+                generated_at: "2024-01-15T10:30:00Z"
+                expires_at: "2024-01-15T22:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: Too many requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: Service unavailable - AI service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /ai/insights:
     get:
       summary: Get User Insights
@@ -1403,6 +1479,121 @@ components:
       required: [users, total, radius_used, center_latitude, center_longitude]
 
     # AI Schemas
+    SummarizationRequest:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          description: |
+            Unique identifier for the conversation to summarize.
+            Must be a valid conversation ID that the user has access to.
+          example: "conv_123456789"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+          description: |
+            Maximum number of messages to include in the summarization.
+            Defaults to 100 if not specified. Useful for limiting the scope
+            of very long conversations.
+          example: 50
+        include_metadata:
+          type: boolean
+          default: true
+          description: |
+            Whether to include metadata such as timestamps, participant info,
+            and message types in the summarization analysis.
+          example: true
+      required: [conversation_id]
+      example:
+        conversation_id: "conv_123456789"
+        limit: 50
+        include_metadata: true
+
+    SummarizationResponse:
+      type: object
+      properties:
+        summary:
+          type: string
+          description: |
+            The AI-generated summary in markdown format, including key topics,
+            decisions made, action items, and other relevant insights.
+          example: |
+            ## Key Topics Discussed
+            - Product roadmap planning for Q2 2024
+            - Budget allocation for new feature development
+            - Team restructuring and hiring plans
+            
+            ## Decisions Made
+            - Approved $100k budget for mobile app redesign
+            - Decided to postpone internationalization until Q3
+            
+            ## Action Items
+            - Sarah to draft technical specifications by Friday
+            - Mike to schedule follow-up with design team
+            - Team lead to present findings at next board meeting
+        conversation_id:
+          type: string
+          description: The ID of the conversation that was summarized
+          example: "conv_123456789"
+        message_count:
+          type: integer
+          description: Total number of messages analyzed in the summary
+          example: 45
+        participants:
+          type: array
+          items:
+            type: string
+          description: List of participants in the conversation
+          example: ["Alice Johnson", "Bob Smith", "Charlie Davis"]
+        generated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the summary was generated
+          example: "2024-01-15T10:30:00Z"
+        expires_at:
+          type: string
+          format: date-time
+          description: Timestamp when the cached summary expires
+          example: "2024-01-15T22:30:00Z"
+        confidence_score:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: |
+            Confidence score of the AI summarization quality (0.0 to 1.0).
+            Higher scores indicate more reliable summaries.
+          example: 0.89
+        word_count:
+          type: integer
+          description: Word count of the generated summary
+          example: 127
+      required: [summary, conversation_id, message_count, participants, generated_at, expires_at, confidence_score]
+      example:
+        summary: |
+          ## Key Topics Discussed
+          - Product roadmap planning for Q2 2024
+          - Budget allocation for new feature development
+          - Team restructuring and hiring plans
+          
+          ## Decisions Made
+          - Approved $100k budget for mobile app redesign
+          - Decided to postpone internationalization until Q3
+          
+          ## Action Items
+          - Sarah to draft technical specifications by Friday
+          - Mike to schedule follow-up with design team
+          - Team lead to present findings at next board meeting
+        conversation_id: "conv_123456789"
+        message_count: 45
+        participants: ["Alice Johnson", "Bob Smith", "Charlie Davis"]
+        generated_at: "2024-01-15T10:30:00Z"
+        expires_at: "2024-01-15T22:30:00Z"
+        confidence_score: 0.89
+        word_count: 127
+
     AIInsight:
       type: object
       properties:
