@@ -44,7 +44,7 @@ aqua: #06b6d4 vs #0e7490 vs #2dd4bf
 ```css
 /* Unified system */
 aqua: #14b8a6           /* Maps to primary-500 */
-semantic-success: #22c55e  /* Green for success */
+semantic-success: #14b8a6  /* Aqua for success (brand consistent) */
 semantic-danger: #ef4444   /* Red for errors */
 surface-primary: #ffffff   /* Consistent naming */
 ```

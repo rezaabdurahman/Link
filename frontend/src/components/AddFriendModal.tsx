@@ -113,7 +113,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
               </div>
               
               {successMessage && (
-                <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-aqua/10 border border-aqua/30 text-aqua px-4 py-3 rounded-lg text-sm">
                   {successMessage}
                 </div>
               )}
@@ -152,7 +152,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
                 </p>
                 
                 {successMessage ? (
-                  <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm mb-4">
+                  <div className="bg-aqua/10 border border-aqua/30 text-aqua px-4 py-3 rounded-lg text-sm mb-4">
                     {successMessage}
                   </div>
                 ) : null}

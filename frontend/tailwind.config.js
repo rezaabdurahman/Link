@@ -29,7 +29,7 @@ module.exports = {
         },
         // Semantic color system
         semantic: {
-          success: '#22c55e',    // Green for success states
+          success: '#14b8a6',    // Aqua for success states (consistent with brand)
           warning: '#f59e0b',    // Amber for warnings  
           danger: '#ef4444',     // Red for errors/danger
           info: '#3b82f6',       // Blue for info states

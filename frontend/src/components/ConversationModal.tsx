@@ -548,7 +548,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                           <div className="flex gap-2 mt-3">
                             <button
                               onClick={() => handlePermissionResponse(msg.id, true, msg.permissionData!.queuedMessageId!)}
-                              className="flex items-center gap-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-full transition-colors hover-scale"
+                              className="flex items-center gap-1 px-3 py-2 bg-aqua hover:bg-aqua-dark text-white text-xs font-medium rounded-full transition-colors hover-scale"
                             >
                               <Check size={12} />
                               Yes
@@ -566,7 +566,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                           <div className="mt-2">
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                               msg.permissionData.isApproved 
-                                ? 'bg-green-100 text-green-700' 
+                                ? 'bg-aqua/20 text-aqua' 
                                 : 'bg-red-100 text-red-700'
                             }`}>
                               {msg.permissionData.isApproved ? '✓ Accepted' : '✗ Declined'}

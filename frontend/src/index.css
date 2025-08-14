@@ -68,7 +68,7 @@
 
   /* Status indicators with accessibility improvements */
   .online-indicator {
-    @apply w-3 h-3 bg-semantic-success rounded-full border-2 border-white absolute bottom-0.5 right-0.5;
+    @apply w-3 h-3 bg-aqua rounded-full border-2 border-white absolute bottom-0.5 right-0.5;
   }
 
   .offline-indicator {

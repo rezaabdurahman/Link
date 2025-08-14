@@ -84,8 +84,8 @@ const FriendButton: React.FC<FriendButtonProps> = ({
       
       case 'pending_received':
         return variant === 'outline'
-          ? 'border-green-500 text-green-600 hover:bg-green-50'
-          : 'bg-green-500 text-white hover:bg-green-600';
+          ? 'border-aqua text-aqua hover:bg-aqua/10'
+          : 'bg-aqua text-white hover:bg-aqua-dark';
       
       case 'none':
       default:
@@ -181,7 +181,7 @@ export const FriendButtonMini: React.FC<FriendButtonMiniProps> = ({
       case 'pending_sent':
         return 'bg-gray-400 cursor-not-allowed';
       case 'pending_received':
-        return 'bg-green-500 hover:bg-green-600';
+        return 'bg-aqua hover:bg-aqua-dark';
       case 'none':
       default:
         return 'bg-aqua hover:bg-aqua/90';

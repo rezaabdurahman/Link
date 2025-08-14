@@ -29,7 +29,7 @@ aqua-deeper: #0f766e   /* Maps to primary-700 */
 
 ### Semantic Colors (For States)
 ```css
-semantic-success: #22c55e  /* Green for success states */
+semantic-success: #14b8a6  /* Aqua for success states (brand consistent) */
 semantic-warning: #f59e0b  /* Amber for warnings */
 semantic-danger:  #ef4444  /* Red for errors/danger */
 semantic-info:    #3b82f6  /* Blue for info states */
@@ -81,7 +81,7 @@ accent-pink:         #ec4899  /* Pink accent */
 - Consistent padding and border radius
 
 ### Status Indicators
-- **`.online-indicator`** - Aqua availability indicator (was green, changed for palette consistency)
+- **`.online-indicator`** - Aqua availability indicator (consistent with brand palette)
 - **`.offline-indicator`** - Copper busy/offline indicator
 
 ## 🎭 Animations & Effects
