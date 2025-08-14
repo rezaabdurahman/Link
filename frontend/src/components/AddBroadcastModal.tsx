@@ -51,6 +51,12 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({
     }
   };
 
+  const handleBackdropKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape' && !isSubmitting) {
+      handleCancel();
+    }
+  };
+
   const isFormValid = broadcastText.trim().length > 0;
   const hasChanges = broadcastText.trim() !== currentBroadcast;
 
@@ -58,6 +64,10 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({
     <div 
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
+      onKeyDown={handleBackdropKeyDown}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
     >
       <div className="bg-white rounded-3xl max-w-md w-full mx-4 overflow-hidden shadow-2xl animate-scale-in">
         {/* Header */}
@@ -79,7 +89,7 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({
             className="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm text-gray-900 placeholder:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             maxLength={200}
             disabled={isSubmitting}
-            autoFocus
+            aria-label="Broadcast message"
           />
           <div className="text-right mt-2">
             <span className="text-xs text-gray-400">

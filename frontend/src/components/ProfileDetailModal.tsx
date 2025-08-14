@@ -17,22 +17,22 @@ const mapUserProfileToUser = (profile: UserProfileResponse): User => {
   return {
     id: profile.id,
     name: `${profile.first_name} ${profile.last_name}`.trim(),
-    age: profile.date_of_birth ? 
+    age: profile.age || (profile.date_of_birth ? 
       Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
-      25, // fallback age
+      undefined), // Use age from backend or calculate it
     profilePicture: profile.profile_picture || undefined,
     bio: profile.bio || 'No bio available',
-    interests: [], // Will need to be added to backend or use fallback
+    interests: profile.interests || [], // Use interests from backend
     location: {
       lat: 0, // Will need to be added to backend
       lng: 0, // Will need to be added to backend
       proximityMiles: Math.floor(Math.random() * 10) + 1 // fallback
     },
     isAvailable: true, // fallback
-    mutualFriends: [], // Will need to be calculated from mutual_friends_count
+    mutualFriends: profile.mutual_friends ? Array(profile.mutual_friends).fill('').map(() => 'friend') : [], // Convert count to array
     connectionPriority: 'regular' as const,
-    lastSeen: new Date(),
-    profileType: 'public' as const // fallback, will need privacy settings logic
+    lastSeen: new Date(profile.last_login_at || Date.now()),
+    profileType: 'public' as const // Will be determined by privacy settings
   };
 };
 
@@ -58,6 +58,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
         const profileResponse = await getUserProfile(userId);
         const mappedUser = mapUserProfileToUser(profileResponse);
         setUser(mappedUser);
+        setProfileResponse(profileResponse); // Store the full response
       } catch (err: any) {
         console.error('Failed to fetch user profile:', err);
         setError(getProfileErrorMessage(err.error || err, userId));
@@ -87,6 +88,12 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     }
   };
 
+  const handleModalKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
   // Create a Chat object for ConversationModal (only when user is available)
   const chatData: Chat | null = user ? {
     id: `chat-${user.id}`,
@@ -107,19 +114,27 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     messages: []
   } : null;
 
-  const socialLinks = user ? [
-    { platform: 'Instagram', icon: Instagram, handle: '@' + user.name.toLowerCase().replace(' ', '_') },
-    { platform: 'Twitter', icon: Twitter, handle: '@' + user.name.toLowerCase().replace(' ', '_') },
-    { platform: 'Facebook', icon: Facebook, handle: user.name },
-  ] : [];
+  // We'll need the original profile response to get social links and photos
+  const [profileResponse, setProfileResponse] = useState<UserProfileResponse | undefined>(undefined);
+  
+  // Map social links from backend with appropriate icons
+  const getSocialIcon = (platform: string) => {
+    const platformLower = platform.toLowerCase();
+    if (platformLower.includes('instagram')) return Instagram;
+    if (platformLower.includes('twitter')) return Twitter;
+    if (platformLower.includes('facebook')) return Facebook;
+    return MessageCircle; // fallback icon
+  };
 
-  // Mock additional photos (only when user is available)
-  const additionalPhotos = user ? [
-    user.profilePicture,
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-    'https://images.unsplash.com/photo-1494790108755-2616b612b5ab?w=150&h=150&fit=crop&crop=face',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
-  ] : [];
+  const socialLinks = profileResponse?.social_links?.map(link => ({
+    platform: link.platform,
+    icon: getSocialIcon(link.platform),
+    handle: link.username ? `@${link.username}` : link.url,
+    url: link.url
+  })) || [];
+
+  // Use additional photos from backend
+  const additionalPhotos = profileResponse?.additional_photos?.filter(photo => photo) || [];
 
   // Loading skeleton component
   const ProfileSkeleton = () => (
@@ -153,8 +168,19 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   );
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <div 
+      className="modal-overlay" 
+      onClick={onClose}
+      onKeyDown={handleModalKeyDown}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+    >
+      <div 
+        className="modal-content" 
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex justify-between items-center p-5 pb-0">
           <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
@@ -338,7 +364,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                       <img
                         key={index}
                         src={photo}
-                        alt={`${user.name} photo ${index + 1}`}
+                        alt={`${user.name}'s photo ${index + 1}`}
                         style={{
                           width: '100%',
                           aspectRatio: '1',

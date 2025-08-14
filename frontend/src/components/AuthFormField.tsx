@@ -58,10 +58,8 @@ const AuthFormField: React.FC<AuthFormFieldProps> = ({
           type={inputType}
           placeholder={placeholder}
           className={`
-            w-full pl-11 pr-${rightElement || showPasswordToggle ? '12' : '4'} py-4 bg-surface-card border rounded-2xl
-            text-gray-900 placeholder-gray-500
-            focus:outline-none focus:ring-2 focus:ring-aqua/50 focus:border-aqua
-            transition-colors duration-200
+            ios-text-field w-full pl-11 pr-${rightElement || showPasswordToggle ? '12' : '4'} py-4
+            focus:hover-glow transition-all duration-200
             ${error 
               ? 'border-red-300 focus:ring-red-500/50 focus:border-red-500' 
               : 'border-gray-200'

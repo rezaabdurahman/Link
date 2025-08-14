@@ -6,22 +6,37 @@ import { AuthUser } from '../types/index';
 
 // API endpoints
 const USER_ENDPOINTS = {
-  profile: (userId: string) => `/users/profile/${userId}`,
+  myProfile: '/api/v1/users/profile',
+  profile: (userId: string) => `/api/v1/users/profile/${userId}`,
   searchFriends: '/api/v1/users/friends/search',
 } as const;
+
+// Social Link Interface
+export interface SocialLink {
+  readonly platform: string;
+  readonly url: string;
+  readonly username?: string;
+}
+
+// Privacy Settings Interface
+export interface PrivacySettings {
+  readonly show_age: boolean;
+  readonly show_location: boolean;
+  readonly show_mutual_friends: boolean;
+}
 
 // User Profile Response Interface
 // Extends the existing AuthUser type with additional user profile fields
 export interface UserProfileResponse extends AuthUser {
   // Additional profile fields that might be available for other users
+  readonly age?: number; // Calculated from date_of_birth, respecting privacy
+  readonly interests: string[];
+  readonly social_links: SocialLink[];
+  readonly additional_photos: string[];
+  readonly privacy_settings: PrivacySettings;
   readonly is_friend?: boolean;
-  readonly mutual_friends_count?: number;
-  readonly last_active?: string; // ISO string format
-  readonly privacy_settings?: {
-    readonly show_age: boolean;
-    readonly show_location: boolean;
-    readonly show_mutual_friends: boolean;
-  };
+  readonly mutual_friends?: number; // Changed from mutual_friends_count to match backend
+  readonly last_login_at?: string; // ISO string format, changed from last_active
 }
 
 // Public User Interface for search results
@@ -29,6 +44,31 @@ export interface PublicUser extends AuthUser {
   readonly is_friend?: boolean;
   readonly mutual_friends_count?: number;
   readonly last_active?: string; // ISO string format
+}
+
+/**
+ * Get the authenticated user's own profile
+ * @returns Promise resolving to the current user's complete profile data
+ * @throws AuthServiceError with detailed error information
+ */
+export async function getMyProfile(): Promise<UserProfileResponse> {
+  try {
+    const response = await apiClient.get<UserProfileResponse>(
+      USER_ENDPOINTS.myProfile
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to fetch your profile due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
 }
 
 /**

@@ -7,6 +7,7 @@ import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorMessage from '../ui/ErrorMessage';
+import OnboardingStepHeader from './ui/OnboardingStepHeader';
 
 const ProfilePictureStep: React.FC = (): JSX.Element => {
   const { user } = useAuth();
@@ -139,18 +140,12 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
 
   return (
     <div className="w-full space-y-10">
-      {/* Step Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-full text-sm font-medium mb-4">
-          <span className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold">1</span>
-          <span>Step 1 of 7</span>
-        </div>
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">Let's add your profile picture</h1>
-        <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
-          A great profile picture helps others recognize you and makes a strong first impression. 
-          Don't worry - you can always change it later.
-        </p>
-      </div>
+      <OnboardingStepHeader
+        stepNumber={1}
+        totalSteps={7}
+        title="Let's add your profile picture"
+        subtitle="A great profile picture helps others recognize you and makes a strong first impression. Don't worry - you can always change it later."
+      />
 
       {/* Error Message */}
       {error && (
@@ -164,7 +159,7 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
       {/* Upload Area */}
       <div className="max-w-4xl mx-auto">
         <div
-          className="relative border-2 border-dashed border-gray-300 rounded-2xl p-16 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-300 bg-gradient-to-b from-gray-50 to-white"
+          className="relative border-2 border-dashed border-white/10 rounded-2xl p-16 text-center hover:border-aqua hover:bg-aqua/10 transition-all duration-300 bg-gradient-to-b from-gray-50 to-white"
           onDrop={handleDrop}
           onDragOver={handleDragOver}
         >
@@ -200,7 +195,7 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
                 <p className="text-gray-600 mb-2">
                   Drop an image here, or
                 </p>
-                <label className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
+                <label className="cursor-pointer text-aqua hover:text-aqua-dark font-medium">
                   browse files
                   <input
                     type="file"
@@ -216,7 +211,7 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
 
           {/* Camera Option (for mobile) */}
           <div className="mt-4 sm:hidden">
-            <label className="flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-700 cursor-pointer">
+            <label className="flex items-center justify-center space-x-2 text-aqua hover:text-aqua-dark cursor-pointer">
               <Camera className="w-5 h-5" />
               <span className="text-sm font-medium">Take Photo</span>
               <input
@@ -241,7 +236,7 @@ const ProfilePictureStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleContinue}
           disabled={isLoading || isUploading || (!selectedFile && !previewUrl)}
-          className="flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg hover:shadow-xl font-semibold text-lg"
+          className="ios-button flex items-center space-x-3 px-8 py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isUploading ? (
             <>

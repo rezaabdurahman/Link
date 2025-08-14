@@ -50,15 +50,17 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
 
   if (!isOpen) return <></>;
 
+  // Add slide-up animation to modal
+
   const modalContent = (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <div className="bg-surface-card rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-surface-card rounded-2xl w-full max-w-md shadow-2xl slide-up">
         {/* Header */}
         <div className="flex items-center justify-between p-6 pb-4">
           <h2 className="text-2xl font-bold text-gray-900">Add Friends</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 flex items-center justify-center"
+            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 flex items-center justify-center hover-scale"
           >
             <X size={18} className="text-gray-600" />
           </button>
@@ -69,7 +71,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
           <div className="flex bg-surface-hover rounded-lg p-1">
             <button
               onClick={() => setActiveTab('email')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 hover-scale ${
                 activeTab === 'email'
                   ? 'bg-aqua text-white shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -80,7 +82,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
             </button>
             <button
               onClick={() => setActiveTab('contacts')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 hover-scale ${
                 activeTab === 'contacts'
                   ? 'bg-aqua text-white shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -105,7 +107,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter friend's email address"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-aqua/50 focus:border-aqua"
+                  className="ios-text-field w-full px-4 py-3"
                   disabled={isLoading}
                 />
               </div>
@@ -119,7 +121,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
               <button
                 onClick={handleAddByEmail}
                 disabled={!email.trim() || isLoading}
-                className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 hover-glow hover-scale ${
                   email.trim() && !isLoading
                     ? 'bg-aqua text-white hover:bg-aqua-dark shadow-sm'
                     : 'bg-gray-200 text-gray-500 cursor-not-allowed'
@@ -158,7 +160,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose }): JSX
                 <button
                   onClick={handleImportContacts}
                   disabled={isLoading}
-                  className={`inline-flex items-center gap-2 py-3 px-6 rounded-lg font-semibold transition-all duration-200 ${
+                  className={`inline-flex items-center gap-2 py-3 px-6 rounded-lg font-semibold transition-all duration-200 hover-glow hover-scale ${
                     !isLoading
                       ? 'bg-aqua text-white hover:bg-aqua-dark shadow-sm'
                       : 'bg-gray-200 text-gray-500 cursor-not-allowed'

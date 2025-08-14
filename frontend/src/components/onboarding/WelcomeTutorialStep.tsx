@@ -7,6 +7,8 @@ import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorMessage from '../ui/ErrorMessage';
+import OnboardingCard from './ui/OnboardingCard';
+import OnboardingStepHeader from './ui/OnboardingStepHeader';
 
 const WelcomeTutorialStep: React.FC = (): JSX.Element => {
   const { user } = useAuth();
@@ -43,24 +45,16 @@ const WelcomeTutorialStep: React.FC = (): JSX.Element => {
 
   return (
     <div className="w-full space-y-10">
-      {/* Step Header */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center space-x-2 bg-green-50 text-green-700 px-3 py-2 rounded-full text-sm font-medium mb-4">
-          <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-xs font-bold">7</span>
-          <span>Step 7 of 7</span>
+        <div className="w-20 h-20 bg-gradient-to-r from-aqua to-aqua-dark rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <Sparkles className="w-10 h-10 text-white" />
         </div>
-        
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-            <Sparkles className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-            Welcome to Link, {user?.first_name}! 🎉
-          </h1>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            You're all set up and ready to start connecting with amazing people!
-          </p>
-        </div>
+        <OnboardingStepHeader
+          stepNumber={7}
+          totalSteps={7}
+          title={`Welcome to Link, ${user?.first_name}! 🎉`}
+          subtitle="You're all set up and ready to start connecting with amazing people!"
+        />
       </div>
 
       {error && (
@@ -74,52 +68,52 @@ const WelcomeTutorialStep: React.FC = (): JSX.Element => {
       {/* Content Grid */}
       <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
         {/* Left Column - Features */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-8 space-y-6">
+        <OnboardingCard className="bg-gradient-to-r from-aqua/10 to-aqua/20">
           <h3 className="text-2xl font-bold text-gray-800 mb-6">
             Here's what you can do now:
           </h3>
           
           <div className="space-y-4">
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 bg-aqua rounded-full flex items-center justify-center flex-shrink-0">
                 <Check className="w-5 h-5 text-white" />
               </div>
               <span className="text-lg text-gray-700">Discover people nearby who share your interests</span>
             </div>
             
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 bg-aqua rounded-full flex items-center justify-center flex-shrink-0">
                 <Check className="w-5 h-5 text-white" />
               </div>
               <span className="text-lg text-gray-700">Start conversations and make meaningful connections</span>
             </div>
             
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 bg-aqua rounded-full flex items-center justify-center flex-shrink-0">
                 <Check className="w-5 h-5 text-white" />
               </div>
               <span className="text-lg text-gray-700">Join local events and activities</span>
             </div>
             
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 bg-aqua rounded-full flex items-center justify-center flex-shrink-0">
                 <Check className="w-5 h-5 text-white" />
               </div>
               <span className="text-lg text-gray-700">Customize your profile anytime in settings</span>
             </div>
           </div>
-        </div>
+        </OnboardingCard>
 
         {/* Right Column - Tips */}
-        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-8 space-y-6">
-          <h4 className="text-2xl font-bold text-yellow-800 mb-6">💡 Pro Tips:</h4>
-          <ul className="text-lg text-yellow-700 space-y-3">
+        <OnboardingCard className="bg-accent-copper/10 border-2 border-accent-copper/20">
+          <h4 className="text-2xl font-bold text-accent-copper mb-6">💡 Pro Tips:</h4>
+          <ul className="text-lg text-accent-copper space-y-3">
             <li>• Keep your profile updated to get better matches</li>
             <li>• Be genuine and authentic in your conversations</li>
             <li>• Don't hesitate to reach out to people who share your interests</li>
             <li>• Check out the opportunities section for local events</li>
           </ul>
-        </div>
+        </OnboardingCard>
       </div>
 
       {/* Action Buttons */}
@@ -127,7 +121,7 @@ const WelcomeTutorialStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleComplete}
           disabled={isLoading || isCompleting}
-          className="flex items-center space-x-3 bg-gradient-to-r from-green-500 to-blue-600 text-white px-10 py-5 rounded-2xl hover:from-green-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-xl hover:shadow-2xl font-bold text-xl"
+          className="ios-button flex items-center space-x-3 px-10 py-5 text-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl"
         >
           {isCompleting ? (
             <>

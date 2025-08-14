@@ -83,7 +83,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
     // Instagram-style feed layout
     return (
       <div 
-        className="relative group cursor-pointer overflow-hidden mb-8" 
+        className="relative group cursor-pointer overflow-hidden mb-8 fade-in hover-glow" 
         onClick={onClick}
       >
         {/* Full-width Profile Media */}
@@ -105,10 +105,10 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
                 <div className="absolute inset-0 flex items-center justify-center">
                   {/* Play/Pause Button */}
                   {showPlayButton && (
-                    <button
-                      onClick={handleVideoToggle}
-                      className="bg-black/50 backdrop-blur-sm rounded-full p-4 text-white hover:bg-black/70 transition-all duration-200"
-                    >
+                  <button
+                    onClick={handleVideoToggle}
+                    className="bg-black/50 backdrop-blur-sm rounded-full p-4 text-white hover:bg-black/70 transition-all duration-200 hover-scale"
+                  >
                       <Play size={32} className="ml-1" fill="currentColor" />
                     </button>
                   )}
@@ -116,7 +116,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
                 {/* Mute Toggle */}
                 <button
                   onClick={handleMuteToggle}
-                  className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm rounded-full p-2 text-white hover:bg-black/70 transition-all duration-200"
+                  className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm rounded-full p-2 text-white hover:bg-black/70 transition-all duration-200 hover-scale"
                 >
                   {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>
@@ -216,7 +216,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
   // Original grid layout (keeping for backwards compatibility)
   return (
     <div 
-      className="relative group cursor-pointer overflow-hidden" 
+      className="relative group cursor-pointer overflow-hidden fade-in hover-glow" 
       onClick={onClick}
     >
       {/* Profile Picture */}

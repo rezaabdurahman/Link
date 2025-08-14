@@ -7,6 +7,8 @@ import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorMessage from '../ui/ErrorMessage';
+import OnboardingCard from './ui/OnboardingCard';
+import OnboardingStepHeader from './ui/OnboardingStepHeader';
 
 const BioStep: React.FC = (): JSX.Element => {
   const { user } = useAuth();
@@ -83,18 +85,13 @@ const BioStep: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="w-full space-y-10">
-      {/* Step Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-full text-sm font-medium mb-4">
-          <span className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold">2</span>
-          <span>Step 2 of 7</span>
-        </div>
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">Tell us about yourself</h1>
-        <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
-          Write a short bio to help others get to know you. What makes you unique and interesting?
-        </p>
-      </div>
+    <div className="w-full space-y-10 fade-in">
+      <OnboardingStepHeader
+        stepNumber={2}
+        totalSteps={7}
+        title="Tell us about yourself"
+        subtitle="Write a short bio to help others get to know you. What makes you unique and interesting?"
+      />
 
       {/* Error Message */}
       {error && (
@@ -114,7 +111,7 @@ const BioStep: React.FC = (): JSX.Element => {
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               placeholder="I'm passionate about... I love to... You can find me..."
-              className="w-full h-48 px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-lg leading-relaxed transition-all duration-200 bg-white shadow-sm"
+              className="ios-text-field w-full h-48 px-6 py-4 resize-none text-lg leading-relaxed focus:hover-glow"
               maxLength={maxLength}
               disabled={isLoading || isSubmitting}
             />
@@ -126,12 +123,12 @@ const BioStep: React.FC = (): JSX.Element => {
           </div>
 
           {/* Tips */}
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+          <OnboardingCard className="bg-aqua/10 border border-aqua/20">
             <div className="flex items-start space-x-4">
-              <Lightbulb className="w-6 h-6 text-blue-500 mt-0.5 flex-shrink-0" />
+              <Lightbulb className="w-6 h-6 text-aqua mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-base font-semibold text-blue-800 mb-3">Tips for a great bio:</p>
-                <ul className="text-sm text-blue-700 space-y-2">
+                <p className="text-base font-semibold text-aqua mb-3">Tips for a great bio:</p>
+                <ul className="text-sm text-aqua space-y-2">
                   <li>• Share your hobbies and interests</li>
                   <li>• Mention what you're looking for in connections</li>
                   <li>• Keep it friendly and authentic</li>
@@ -139,7 +136,7 @@ const BioStep: React.FC = (): JSX.Element => {
                 </ul>
               </div>
             </div>
-          </div>
+          </OnboardingCard>
         </div>
 
         {/* Right Column - Suggestions */}
@@ -152,7 +149,7 @@ const BioStep: React.FC = (): JSX.Element => {
               <button
                 key={index}
                 onClick={() => handleUseSuggestion(suggestion)}
-                className="w-full text-left p-4 border-2 border-gray-200 rounded-2xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 text-base text-gray-700 hover:shadow-md"
+                className="w-full text-left p-4 border-2 border-white/10 rounded-2xl hover:border-aqua/30 hover:bg-aqua/10 transition-all duration-200 text-base text-gray-700 hover:shadow-md hover-scale"
                 disabled={isLoading || isSubmitting}
               >
                 "{suggestion}"
@@ -167,7 +164,7 @@ const BioStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleSkip}
           disabled={isLoading || isSubmitting}
-          className="px-6 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all duration-200 disabled:opacity-50 font-medium"
+          className="ios-button-secondary px-6 py-3 font-medium disabled:opacity-50 hover-scale"
         >
           Skip this step
         </button>
@@ -175,7 +172,7 @@ const BioStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleContinue}
           disabled={isLoading || isSubmitting}
-          className="flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg hover:shadow-xl font-semibold text-lg"
+          className="ios-button flex items-center space-x-3 px-8 py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover-glow hover-scale"
         >
           {isSubmitting ? (
             <>

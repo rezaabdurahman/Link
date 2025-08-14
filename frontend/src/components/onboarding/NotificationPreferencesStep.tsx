@@ -6,6 +6,8 @@ import { ArrowRight, Bell } from 'lucide-react';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorMessage from '../ui/ErrorMessage';
+import OnboardingCard from './ui/OnboardingCard';
+import OnboardingStepHeader from './ui/OnboardingStepHeader';
 
 const NotificationPreferencesStep: React.FC = (): JSX.Element => {
   const {
@@ -42,16 +44,17 @@ const NotificationPreferencesStep: React.FC = (): JSX.Element => {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Bell className="w-8 h-8 text-yellow-600" />
+        <div className="w-16 h-16 bg-accent-copper/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Bell className="w-8 h-8 text-accent-copper" />
         </div>
-        <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-          Notification Settings
-        </h2>
-        <p className="text-gray-600">
-          Choose how you want to stay connected and receive updates.
-        </p>
       </div>
+      
+      <OnboardingStepHeader
+        stepNumber={5}
+        totalSteps={7}
+        title="Notification Settings"
+        subtitle="Choose how you want to stay connected and receive updates."
+      />
 
       {error && (
         <ErrorMessage
@@ -61,15 +64,15 @@ const NotificationPreferencesStep: React.FC = (): JSX.Element => {
         />
       )}
 
-      <div className="text-center py-8">
-        <p className="text-gray-500">Notification preferences coming soon...</p>
-      </div>
+      <OnboardingCard className="text-center">
+        <p className="text-text-secondary">Notification preferences coming soon...</p>
+      </OnboardingCard>
 
       <div className="flex justify-between items-center pt-6">
         <button
           onClick={handleSkip}
           disabled={isLoading || isSubmitting}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+          className="ios-button-secondary px-4 py-2 disabled:opacity-50"
         >
           Skip this step
         </button>
@@ -77,7 +80,7 @@ const NotificationPreferencesStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleContinue}
           disabled={isLoading || isSubmitting}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="ios-button flex items-center space-x-2 px-6 py-2 disabled:opacity-50"
         >
           {isSubmitting ? (
             <>

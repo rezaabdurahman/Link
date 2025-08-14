@@ -34,6 +34,11 @@ npm run build
 - `npm run cypress:open` - Open Cypress test runner
 - `npm run cypress:run` - Run Cypress tests headlessly
 
+### Accessibility
+- `npm run audit:contrast` - Run color contrast analysis for WCAG compliance
+- `npm run audit:a11y` - Run accessibility linting (ESLint JSX a11y)
+- `npm run audit:full` - Run complete accessibility audit
+
 ## Project Structure
 
 ```
@@ -65,6 +70,8 @@ src/
 - Write tests for new features
 - Use semantic commit messages
 - Maintain 80%+ code coverage
+- Ensure WCAG AA accessibility compliance
+- Test keyboard navigation and screen reader compatibility
 
 ## Environment Variables
 
@@ -276,3 +283,81 @@ useEffect(() => {
   fetchData();
 }, [userId]);
 ```
+
+## Accessibility
+
+This application follows WCAG 2.1 AA standards to ensure accessibility for all users.
+
+### Compliance Status
+
+- **Color Contrast**: 57.6% WCAG AA compliant (38/66 combinations)
+- **Interactive Elements**: Full keyboard navigation support
+- **Screen Reader**: ARIA labels and semantic HTML
+- **Focus Management**: Visible focus indicators
+
+### Automated Testing
+
+Run accessibility audits regularly during development:
+
+```bash
+# Complete accessibility audit
+npm run audit:full
+
+# Color contrast analysis only
+npm run audit:contrast
+
+# ESLint accessibility rules only  
+npm run audit:a11y
+```
+
+### Color Usage Guidelines
+
+#### Safe Colors (WCAG AA Compliant)
+- **Text**: `text-primary`, `text-secondary`
+- **Interactive**: `primary-700+`, `aqua-accessible`
+- **Accents**: All copper variants, `accent-charcoal`
+
+#### Restricted Colors (Use Carefully)
+- `primary-400` to `primary-600`: Decorative use only
+- `aqua-light`, `aqua-dark`: Avoid for text or critical UI
+- `text-muted`: Ensure sufficient background contrast
+
+### Keyboard Navigation
+
+All interactive elements support keyboard navigation:
+- **Tab**: Move between focusable elements
+- **Enter/Space**: Activate buttons and links
+- **Escape**: Close modals and dropdowns
+- **Arrow Keys**: Navigate within components (when applicable)
+
+### Screen Reader Support
+
+- Semantic HTML structure
+- ARIA labels for complex interactions
+- Live regions for dynamic content
+- Descriptive alt text for images
+- Form labels properly associated
+
+### Development Checklist
+
+For each new component:
+
+- [ ] Color contrast meets 4.5:1 ratio
+- [ ] Keyboard navigation works
+- [ ] Screen reader announces content correctly
+- [ ] Focus indicators are visible
+- [ ] ARIA roles and labels are appropriate
+- [ ] Images have descriptive alt text
+- [ ] Forms have proper labels
+
+### Testing Tools
+
+- **Automated**: ESLint JSX a11y, custom contrast analyzer
+- **Manual**: Keyboard navigation, screen reader testing
+- **Browser**: Chrome DevTools Lighthouse accessibility audit
+
+### Resources
+
+- Full audit report: `ACCESSIBILITY_AUDIT_REPORT.md`
+- Color combinations: `contrast-audit-results.json`
+- Guidelines: [WCAG 2.1 AA](https://www.w3.org/WAI/WCAG21/AA/)

@@ -6,6 +6,8 @@ import { ArrowRight, Shield } from 'lucide-react';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorMessage from '../ui/ErrorMessage';
+import OnboardingCard from './ui/OnboardingCard';
+import OnboardingStepHeader from './ui/OnboardingStepHeader';
 
 const PrivacySettingsStep: React.FC = (): JSX.Element => {
   const {
@@ -42,16 +44,17 @@ const PrivacySettingsStep: React.FC = (): JSX.Element => {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Shield className="w-8 h-8 text-purple-600" />
+        <div className="w-16 h-16 bg-accent-pink/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Shield className="w-8 h-8 text-accent-pink" />
         </div>
-        <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-          Privacy Settings
-        </h2>
-        <p className="text-gray-600">
-          Control who can see your profile and activity on Link.
-        </p>
       </div>
+      
+      <OnboardingStepHeader
+        stepNumber={6}
+        totalSteps={7}
+        title="Privacy Settings"
+        subtitle="Control who can see your profile and activity on Link."
+      />
 
       {error && (
         <ErrorMessage
@@ -61,15 +64,15 @@ const PrivacySettingsStep: React.FC = (): JSX.Element => {
         />
       )}
 
-      <div className="text-center py-8">
-        <p className="text-gray-500">Privacy settings coming soon...</p>
-      </div>
+      <OnboardingCard className="text-center">
+        <p className="text-text-secondary">Privacy settings coming soon...</p>
+      </OnboardingCard>
 
       <div className="flex justify-between items-center pt-6">
         <button
           onClick={handleSkip}
           disabled={isLoading || isSubmitting}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+          className="ios-button-secondary px-4 py-2 disabled:opacity-50"
         >
           Skip this step
         </button>
@@ -77,7 +80,7 @@ const PrivacySettingsStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleContinue}
           disabled={isLoading || isSubmitting}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="ios-button flex items-center space-x-2 px-6 py-2 disabled:opacity-50"
         >
           {isSubmitting ? (
             <>

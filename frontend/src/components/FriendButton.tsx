@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, UserPlus, UserMinus, Clock, Check } from 'lucide-react';
+import { UserPlus, UserMinus, Clock, Check } from 'lucide-react';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 
 interface FriendButtonProps {
@@ -57,7 +57,7 @@ const FriendButton: React.FC<FriendButtonProps> = ({
   };
 
   const getVariantClasses = () => {
-    const baseClasses = 'font-medium rounded-full transition-all duration-200 flex items-center gap-2';
+    const baseClasses = 'font-medium rounded-full transition-all duration-200 flex items-center gap-2 hover-scale';
     
     switch (variant) {
       case 'outline':
@@ -66,7 +66,7 @@ const FriendButton: React.FC<FriendButtonProps> = ({
         return `${baseClasses} bg-transparent hover:bg-gray-100`;
       case 'default':
       default:
-        return `${baseClasses} shadow-sm hover:shadow-md`;
+        return `${baseClasses} shadow-sm hover:shadow-md hover-glow`;
     }
   };
 

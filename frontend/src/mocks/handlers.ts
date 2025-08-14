@@ -1442,6 +1442,82 @@ export const onboardingHandlers = [
 // Auth handlers for login/register (basic mock)
 // User profile handlers
 export const userHandlers = [
+  // GET /users/profile/me - Get current user's profile
+  http.get('*/users/profile/me', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          type: 'AUTHENTICATION_ERROR',
+          message: 'Authentication required',
+          code: 'INVALID_CREDENTIALS',
+        },
+        { status: 401 }
+      );
+    }
+
+    // Get user profile from mock database
+    const userProfile = mockUserProfiles.get(userId);
+    
+    if (!userProfile) {
+      // Create a default profile for the authenticated user
+      const defaultProfile = {
+        id: userId,
+        email: `user${userId}@example.com`,
+        username: `user${userId}`,
+        first_name: 'Current',
+        last_name: 'User',
+        bio: 'Hello, I\'m using Link!',
+        profile_picture: null,
+        location: null,
+        email_verified: true,
+        created_at: now(),
+        updated_at: now(),
+        // Additional profile fields for full profile response
+        age: 25,
+        interests: ['technology', 'music', 'travel'],
+        social_links: [
+          {
+            platform: 'instagram',
+            url: 'https://instagram.com/currentuser',
+            username: 'currentuser'
+          }
+        ],
+        additional_photos: [],
+        privacy_settings: {
+          show_age: true,
+          show_location: false,
+          show_mutual_friends: true,
+        },
+        mutual_friends: 5,
+        last_login_at: now(),
+      };
+      
+      mockUserProfiles.set(userId, defaultProfile);
+      return HttpResponse.json(defaultProfile, { status: 200 });
+    }
+
+    // Return the stored profile with additional fields for complete profile response
+    const completeProfile = {
+      ...userProfile,
+      // Ensure all expected fields are present for current user's complete profile
+      age: userProfile.age || 25,
+      interests: userProfile.interests || ['technology', 'music'],
+      social_links: userProfile.social_links || [],
+      additional_photos: userProfile.additional_photos || [],
+      privacy_settings: userProfile.privacy_settings || {
+        show_age: true,
+        show_location: false,
+        show_mutual_friends: true,
+      },
+      mutual_friends: userProfile.mutual_friends || 0,
+      last_login_at: userProfile.last_login_at || now(),
+    };
+
+    return HttpResponse.json(completeProfile, { status: 200 });
+  }),
+
   // GET /users/profile/:userId - Get user profile
   http.get('*/users/profile/:userId', ({ request, params }) => {
     const { userId } = params;
@@ -1472,7 +1548,56 @@ export const userHandlers = [
       );
     }
 
-    // Convert User type to UserProfileResponse format
+    // TODO: TEMPORARY MOCK DATA - Replace with actual user-svc backend integration
+    // These should be retrieved from user database, not generated
+    // Backend changes needed:
+    // 1. Add social_links table to user-svc database
+    // 2. Add social_links field to UserProfile schema in OpenAPI spec
+    // 3. Add CRUD endpoints for managing social links
+    
+    // TEMPORARY: Generate mock social links for development
+    const generateMockSocialLinks = (name: string, profileType: string) => {
+      if (profileType !== 'public') return [];
+      
+      const username = name.toLowerCase().replace(/\s+/g, '_');
+      const socialPlatforms = ['instagram', 'twitter', 'facebook'];
+      const numPlatforms = Math.floor(Math.random() * 3) + 1; // 1-3 platforms
+      
+      return socialPlatforms.slice(0, numPlatforms).map(platform => ({
+        platform: platform as 'instagram' | 'twitter' | 'facebook',
+        handle: platform === 'instagram' ? `@${username}` : 
+               platform === 'twitter' ? `@${username}` : name,
+        url: `https://${platform}.com/${username}`
+      }));
+    };
+    
+    // TODO: TEMPORARY MOCK DATA - Replace with actual user media from backend
+    // These should be stored in user media/photos table
+    // Backend changes needed:
+    // 1. Add user_photos table or extend user media storage
+    // 2. Add additional_photos field to UserProfile response
+    // 3. Add photo upload/management endpoints
+    
+    // TEMPORARY: Generate mock additional photos for development  
+    const generateMockAdditionalPhotos = (profileType: string, profilePicture: string | null) => {
+      if (profileType !== 'public') return [];
+      
+      const additionalPhotoUrls = [
+        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1494790108755-2616b612b5ab?w=300&h=300&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&h=300&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300&h=300&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop&crop=face'
+      ];
+      
+      const numPhotos = Math.floor(Math.random() * 4) + 1; // 1-4 additional photos
+      const photos = additionalPhotoUrls.slice(0, numPhotos);
+      
+      // Don't include profile picture in additional photos
+      return photos.filter(photo => photo !== profilePicture);
+    };
+
+    // Convert User type to UserProfileResponse format matching backend
     const profileResponse = {
       id: user.id,
       email: `${user.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
@@ -1482,19 +1607,24 @@ export const userHandlers = [
       bio: user.bio,
       profile_picture: user.profilePicture || null,
       location: user.location ? `${user.location.proximityMiles} miles away` : null,
-      date_of_birth: new Date(Date.now() - user.age * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      date_of_birth: user.age ? new Date(Date.now() - user.age * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined,
       email_verified: true,
       created_at: now(),
       updated_at: now(),
-      // Additional profile fields
-      is_friend: user.id === '2' || user.id === '3', // Mock some as friends
-      mutual_friends_count: user.mutualFriends?.length || 0,
-      last_active: user.lastSeen?.toISOString() || now(),
+      // New backend fields matching updated API
+      age: user.profileType === 'public' ? user.age : undefined, // Respect privacy settings
+      interests: user.interests || [], // Real interests from mock data
+      social_links: generateMockSocialLinks(user.name, user.profileType), // Mock social links
+      additional_photos: generateMockAdditionalPhotos(user.profileType, user.profilePicture || null), // Mock photos
       privacy_settings: {
         show_age: user.profileType === 'public',
         show_location: user.profileType === 'public',
         show_mutual_friends: user.profileType === 'public',
       },
+      // Friend-related fields
+      is_friend: user.id === '2' || user.id === '3', // Mock some as friends
+      mutual_friends: (user.profileType === 'public' && (user.id === '2' || user.id === '3')) ? user.mutualFriends?.length || 0 : undefined, // Respect privacy
+      last_login_at: user.lastSeen?.toISOString() || now(), // Changed from last_active to match backend
     };
 
     return HttpResponse.json(profileResponse, { status: 200 });

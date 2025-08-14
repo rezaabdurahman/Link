@@ -21,10 +21,11 @@ module.exports = {
           900: '#134e4a',
         },
         aqua: {
-          light: '#7dd3fc', // Light aqua
-          DEFAULT: '#06b6d4', // Main aqua 
+          light: '#7dd3fc', // Light aqua - use sparingly, poor contrast
+          DEFAULT: '#0e7490', // Main aqua - WCAG AA compliant (was #06b6d4)
           dark: '#0891b2', // Dark aqua
-          deeper: '#0e7490', // Deeper aqua
+          deeper: '#0e7490', // Deeper aqua - WCAG AA compliant
+          accessible: '#0e7490', // Explicit WCAG AA compliant variant
         },
         surface: {
           dark: '#f8fafc', // Light surface
@@ -34,12 +35,12 @@ module.exports = {
         text: {
           primary: '#1f2937', // Dark text for light background
           secondary: '#4b5563', // Medium gray text
-          muted: '#9ca3af', // Light gray text
+          muted: '#6b7280', // Darker gray text for better contrast (was #9ca3af)
         },
         accent: {
-          copper: '#b45309',      // Main copper brown
-          'copper-light': '#d97706', // Light copper for highlights
-          'copper-dark': '#92400e',  // Dark copper for emphasis
+          copper: '#b45309',      // Main copper brown - WCAG AA compliant
+          'copper-light': '#b45309', // Use main copper for better contrast (was #d97706)
+          'copper-dark': '#92400e',  // Dark copper for emphasis - WCAG AAA compliant
           charcoal: '#36454f',    // Charcoal gray for additional accent
           // Streamlined palette: aqua + copper brown + charcoal
         }

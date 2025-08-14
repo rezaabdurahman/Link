@@ -41,9 +41,9 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="min-h-screen bg-surface-dark">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50">
+      <header className="ios-card border-b border-gray-200/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             {/* Left side - Back button */}
@@ -52,7 +52,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
                 <button
                   onClick={handleBack}
                   disabled={isLoading}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="ios-button-secondary p-2 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Go back"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -61,17 +61,17 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
               
               {/* Logo */}
               <Link to="/discovery" className="flex items-center">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-aqua rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-sm">L</span>
                 </div>
-                <span className="ml-2 text-xl font-semibold text-gray-800">Link</span>
+                <span className="ml-2 text-xl font-semibold text-primary">Link</span>
               </Link>
             </div>
 
             {/* Center - User greeting */}
             <div className="hidden sm:block">
               {user && (
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-secondary">
                   Welcome, {user.first_name}!
                 </p>
               )}
@@ -93,24 +93,24 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-auto">
+      <footer className="bg-surface-card border-t border-gray-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-center items-center space-x-6 text-sm text-gray-500">
+          <div className="flex justify-center items-center space-x-6 text-sm text-muted">
             <Link 
               to="/help" 
-              className="hover:text-gray-700 transition-colors"
+              className="hover:text-primary transition-colors"
             >
               Help
             </Link>
             <Link 
               to="/privacy" 
-              className="hover:text-gray-700 transition-colors"
+              className="hover:text-primary transition-colors"
             >
               Privacy
             </Link>
             <Link 
               to="/terms" 
-              className="hover:text-gray-700 transition-colors"
+              className="hover:text-primary transition-colors"
             >
               Terms
             </Link>

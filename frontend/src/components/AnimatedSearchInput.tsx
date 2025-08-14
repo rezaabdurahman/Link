@@ -48,7 +48,7 @@ const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
   };
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative fade-in ${className}`}>
       <Search 
         size={20} 
         className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted pointer-events-none z-10" 
@@ -59,7 +59,7 @@ const AnimatedSearchInput: React.FC<AnimatedSearchInputProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        className={`ios-text-field w-full pl-11 pr-4 py-2.5 bg-surface-hover/60 border-none rounded-ios text-black placeholder:text-transparent focus:ring-2 focus:ring-aqua/50 relative z-0 ${
+        className={`ios-text-field w-full pl-11 pr-4 py-2.5 text-black placeholder:text-transparent relative z-0 fade-in ${
           disabled ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         placeholder={value ? '' : placeholder}

@@ -1,0 +1,767 @@
+{
+  "summary": {
+    "totalTests": 66,
+    "passedAA": 38,
+    "passedAAA": 14,
+    "aaPercentage": "57.6",
+    "aaaPercentage": "21.2"
+  },
+  "results": [
+    {
+      "foreground": "primary-50",
+      "foregroundColor": "#f0fdfa",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.04",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-50",
+      "foregroundColor": "#f0fdfa",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.00",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-50",
+      "foregroundColor": "#f0fdfa",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.05",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-100",
+      "foregroundColor": "#ccfbf1",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.13",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-100",
+      "foregroundColor": "#ccfbf1",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.08",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-100",
+      "foregroundColor": "#ccfbf1",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.03",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-200",
+      "foregroundColor": "#99f6e4",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.26",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-200",
+      "foregroundColor": "#99f6e4",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.20",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-200",
+      "foregroundColor": "#99f6e4",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.15",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-300",
+      "foregroundColor": "#5eead4",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.48",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-300",
+      "foregroundColor": "#5eead4",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.41",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-300",
+      "foregroundColor": "#5eead4",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.35",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-400",
+      "foregroundColor": "#2dd4bf",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.86",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-400",
+      "foregroundColor": "#2dd4bf",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.78",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-400",
+      "foregroundColor": "#2dd4bf",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.70",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-500",
+      "foregroundColor": "#14b8a6",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "2.49",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-500",
+      "foregroundColor": "#14b8a6",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "2.38",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-500",
+      "foregroundColor": "#14b8a6",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "2.27",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-600",
+      "foregroundColor": "#0d9488",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "3.74",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-600",
+      "foregroundColor": "#0d9488",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "3.58",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-600",
+      "foregroundColor": "#0d9488",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "3.42",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-700",
+      "foregroundColor": "#0f766e",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "5.47",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-700",
+      "foregroundColor": "#0f766e",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "5.23",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-700",
+      "foregroundColor": "#0f766e",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "5.00",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-800",
+      "foregroundColor": "#115e59",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "7.58",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "primary-800",
+      "foregroundColor": "#115e59",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "7.25",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "primary-800",
+      "foregroundColor": "#115e59",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "6.92",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "primary-900",
+      "foregroundColor": "#134e4a",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "9.48",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "primary-900",
+      "foregroundColor": "#134e4a",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "9.06",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "primary-900",
+      "foregroundColor": "#134e4a",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "8.65",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "text-primary",
+      "foregroundColor": "#1f2937",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "14.68",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "text-primary",
+      "foregroundColor": "#1f2937",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "14.03",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "text-primary",
+      "foregroundColor": "#1f2937",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "13.40",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "text-secondary",
+      "foregroundColor": "#4b5563",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "7.56",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "text-secondary",
+      "foregroundColor": "#4b5563",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "7.22",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "text-secondary",
+      "foregroundColor": "#4b5563",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "6.90",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "text-muted",
+      "foregroundColor": "#6b7280",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "4.83",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "text-muted",
+      "foregroundColor": "#6b7280",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "4.62",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "text-muted",
+      "foregroundColor": "#6b7280",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "4.41",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper",
+      "foregroundColor": "#b45309",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "5.02",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper",
+      "foregroundColor": "#b45309",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "4.80",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper",
+      "foregroundColor": "#b45309",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "4.58",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper-light",
+      "foregroundColor": "#b45309",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "5.02",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper-light",
+      "foregroundColor": "#b45309",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "4.80",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper-light",
+      "foregroundColor": "#b45309",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "4.58",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper-dark",
+      "foregroundColor": "#92400e",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "7.09",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "accent-copper-dark",
+      "foregroundColor": "#92400e",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "6.78",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-copper-dark",
+      "foregroundColor": "#92400e",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "6.47",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "accent-charcoal",
+      "foregroundColor": "#36454f",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "9.90",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "accent-charcoal",
+      "foregroundColor": "#36454f",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "9.46",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "accent-charcoal",
+      "foregroundColor": "#36454f",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "9.04",
+      "wcagAA": true,
+      "wcagAAA": true
+    },
+    {
+      "foreground": "aqua-light",
+      "foregroundColor": "#7dd3fc",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.67",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-light",
+      "foregroundColor": "#7dd3fc",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.59",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-light",
+      "foregroundColor": "#7dd3fc",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.52",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-DEFAULT",
+      "foregroundColor": "#0e7490",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "5.36",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-DEFAULT",
+      "foregroundColor": "#0e7490",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "5.12",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-DEFAULT",
+      "foregroundColor": "#0e7490",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "4.89",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-dark",
+      "foregroundColor": "#0891b2",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "3.68",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-dark",
+      "foregroundColor": "#0891b2",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "3.52",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-dark",
+      "foregroundColor": "#0891b2",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "3.36",
+      "wcagAA": false,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-deeper",
+      "foregroundColor": "#0e7490",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "5.36",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-deeper",
+      "foregroundColor": "#0e7490",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "5.12",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-deeper",
+      "foregroundColor": "#0e7490",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "4.89",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-accessible",
+      "foregroundColor": "#0e7490",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "5.36",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-accessible",
+      "foregroundColor": "#0e7490",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "5.12",
+      "wcagAA": true,
+      "wcagAAA": false
+    },
+    {
+      "foreground": "aqua-accessible",
+      "foregroundColor": "#0e7490",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "4.89",
+      "wcagAA": true,
+      "wcagAAA": false
+    }
+  ],
+  "issues": [
+    {
+      "foreground": "primary-400",
+      "foregroundColor": "#2dd4bf",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.86",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-500 instead"
+    },
+    {
+      "foreground": "primary-400",
+      "foregroundColor": "#2dd4bf",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.78",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-500 instead"
+    },
+    {
+      "foreground": "primary-400",
+      "foregroundColor": "#2dd4bf",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.70",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-500 instead"
+    },
+    {
+      "foreground": "primary-500",
+      "foregroundColor": "#14b8a6",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "2.49",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-600 instead"
+    },
+    {
+      "foreground": "primary-500",
+      "foregroundColor": "#14b8a6",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "2.38",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-600 instead"
+    },
+    {
+      "foreground": "primary-500",
+      "foregroundColor": "#14b8a6",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "2.27",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-600 instead"
+    },
+    {
+      "foreground": "primary-600",
+      "foregroundColor": "#0d9488",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "3.74",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-700 instead"
+    },
+    {
+      "foreground": "primary-600",
+      "foregroundColor": "#0d9488",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "3.58",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-700 instead"
+    },
+    {
+      "foreground": "primary-600",
+      "foregroundColor": "#0d9488",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "3.42",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using primary-700 instead"
+    },
+    {
+      "foreground": "text-muted",
+      "foregroundColor": "#6b7280",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "4.41",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using a darker text color"
+    },
+    {
+      "foreground": "aqua-light",
+      "foregroundColor": "#7dd3fc",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "1.67",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using aqua-dark or aqua-deeper"
+    },
+    {
+      "foreground": "aqua-light",
+      "foregroundColor": "#7dd3fc",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "1.59",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using aqua-dark or aqua-deeper"
+    },
+    {
+      "foreground": "aqua-light",
+      "foregroundColor": "#7dd3fc",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "1.52",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using aqua-dark or aqua-deeper"
+    },
+    {
+      "foreground": "aqua-dark",
+      "foregroundColor": "#0891b2",
+      "background": "white",
+      "backgroundColor": "#ffffff",
+      "ratio": "3.68",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using aqua-dark or aqua-deeper"
+    },
+    {
+      "foreground": "aqua-dark",
+      "foregroundColor": "#0891b2",
+      "background": "surface.dark",
+      "backgroundColor": "#f8fafc",
+      "ratio": "3.52",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using aqua-dark or aqua-deeper"
+    },
+    {
+      "foreground": "aqua-dark",
+      "foregroundColor": "#0891b2",
+      "background": "surface.hover",
+      "backgroundColor": "#f1f5f9",
+      "ratio": "3.36",
+      "wcagAA": false,
+      "wcagAAA": false,
+      "suggestion": "Consider using aqua-dark or aqua-deeper"
+    }
+  ]
+}

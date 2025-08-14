@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Send, Bot, User as UserIcon, Clock, MapPin, UserPlus, Bookmark, Check, X as XIcon } from 'lucide-react';
+import { X, Send, Bot, User as UserIcon, Clock, MapPin, Bookmark, Check, X as XIcon } from 'lucide-react';
 import { Chat, User, Message } from '../types';
 import ConversationalCueCards from './ConversationalCueCards';
 import FriendButton from './FriendButton';
@@ -61,7 +61,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   
   // Determine if users are friends based on real friendship status
   const areFriends = friendshipStatus === 'friends';
-  const showFriendButton = chat && !areFriends && friendshipStatus !== 'blocked';
+  const showFriendButton = chat && !areFriends;
   
   const handleFriendAction = (action: string, success: boolean) => {
     if (success) {
@@ -468,8 +468,6 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               <FriendButton
                 userId={chat.participantId}
                 size="small"
-                showLabel={false}
-                onAction={handleFriendAction}
                 className="p-2"
               />
             )}
@@ -568,14 +566,14 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                           <div className="flex gap-2 mt-3">
                             <button
                               onClick={() => handlePermissionResponse(msg.id, true, msg.permissionData!.queuedMessageId!)}
-                              className="flex items-center gap-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-full transition-colors"
+                              className="flex items-center gap-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-full transition-colors hover-scale"
                             >
                               <Check size={12} />
                               Yes
                             </button>
                             <button
                               onClick={() => handlePermissionResponse(msg.id, false, msg.permissionData!.queuedMessageId!)}
-                              className="flex items-center gap-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-full transition-colors"
+                              className="flex items-center gap-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-full transition-colors hover-scale"
                             >
                               <XIcon size={12} />
                               No
@@ -725,11 +723,11 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
             <button
               onClick={handleSendMessage}
               disabled={!newMessage.trim()}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 hover-scale ${
                 newMessage.trim()
                   ? newMessage.startsWith('@')
-                    ? 'bg-gradient-to-b from-accent-copper-light to-accent-copper-dark text-white hover:shadow-md border border-accent-copper/40'
-                    : 'bg-aqua text-white hover:bg-aqua-dark'
+                    ? 'bg-gradient-to-b from-accent-copper-light to-accent-copper-dark text-white hover:shadow-md border border-accent-copper/40 hover-glow'
+                    : 'bg-aqua text-white hover:bg-aqua-dark hover-glow'
                   : 'bg-gray-200 text-gray-500 cursor-not-allowed'
               }`}
             >

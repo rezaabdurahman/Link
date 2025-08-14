@@ -27,8 +27,8 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
         {showPercentage && (
           <div className="flex items-center space-x-3">
             {validProgress === 100 && (
-              <div className="flex items-center space-x-2 text-green-600">
-                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+              <div className="flex items-center space-x-2 text-aqua">
+                <div className="w-6 h-6 bg-aqua/20 rounded-full flex items-center justify-center">
                   <Check className="w-4 h-4" />
                 </div>
                 <span className="text-sm font-semibold">Complete!</span>
@@ -46,7 +46,7 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
         <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
           {/* Progress Fill */}
           <div
-            className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 rounded-full transition-all duration-700 ease-out relative overflow-hidden"
+            className="h-full bg-aqua rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-pulse-slow"
             style={{ width: `${validProgress}%` }}
           >
             {/* Shimmer effect */}
@@ -68,7 +68,7 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
                   isCompleted
                     ? 'bg-white shadow-sm scale-110'
                     : isCurrent
-                    ? 'bg-blue-100 scale-105'
+                    ? 'bg-primary-100 scale-105'
                     : 'bg-gray-300'
                 }`}
               />
@@ -97,9 +97,9 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
               key={index}
               className={`text-xs transition-colors duration-300 ${
                 isCompleted
-                  ? 'text-indigo-600 font-medium'
+                  ? 'text-aqua font-medium'
                   : isCurrent
-                  ? 'text-blue-600 font-medium'
+                  ? 'text-primary-600 font-medium'
                   : 'text-gray-400'
               }`}
             >

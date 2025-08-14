@@ -109,6 +109,20 @@ export interface AuthToken {
   readonly issuedAt: string;
 }
 
+// Social Link Interface - mirroring backend
+export interface SocialLink {
+  readonly platform: string;
+  readonly url: string;
+  readonly username?: string;
+}
+
+// Privacy Settings Interface - mirroring backend
+export interface PrivacySettings {
+  readonly show_age: boolean;
+  readonly show_location: boolean;
+  readonly show_mutual_friends: boolean;
+}
+
 /**
  * Authentication user data mirroring backend ProfileUser structure
  * Uses readonly properties where appropriate for immutability
@@ -123,6 +137,10 @@ export interface AuthUser {
   readonly profile_picture?: string | null;
   readonly bio?: string | null;
   readonly location?: string | null;
+  readonly interests: string[];
+  readonly social_links: SocialLink[];
+  readonly additional_photos: string[];
+  readonly privacy_settings: PrivacySettings;
   readonly email_verified: boolean;
   readonly created_at: string; // ISO string format
   readonly updated_at: string; // ISO string format

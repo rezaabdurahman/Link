@@ -70,7 +70,7 @@ const TabBar: React.FC = (): JSX.Element => {
               color: location.pathname === tab.path ? '#06b6d4' : '#6b7280',
               transition: 'color 0.2s ease'
             }}
-            className="haptic-light"
+            className="haptic-light hover-scale"
           >
             {tab.icon}
             <span style={{ fontSize: '10px', fontWeight: '500' }}>

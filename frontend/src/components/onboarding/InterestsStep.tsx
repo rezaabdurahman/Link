@@ -2,10 +2,12 @@
 // Allows users to select their interests from predefined categories
 
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, Heart, Search } from 'lucide-react';
+import { ArrowRight, Search } from 'lucide-react';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorMessage from '../ui/ErrorMessage';
+import OnboardingCard from './ui/OnboardingCard';
+import OnboardingStepHeader from './ui/OnboardingStepHeader';
 
 const InterestsStep: React.FC = (): JSX.Element => {
   const {
@@ -114,20 +116,13 @@ const InterestsStep: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Heart className="w-8 h-8 text-pink-600" />
-        </div>
-        <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-          What Are You Into?
-        </h2>
-        <p className="text-gray-600">
-          Select your interests to help us connect you with like-minded people.
-          Choose as many as you like!
-        </p>
-      </div>
+    <div className="w-full space-y-8 fade-in">
+      <OnboardingStepHeader
+        stepNumber={3}
+        totalSteps={7}
+        title="What Are You Into?"
+        subtitle="Select your interests to help us connect you with like-minded people. Choose as many as you like!"
+      />
 
       {/* Error Message */}
       {error && (
@@ -141,7 +136,7 @@ const InterestsStep: React.FC = (): JSX.Element => {
       {/* Selected Count */}
       {selectedInterests.length > 0 && (
         <div className="text-center">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-aqua/20 text-aqua">
             {selectedInterests.length} interest{selectedInterests.length !== 1 ? 's' : ''} selected
           </span>
         </div>
@@ -157,7 +152,7 @@ const InterestsStep: React.FC = (): JSX.Element => {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search interests..."
-          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="ios-text-field block w-full pl-10 pr-3 py-2"
         />
       </div>
 
@@ -170,9 +165,9 @@ const InterestsStep: React.FC = (): JSX.Element => {
               <button
                 key={interest}
                 onClick={() => toggleInterest(interest)}
-                className={`px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`px-3 py-2 rounded-full text-sm font-medium transition-colors hover-scale ${
                   selectedInterests.includes(interest)
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-aqua text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
                 disabled={isLoading || isSubmitting}
@@ -198,9 +193,9 @@ const InterestsStep: React.FC = (): JSX.Element => {
                   <button
                     key={interest}
                     onClick={() => toggleInterest(interest)}
-                    className={`px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-full text-sm font-medium transition-colors hover-scale ${
                       selectedInterests.includes(interest)
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-aqua text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                     disabled={isLoading || isSubmitting}
@@ -217,20 +212,20 @@ const InterestsStep: React.FC = (): JSX.Element => {
 
       {/* Selected Interests Summary */}
       {selectedInterests.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-blue-800 mb-2">
+        <OnboardingCard className="bg-aqua/10 border border-aqua/20">
+          <h3 className="text-sm font-medium text-aqua mb-2">
             Your Selected Interests:
           </h3>
           <div className="flex flex-wrap gap-2">
             {selectedInterests.map((interest) => (
               <span
                 key={interest}
-                className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-aqua/20 text-aqua"
               >
                 {interest}
                 <button
                   onClick={() => toggleInterest(interest)}
-                  className="ml-1 text-blue-600 hover:text-blue-800"
+                  className="ml-1 text-aqua hover:text-aqua-dark"
                   disabled={isLoading || isSubmitting}
                 >
                   ×
@@ -238,7 +233,7 @@ const InterestsStep: React.FC = (): JSX.Element => {
               </span>
             ))}
           </div>
-        </div>
+        </OnboardingCard>
       )}
 
       {/* Action Buttons */}
@@ -246,7 +241,7 @@ const InterestsStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleSkip}
           disabled={isLoading || isSubmitting}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+          className="ios-button-secondary px-4 py-2 disabled:opacity-50 hover-scale"
         >
           Skip this step
         </button>
@@ -254,7 +249,7 @@ const InterestsStep: React.FC = (): JSX.Element => {
         <button
           onClick={handleContinue}
           disabled={isLoading || isSubmitting}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="ios-button flex items-center space-x-2 px-6 py-2 disabled:opacity-50 disabled:cursor-not-allowed hover-glow hover-scale"
         >
           {isSubmitting ? (
             <>
