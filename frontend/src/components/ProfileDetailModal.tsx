@@ -6,7 +6,7 @@ import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
 import IconActionButton from './IconActionButton';
 import { useFriendRequests } from '../hooks/useFriendRequests';
-import { getUserProfile, UserProfileResponse, getProfileErrorMessage, blockUser, unblockUser, getBlockingErrorMessage } from '../services/userClient';
+import { getUserProfile, UserProfileResponse, getProfileErrorMessage, blockUser, getBlockingErrorMessage } from '../services/userClient';
 import ConfirmationModal from './ConfirmationModal';
 
 interface ProfileDetailModalProps {
@@ -92,7 +92,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     setShowBlockConfirmation(true);
   };
 
-  const confirmBlockUser = async (): void => {
+  const confirmBlockUser = async (): Promise<void> => {
     if (!user) return;
     
     setBlockingLoading(true);
@@ -257,18 +257,19 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 )}
               </div>
 
-              {/* Profile Header */}
-              <div className="text-center mb-4 px-5 pb-0">
-                <div className="relative inline-block mb-4">
+              {/* Instagram-style Profile Header */}
+              <div className="flex gap-4 items-start px-5 mb-4">
+                {/* Profile Picture - Left Side */}
+                <div className="relative flex-shrink-0">
                   {user.profilePicture ? (
                     <img
                       src={user.profilePicture}
                       alt={user.name}
-                      className="w-30 h-30 rounded-full object-cover border-2 border-white/20 shadow-lg"
+                      className="w-28 h-28 rounded-full object-cover border-2 border-white/20 shadow-lg"
                     />
                   ) : (
-                    <div className="w-30 h-30 rounded-full bg-surface-hover border-2 border-white/20 shadow-lg flex items-center justify-center">
-                      <div className="text-text-muted text-4xl font-bold">
+                    <div className="w-28 h-28 rounded-full bg-surface-hover border-2 border-white/20 shadow-lg flex items-center justify-center">
+                      <div className="text-text-muted text-3xl font-bold">
                         {user.name.charAt(0).toUpperCase()}
                       </div>
                     </div>
@@ -278,72 +279,75 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   )}
                 </div>
                 
-                {user.profileType === 'public' ? (
-                  <h3 className="text-3xl font-bold mb-2 text-gradient-primary">
-                    {user.name}, {user.age}
-                  </h3>
-                ) : (
-                  <h3 className="text-3xl font-bold mb-2 text-gradient-primary">
-                    Private Profile
-                  </h3>
-                )}
-                
-                {/* Distance, Mutual Friends & Social Links */}
-                <div className="flex justify-center items-center gap-4 mb-4 flex-wrap">
-                  {/* Distance */}
-                  <div className="flex items-center gap-1">
-                    <MapPin size={16} className="text-text-secondary" />
-                    <span className="text-text-secondary text-sm">
-                      {user.location.proximityMiles} mi
-                    </span>
-                  </div>
+                {/* Name, Age and Meta Info - Right Side */}
+                <div className="flex-1 min-w-0">
+                  {user.profileType === 'public' ? (
+                    <h3 className="text-2xl font-bold mb-3 text-gradient-primary">
+                      {user.name}, {user.age}
+                    </h3>
+                  ) : (
+                    <h3 className="text-2xl font-bold mb-3 text-gradient-primary">
+                      Private Profile
+                    </h3>
+                  )}
                   
-                  {/* Mutual Friends */}
-                  {user.mutualFriends.length > 0 && (
+                  {/* Distance, Mutual Friends & Social Links */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    {/* Distance */}
                     <div className="flex items-center gap-1">
-                      <Users size={16} className="text-aqua" />
-                      <span className="text-aqua text-sm font-medium">
-                        {user.mutualFriends.length} mutuals
+                      <MapPin size={16} className="text-text-secondary" />
+                      <span className="text-text-secondary text-sm">
+                        {user.location.proximityMiles} mi
                       </span>
                     </div>
-                  )}
-                  
-                  {/* Social Media Links - same row */}
-                  {user.profileType === 'public' && socialLinks.length > 0 && (
-                    <div className="flex gap-2">
-                      {socialLinks.map((social, index) => {
-                        const IconComponent = social.icon;
-                        const getSocialIconColor = (platform: string) => {
-                          const platformLower = platform.toLowerCase();
-                          if (platformLower.includes('instagram')) return 'text-pink-500 hover:text-pink-600';
-                          if (platformLower.includes('twitter') || platformLower.includes('x.com')) return 'text-blue-400 hover:text-blue-500';
-                          if (platformLower.includes('facebook')) return 'text-blue-600 hover:text-blue-700';
-                          if (platformLower.includes('linkedin')) return 'text-blue-700 hover:text-blue-800';
-                          if (platformLower.includes('tiktok')) return 'text-black hover:text-gray-800';
-                          if (platformLower.includes('snapchat')) return 'text-yellow-400 hover:text-yellow-500';
-                          if (platformLower.includes('youtube')) return 'text-red-600 hover:text-red-700';
-                          return 'text-aqua hover:text-aqua-dark';
-                        };
-                        
-                        return (
-                          <a
-                            key={index}
-                            href={social.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
-                            title={social.handle}
-                          >
-                            <IconComponent 
-                              size={16} 
-                              className={`${getSocialIconColor(social.platform)} transition-colors`}
-                            />
-                          </a>
-                        );
-                      })}
-                    </div>
-                  )}
+                    
+                    {/* Mutual Friends */}
+                    {user.mutualFriends.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Users size={16} className="text-aqua" />
+                        <span className="text-aqua text-sm font-medium">
+                          {user.mutualFriends.length} mutuals
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Social Media Links - same row */}
+                    {user.profileType === 'public' && socialLinks.length > 0 && (
+                      <div className="flex gap-2">
+                        {socialLinks.map((social, index) => {
+                          const IconComponent = social.icon;
+                          const getSocialIconColor = (platform: string) => {
+                            const platformLower = platform.toLowerCase();
+                            if (platformLower.includes('instagram')) return 'text-pink-500 hover:text-pink-600';
+                            if (platformLower.includes('twitter') || platformLower.includes('x.com')) return 'text-blue-400 hover:text-blue-500';
+                            if (platformLower.includes('facebook')) return 'text-blue-600 hover:text-blue-700';
+                            if (platformLower.includes('linkedin')) return 'text-blue-700 hover:text-blue-800';
+                            if (platformLower.includes('tiktok')) return 'text-black hover:text-gray-800';
+                            if (platformLower.includes('snapchat')) return 'text-yellow-400 hover:text-yellow-500';
+                            if (platformLower.includes('youtube')) return 'text-red-600 hover:text-red-700';
+                            return 'text-aqua hover:text-aqua-dark';
+                          };
+                          
+                          return (
+                            <a
+                              key={index}
+                              href={social.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                              title={social.handle}
+                            >
+                              <IconComponent 
+                                size={16} 
+                                className={`${getSocialIconColor(social.platform)} transition-colors`}
+                              />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -366,21 +370,15 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
               </div>
 
-              {/* Bio */}
-              <div className="px-5 mb-3">
-                <h4 className="text-lg font-semibold mb-2 text-text-primary">
-                  About
-                </h4>
+              {/* Bio - no header */}
+              <div className="px-5 mb-4">
                 <p className="text-text-secondary text-base leading-relaxed">
                   {user.bio}
                 </p>
               </div>
 
-              {/* Interests */}
-              <div className="px-5 mb-3">
-                <h4 className="text-lg font-semibold mb-2 text-text-primary">
-                  Interests
-                </h4>
+              {/* Interests - no header */}
+              <div className="px-5 mb-4">
                 <div className="flex flex-wrap gap-2">
                   {user.interests && user.interests.length > 0 ? (
                     user.interests.map((interest, index) => (
@@ -397,12 +395,9 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
               </div>
 
-              {/* Photos - only show for public profiles */}
+              {/* Photos - no header, only show for public profiles */}
               {user.profileType === 'public' && additionalPhotos.length > 0 && (
                 <div className="px-5 mb-5">
-                  <h4 className="text-lg font-semibold mb-2 text-text-primary">
-                    Photos
-                  </h4>
                   <div className="grid grid-cols-2 gap-3">
                     {additionalPhotos.map((photo, index) => (
                       <img
