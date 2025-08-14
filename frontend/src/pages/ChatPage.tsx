@@ -8,6 +8,7 @@ import { isFeatureEnabled } from '../config/featureFlags';
 import RankToggle from '../components/RankToggle';
 import ConversationModal from '../components/ConversationModal';
 import AddMyContactModal from '../components/AddMyContactModal';
+import ProfileDetailModal from '../components/ProfileDetailModal';
 import { getConversations, conversationToChat, createConversation } from '../services/chatClient';
 import { unifiedSearch, UnifiedSearchRequest, isUnifiedSearchError, getUnifiedSearchErrorMessage } from '../services/unifiedSearchClient';
 // Legacy import - this will show deprecation warnings in console
@@ -25,6 +26,7 @@ const ChatPage: React.FC = (): JSX.Element => {
   const [conversationModalOpen, setConversationModalOpen] = useState<boolean>(false);
   const [initialMessage, setInitialMessage] = useState<string>('');
   const [addMyContactModalOpen, setAddMyContactModalOpen] = useState<boolean>(false);
+  const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -294,6 +296,14 @@ const ChatPage: React.FC = (): JSX.Element => {
     }
   };
 
+  const handleProfileClick = (participantId: string): void => {
+    setProfileModalUserId(participantId);
+  };
+
+  const handleCloseProfileModal = (): void => {
+    setProfileModalUserId(null);
+  };
+
 
   return (
     <div className="min-h-screen">
@@ -394,6 +404,7 @@ const ChatPage: React.FC = (): JSX.Element => {
               key={chat.id || `pseudo-${chat.participantId}`}
               chat={chat}
               onClick={() => handleChatClick(chat)}
+              onProfileClick={handleProfileClick}
               enableAISummary={isFeatureEnabled('AI_CONVERSATION_SUMMARIES')}
               data-testid="chat-item"
             />
@@ -445,6 +456,14 @@ const ChatPage: React.FC = (): JSX.Element => {
         isOpen={addMyContactModalOpen}
         onClose={() => setAddMyContactModalOpen(false)}
       />
+
+      {/* Profile Detail Modal */}
+      {profileModalUserId && (
+        <ProfileDetailModal
+          userId={profileModalUserId}
+          onClose={handleCloseProfileModal}
+        />
+      )}
     </div>
   );
 };
