@@ -48,6 +48,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const [savedContexts, setSavedContexts] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [linkBotTyping, setLinkBotTyping] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
@@ -117,9 +118,19 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         activities: generateMockActivities()
       };
       
-      // Only add bot summary for friends
+      // Only add bot summary for friends with typing animation
       if (chat.isFriend) {
-        setMessages([...uiMessages, botSummary]);
+        // First set the regular messages
+        setMessages(uiMessages);
+        
+        // Show LinkBot typing indicator
+        setLinkBotTyping(true);
+        
+        // After a delay, add the bot summary and hide typing
+        setTimeout(() => {
+          setMessages(prev => [...prev, botSummary]);
+          setLinkBotTyping(false);
+        }, 1500 + Math.random() * 1000); // 1.5-2.5 seconds for natural feel
       } else {
         setMessages(uiMessages);
       }
@@ -629,7 +640,28 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
             }
           })}
           
-          {/* Typing Indicator */}
+          {/* LinkBot Typing Indicator */}
+          {linkBotTyping && (
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-b from-accent-copper-light to-accent-copper-dark flex items-center justify-center flex-shrink-0 shadow-md">
+                <Bot size={16} className="text-white drop-shadow-sm" />
+              </div>
+              <div className="flex-1">
+                <div className="bg-accent-copper-light rounded-2xl rounded-tl-sm p-3 max-w-[120px]">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 ml-3">
+                  LinkBot is generating summary...
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {/* User Typing Indicator */}
           {typingUsers.size > 0 && (
             <div className="flex gap-3">
               <img 

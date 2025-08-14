@@ -16,14 +16,16 @@ import UserCardDemo from './pages/UserCardDemo';
 import { AuthProvider } from './contexts/AuthContext';
 import { OnboardingProvider } from './contexts/OnboardingContext';
 import OnboardingPage from './pages/OnboardingPage';
+import DemoInitializer from './components/DemoInitializer';
 import './App.css';
 
 const App: React.FC = (): JSX.Element => {
   return (
     <Router>
       <AuthProvider>
-        <OnboardingProvider>
-          <Routes>
+        <DemoInitializer>
+          <OnboardingProvider>
+            <Routes>
             {/* Development Routes (remove in production) */}
             <Route path="/dev" element={<AuthExample />} />
             <Route path="/demo/usercard" element={<UserCardDemo />} />
@@ -53,8 +55,9 @@ const App: React.FC = (): JSX.Element => {
               {/* Friend Requests - separate layout */}
               <Route path="friend-requests" element={<FriendRequestsPage />} />
             </Route>
-          </Routes>
-        </OnboardingProvider>
+            </Routes>
+          </OnboardingProvider>
+        </DemoInitializer>
       </AuthProvider>
     </Router>
   );
