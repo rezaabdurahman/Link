@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, MapPin, Users, EyeOff } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, Ban } from 'lucide-react';
 import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
 import IconActionButton from './IconActionButton';
 import { useFriendRequests } from '../hooks/useFriendRequests';
-import { getUserProfile, UserProfileResponse, getProfileErrorMessage } from '../services/userClient';
+import { getUserProfile, UserProfileResponse, getProfileErrorMessage, blockUser, unblockUser, getBlockingErrorMessage } from '../services/userClient';
+import ConfirmationModal from './ConfirmationModal';
 
 interface ProfileDetailModalProps {
   userId: string;
   onClose: () => void;
-  onHide?: (userId: string) => void;
+  onBlock?: (userId: string) => void;
 }
 
 // Helper function to convert UserProfileResponse to User type
@@ -38,12 +39,15 @@ const mapUserProfileToUser = (profile: UserProfileResponse): User => {
   };
 };
 
-const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose, onHide }): JSX.Element => {
+const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose, onBlock }): JSX.Element => {
   const [user, setUser] = useState<User | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
+  const [showBlockConfirmation, setShowBlockConfirmation] = useState<boolean>(false);
+  const [blockingLoading, setBlockingLoading] = useState<boolean>(false);
+  const [blockingError, setBlockingError] = useState<string | undefined>(undefined);
   
   // Use the friendship hook to get real friendship status
   const { getFriendshipStatus } = useFriendRequests();
@@ -84,11 +88,34 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     }
   };
 
-  const handleHideUser = (): void => {
-    if (onHide && user) {
-      onHide(user.id);
-      onClose(); // Close the modal after hiding
+  const handleBlockUser = (): void => {
+    setShowBlockConfirmation(true);
+  };
+
+  const confirmBlockUser = async (): void => {
+    if (!user) return;
+    
+    setBlockingLoading(true);
+    setBlockingError(undefined);
+    
+    try {
+      await blockUser(user.id);
+      if (onBlock) {
+        onBlock(user.id);
+      }
+      onClose(); // Close the modal after blocking
+    } catch (err: any) {
+      console.error('Failed to block user:', err);
+      setBlockingError(getBlockingErrorMessage(err.error || err));
+    } finally {
+      setBlockingLoading(false);
+      setShowBlockConfirmation(false);
     }
+  };
+
+  const cancelBlockUser = (): void => {
+    setShowBlockConfirmation(false);
+    setBlockingError(undefined);
   };
 
 
@@ -214,16 +241,16 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
           
           {user && !loading && !error && (
             <>
-              {/* Profile Title & Hide Button */}
+              {/* Profile Title & Block Button */}
               <div className="flex justify-between items-center px-5 pt-0 pb-4">
                 <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
                   Profile
                 </h2>
-                {onHide && (
+                {onBlock && (
                   <IconActionButton
-                    Icon={EyeOff}
-                    label="Hide user"
-                    onClick={handleHideUser}
+                    Icon={Ban}
+                    label="Block user"
+                    onClick={handleBlockUser}
                     variant="secondary"
                     size="small"
                   />
@@ -403,6 +430,20 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
             isFriend={isFriend}
           />
         )}
+        
+        {/* Block Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showBlockConfirmation}
+          onClose={cancelBlockUser}
+          onConfirm={confirmBlockUser}
+          title="Block User"
+          message={user ? `Are you sure you want to block ${user.name}? This will prevent both of you from seeing each other's profiles and messaging each other.` : "Are you sure you want to block this user?"}
+          confirmText="Block"
+          cancelText="Cancel"
+          confirmButtonClass="bg-red-500 hover:bg-red-600 text-white"
+          loading={blockingLoading}
+          error={blockingError}
+        />
       </div>
     </div>
   );

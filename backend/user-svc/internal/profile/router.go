@@ -21,5 +21,10 @@ func RegisterRoutes(router *gin.RouterGroup, profileHandler *ProfileHandler) {
 		users.PUT("/friend-requests/:requestId", profileHandler.RespondToFriendRequest)
 		users.DELETE("/friend-requests/:requesteeId", profileHandler.CancelFriendRequest)
 
+		// Blocking endpoints (require auth via gateway)
+		users.POST("/block", profileHandler.BlockUser)
+		users.DELETE("/block/:userId", profileHandler.UnblockUser)
+		users.GET("/blocked", profileHandler.GetBlockedUsers)
+
 	}
 }

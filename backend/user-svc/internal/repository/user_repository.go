@@ -10,6 +10,9 @@ import (
 
 // UserRepository interface defines user data operations
 type UserRepository interface {
+	// Database transaction operations
+	BeginTx() *gorm.DB
+	
 	// User CRUD operations
 	CreateUser(user *models.User) error
 	GetUserByID(id uuid.UUID) (*models.User, error)
@@ -54,6 +57,11 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 	return &userRepository{
 		db: db,
 	}
+}
+
+// BeginTx starts a new database transaction
+func (r *userRepository) BeginTx() *gorm.DB {
+	return r.db.Begin()
 }
 
 // CreateUser creates a new user
