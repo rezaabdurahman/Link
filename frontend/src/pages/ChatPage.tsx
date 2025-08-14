@@ -14,6 +14,7 @@ import { unifiedSearch, UnifiedSearchRequest, isUnifiedSearchError, getUnifiedSe
 import { searchFriends, PublicUser } from '../services/userClient';
 import { useAuth } from '../contexts/AuthContext';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
+import FixedHeader from '../components/layout/FixedHeader';
 
 type SortOption = 'priority' | 'time' | 'unread' | 'discover';
 
@@ -276,56 +277,60 @@ const ChatPage: React.FC = (): JSX.Element => {
 
 
   return (
-    <div className="ios-safe-area" style={{ padding: '0 20px' }}>
-      {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '24px',
-        paddingTop: '20px'
-      }}>
-        <div>
-          <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '4px' }}>
-            Chats
-          </h1>
-          <p className="text-secondary" style={{ fontSize: '14px' }}>
-            {sortedChats.reduce((sum, chat) => sum + chat.unreadCount, 0)} unread messages
-          </p>
+    <div className="flex flex-col min-h-screen">
+      {/* Fixed Header Section */}
+      <FixedHeader>
+        {/* Header */}
+        <div className="flex justify-between items-center py-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gradient-aqua leading-tight">
+              Chats
+            </h1>
+            <p className="text-secondary text-sm">
+              {sortedChats.reduce((sum, chat) => sum + chat.unreadCount, 0)} unread messages
+            </p>
+          </div>
+          <button
+            onClick={() => setAddFriendModalOpen(true)}
+            className="w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
+            title="Add Friend"
+          >
+            <UserPlus size={16} />
+          </button>
         </div>
-        <button
-          onClick={() => setAddFriendModalOpen(true)}
-          className="w-10 h-10 bg-aqua hover:bg-aqua-dark text-white rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:shadow-md"
-          title="Add Friend"
-        >
-          <UserPlus size={20} />
-        </button>
-      </div>
 
-      {/* Search */}
-      <AnimatedSearchInput
-        value={searchQuery}
-        onChange={setSearchQuery}
-        onEnter={handleSearchEnter}
-        suggestions={[
-          'who is into raving?',
-          'Who is into volleyball?',
-          "Who's going to Coachella next year?",
-          "Who's gonna be in France this September?",
-          'who loves indie films?',
-          'who wants to grab coffee?',
-          'who is into yoga?'
-        ]}
-        className="mb-6"
-        loading={searchLoading}
-        aria-label="Search for friends and conversations"
-        aria-describedby="search-help"
-      />
+        {/* Search */}
+        <div className="pb-2">
+          <AnimatedSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            onEnter={handleSearchEnter}
+            suggestions={[
+              'who is into raving?',
+              'Who is into volleyball?',
+              "Who's going to Coachella next year?",
+              "Who's gonna be in France this September?",
+              'who loves indie films?',
+              'who wants to grab coffee?',
+              'who is into yoga?'
+            ]}
+            className=""
+            loading={searchLoading}
+            aria-label="Search for friends and conversations"
+            aria-describedby="search-help"
+          />
+        </div>
 
-      {/* Rank Toggle */}
-      <div className="flex justify-end mb-6">
-        <RankToggle value={sortBy} onChange={setSortBy} />
-      </div>
+        {/* Rank Toggle */}
+        <div className="flex justify-end pb-2">
+          <RankToggle value={sortBy} onChange={setSortBy} />
+        </div>
+      </FixedHeader>
+
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto pb-4">
+        <div className="pt-4 px-4">
+          <div className="max-w-sm mx-auto">
 
       {/* Loading State */}
       {loading && (
@@ -405,6 +410,10 @@ const ChatPage: React.FC = (): JSX.Element => {
       {isFeatureEnabled('INTELLIGENT_MESSAGE_BOX') && (
         <IntelligentMessageBox onSendMessage={handleSendMessage} />
       )}
+
+          </div>
+        </div>
+      </div>
 
       {/* Conversation Modal */}
       <ConversationModal 
