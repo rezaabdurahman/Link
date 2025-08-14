@@ -9,6 +9,9 @@ const USER_ENDPOINTS = {
   myProfile: '/api/v1/users/profile',
   profile: (userId: string) => `/api/v1/users/profile/${userId}`,
   searchFriends: '/api/v1/users/friends/search',
+  block: '/api/v1/users/block',
+  unblock: (userId: string) => `/api/v1/users/block/${userId}`,
+  blockedUsers: '/api/v1/users/blocked',
 } as const;
 
 // Social Link Interface
@@ -158,5 +161,122 @@ export function getProfileErrorMessage(error: ApiError, userId?: string): string
     
     default:
       return getErrorMessage(error);
+  }
+}
+
+/**
+ * Block a user
+ * @param userId - The ID of the user to block
+ * @returns Promise resolving when user is successfully blocked
+ * @throws AuthServiceError with detailed error information
+ */
+export async function blockUser(userId: string): Promise<void> {
+  try {
+    // Validate userId parameter
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'User ID is required and must be a non-empty string',
+        field: 'userId',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    await apiClient.post<void>(USER_ENDPOINTS.block, {
+      user_id: userId.trim()
+    });
+    
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to block user due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Unblock a user
+ * @param userId - The ID of the user to unblock
+ * @returns Promise resolving when user is successfully unblocked
+ * @throws AuthServiceError with detailed error information
+ */
+export async function unblockUser(userId: string): Promise<void> {
+  try {
+    // Validate userId parameter
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'User ID is required and must be a non-empty string',
+        field: 'userId',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    await apiClient.delete<void>(USER_ENDPOINTS.unblock(userId.trim()));
+    
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to unblock user due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get list of blocked users
+ * @param options - Optional pagination parameters
+ * @returns Promise resolving to list of blocked users
+ * @throws AuthServiceError with detailed error information
+ */
+export async function getBlockedUsers(options?: {page?: number; limit?: number}): Promise<PublicUser[]> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    
+    const queryString = params.toString();
+    const endpoint = queryString ? `${USER_ENDPOINTS.blockedUsers}?${queryString}` : USER_ENDPOINTS.blockedUsers;
+    
+    const response = await apiClient.get<{blocked_users: PublicUser[]}>(endpoint);
+    return response.blocked_users;
+    
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to fetch blocked users due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Helper function to get user-friendly blocking error messages
+ */
+export function getBlockingErrorMessage(error: ApiError): string {
+  switch (error.code) {
+    case 'BLOCK_EXISTS':
+      return 'This user is already blocked';
+    case 'BLOCK_NOT_FOUND':
+      return 'This user is not currently blocked';
+    case 'CANNOT_BLOCK_SELF':
+      return 'You cannot block yourself';
+    case 'USER_BLOCKED':
+      return 'This action is not available due to blocking restrictions';
+    default:
+      return getProfileErrorMessage(error);
   }
 }

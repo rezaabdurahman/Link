@@ -314,6 +314,134 @@ func (h *ProfileHandler) RemoveFriend(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
+// BlockUser blocks a user
+// @Summary Block user
+// @Description Block a user, preventing them from seeing each other's profiles and interacting
+// @Tags blocking
+// @Accept json
+// @Produce json
+// @Param body body object{"user_id":"string"} true "User ID to block"
+// @Success 201 {object} map[string]interface{} "User blocked successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request - validation error, cannot block self, or user already blocked"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 404 {object} map[string]interface{} "User not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /users/block [post]
+func (h *ProfileHandler) BlockUser(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	var req struct {
+		UserID uuid.UUID `json:"user_id" validate:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid request data",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if err := h.profileService.BlockUser(userID, req.UserID); err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "User blocked successfully",
+	})
+}
+
+// UnblockUser unblocks a user
+// @Summary Unblock user
+// @Description Remove a block relationship with another user
+// @Tags blocking
+// @Accept json
+// @Produce json
+// @Param userId path string true "User ID to unblock (UUID)"
+// @Success 204 "User unblocked successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request - validation error or block not found"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 404 {object} map[string]interface{} "User or block relationship not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /users/block/{userId} [delete]
+func (h *ProfileHandler) UnblockUser(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	blockedUserIDStr := c.Param("userId")
+	blockedUserID, err := uuid.Parse(blockedUserIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid user ID format",
+			"code":    "INVALID_UUID",
+		})
+		return
+	}
+
+	if err := h.profileService.UnblockUser(userID, blockedUserID); err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
+}
+
+// GetBlockedUsers gets the user's blocked users list
+// @Summary Get blocked users
+// @Description Retrieve a paginated list of users blocked by the authenticated user
+// @Tags blocking
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number (default: 1)"
+// @Param limit query int false "Items per page (default: 20, max: 100)"
+// @Success 200 {object} map[string]interface{} "List of blocked users with pagination info"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /users/blocked [get]
+func (h *ProfileHandler) GetBlockedUsers(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromHeader(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User context required",
+			"code":    "MISSING_USER_CONTEXT",
+		})
+		return
+	}
+
+	// Parse pagination parameters
+	page, limit := h.getPaginationParams(c)
+
+	blockedUsers, err := h.profileService.GetBlockedUsers(userID, page, limit)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"blocked_users": blockedUsers,
+		"page":         page,
+		"limit":        limit,
+		"count":        len(blockedUsers),
+	})
+}
 
 // getPaginationParams extracts pagination parameters from request
 func (h *ProfileHandler) getPaginationParams(c *gin.Context) (int, int) {
@@ -379,6 +507,31 @@ func (h *ProfileHandler) handleServiceError(c *gin.Context, err error) {
 			"error":   "VALIDATION_ERROR",
 			"message": "Users are not friends",
 			"code":    "NOT_FRIENDS",
+		})
+	// Blocking-related errors
+	case errors.Is(err, ErrBlockExists):
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "CONFLICT_ERROR",
+			"message": "User is already blocked",
+			"code":    "BLOCK_EXISTS",
+		})
+	case errors.Is(err, ErrBlockNotFound):
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "NOT_FOUND",
+			"message": "Block relationship not found",
+			"code":    "BLOCK_NOT_FOUND",
+		})
+	case errors.Is(err, ErrCannotBlockSelf):
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Cannot block yourself",
+			"code":    "CANNOT_BLOCK_SELF",
+		})
+	case errors.Is(err, ErrUserBlocked):
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "AUTHORIZATION_ERROR",
+			"message": "Action blocked due to user blocking relationship",
+			"code":    "USER_BLOCKED",
 		})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{
