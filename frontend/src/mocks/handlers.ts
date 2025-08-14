@@ -938,11 +938,11 @@ export const availabilityHandlers = [
 
       mockAvailability.set(userId, availability);
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 200));
-
+      console.log('🔄 MSW: Updated availability:', { userId, is_available: body.is_available });
+      
       return HttpResponse.json(availability, { status: 200 });
     } catch (error) {
+      console.error('❌ MSW: Availability update error:', error);
       return HttpResponse.json(
         {
           error: 'Invalid request body',
@@ -952,6 +952,111 @@ export const availabilityHandlers = [
         { status: 400 }
       );
     }
+  }),
+  
+  // GET /availability/:userId - Get specific user's availability
+  http.get('*/availability/:userId', ({ request, params }) => {
+    const { userId } = params;
+    const requestingUserId = extractUserId(request);
+    
+    if (!requestingUserId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to view availability',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    const availability = mockAvailability.get(userId as string);
+    
+    if (!availability) {
+      // Return default unavailable status
+      return HttpResponse.json({
+        user_id: userId as string,
+        is_available: false,
+        created_at: now(),
+        updated_at: now(),
+      }, { status: 200 });
+    }
+
+    // Return public availability info (no sensitive data)
+    return HttpResponse.json({
+      user_id: availability.user_id,
+      is_available: availability.is_available,
+      last_available_at: availability.last_available_at,
+      updated_at: availability.updated_at,
+    }, { status: 200 });
+  }),
+  
+  // GET /available-users - Get list of available users
+  http.get('*/available-users', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to view available users',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+
+    // Get available users from mock data
+    const availableUsers = Array.from(mockAvailability.values())
+      .filter(av => av.is_available && av.user_id !== userId)
+      .slice(offset, offset + limit)
+      .map(av => ({
+        user_id: av.user_id,
+        is_available: av.is_available,
+        last_available_at: av.last_available_at,
+        updated_at: av.updated_at,
+      }));
+
+    return HttpResponse.json({
+      data: availableUsers,
+      total: availableUsers.length,
+      limit,
+      offset,
+      has_more: false,
+    }, { status: 200 });
+  }),
+  
+  // POST /availability/heartbeat - Send heartbeat
+  http.post('*/availability/heartbeat', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          error: 'Authentication required',
+          message: 'You must be logged in to send heartbeat',
+          code: 'AUTH_REQUIRED',
+        },
+        { status: 401 }
+      );
+    }
+
+    // Update last heartbeat timestamp
+    let availability = mockAvailability.get(userId);
+    if (availability && availability.is_available) {
+      availability.last_available_at = now();
+      availability.updated_at = now();
+      mockAvailability.set(userId, availability);
+    }
+
+    return HttpResponse.json({
+      message: 'Heartbeat received',
+      timestamp: now(),
+    }, { status: 200 });
   }),
 ];
 
@@ -1632,6 +1737,71 @@ export const userHandlers = [
 ];
 
 export const authHandlers = [
+  // GET /auth/me - Get current user info
+  http.get('*/auth/me', ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return HttpResponse.json(
+        {
+          type: 'AUTHENTICATION_ERROR',
+          message: 'User not authenticated',
+          code: 'UNAUTHENTICATED',
+        },
+        { status: 401 }
+      );
+    }
+
+    // Return the current demo user
+    const user = {
+      id: 'user-jane',
+      email: 'jane@example.com',
+      username: 'janesmith',
+      first_name: 'Jane',
+      last_name: 'Smith',
+      profile_picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+      bio: 'Demo user for Link chat app',
+      location: 'San Francisco, CA',
+      date_of_birth: '1990-01-01',
+      email_verified: true,
+      created_at: now(),
+      updated_at: now(),
+    };
+
+    return HttpResponse.json(user, { status: 200 });
+  }),
+
+  // POST /auth/refresh - Refresh token
+  http.post('*/auth/refresh', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    
+    if (!authHeader || !authHeader.includes('dev-token-')) {
+      return HttpResponse.json(
+        {
+          type: 'AUTHENTICATION_ERROR',
+          message: 'Invalid or expired token',
+          code: 'INVALID_TOKEN',
+        },
+        { status: 401 }
+      );
+    }
+
+    // Return a new demo token
+    const response = {
+      token: `dev-token-${Date.now()}`,
+      message: 'Token refreshed successfully',
+    };
+
+    return HttpResponse.json(response, { status: 200 });
+  }),
+
+  // POST /auth/logout - Logout
+  http.post('*/auth/logout', () => {
+    return HttpResponse.json(
+      { message: 'Logout successful' },
+      { status: 200 }
+    );
+  }),
   // POST /auth/login - Mock login
   http.post('*/auth/login', async ({ request }) => {
     try {
