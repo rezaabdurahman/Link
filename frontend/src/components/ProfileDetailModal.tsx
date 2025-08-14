@@ -350,19 +350,19 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   </div>
                   
                   {/* Action Buttons - Now inline with profile */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <button
                       onClick={() => setIsChatOpen(true)}
-                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center gap-1 text-sm"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1.5 px-2 rounded-md transition-colors duration-200 flex items-center justify-center gap-1 text-xs"
                     >
-                      <MessageCircle size={14} />
+                      <MessageCircle size={12} />
                       Message
                     </button>
                     <FriendButton
                       userId={user.id}
-                      size="medium"
+                      size="small"
                       variant="default"
-                      className="flex-1 bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-2 px-3 rounded-lg transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-sm"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-1.5 px-2 rounded-md transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-xs"
                     />
                   </div>
                 </div>
@@ -395,21 +395,26 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
 
               {/* Photos - no header, scrollable, only show for public profiles */}
               {user.profileType === 'public' && additionalPhotos.length > 0 && (
-                <div className="px-4 mb-4">
-                  <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-                    <div className="grid grid-cols-2 gap-2">
-                      {additionalPhotos.map((photo, index) => (
-                        <img
-                          key={photo}
-                          src={photo}
-                          alt={`${user.name}'s photo ${index + 1}`}
-                          className="w-full aspect-square rounded-lg object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
-                          onError={() => handleImageError(photo)}
-                        />
-                      ))}
+                <>
+                  {/* Divider line before photos */}
+                  <div className="mx-4 mb-3 border-t border-white/10"></div>
+                  
+                  <div className="px-4 mb-4">
+                    <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                      <div className="grid grid-cols-2 gap-2">
+                        {additionalPhotos.map((photo, index) => (
+                          <img
+                            key={photo}
+                            src={photo}
+                            alt={`${user.name}'s photo ${index + 1}`}
+                            className="w-full aspect-square rounded-lg object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
+                            onError={() => handleImageError(photo)}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </>
               )}
             </>
           )}
