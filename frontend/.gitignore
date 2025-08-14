@@ -1,6 +1,7 @@
 .vercel
 
 # Environment files
+.env
 .env.local
 .env.test
 .env.*.local
@@ -14,6 +15,14 @@ build/
 
 # Coverage reports
 coverage/
+
+# Log files
+*.log
+dev.log
+
+# Duplicate files (system generated)
+*" 2."*
+*" 2 "*
 
 # IDE files
 .vscode/

@@ -61,6 +61,7 @@ accent-copper-dark: #92400e   /* Dark copper for emphasis */
 ### Buttons
 - **`.ios-button`** - Primary aqua buttons
 - **`.ios-button-secondary`** - Secondary transparent buttons
+- **`IconActionButton`** - Circular icon-only buttons with consistent styling
 - Hover effects with scaling and color transitions
 - **`.hover-glow`** - Adds aqua glow effect on hover
 
@@ -147,6 +148,50 @@ pulse-slow: /* Slow pulse for emphasis */
 <button className="bg-aqua hover:bg-aqua-dark text-white font-semibold py-3 px-6 rounded-ios transition-all duration-200 hover-glow">
   Action Button
 </button>
+```
+
+### IconActionButton
+```tsx
+import { MessageCircle, Ban, EyeOff } from 'lucide-react';
+
+// Primary action button
+<IconActionButton
+  Icon={MessageCircle}
+  label="Send message"
+  onClick={() => console.log('Message clicked')}
+  variant="primary"
+  size="large"
+/>
+
+// Secondary action button
+<IconActionButton
+  Icon={EyeOff}
+  label="Hide user"
+  onClick={() => console.log('Hide clicked')}
+  variant="secondary"
+  size="medium"
+/>
+
+// Danger action button
+<IconActionButton
+  Icon={Ban}
+  label="Block user"
+  onClick={() => console.log('Block clicked')}
+  variant="danger"
+  size="large"
+/>
+
+// Social media buttons with external links
+<a href="https://instagram.com/user" target="_blank" rel="noopener noreferrer">
+  <IconActionButton
+    Icon={Instagram}
+    label="Visit Instagram"
+    onClick={() => {}}
+    variant="secondary"
+    size="medium"
+    title="@username"
+  />
+</a>
 ```
 
 ### Status Indicator

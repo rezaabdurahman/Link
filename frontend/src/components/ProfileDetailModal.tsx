@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users, EyeOff } from 'lucide-react';
+import { X, MessageCircle, Instagram, Twitter, Facebook, MapPin, Users, EyeOff, Ban } from 'lucide-react';
 import { User, Chat } from '../types';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
+import IconActionButton from './IconActionButton';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { getUserProfile, UserProfileResponse, getProfileErrorMessage } from '../services/userClient';
 
@@ -10,6 +11,7 @@ interface ProfileDetailModalProps {
   userId: string;
   onClose: () => void;
   onHide?: (userId: string) => void;
+  onBlock?: (userId: string) => void;
 }
 
 // Helper function to convert UserProfileResponse to User type
@@ -19,7 +21,7 @@ const mapUserProfileToUser = (profile: UserProfileResponse): User => {
     name: `${profile.first_name} ${profile.last_name}`.trim(),
     age: profile.age || (profile.date_of_birth ? 
       Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
-      undefined), // Use age from backend or calculate it
+      25), // Use age from backend or calculate it, fallback to 25
     profilePicture: profile.profile_picture || undefined,
     bio: profile.bio || 'No bio available',
     interests: profile.interests || [], // Use interests from backend
@@ -36,7 +38,7 @@ const mapUserProfileToUser = (profile: UserProfileResponse): User => {
   };
 };
 
-const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose, onHide }): JSX.Element => {
+const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose, onHide, onBlock }): JSX.Element => {
   const [user, setUser] = useState<User | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -85,6 +87,13 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     if (onHide && user) {
       onHide(user.id);
       onClose(); // Close the modal after hiding
+    }
+  };
+
+  const handleBlockUser = (): void => {
+    if (onBlock && user) {
+      onBlock(user.id);
+      onClose(); // Close the modal after blocking
     }
   };
 
@@ -261,57 +270,56 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3 justify-center">
-                  <button
+                <div className="flex gap-4 justify-center">
+                  <IconActionButton
+                    Icon={MessageCircle}
+                    label="Send message"
                     onClick={() => setIsChatOpen(true)}
-                    className="flex-1 max-w-36 bg-aqua hover:bg-aqua-dark text-white font-semibold py-3 px-6 rounded-ios transition-all duration-200 flex items-center justify-center gap-2 hover-glow"
-                  >
-                    <MessageCircle size={16} />
-                    Message
-                  </button>
+                    variant="primary"
+                    size="large"
+                  />
                   {onHide && (
-                    <button
+                    <IconActionButton
+                      Icon={EyeOff}
+                      label="Hide user"
                       onClick={handleHideUser}
-                      className="flex-1 max-w-36 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-ios transition-all duration-200 flex items-center justify-center gap-2"
-                    >
-                      <EyeOff size={16} />
-                      Hide
-                    </button>
+                      variant="secondary"
+                      size="large"
+                    />
+                  )}
+                  {onBlock && (
+                    <IconActionButton
+                      Icon={Ban}
+                      label="Block user"
+                      onClick={handleBlockUser}
+                      variant="danger"
+                      size="large"
+                    />
                   )}
                 </div>
               </div>
 
               {/* Bio */}
-              <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold mb-3 text-text-primary">
                   About
                 </h4>
-                <p className="text-secondary" style={{ 
-                  fontSize: '16px', 
-                  lineHeight: '1.5'
-                }}>
+                <p className="text-text-secondary text-base leading-relaxed text-center px-2">
                   {user.bio}
                 </p>
               </div>
 
               {/* Interests */}
-              <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold mb-3 text-text-primary">
                   Interests
                 </h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <div className="flex flex-wrap gap-2 justify-center">
                   {user.interests && user.interests.length > 0 ? (
                     user.interests.map((interest, index) => (
                       <span
                         key={index}
-                        style={{
-                          background: 'rgba(0, 122, 255, 0.2)',
-                          color: '#007AFF',
-                          padding: '8px 16px',
-                          borderRadius: '20px',
-                          fontSize: '14px',
-                          fontWeight: '500'
-                        }}
+                        className="bg-aqua/20 text-aqua px-3 py-1.5 rounded-full text-sm font-medium backdrop-blur-sm"
                       >
                         {interest}
                       </span>
@@ -323,55 +331,47 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
               </div>
 
               {/* Social Media - only show for public profiles */}
-              {user.profileType === 'public' && (
-                <div style={{ marginBottom: '24px' }}>
-                  <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
+              {user.profileType === 'public' && socialLinks.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold mb-3 text-text-primary text-center">
                     Connect
                   </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="flex gap-3 justify-center">
                     {socialLinks.map((social, index) => (
-                      <div
+                      <a
                         key={index}
-                        className="ios-card"
-                        style={{
-                          padding: '12px 16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                          cursor: 'pointer'
-                        }}
+                        href={social.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <social.icon size={20} className="text-accent" />
-                        <span style={{ fontSize: '16px' }}>{social.handle}</span>
-                      </div>
+                        <IconActionButton
+                          Icon={social.icon}
+                          label={`Visit ${social.platform}`}
+                          onClick={() => window.open(social.url, '_blank', 'noopener,noreferrer')}
+                          variant="secondary"
+                          size="medium"
+                          title={social.handle}
+                        />
+                      </a>
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Photos - only show for public profiles */}
-              {user.profileType === 'public' && (
-                <div style={{ marginBottom: '24px' }}>
-                  <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>
+              {user.profileType === 'public' && additionalPhotos.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold mb-3 text-text-primary text-center">
                     Photos
                   </h4>
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(2, 1fr)', 
-                    gap: '12px' 
-                  }}>
+                  <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto">
                     {additionalPhotos.filter(photo => photo).map((photo, index) => (
                       <img
                         key={index}
                         src={photo}
                         alt={`${user.name}'s photo ${index + 1}`}
-                        style={{
-                          width: '100%',
-                          aspectRatio: '1',
-                          borderRadius: '12px',
-                          objectFit: 'cover',
-                          cursor: 'pointer'
-                        }}
+                        className="w-full aspect-square rounded-xl object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
                       />
                     ))}
                   </div>

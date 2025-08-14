@@ -156,7 +156,8 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           
           {/* Content overlay */}
-          <div className="absolute inset-0 flex flex-col justify-between p-4">
+          <div className="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none">
+            {/* Enable pointer events only for interactive elements */}
             {/* Top section - Name and Age */}
             <div className="flex items-start justify-between">
               <div>
