@@ -224,7 +224,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
         onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Fixed Header - Only Close Button */}
-        <div className="flex justify-end items-center p-5 pb-0">
+        <div className="flex justify-end items-center p-3 pb-0">
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
@@ -242,8 +242,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
           {user && !loading && !error && (
             <>
               {/* Profile Title & Block Button */}
-              <div className="flex justify-between items-center px-5 pt-0 pb-4">
-                <h2 className="text-2xl font-bold m-0 text-gradient-aqua">
+              <div className="flex justify-between items-center px-4 pt-0 pb-3">
+                <h2 className="text-xl font-bold m-0 text-gradient-aqua">
                   Profile
                 </h2>
                 {onBlock && (
@@ -258,45 +258,45 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
               </div>
 
               {/* Instagram-style Profile Header */}
-              <div className="flex gap-4 items-start px-5 mb-4">
+              <div className="flex gap-4 items-start px-4 mb-3">
                 {/* Profile Picture - Left Side */}
                 <div className="relative flex-shrink-0">
                   {user.profilePicture ? (
                     <img
                       src={user.profilePicture}
                       alt={user.name}
-                      className="w-28 h-28 rounded-full object-cover border-2 border-white/20 shadow-lg"
+                      className="w-20 h-20 rounded-full object-cover border-2 border-white/20 shadow-lg"
                     />
                   ) : (
-                    <div className="w-28 h-28 rounded-full bg-surface-hover border-2 border-white/20 shadow-lg flex items-center justify-center">
-                      <div className="text-text-muted text-3xl font-bold">
+                    <div className="w-20 h-20 rounded-full bg-surface-hover border-2 border-white/20 shadow-lg flex items-center justify-center">
+                      <div className="text-text-muted text-xl font-bold">
                         {user.name.charAt(0).toUpperCase()}
                       </div>
                     </div>
                   )}
                   {user.isAvailable && (
-                    <div className="absolute bottom-2 right-2 w-5 h-5 bg-aqua rounded-full border-2 border-surface-dark" />
+                    <div className="absolute bottom-1 right-1 w-4 h-4 bg-aqua rounded-full border-2 border-surface-dark" />
                   )}
                 </div>
                 
-                {/* Name, Age and Meta Info - Right Side */}
+                {/* Name, Age, Meta Info and Action Buttons - Right Side */}
                 <div className="flex-1 min-w-0">
                   {user.profileType === 'public' ? (
-                    <h3 className="text-2xl font-bold mb-3 text-gradient-primary">
+                    <h3 className="text-lg font-bold mb-2 text-gradient-primary">
                       {user.name}, {user.age}
                     </h3>
                   ) : (
-                    <h3 className="text-2xl font-bold mb-3 text-gradient-primary">
+                    <h3 className="text-lg font-bold mb-2 text-gradient-primary">
                       Private Profile
                     </h3>
                   )}
                   
                   {/* Distance, Mutual Friends & Social Links */}
-                  <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap mb-3">
                     {/* Distance */}
                     <div className="flex items-center gap-1">
-                      <MapPin size={16} className="text-text-secondary" />
-                      <span className="text-text-secondary text-sm">
+                      <MapPin size={14} className="text-text-secondary" />
+                      <span className="text-text-secondary text-xs">
                         {user.location.proximityMiles} mi
                       </span>
                     </div>
@@ -304,8 +304,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                     {/* Mutual Friends */}
                     {user.mutualFriends.length > 0 && (
                       <div className="flex items-center gap-1">
-                        <Users size={16} className="text-aqua" />
-                        <span className="text-aqua text-sm font-medium">
+                        <Users size={14} className="text-aqua" />
+                        <span className="text-aqua text-xs font-medium">
                           {user.mutualFriends.length} mutuals
                         </span>
                       </div>
@@ -313,7 +313,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                     
                     {/* Social Media Links - same row */}
                     {user.profileType === 'public' && socialLinks.length > 0 && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
                         {socialLinks.map((social, index) => {
                           const IconComponent = social.icon;
                           const getSocialIconColor = (platform: string) => {
@@ -335,11 +335,11 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                              className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
                               title={social.handle}
                             >
                               <IconComponent 
-                                size={16} 
+                                size={12} 
                                 className={`${getSocialIconColor(social.platform)} transition-colors`}
                               />
                             </a>
@@ -348,66 +348,66 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="px-5 mb-4">
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setIsChatOpen(true)}
-                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
-                  >
-                    <MessageCircle size={18} />
-                    Send a message
-                  </button>
-                  <FriendButton
-                    userId={user.id}
-                    size="large"
-                    variant="default"
-                    className="flex-1 bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800"
-                  />
+                  
+                  {/* Action Buttons - Now inline with profile */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setIsChatOpen(true)}
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center gap-1 text-sm"
+                    >
+                      <MessageCircle size={14} />
+                      Message
+                    </button>
+                    <FriendButton
+                      userId={user.id}
+                      size="medium"
+                      variant="default"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-2 px-3 rounded-lg transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-sm"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Bio - no header */}
-              <div className="px-5 mb-4">
-                <p className="text-text-secondary text-base leading-relaxed">
+              <div className="px-4 mb-3">
+                <p className="text-text-secondary text-sm leading-relaxed">
                   {user.bio}
                 </p>
               </div>
 
               {/* Interests - no header */}
-              <div className="px-5 mb-4">
-                <div className="flex flex-wrap gap-2">
+              <div className="px-4 mb-3">
+                <div className="flex flex-wrap gap-1.5">
                   {user.interests && user.interests.length > 0 ? (
                     user.interests.map((interest, index) => (
                       <span
                         key={index}
-                        className="bg-aqua/20 text-aqua px-3 py-1.5 rounded-full text-sm font-medium backdrop-blur-sm"
+                        className="bg-aqua/20 text-aqua px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm"
                       >
                         {interest}
                       </span>
                     ))
                   ) : (
-                    <span className="text-text-secondary text-sm">No interests listed</span>
+                    <span className="text-text-secondary text-xs">No interests listed</span>
                   )}
                 </div>
               </div>
 
-              {/* Photos - no header, only show for public profiles */}
+              {/* Photos - no header, scrollable, only show for public profiles */}
               {user.profileType === 'public' && additionalPhotos.length > 0 && (
-                <div className="px-5 mb-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    {additionalPhotos.map((photo, index) => (
-                      <img
-                        key={photo}
-                        src={photo}
-                        alt={`${user.name}'s photo ${index + 1}`}
-                        className="w-full aspect-square rounded-xl object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
-                        onError={() => handleImageError(photo)}
-                      />
-                    ))}
+                <div className="px-4 mb-4">
+                  <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                    <div className="grid grid-cols-2 gap-2">
+                      {additionalPhotos.map((photo, index) => (
+                        <img
+                          key={photo}
+                          src={photo}
+                          alt={`${user.name}'s photo ${index + 1}`}
+                          className="w-full aspect-square rounded-lg object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
+                          onError={() => handleImageError(photo)}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
