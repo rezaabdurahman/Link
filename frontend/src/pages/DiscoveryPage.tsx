@@ -505,7 +505,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             {isSearching && (
               <div className="mb-6" role="region" aria-label="User search results loading">
                 {isGridView ? (
-                  <div className="grid grid-cols-3 gap-x-1 gap-y-1">
+                  <div className="grid grid-cols-3 gap-0.5">
                     {Array.from({ length: 9 }).map((_, index) => (
                       <div key={index} className="aspect-square">
                         <div className="bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] animate-shimmer w-full h-full rounded-sm" />
@@ -567,7 +567,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
               >
                 {isGridView ? (
                   // Grid View - Instagram stories-like layout with tight gaps
-                  <div className="grid grid-cols-3 gap-x-1 gap-y-1 mb-6">
+                  <div className="grid grid-cols-3 gap-0.5 mb-6">
                     {displayUsers.map((user, index) => {
                       const baseDelay = 100;
                       const staggerDelay = index * 50; // Faster for grid
@@ -588,7 +588,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                         >
                           <button
                             onClick={() => handleUserClick(user)}
-                            className="relative w-full aspect-square overflow-hidden bg-gray-100 hover:scale-[1.02] transition-transform duration-200"
+                            className="relative w-full aspect-square overflow-hidden bg-gray-100 hover:scale-[1.02] transition-transform duration-200 block"
                           >
                             <img
                               src={mediaSource}
