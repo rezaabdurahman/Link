@@ -359,9 +359,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="min-h-screen">
       {/* Fixed Header Section */}
-      <div className="flex-shrink-0 bg-white/95 backdrop-blur-ios border-b border-gray-100 z-10">
+      <div className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-ios border-b border-gray-100 z-10">
         <div className="max-w-sm mx-auto px-4 pt-12">
         {/* Header */}
         <div className="flex justify-between items-center py-3">
@@ -540,8 +540,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto pb-4">
-        <div className="pt-4 px-4">
+      <div className="pt-72 pb-4 overflow-y-auto">
+        <div className="px-4">
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (
           <div className={isGridView ? 'max-w-sm mx-auto px-4' : 'flex flex-col'}>
