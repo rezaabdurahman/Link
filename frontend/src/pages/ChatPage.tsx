@@ -202,6 +202,7 @@ const ChatPage: React.FC = (): JSX.Element => {
               key={chat.id}
               chat={chat}
               onClick={() => handleChatClick(chat)}
+              enableAISummary={isFeatureEnabled('AI_CONVERSATION_SUMMARIES')}
             />
           ))}
         </div>
