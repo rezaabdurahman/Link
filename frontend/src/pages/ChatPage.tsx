@@ -357,7 +357,7 @@ const ChatPage: React.FC = (): JSX.Element => {
       </FixedHeader>
 
       {/* Scrollable Content Area */}
-      <div className="pt-60 pb-4 px-4 min-h-screen">
+      <div className="pt-44 pb-4 px-4 min-h-screen">
         <div className="max-w-sm mx-auto">
 
       {/* Loading State */}
