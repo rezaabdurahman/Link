@@ -163,11 +163,11 @@ All requests go through the API Gateway at `http://localhost:8080`:
 - `POST /auth/refresh` - Token refresh
 
 ### User Management (Protected)
-- `GET /users/profile` - Get current user profile
+- `GET /users/profile/me` - Get authenticated user's own profile (complete data)
 - `PUT /users/profile` - Update user profile
 - `DELETE /auth/logout` - User logout
 - `GET /users/search` - Search users
-- `GET /users/profile/{userId}` - Get public user profile
+- `GET /users/profile/{userId}` - Get public user profile (filtered data)
 
 ### Friend System (Protected)
 - `GET /users/friends` - Get user's friends list
