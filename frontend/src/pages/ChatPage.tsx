@@ -296,7 +296,7 @@ const ChatPage: React.FC = (): JSX.Element => {
 
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="min-h-screen">
       {/* Fixed Header Section */}
       <FixedHeader>
         {/* Header */}
@@ -347,9 +347,8 @@ const ChatPage: React.FC = (): JSX.Element => {
       </FixedHeader>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto pb-4">
-        <div className="pt-4 px-4">
-          <div className="max-w-sm mx-auto">
+      <div className="pt-44 pb-4 px-4 min-h-screen">
+        <div className="max-w-sm mx-auto">
 
       {/* Loading State */}
       {loading && (
@@ -430,7 +429,6 @@ const ChatPage: React.FC = (): JSX.Element => {
         <IntelligentMessageBox onSendMessage={handleSendMessage} />
       )}
 
-          </div>
         </div>
       </div>
 
