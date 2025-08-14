@@ -15,6 +15,7 @@ import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, Unif
 import { searchAvailableUsers, isSearchError, getSearchErrorMessage, SearchUsersRequest } from '../services/searchClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import { usePendingReceivedRequestsCount } from '../hooks/useFriendRequests';
+import ViewTransition from '../components/ViewTransition';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
@@ -315,7 +316,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="flex flex-col min-h-screen">
       {/* Fixed Header Section */}
       <div className="flex-shrink-0 bg-white/95 backdrop-blur-ios border-b border-gray-100 z-10">
         <div className="max-w-sm mx-auto px-4 pt-12">
@@ -495,7 +496,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto pb-20">
+      <div className="flex-1 overflow-y-auto pb-4">
         <div className="pt-4 px-4">
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (
@@ -560,9 +561,12 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             )}
             {/* Users Grid/Feed */}
             {!isSearching && !searchError && displayUsers.length > 0 && (
-              <>            
+              <ViewTransition 
+                viewKey={isGridView ? 'grid' : 'feed'}
+                className="transition-opacity duration-200"
+              >
                 {isGridView ? (
-                  // Grid View - Instagram Discover-like layout with even gaps
+                  // Grid View - Instagram stories-like layout with tight gaps
                   <div className="grid grid-cols-3 gap-1 mb-6">
                     {displayUsers.map((user, index) => {
                       const baseDelay = 100;
@@ -632,7 +636,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                     })}
                   </div>
                 )}
-              </>
+              </ViewTransition>
             )}
           </div>
         ) : (

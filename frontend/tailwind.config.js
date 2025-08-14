@@ -73,6 +73,11 @@ module.exports = {
         'word-cycle': 'wordCycle 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
         'word-glow': 'wordGlow 2s ease-in-out infinite',
         'shimmer': 'shimmer 2s linear infinite',
+        'view-toggle-fade': 'viewToggleFade 0.25s ease-in-out',
+        'fade-out': 'fadeOut 0.2s ease-in',
+        'scale-fade-in': 'scaleFadeIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        'slide-fade-up': 'slideFadeUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        'bounce-in': 'bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
       },
       keyframes: {
         fadeIn: {
@@ -167,6 +172,52 @@ module.exports = {
         shimmer: {
           '0%': { backgroundPosition: '200% 0' },
           '100%': { backgroundPosition: '-200% 0' },
+        },
+        viewToggleFade: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        fadeOut: {
+          '0%': { opacity: '1' },
+          '100%': { opacity: '0' },
+        },
+        scaleFadeIn: {
+          '0%': { 
+            opacity: '0', 
+            transform: 'scale(0.9)' 
+          },
+          '100%': { 
+            opacity: '1', 
+            transform: 'scale(1)' 
+          },
+        },
+        slideFadeUp: {
+          '0%': { 
+            opacity: '0', 
+            transform: 'translateY(24px)' 
+          },
+          '100%': { 
+            opacity: '1', 
+            transform: 'translateY(0)' 
+          },
+        },
+        bounceIn: {
+          '0%': {
+            opacity: '0',
+            transform: 'scale(0.3)',
+          },
+          '50%': {
+            opacity: '0.9',
+            transform: 'scale(1.05)',
+          },
+          '80%': {
+            opacity: '1',
+            transform: 'scale(0.97)',
+          },
+          '100%': {
+            opacity: '1',
+            transform: 'scale(1)',
+          },
         }
       }
     },

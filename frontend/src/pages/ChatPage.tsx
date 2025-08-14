@@ -365,7 +365,7 @@ const ChatPage: React.FC = (): JSX.Element => {
 
       {/* Chat List */}
       {!loading && !error && (
-        <div data-testid="chat-list" style={{ marginBottom: '140px' }}>
+        <div data-testid="chat-list" style={{ marginBottom: '20px', paddingBottom: '4px' }}>
           {sortedChats.map((chat) => (
             <ChatListItem
               key={chat.id || `pseudo-${chat.participantId}`}

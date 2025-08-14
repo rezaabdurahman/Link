@@ -389,7 +389,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Recent Check-ins Section */}
-      <div style={{ marginBottom: '120px' }}>
+      <div style={{ marginBottom: '20px', paddingBottom: '4px' }}>
         <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '6px' }}>
           Recent Check-ins
         </h2>

@@ -316,7 +316,8 @@ const ProfilePage: React.FC = (): JSX.Element => {
           justifyContent: 'center',
           gap: '12px',
           cursor: 'pointer',
-          marginBottom: '100px',
+          marginBottom: '20px',
+          paddingBottom: '4px',
           color: '#FF3B30'
         }}
       >

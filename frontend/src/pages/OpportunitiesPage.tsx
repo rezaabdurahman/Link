@@ -115,7 +115,7 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Opportunities List */}
-      <div style={{ marginBottom: '100px' }}>
+      <div style={{ marginBottom: '20px', paddingBottom: '4px' }}>
         {filteredOpportunities.map((opportunity) => (
           <OpportunityCard
             key={opportunity.id}
