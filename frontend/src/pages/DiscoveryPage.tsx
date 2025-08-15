@@ -544,8 +544,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         <div className="px-4">
           {/* View Mode Description */}
           {isAvailable && displayUsers.length > 0 && !isSearching && !searchError && (
-            <div className={`${showFeedAnimation ? 'animate-fade-in' : 'opacity-0'} transition-opacity duration-300 mb-4`}>
-              <p className="text-xs text-gray-500 text-center" aria-live="polite">
+            <div className={`${showFeedAnimation ? 'animate-fade-in' : 'opacity-0'} transition-opacity duration-300 mb-3`}>
+              <p className="text-xs text-gray-500 text-left ml-4" aria-live="polite">
                 {isGridView
                   ? 'Grid mode: Showing users by distance (up to 2mi.)'
                   : 'Feed mode: Showing users by similarity (AI)'}
