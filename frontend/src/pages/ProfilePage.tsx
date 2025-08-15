@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { 
-  Edit, Settings, /* Send, */ Camera, MapPin, Hash, Mic, Paperclip, X, Plus, Clock, Edit3, Trash2, Share, /* Loader2, */ Check
+  Edit, Settings, /* Send, */ Camera, MapPin, Hash, Mic, Paperclip, X, Plus, Clock, Edit3, Trash2, Share, /* Loader2, */ Check, HelpCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FaInstagram, FaTwitter, FaLinkedin } from 'react-icons/fa';
@@ -160,6 +160,9 @@ const ProfilePage: React.FC = (): JSX.Element => {
   const [manualTags, setManualTags] = useState<Tag[]>([]);
   const [tagInput, setTagInput] = useState<string>('');
   const [showTagSuggestions, setShowTagSuggestions] = useState<boolean>(false);
+  
+  // Help modal state
+  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -544,7 +547,16 @@ const ProfilePage: React.FC = (): JSX.Element => {
             
             {/* Section Header with Add Button */}
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-text-primary">Check-In</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-text-primary">Check-In</h3>
+                <button
+                  onClick={() => setShowHelpModal(true)}
+                  className="w-5 h-5 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
+                  title="What happens when you check-in?"
+                >
+                  <HelpCircle size={14} />
+                </button>
+              </div>
               <button
                 onClick={() => setShowNewCheckinModal(true)}
                 className="flex items-center justify-center w-8 h-8 bg-aqua hover:bg-aqua-dark text-white rounded-full transition-all duration-200 hover:scale-105"
@@ -1140,6 +1152,62 @@ const ProfilePage: React.FC = (): JSX.Element => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-surface-card rounded-2xl max-w-md w-full shadow-2xl"
+          >
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-text-primary">What happens when you check-in?</h3>
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="space-y-4 text-sm text-text-secondary leading-relaxed">
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">1</span>
+                  </div>
+                  <p><strong className="text-text-primary">Friends get summaries:</strong> When you chat with friends, they'll see a summary of your recent check-ins to stay connected with what's happening in your life.</p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">2</span>
+                  </div>
+                  <p><strong className="text-text-primary">Bio updates:</strong> Friends can see your check-in details in your profile bio, giving them insight into your current interests and activities.</p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">3</span>
+                  </div>
+                  <p><strong className="text-text-primary">Interest montage:</strong> The tags from your check-ins automatically update your profile's interest montage, showing friends what you're genuinely passionate about.</p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">4</span>
+                  </div>
+                  <p><strong className="text-text-primary">Smart opportunities:</strong> Your check-ins help us suggest relevant social opportunities, events, and connections based on your interests and activities.</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
