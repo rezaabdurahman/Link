@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FixedHeader from '../components/layout/FixedHeader';
+import SocialIcon from '../components/SocialIcon';
 
 import { 
   CheckIn, SocialAccount, Tag, CheckinState, CheckinAction,
@@ -861,12 +862,12 @@ const CheckinPage: React.FC = (): JSX.Element => {
                 <button
                   key={account.id}
                   onClick={() => handleSocialAccountClick(account)}
-                  className={`text-lg transition-all duration-200 hover:scale-110 ${
+                  className={`transition-all duration-200 hover:scale-110 ${
                     account.connected ? 'opacity-100' : 'opacity-40 grayscale'
                   }`}
                   title={account.connected ? `Connected to ${account.name}` : `Connect to ${account.name}`}
                 >
-                  {account.icon}
+                  <SocialIcon provider={account.provider} size={20} />
                 </button>
               ))}
             </div>
