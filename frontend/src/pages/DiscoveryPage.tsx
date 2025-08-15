@@ -18,6 +18,12 @@ import { isSearchError, getSearchErrorMessage } from '../services/searchClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import { usePendingReceivedRequestsCount } from '../hooks/useFriendRequests';
 import ViewTransition from '../components/ViewTransition';
+import SmartGrid from '../components/SmartGrid';
+import { 
+  addClickLikelihoodScores, 
+  createGridChunks, 
+  UserWithLikelihood 
+} from '../services/clickLikelihoodClient';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
@@ -151,7 +157,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   }, [activeFilters.distance, activeFilters.interests, hasSearched, performSearch]);
 
   // Determine which users to display: search results if searched, otherwise nearby users with basic filtering
-  const displayUsers = hasSearched ? searchResults : nearbyUsers
+  const baseDisplayUsers = hasSearched ? searchResults : nearbyUsers
     .filter(user =>
       !hiddenUserIds.has(user.id) && // Exclude hidden users
       (searchQuery === '' || 
@@ -169,6 +175,16 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       }
       return 0; // Maintain original order for feed mode
     });
+
+  // For grid view: Add click likelihood scores and create chunks
+  // For feed view: Use users as-is
+  const displayUsers = baseDisplayUsers;
+  const usersWithLikelihood: UserWithLikelihood[] = isGridView 
+    ? addClickLikelihoodScores(baseDisplayUsers)
+    : [];
+  const gridChunks = isGridView && usersWithLikelihood.length > 0 
+    ? createGridChunks(usersWithLikelihood) 
+    : [];
 
   const toggleAvailability = async (): Promise<void> => {
     if (isAvailabilitySubmitting) return; // Prevent multiple submissions
@@ -629,47 +645,57 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                 className="transition-opacity duration-200"
               >
                 {isGridView ? (
-                  // Grid View - Instagram stories-like layout with tight gaps
-                  <div className="grid grid-cols-3 gap-0.5 mb-6">
-                    {displayUsers.map((user, index) => {
-                      const baseDelay = 100;
-                      const staggerDelay = index * 50; // Faster for grid
-                      const totalDelay = baseDelay + staggerDelay;
-                      
-                      // Determine if user has video or image
-                      const hasVideo = user.profileMedia?.type === 'video';
-                      const mediaSource = hasVideo ? user.profileMedia?.thumbnail : user.profilePicture;
-                      
-                      return (
-                        <div
-                          key={user.id}
-                          className={`opacity-0 ${showFeedAnimation ? 'animate-card-entrance' : ''}`}
-                          style={{
-                            animationDelay: showFeedAnimation ? `${totalDelay}ms` : '0ms',
-                            animationFillMode: 'forwards'
-                          }}
-                        >
-                          <button
-                            onClick={() => handleUserClick(user)}
-                            className="relative w-full aspect-square overflow-hidden bg-gray-100 hover:scale-[1.02] transition-transform duration-200 block"
-                          >
-                            <img
-                              src={mediaSource}
-                              alt={user.name}
-                              className="w-full h-full object-cover"
-                            />
-                            {/* Video indicator for profiles with video */}
-                            {hasVideo && (
-                              <div className="absolute top-2 right-2 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center">
-                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M8 5v14l11-7z"/>
-                                </svg>
-                              </div>
-                            )}
-                          </button>
-                        </div>
-                      );
-                    })}
+                  // Smart Grid View - ML-optimized layout with 2x2 prominent users
+                  <div className="mb-6">
+                    {gridChunks.length > 0 ? (
+                      <SmartGrid
+                        chunks={gridChunks}
+                        onUserClick={handleUserClick}
+                        showAnimation={showFeedAnimation}
+                        className=""
+                      />
+                    ) : (
+                      // Fallback: Simple grid if no chunks (shouldn't happen with proper data)
+                      <div className="grid grid-cols-3 gap-0.5">
+                        {displayUsers.map((user, index) => {
+                          const baseDelay = 100;
+                          const staggerDelay = index * 50;
+                          const totalDelay = baseDelay + staggerDelay;
+                          
+                          const hasVideo = user.profileMedia?.type === 'video';
+                          const mediaSource = hasVideo ? user.profileMedia?.thumbnail : user.profilePicture;
+                          
+                          return (
+                            <div
+                              key={user.id}
+                              className={`opacity-0 ${showFeedAnimation ? 'animate-card-entrance' : ''}`}
+                              style={{
+                                animationDelay: showFeedAnimation ? `${totalDelay}ms` : '0ms',
+                                animationFillMode: 'forwards'
+                              }}
+                            >
+                              <button
+                                onClick={() => handleUserClick(user)}
+                                className="relative w-full aspect-square overflow-hidden bg-gray-100 hover:scale-[1.02] transition-transform duration-200 block"
+                              >
+                                <img
+                                  src={mediaSource}
+                                  alt={user.name}
+                                  className="w-full h-full object-cover"
+                                />
+                                {hasVideo && (
+                                  <div className="absolute top-2 right-2 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center">
+                                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                  </div>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   // Feed View - Vertical cards
