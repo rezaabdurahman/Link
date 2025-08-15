@@ -151,15 +151,24 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   }, [activeFilters.distance, activeFilters.interests, hasSearched, performSearch]);
 
   // Determine which users to display: search results if searched, otherwise nearby users with basic filtering
-  const displayUsers = hasSearched ? searchResults : nearbyUsers.filter(user =>
-    !hiddenUserIds.has(user.id) && // Exclude hidden users
-    (searchQuery === '' || 
-     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     user.interests.some(interest => 
-       interest.toLowerCase().includes(searchQuery.toLowerCase())
-     ) ||
-     user.bio.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const displayUsers = hasSearched ? searchResults : nearbyUsers
+    .filter(user =>
+      !hiddenUserIds.has(user.id) && // Exclude hidden users
+      (searchQuery === '' || 
+       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+       user.interests.some(interest => 
+         interest.toLowerCase().includes(searchQuery.toLowerCase())
+       ) ||
+       user.bio.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+    .sort((a, b) => {
+      // Grid mode: sort by distance (closest first)
+      // Feed mode: maintain original order (simulating AI similarity)
+      if (isGridView) {
+        return a.location.proximityMiles - b.location.proximityMiles;
+      }
+      return 0; // Maintain original order for feed mode
+    });
 
   const toggleAvailability = async (): Promise<void> => {
     if (isAvailabilitySubmitting) return; // Prevent multiple submissions
@@ -540,11 +549,11 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="pt-48 pb-4 overflow-y-auto">
+      <div className="pt-44 pb-4 overflow-y-auto">
         <div className="px-4">
           {/* View Mode Description */}
           {isAvailable && displayUsers.length > 0 && !isSearching && !searchError && (
-            <div className={`${showFeedAnimation ? 'animate-fade-in' : 'opacity-0'} transition-opacity duration-300 mb-3`}>
+            <div className={`${showFeedAnimation ? 'animate-fade-in' : 'opacity-0'} transition-opacity duration-300 mb-2 mt-1`}>
               <p className="text-xs text-gray-500 text-left ml-4" aria-live="polite">
                 {isGridView
                   ? 'Grid mode: Showing users by distance (up to 2mi.)'
