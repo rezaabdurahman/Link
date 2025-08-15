@@ -1,47 +1,40 @@
 import React, { useState } from 'react';
-import { Edit, MapPin, Users, Heart, Calendar, Bell, Shield, LogOut } from 'lucide-react';
+import { Edit, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { FaInstagram, FaTwitter, FaLinkedin } from 'react-icons/fa';
 import { currentUser } from '../data/mockData';
+import ProfileDetailModal from '../components/ProfileDetailModal';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProfilePage: React.FC = (): JSX.Element => {
-  const { logout } = useAuth();
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [editedBio, setEditedBio] = useState<string>(currentUser.bio);
+  const navigate = useNavigate();
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
 
-  const handleSaveBio = (): void => {
-    // Here you would save the bio to the backend
-    console.log('Saving bio:', editedBio);
-    setIsEditing(false);
+  const handleSettingsClick = (): void => {
+    navigate('/settings');
   };
 
-  const handleCancelEdit = (): void => {
-    setEditedBio(currentUser.bio);
-    setIsEditing(false);
+  const handleEditProfile = (): void => {
+    setShowProfileModal(true);
   };
 
-  const settingsItems = [
-    { icon: Bell, label: 'Notifications', action: 'navigate' },
-    { icon: Shield, label: 'Privacy & Location', action: 'navigate' },
-    { icon: Users, label: 'Close Friends', action: 'navigate' },
-    { icon: Heart, label: 'Connection Preferences', action: 'navigate' },
-    { icon: Calendar, label: 'Availability Settings', action: 'navigate' },
-  ];
-
-  const handleSettingClick = (label: string): void => {
-    console.log('Navigate to:', label);
-    // Here you would navigate to the specific settings page
+  const handleCloseProfileModal = (): void => {
+    setShowProfileModal(false);
   };
 
-  const handleLogout = async (): Promise<void> => {
-    try {
-      console.log('Logging out...');
-      await logout();
-      // User will be redirected to login page automatically by AuthContext
-    } catch (error) {
-      console.error('Logout failed:', error);
-      // Even if logout fails, the auth state will be cleared
-    }
+  // Handle broken images
+  const handleImageError = (photoUrl: string) => {
+    setBrokenImages(prev => new Set([...prev, photoUrl]));
   };
+
+  // Mock additional photos for demonstration (since currentUser might not have them)
+  const additionalPhotos = [
+    'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=400&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1494790108755-2616c6c5a72b?w=400&h=400&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?w=400&h=400&fit=crop&crop=face'
+  ].filter(photo => photo && !brokenImages.has(photo));
 
   return (
     <div className="ios-safe-area" style={{ padding: '0 20px' }}>
@@ -53,150 +46,196 @@ const ProfilePage: React.FC = (): JSX.Element => {
         marginBottom: '32px',
         paddingTop: '20px'
       }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '700' }}>
+        <h1 className="text-gradient-aqua" style={{ fontSize: '28px', fontWeight: '700' }}>
           Profile
         </h1>
-        <button
-          onClick={() => setIsEditing(!isEditing)}
-          style={{
-            background: 'rgba(6, 182, 212, 0.2)',
-            border: 'none',
-            borderRadius: '50%',
-            width: '36px',
-            height: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: '#06b6d4'
-          }}
-          className="haptic-light"
-        >
-          <Edit size={18} />
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={handleEditProfile}
+            style={{
+              background: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#06b6d4',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            }}
+            className="haptic-light"
+          >
+            <Edit size={18} />
+          </button>
+          <button
+            onClick={handleSettingsClick}
+            style={{
+              background: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#06b6d4',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            }}
+            className="haptic-light"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
       </div>
 
-      {/* Profile Card */}
-      <div className="ios-card" style={{ padding: '24px', marginBottom: '32px' }}>
-        {/* Profile Picture and Basic Info */}
-        <div style={{ 
-          display: 'flex',
-          alignItems: 'center',
-          gap: '20px',
-          marginBottom: '20px'
-        }}>
-          <div style={{ position: 'relative' }}>
-            <img
-              src={currentUser.profilePicture}
-              alt={currentUser.name}
-              style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: '50%',
-                objectFit: 'cover'
-              }}
-            />
-            <div className="online-indicator" />
-          </div>
-          
-          <div style={{ flex: 1 }}>
-            <h2 style={{ 
-              fontSize: '22px', 
-              fontWeight: '600', 
-              marginBottom: '4px'
-            }}>
-              {currentUser.name}
+      {/* Profile Detail - Using ProfileDetailModal style */}
+      <div 
+        className="ios-card" 
+        style={{
+          position: 'relative',
+          margin: '0 auto',
+          marginBottom: '32px',
+          maxWidth: '400px',
+          padding: '0',
+          background: 'white',
+          border: 'none',
+          boxShadow: 'none'
+        }}
+      >
+        {/* Scrollable Content */}
+        <div>
+          {/* Profile Title */}
+          <div className="px-4 pt-4 pb-1">
+            <h2 className="text-xl font-bold m-0 text-gradient-aqua">
+              Your User Card
             </h2>
-            <p style={{ fontSize: '16px', marginBottom: '8px', color: '#000000' }}>
-              {currentUser.age} years old
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <MapPin size={14} style={{ color: '#64748b' }} />
-              <span style={{ fontSize: '14px', color: '#64748b' }}>
-                San Francisco, CA
-              </span>
-            </div>
           </div>
-        </div>
 
-        {/* Bio */}
-        <div style={{ marginBottom: '20px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
-            Bio
-          </h3>
-          {isEditing ? (
-            <div>
-              <textarea
-                value={editedBio}
-                onChange={(e) => setEditedBio(e.target.value)}
-                className="ios-text-field"
-                style={{ 
-                  width: '100%', 
-                  minHeight: '80px',
-                  resize: 'vertical',
-                  marginBottom: '12px'
-                }}
-                placeholder="Tell people about yourself..."
+          {/* Instagram-style Profile Header */}
+          <div className="flex gap-4 items-center px-4 mb-1">
+            {/* Profile Picture - Left Side */}
+            <div className="relative flex-shrink-0">
+              <img
+                src={currentUser.profilePicture}
+                alt={currentUser.name}
+                className="w-24 h-24 rounded-full object-cover border-2 border-white/20 shadow-lg"
               />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={handleCancelEdit}
-                  style={{
-                    flex: 1,
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '8px 16px',
-                    color: '#64748b',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                  className="haptic-light"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveBio}
-                  className="ios-button"
-                  style={{
-                    flex: 1,
-                    fontSize: '14px',
-                    padding: '8px 16px'
-                  }}
-                >
-                  Save
-                </button>
+              {currentUser.isAvailable && (
+                <div className="absolute bottom-1 right-1 w-4 h-4 bg-aqua rounded-full border-2 border-surface-dark" />
+              )}
+            </div>
+            
+            {/* Name, Age, Meta Info - Right Side */}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold mb-1 text-gradient-primary">
+                {currentUser.name}, {currentUser.age}
+              </h3>
+              
+              {/* Distance, Social Links */}
+              <div className="flex items-center gap-3 flex-wrap mb-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-text-secondary text-xs">
+                    📍 San Francisco, CA
+                  </span>
+                </div>
+                
+                {/* Social Media Links */}
+                <div className="flex gap-1">
+                  <a
+                    href="https://instagram.com/alexthompson"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                    title="@alexthompson"
+                  >
+                    <FaInstagram 
+                      size={12} 
+                      className="text-pink-500 hover:text-pink-600 transition-colors"
+                    />
+                  </a>
+                  <a
+                    href="https://twitter.com/alexthompson"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                    title="@alexthompson"
+                  >
+                    <FaTwitter 
+                      size={12} 
+                      className="text-blue-400 hover:text-blue-500 transition-colors"
+                    />
+                  </a>
+                  <a
+                    href="https://linkedin.com/in/alexthompson"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover-glow group"
+                    title="Alex Thompson"
+                  >
+                    <FaLinkedin 
+                      size={12} 
+                      className="text-blue-700 hover:text-blue-800 transition-colors"
+                    />
+                  </a>
+                </div>
+              </div>
+
+              {/* Bio */}
+              <div className="mb-1">
+                <p className="text-text-secondary text-sm leading-relaxed">
+                  {currentUser.bio}
+                </p>
               </div>
             </div>
-          ) : (
-            <p style={{ fontSize: '14px', lineHeight: '1.4', color: '#000000' }}>
-              {currentUser.bio}
-            </p>
-          )}
-        </div>
-
-        {/* Interests */}
-        <div>
-          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
-            Interests
-          </h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {currentUser.interests.map((interest, index) => (
-            <span
-              key={index}
-              style={{
-                background: 'rgba(6, 182, 212, 0.2)',
-                color: '#06b6d4',
-                padding: '6px 12px',
-                borderRadius: '16px',
-                fontSize: '12px',
-                fontWeight: '500'
-              }}
-            >
-              {interest}
-            </span>
-            ))}
           </div>
+
+          {/* Interests */}
+          <div className="px-4 mb-1 mt-3">
+            <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
+            <p className="text-text-primary text-sm mb-1 font-bold">
+              Interest Montages
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {currentUser.interests.map((interest, index) => (
+                <span
+                  key={index}
+                  className="bg-aqua/20 text-aqua px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm"
+                >
+                  {interest}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Photos - scrollable, similar to ProfileDetailModal */}
+          {additionalPhotos.length > 0 && (
+            <>
+              {/* Divider line before photos */}
+              <div className="mx-4 mb-1 border-t border-white/10"></div>
+              
+              <div className="px-4 mb-2">
+                <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                  <div className="grid grid-cols-2 gap-2">
+                    {additionalPhotos.map((photo, index) => (
+                      <img
+                        key={photo}
+                        src={photo}
+                        alt={`${currentUser.name}'s photo ${index + 1}`}
+                        className="w-full aspect-square rounded-lg object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
+                        onError={() => handleImageError(photo)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -252,80 +291,13 @@ const ProfilePage: React.FC = (): JSX.Element => {
         </div>
       </div>
 
-      {/* Settings */}
-      <div className="ios-card" style={{ padding: '0', marginBottom: '32px' }}>
-        <h3 style={{ 
-          fontSize: '16px', 
-          fontWeight: '600', 
-          padding: '20px 20px 0 20px',
-          marginBottom: '16px',
-          color: '#000000'
-        }}>
-          Settings
-        </h3>
-        <div>
-          {settingsItems.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={index}
-                onClick={() => handleSettingClick(item.label)}
-                className="haptic-light"
-                style={{
-                  width: '100%',
-                  background: 'none',
-                  border: 'none',
-                  padding: '16px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '16px',
-                  cursor: 'pointer',
-                  borderBottom: index < settingsItems.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none'
-                }}
-              >
-                <Icon size={20} className="text-accent" />
-                <span style={{ 
-                  flex: 1, 
-                  textAlign: 'left',
-                  fontSize: '16px',
-                  color: '#000000'
-                }}>
-                  {item.label}
-                </span>
-                <span style={{ color: '#64748b' }}>
-                  ›
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Logout */}
-      <button
-        onClick={handleLogout}
-        className="haptic-light"
-        style={{
-          width: '100%',
-          background: 'rgba(255, 59, 48, 0.1)',
-          border: '1px solid rgba(255, 59, 48, 0.3)',
-          borderRadius: '12px',
-          padding: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '12px',
-          cursor: 'pointer',
-          marginBottom: '20px',
-          paddingBottom: '4px',
-          color: '#FF3B30'
-        }}
-      >
-        <LogOut size={20} />
-        <span style={{ fontSize: '16px', fontWeight: '500' }}>
-          Log Out
-        </span>
-      </button>
+      {/* Profile Detail Modal for editing */}
+      {showProfileModal && (
+        <ProfileDetailModal
+          userId={currentUser.id}
+          onClose={handleCloseProfileModal}
+        />
+      )}
     </div>
   );
 };
