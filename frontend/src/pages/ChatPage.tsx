@@ -17,7 +17,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import FixedHeader from '../components/layout/FixedHeader';
 
-type SortOption = 'priority' | 'time' | 'unread' | 'discover';
+type SortOption = 'priority' | 'time' | 'unread';
 
 const ChatPage: React.FC = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -173,11 +173,6 @@ const ChatPage: React.FC = (): JSX.Element => {
       const matchesSearch = chat.participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chat.conversationSummary.toLowerCase().includes(searchQuery.toLowerCase());
       
-      // Discover filter: only show non-friends
-      if (sortBy === 'discover') {
-        return matchesSearch && !chat.isFriend;
-      }
-      
       return matchesSearch;
     });
 
@@ -207,7 +202,6 @@ const ChatPage: React.FC = (): JSX.Element => {
    * - priority: Lower number = higher priority (1 is highest priority)
    * - time: Most recent messages first (descending timestamp)
    * - unread: Highest unread count first (descending count)
-   * - discover: Non-friend conversations by recency (filtered in combinedList)
    * 
    * @see ChatPage-Sort-Logic.md for detailed documentation
    */
@@ -222,9 +216,6 @@ const ChatPage: React.FC = (): JSX.Element => {
       case 'unread':
         // Highest unread count first
         return b.unreadCount - a.unreadCount;
-      case 'discover':
-        // For discover mode, sort non-friends by most recent messages
-        return b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime();
       default:
         return 0;
     }
