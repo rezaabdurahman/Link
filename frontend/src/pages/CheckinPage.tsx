@@ -149,7 +149,6 @@ const CheckinPage: React.FC = (): JSX.Element => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
-  const opportunitiesRef = useRef<HTMLDivElement>(null);
 
   // Load social accounts from localStorage
   useEffect(() => {
@@ -406,14 +405,6 @@ const CheckinPage: React.FC = (): JSX.Element => {
     }
   };
 
-  // Opportunity management
-  const handleOpportunityAction = (opportunityId: string, action: 'accepted' | 'rejected') => {
-    dispatch({
-      type: 'UPDATE_OPPORTUNITY',
-      payload: { id: opportunityId, status: action }
-    });
-  };
-
   const handleAcceptTag = (checkinId: string, tagId: string) => {
     dispatch({
       type: 'ACCEPT_TAG',
@@ -439,8 +430,6 @@ const CheckinPage: React.FC = (): JSX.Element => {
   };
 
   const hasAttachments = mediaAttachments.length > 0 || fileAttachments.length > 0 || voiceNote || locationAttachment;
-  const pendingOpportunities = state.opportunities.filter(opp => opp.status === 'pending');
-  // const hasValidContent = searchText.trim() || hasAttachments || manualTags.length > 0;
 
   const handleSocialAccountClick = (account: SocialAccount) => {
     if (account.connected) {
@@ -460,15 +449,17 @@ const CheckinPage: React.FC = (): JSX.Element => {
     <div className="min-h-screen bg-background">
       {/* Fixed Header */}
       <FixedHeader>
-        <div className="flex justify-between items-center pb-6">
-          <h1 className="text-2xl font-bold text-gradient-aqua">Check-in</h1>
-          <button
-            onClick={() => setShowHelpModal(true)}
-            className="w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
-            title="What happens when you check-in?"
-          >
-            <HelpCircle size={16} />
-          </button>
+        <div className="pb-6">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gradient-aqua">
+            Check-in
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className="w-6 h-6 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
+              title="What happens when you check-in?"
+            >
+              <HelpCircle size={16} />
+            </button>
+          </h1>
         </div>
       </FixedHeader>
       
@@ -780,72 +771,6 @@ const CheckinPage: React.FC = (): JSX.Element => {
           </div>
         </div>
 
-        {/* Opportunities Carousel */}
-        {pendingOpportunities.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-text-primary">Social Opportunities</h2>
-            <div className="text-xs text-text-muted">Swipe to explore</div>
-          </div>
-          
-          <div 
-            ref={opportunitiesRef}
-            className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            <style>{`div::-webkit-scrollbar { display: none; }`}</style>
-            {pendingOpportunities.map((opportunity) => (
-              <motion.div
-                key={opportunity.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex-shrink-0 w-64 ios-card p-4"
-              >
-                <div className="mb-3">
-                  <div className="text-sm font-semibold text-text-primary mb-1">
-                    {opportunity.title}
-                  </div>
-                  <div className="text-xs text-text-secondary line-clamp-2">
-                    {opportunity.description}
-                  </div>
-                </div>
-                
-                {opportunity.details && (
-                  <div className="text-xs text-text-muted mb-3">
-                    {opportunity.details.date && (
-                      <div className="flex items-center gap-1 mb-1">
-                        <Clock size={10} />
-                        <span>{opportunity.details.date}</span>
-                      </div>
-                    )}
-                    {opportunity.details.location && (
-                      <div className="flex items-center gap-1">
-                        <MapPin size={10} />
-                        <span>{opportunity.details.location}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleOpportunityAction(opportunity.id, 'rejected')}
-                    className="flex-1 px-3 py-2 text-xs font-medium text-text-muted border border-surface-border rounded-ios hover:bg-surface-hover transition-colors"
-                  >
-                    Pass
-                  </button>
-                  <button
-                    onClick={() => handleOpportunityAction(opportunity.id, 'accepted')}
-                    className="flex-1 px-3 py-2 text-xs font-medium text-white bg-aqua hover:bg-aqua-dark rounded-ios transition-colors"
-                  >
-                    {opportunity.actionLabel || 'Accept'}
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-        )}
 
         {/* Check-in History */}
         <div className="mb-4">
