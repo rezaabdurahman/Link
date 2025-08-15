@@ -1,15 +1,138 @@
-import React, { useState } from 'react';
-import { Edit, Settings } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { 
+  Edit, Settings, Send, Camera, MapPin, Hash, Mic, Paperclip, X, Plus, Clock, Edit3, Trash2, Share, Loader2, Check
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FaInstagram, FaTwitter, FaLinkedin } from 'react-icons/fa';
 import { currentUser } from '../data/mockData';
 import ProfileDetailModal from '../components/ProfileDetailModal';
-import { useAuth } from '../contexts/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Import types for the share thoughts functionality
+interface MediaAttachment {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  name: string;
+}
+
+interface FileAttachment {
+  id: string;
+  name: string;
+  size: string;
+  type: string;
+}
+
+interface VoiceNote {
+  id: string;
+  duration: number;
+  url: string;
+}
+
+interface LocationAttachment {
+  id: string;
+  name: string;
+  coordinates: { lat: number; lng: number };
+}
+
+interface Tag {
+  id: string;
+  label: string;
+  type: 'manual' | 'ai';
+  color: string;
+}
+
+interface CheckIn {
+  id: string;
+  text: string;
+  mediaAttachments: MediaAttachment[];
+  fileAttachments: FileAttachment[];
+  voiceNote: VoiceNote | null;
+  locationAttachment: LocationAttachment | null;
+  tags: Tag[];
+  aiSuggestions?: Tag[];
+  aiSuggestionsPending?: boolean;
+  timestamp: Date;
+}
+
+const COMMON_TAGS = [
+  'coffee', 'workout', 'music', 'food', 'travel', 'work', 'friends', 
+  'family', 'nature', 'art', 'reading', 'coding', 'gaming', 'sports'
+];
+
+// Mock check-ins data
+const generateMockCheckIns = (): CheckIn[] => [
+  {
+    id: 'checkin-1',
+    text: 'Just finished an amazing workout session at the gym! Feeling energized and ready to tackle the rest of the day.',
+    mediaAttachments: [],
+    fileAttachments: [],
+    voiceNote: null,
+    locationAttachment: { id: 'loc-1', name: 'FitnessFirst Gym', coordinates: { lat: 37.7749, lng: -122.4194 } },
+    tags: [
+      { id: 'tag-1', label: 'workout', type: 'manual', color: '#10B981' },
+      { id: 'tag-2', label: 'fitness', type: 'ai', color: '#3B82F6' }
+    ],
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
+  },
+  {
+    id: 'checkin-2',
+    text: 'Exploring the new coffee shop downtown. The vibes here are incredible!',
+    mediaAttachments: [],
+    fileAttachments: [],
+    voiceNote: null,
+    locationAttachment: { id: 'loc-2', name: 'Blue Bottle Coffee', coordinates: { lat: 37.7849, lng: -122.4094 } },
+    tags: [
+      { id: 'tag-3', label: 'coffee', type: 'manual', color: '#F59E0B' },
+      { id: 'tag-4', label: 'exploration', type: 'ai', color: '#8B5CF6' }
+    ],
+    timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000) // 8 hours ago
+  },
+  {
+    id: 'checkin-3',
+    text: 'Weekend coding session with some lo-fi beats. Building something cool!',
+    mediaAttachments: [],
+    fileAttachments: [],
+    voiceNote: null,
+    locationAttachment: null,
+    tags: [
+      { id: 'tag-5', label: 'coding', type: 'manual', color: '#06B6D4' },
+      { id: 'tag-6', label: 'weekend', type: 'ai', color: '#EC4899' }
+    ],
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) // 1 day ago
+  }
+];
 
 const ProfilePage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
+  
+  // Check-ins state
+  const [checkIns, setCheckIns] = useState<CheckIn[]>(generateMockCheckIns());
+  const [showNewCheckinModal, setShowNewCheckinModal] = useState<boolean>(false);
+  const [editingCheckinId, setEditingCheckinId] = useState<string | null>(null);
+  const [editText, setEditText] = useState<string>('');
+  
+  // New check-in form state (for modal)
+  const [searchText, setSearchText] = useState<string>('');
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  const [mediaAttachments, setMediaAttachments] = useState<MediaAttachment[]>([]);
+  const [fileAttachments, setFileAttachments] = useState<FileAttachment[]>([]);
+  const [voiceNote, setVoiceNote] = useState<VoiceNote | null>(null);
+  const [locationAttachment, setLocationAttachment] = useState<LocationAttachment | null>(null);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
+  
+  // Tag input state
+  const [manualTags, setManualTags] = useState<Tag[]>([]);
+  const [tagInput, setTagInput] = useState<string>('');
+  const [showTagSuggestions, setShowTagSuggestions] = useState<boolean>(false);
+  
+  // Refs
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   const handleSettingsClick = (): void => {
     navigate('/settings');
@@ -26,6 +149,209 @@ const ProfilePage: React.FC = (): JSX.Element => {
   // Handle broken images
   const handleImageError = (photoUrl: string) => {
     setBrokenImages(prev => new Set([...prev, photoUrl]));
+  };
+
+  // Share thoughts handlers (copied from CheckinPage)
+  const handleMediaUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file, index) => {
+      const id = `media_${Date.now()}_${index}`;
+      const url = URL.createObjectURL(file);
+      const type = file.type.startsWith('video/') ? 'video' : 'image';
+      
+      setMediaAttachments(prev => [...prev, {
+        id,
+        type,
+        url,
+        name: file.name
+      }]);
+    });
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file, index) => {
+      const id = `file_${Date.now()}_${index}`;
+      const size = (file.size / 1024).toFixed(1) + ' KB';
+      
+      setFileAttachments(prev => [...prev, {
+        id,
+        name: file.name,
+        size,
+        type: file.type
+      }]);
+    });
+  };
+
+  const handleAddLocation = () => {
+    // Simulate location detection
+    setLocationAttachment({
+      id: 'location_' + Date.now(),
+      name: 'Current Location',
+      coordinates: { lat: 37.7749, lng: -122.4194 }
+    });
+  };
+
+  const handleStartRecording = () => {
+    setIsRecording(true);
+    setRecordingDuration(0);
+    
+    // Simulate recording
+    const interval = setInterval(() => {
+      setRecordingDuration(prev => {
+        if (prev >= 60) {
+          handleStopRecording();
+          clearInterval(interval);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+  };
+
+  const handleStopRecording = () => {
+    setIsRecording(false);
+    setVoiceNote({
+      id: 'voice_' + Date.now(),
+      duration: recordingDuration,
+      url: '#'
+    });
+  };
+
+  const handleRemoveMedia = (id: string) => {
+    setMediaAttachments(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleRemoveFile = (id: string) => {
+    setFileAttachments(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleRemoveVoiceNote = () => {
+    setVoiceNote(null);
+  };
+
+  const handleRemoveLocation = () => {
+    setLocationAttachment(null);
+  };
+
+  // Tag management functions
+  const handleAddTag = (tagLabel: string) => {
+    const newTag: Tag = {
+      id: `manual-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      label: tagLabel.toLowerCase(),
+      type: 'manual',
+      color: getTagColor(tagLabel)
+    };
+    setManualTags(prev => [...prev, newTag]);
+    setTagInput('');
+    setShowTagSuggestions(false);
+  };
+
+  const handleRemoveManualTag = (tagId: string) => {
+    setManualTags(prev => prev.filter(tag => tag.id !== tagId));
+  };
+
+  const getTagColor = (label: string): string => {
+    const colors = [
+      '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+      '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+    ];
+    let hash = 0;
+    for (let i = 0; i < label.length; i++) {
+      hash = label.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const getFilteredTagSuggestions = () => {
+    if (!tagInput.trim()) return [];
+    return COMMON_TAGS.filter(tag => 
+      tag.toLowerCase().includes(tagInput.toLowerCase()) &&
+      !manualTags.some(existingTag => existingTag.label === tag)
+    ).slice(0, 5);
+  };
+
+  const handlePost = async () => {
+    if (!(searchText.trim() || hasAttachments)) return;
+    
+    // Create new check-in
+    const newCheckin: CheckIn = {
+      id: `checkin-${Date.now()}`,
+      text: searchText,
+      mediaAttachments: [...mediaAttachments],
+      fileAttachments: [...fileAttachments],
+      voiceNote: voiceNote ? { ...voiceNote } : null,
+      locationAttachment: locationAttachment ? { ...locationAttachment } : null,
+      tags: [...manualTags],
+      timestamp: new Date()
+    };
+    
+    // Add to front of check-ins array
+    setCheckIns(prev => [newCheckin, ...prev]);
+    
+    // Reset form and close modal
+    setSearchText('');
+    setMediaAttachments([]);
+    setFileAttachments([]);
+    setVoiceNote(null);
+    setLocationAttachment(null);
+    setManualTags([]);
+    setIsSearchFocused(false);
+    setShowNewCheckinModal(false);
+  };
+
+  const hasAttachments = mediaAttachments.length > 0 || fileAttachments.length > 0 || voiceNote || locationAttachment;
+
+  // Check-in management
+  const handleEditCheckin = (checkinId: string) => {
+    const checkin = checkIns.find(c => c.id === checkinId);
+    if (checkin) {
+      setEditingCheckinId(checkinId);
+      setEditText(checkin.text);
+    }
+  };
+
+  const handleSaveEdit = (checkinId: string) => {
+    setCheckIns(prev => prev.map(checkin => 
+      checkin.id === checkinId 
+        ? { ...checkin, text: editText }
+        : checkin
+    ));
+    setEditingCheckinId(null);
+    setEditText('');
+  };
+
+  const handleDeleteCheckin = (checkinId: string) => {
+    if (confirm('Are you sure you want to delete this check-in?')) {
+      setCheckIns(prev => prev.filter(checkin => checkin.id !== checkinId));
+    }
+  };
+
+  const handleShareCheckin = (checkin: CheckIn) => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'Check-in',
+        text: checkin.text,
+        url: window.location.href
+      });
+    } else {
+      navigator.clipboard.writeText(checkin.text);
+      alert('Check-in text copied to clipboard!');
+    }
+  };
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
   };
 
   // Mock additional photos for demonstration (since currentUser might not have them)
@@ -53,7 +379,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
           <button
             onClick={handleEditProfile}
             style={{
-              background: 'white',
+              background: 'transparent',
               border: 'none',
               borderRadius: '50%',
               width: '36px',
@@ -62,17 +388,16 @@ const ProfilePage: React.FC = (): JSX.Element => {
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: '#06b6d4',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+              color: '#06b6d4'
             }}
-            className="haptic-light"
+            className="haptic-light hover:bg-black/5 transition-colors"
           >
             <Edit size={18} />
           </button>
           <button
             onClick={handleSettingsClick}
             style={{
-              background: 'white',
+              background: 'transparent',
               border: 'none',
               borderRadius: '50%',
               width: '36px',
@@ -81,10 +406,9 @@ const ProfilePage: React.FC = (): JSX.Element => {
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: '#06b6d4',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+              color: '#06b6d4'
             }}
-            className="haptic-light"
+            className="haptic-light hover:bg-black/5 transition-colors"
           >
             <Settings size={18} />
           </button>
@@ -107,15 +431,9 @@ const ProfilePage: React.FC = (): JSX.Element => {
       >
         {/* Scrollable Content */}
         <div>
-          {/* Profile Title */}
-          <div className="px-4 pt-4 pb-1">
-            <h2 className="text-xl font-bold m-0 text-gradient-aqua">
-              Your User Card
-            </h2>
-          </div>
 
           {/* Instagram-style Profile Header */}
-          <div className="flex gap-4 items-center px-4 mb-1">
+          <div className="flex gap-4 items-center px-4 mb-1 pt-4">
             {/* Profile Picture - Left Side */}
             <div className="relative flex-shrink-0">
               <img
@@ -195,17 +513,212 @@ const ProfilePage: React.FC = (): JSX.Element => {
             </div>
           </div>
 
+          {/* Share Your Thoughts & Check-ins */}
+          <div className="px-4 mb-4 mt-4">
+            <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
+            
+            {/* Section Header with Add Button */}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-text-primary">Share Your Thoughts</h3>
+              <button
+                onClick={() => setShowNewCheckinModal(true)}
+                className="flex items-center justify-center w-8 h-8 bg-aqua hover:bg-aqua-dark text-white rounded-full transition-all duration-200 hover:scale-105"
+                title="Add new check-in"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+
+            {/* Check-ins Horizontal Carousel */}
+            <div className="ios-card" style={{ padding: '12px', margin: '0' }}>
+              {checkIns.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-text-secondary text-sm mb-2">No check-ins yet</p>
+                  <button
+                    onClick={() => setShowNewCheckinModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                  >
+                    <Plus size={16} />
+                    Share your first thought
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  {/* Horizontal scrollable container */}
+                  <div 
+                    className="flex gap-3 overflow-x-auto scrollbar-hide pb-2"
+                    style={{
+                      scrollbarWidth: 'none',
+                      msOverflowStyle: 'none',
+                      WebkitScrollbar: { display: 'none' }
+                    }}
+                  >
+                    <style jsx>{`
+                      div::-webkit-scrollbar {
+                        display: none;
+                      }
+                    `}</style>
+                    
+                    {checkIns.map((checkin, index) => (
+                      <motion.div
+                        key={checkin.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="bg-white/50 rounded-lg p-3 border border-white/20 flex-shrink-0"
+                        style={{ minWidth: '280px', maxWidth: '320px' }}
+                      >
+                        {/* Check-in Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Clock size={11} className="text-gray-500" />
+                            <span className="text-xs text-gray-500">{formatTimeAgo(checkin.timestamp)}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleEditCheckin(checkin.id)}
+                              className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                              title="Edit"
+                            >
+                              <Edit3 size={11} className="text-gray-500" />
+                            </button>
+                            <button
+                              onClick={() => handleShareCheckin(checkin)}
+                              className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                              title="Share"
+                            >
+                              <Share size={11} className="text-gray-500" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCheckin(checkin.id)}
+                              className="p-1 hover:bg-red-500/20 rounded-full transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={11} className="text-red-500" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Check-in Content */}
+                        {editingCheckinId === checkin.id ? (
+                          <div className="mb-2">
+                            <textarea
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              className="w-full p-2 text-sm rounded-md border border-gray-200 resize-none"
+                              style={{ minHeight: '50px' }}
+                            />
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => handleSaveEdit(checkin.id)}
+                                className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded-full text-xs transition-colors"
+                              >
+                                <Check size={10} />
+                              </button>
+                              <button
+                                onClick={() => setEditingCheckinId(null)}
+                                className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded-full text-xs transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p 
+                            className="text-sm text-gray-700 mb-2 leading-relaxed"
+                            style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {checkin.text}
+                          </p>
+                        )}
+
+                        {/* Location */}
+                        {checkin.locationAttachment && (
+                          <div className="flex items-center gap-1 mb-2">
+                            <MapPin size={11} className="text-aqua" />
+                            <span className="text-xs text-aqua truncate">{checkin.locationAttachment.name}</span>
+                          </div>
+                        )}
+
+                        {/* Tags */}
+                        {checkin.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {checkin.tags.slice(0, 3).map((tag) => (
+                              <span
+                                key={tag.id}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium text-white"
+                                style={{ backgroundColor: tag.color }}
+                              >
+                                #{tag.label}
+                              </span>
+                            ))}
+                            {checkin.tags.length > 3 && (
+                              <span className="text-xs text-gray-500 px-1">
+                                +{checkin.tags.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* Scroll Indicator */}
+                  {checkIns.length > 1 && (
+                    <div className="flex justify-center mt-2">
+                      <div className="flex gap-1">
+                        {checkIns.slice(0, Math.min(checkIns.length, 5)).map((_, index) => (
+                          <div
+                            key={index}
+                            className="w-1.5 h-1.5 rounded-full bg-gray-300"
+                            style={{ opacity: index === 0 ? 1 : 0.3 }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Interests */}
           <div className="px-4 mb-1 mt-3">
             <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
             <p className="text-text-primary text-sm mb-1 font-bold">
-              Interest Montages
+              Montages
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div 
+              className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide"
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                WebkitScrollbar: { display: 'none' },
+                maxHeight: '28px' // height of single label + padding
+              }}
+            >
+              <style jsx>{`
+                div::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
+              {/* General label always shown first */}
+              <span
+                className="bg-aqua text-white px-2 py-1 rounded-full text-xs font-medium flex-shrink-0"
+              >
+                General
+              </span>
+              {/* Map through user interests */}
               {currentUser.interests.map((interest, index) => (
                 <span
                   key={index}
-                  className="bg-aqua/20 text-aqua px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm"
+                  className="bg-aqua text-white px-2 py-1 rounded-full text-xs font-medium flex-shrink-0"
                 >
                   {interest}
                 </span>
@@ -239,57 +752,23 @@ const ProfilePage: React.FC = (): JSX.Element => {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="ios-card" style={{ padding: '20px', marginBottom: '32px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
-          Your Connections
-        </h3>
-        <div style={{ 
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '20px'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: '#06b6d4',
-              marginBottom: '4px'
-            }}>
-              12
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              Active Chats
-            </div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: '#06b6d4',
-              marginBottom: '4px'
-            }}>
-              3
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              Close Friends
-            </div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: '#06b6d4',
-              marginBottom: '4px'
-            }}>
-              8
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              This Month
-            </div>
-          </div>
-        </div>
-      </div>
+
+      {/* Hidden File Inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFileUpload}
+      />
+      <input
+        ref={mediaInputRef}
+        type="file"
+        multiple
+        accept="image/*,video/*"
+        style={{ display: 'none' }}
+        onChange={handleMediaUpload}
+      />
 
       {/* Profile Detail Modal for editing */}
       {showProfileModal && (
@@ -298,6 +777,261 @@ const ProfilePage: React.FC = (): JSX.Element => {
           onClose={handleCloseProfileModal}
         />
       )}
+
+      {/* New Check-in Modal */}
+      <AnimatePresence>
+        {showNewCheckinModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-50"
+            onClick={() => setShowNewCheckinModal(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="w-full max-w-md bg-white rounded-t-3xl p-6 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Share Your Thoughts</h3>
+                <button
+                  onClick={() => setShowNewCheckinModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+
+              {/* Text Input */}
+              <div className="mb-4">
+                <textarea
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  placeholder="What's happening?"
+                  className="w-full p-3 text-sm rounded-lg border border-gray-200 resize-none focus:outline-none focus:border-aqua transition-colors"
+                  style={{ minHeight: '80px' }}
+                  autoFocus
+                />
+              </div>
+
+              {/* Attachment Buttons */}
+              <div className="flex gap-2 mb-4 flex-wrap">
+                <button
+                  onClick={() => mediaInputRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                >
+                  <Camera size={14} />
+                  Media
+                </button>
+
+                <button
+                  onClick={isRecording ? handleStopRecording : handleStartRecording}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 ${
+                    isRecording 
+                      ? 'bg-red-500 hover:bg-red-600 text-white' 
+                      : 'bg-aqua hover:bg-aqua-dark text-white'
+                  }`}
+                >
+                  <Mic size={14} />
+                  {isRecording ? `Recording ${recordingDuration}s` : 'Voice'}
+                </button>
+
+                <button
+                  onClick={handleAddLocation}
+                  className="flex items-center gap-2 px-3 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                >
+                  <MapPin size={14} />
+                  Location
+                </button>
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                >
+                  <Paperclip size={14} />
+                  Files
+                </button>
+              </div>
+
+              {/* Attachments Preview */}
+              {mediaAttachments.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex gap-2 flex-wrap">
+                    {mediaAttachments.map((media) => (
+                      <div key={media.id} className="relative">
+                        <img
+                          src={media.url}
+                          alt={media.name}
+                          className="w-16 h-16 object-cover rounded-lg"
+                        />
+                        <button
+                          onClick={() => handleRemoveMedia(media.id)}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
+                        >
+                          <X size={10} color="white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {fileAttachments.length > 0 && (
+                <div className="mb-4">
+                  {fileAttachments.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center justify-between p-2 bg-gray-50 rounded-lg mb-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Paperclip size={14} className="text-aqua" />
+                        <div>
+                          <div className="text-sm font-medium">{file.name}</div>
+                          <div className="text-xs text-gray-500">{file.size}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveFile(file.id)}
+                        className="w-5 h-5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-full flex items-center justify-center transition-colors"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {voiceNote && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between p-3 bg-aqua/10 rounded-lg border border-aqua/30">
+                    <div className="flex items-center gap-2">
+                      <Mic size={14} className="text-aqua" />
+                      <div>
+                        <div className="text-sm font-medium text-aqua">Voice Note</div>
+                        <div className="text-xs text-gray-500">{voiceNote.duration}s</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleRemoveVoiceNote}
+                      className="w-5 h-5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-full flex items-center justify-center transition-colors"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {locationAttachment && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between p-3 bg-aqua/10 rounded-lg border border-aqua/30">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={14} className="text-aqua" />
+                      <div>
+                        <div className="text-sm font-medium text-aqua">{locationAttachment.name}</div>
+                        <div className="text-xs text-gray-500">Location attached</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleRemoveLocation}
+                      className="w-5 h-5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-full flex items-center justify-center transition-colors"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tags Section */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Hash size={16} className="text-aqua" />
+                  <span className="text-sm font-medium text-gray-700">Tags</span>
+                </div>
+                
+                {manualTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {manualTags.map((tag) => (
+                      <motion.span
+                        key={tag.id}
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-white"
+                        style={{ backgroundColor: tag.color }}
+                      >
+                        #{tag.label}
+                        <button
+                          onClick={() => handleRemoveManualTag(tag.id)}
+                          className="ml-1 hover:bg-white/20 rounded-full w-3 h-3 flex items-center justify-center"
+                        >
+                          <X size={8} />
+                        </button>
+                      </motion.span>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="relative">
+                  <input
+                    ref={tagInputRef}
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => {
+                      setTagInput(e.target.value);
+                      setShowTagSuggestions(e.target.value.length > 0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && tagInput.trim()) {
+                        e.preventDefault();
+                        handleAddTag(tagInput.trim());
+                      }
+                      if (e.key === 'Escape') {
+                        setShowTagSuggestions(false);
+                      }
+                    }}
+                    placeholder="Add tags... (press Enter)"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:border-aqua transition-colors"
+                  />
+                  
+                  {showTagSuggestions && getFilteredTagSuggestions().length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-32 overflow-y-auto"
+                    >
+                      {getFilteredTagSuggestions().map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          onClick={() => handleAddTag(suggestion)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors"
+                        >
+                          #{suggestion}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                onClick={handlePost}
+                disabled={!(searchText.trim() || hasAttachments)}
+                className={`w-full py-3 rounded-full font-medium transition-all duration-200 ${
+                  (searchText.trim() || hasAttachments)
+                    ? 'bg-aqua hover:bg-aqua-dark text-white hover:scale-[1.02]'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Share Thought
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -24,9 +24,9 @@ const TabBar: React.FC = (): JSX.Element => {
       label: 'Chats'
     },
     {
-      path: '/checkin',
-      icon: <CheckCircle size={24} />,
-      label: 'Check-in'
+      path: '/profile',
+      icon: <User size={24} />,
+      label: 'Profile'
     },
     {
       path: '/opportunities',
@@ -34,9 +34,9 @@ const TabBar: React.FC = (): JSX.Element => {
       label: 'Opportunities'
     },
     {
-      path: '/profile',
-      icon: <User size={24} />,
-      label: 'Profile'
+      path: '/checkin',
+      icon: <CheckCircle size={24} />,
+      label: 'Check-in'
     }
   ];
 
