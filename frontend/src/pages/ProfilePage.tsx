@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { FaInstagram, FaTwitter, FaLinkedin } from 'react-icons/fa';
 import { currentUser } from '../data/mockData';
 import ProfileDetailModal from '../components/ProfileDetailModal';
+import InstagramWidget from '../components/InstagramWidget';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Import types for the share thoughts functionality
@@ -255,7 +256,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
     setManualTags(prev => prev.filter(tag => tag.id !== tagId));
   };
 
-  const getTagColor = (label: string): string => {
+  const getTagColor = (_label: string): string => {
     // Use consistent aqua brand colors from design system
     return '#14b8a6'; // Primary aqua color from design system
   };
@@ -506,13 +507,13 @@ const ProfilePage: React.FC = (): JSX.Element => {
             </div>
           </div>
 
-          {/* Share Your Thoughts & Check-ins */}
+          {/* Check-In & Check-ins */}
           <div className="px-4 mb-4 mt-4">
             <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
             
             {/* Section Header with Add Button */}
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-text-primary">Share Your Thoughts</h3>
+              <h3 className="text-sm font-bold text-text-primary">Check-In</h3>
               <button
                 onClick={() => setShowNewCheckinModal(true)}
                 className="flex items-center justify-center w-8 h-8 bg-aqua hover:bg-aqua-dark text-white rounded-full transition-all duration-200 hover:scale-105"
@@ -698,12 +699,21 @@ const ProfilePage: React.FC = (): JSX.Element => {
               {currentUser.interests.map((interest, index) => (
                 <span
                   key={index}
-                  className="bg-aqua text-white px-2 py-1 rounded-full text-xs font-medium flex-shrink-0"
+                  className="bg-gray-100 text-gray-900 border border-gray-200 px-2 py-1 rounded-full text-xs font-medium flex-shrink-0"
                 >
                   {interest}
                 </span>
               ))}
             </div>
+          </div>
+
+          {/* Instagram Widget */}
+          <div className="px-4 mb-4 mt-4">
+            <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
+            <p className="text-text-primary text-sm mb-3 font-bold">
+              Latest from Instagram
+            </p>
+            <InstagramWidget />
           </div>
 
           {/* Photos - scrollable, similar to ProfileDetailModal */}
@@ -777,7 +787,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
             >
               {/* Modal Header */}
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Share Your Thoughts</h3>
+                <h3 className="text-lg font-bold text-gray-900">Check-In</h3>
                 <button
                   onClick={() => setShowNewCheckinModal(false)}
                   className="p-2 hover:bg-gray-100 rounded-full transition-colors"
