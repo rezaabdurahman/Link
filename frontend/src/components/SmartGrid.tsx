@@ -3,7 +3,7 @@ import { User } from '../types';
 import { 
   UserWithLikelihood, 
   GridChunk, 
-  getGridPositions,
+  // getGridPositions,
   logGridChunks 
 } from '../services/clickLikelihoodClient';
 

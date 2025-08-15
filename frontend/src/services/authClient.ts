@@ -80,7 +80,7 @@ export type ApiError =
   | {
       type: 'AUTHENTICATION_ERROR';
       message: string;
-      code: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'EMAIL_NOT_VERIFIED';
+      code: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'EMAIL_NOT_VERIFIED' | 'TOKEN_EXPIRED' | 'INVALID_TOKEN';
     }
   | {
       type: 'AUTHORIZATION_ERROR';
@@ -90,7 +90,17 @@ export type ApiError =
   | {
       type: 'CONFLICT_ERROR';
       message: string;
-      code: 'EMAIL_ALREADY_EXISTS' | 'USERNAME_TAKEN';
+      code: 'EMAIL_ALREADY_EXISTS' | 'USERNAME_TAKEN' | 'BLOCK_EXISTS';
+    }
+  | {
+      type: 'NOT_FOUND_ERROR';
+      message: string;
+      code: 'USER_NOT_FOUND' | 'BLOCK_NOT_FOUND';
+    }
+  | {
+      type: 'BUSINESS_LOGIC_ERROR';
+      message: string;
+      code: 'CANNOT_BLOCK_SELF' | 'USER_BLOCKED';
     }
   | {
       type: 'RATE_LIMIT_ERROR';
@@ -101,7 +111,7 @@ export type ApiError =
   | {
       type: 'SERVER_ERROR';
       message: string;
-      code: 'INTERNAL_SERVER_ERROR' | 'SERVICE_UNAVAILABLE' | 'DATABASE_ERROR';
+      code: 'INTERNAL_SERVER_ERROR' | 'SERVICE_UNAVAILABLE' | 'DATABASE_ERROR' | 'INTERNAL_ERROR';
     }
   | {
       type: 'NETWORK_ERROR';

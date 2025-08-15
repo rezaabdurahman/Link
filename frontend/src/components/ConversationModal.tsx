@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Send, Bot, Clock, MapPin, Bookmark, Check, X as XIcon } from 'lucide-react';
 import { Message, Chat, User } from '../types';
-import { useFriendRequests } from '../hooks/useFriendRequests';
+// import { useFriendRequests } from '../hooks/useFriendRequests';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { 
   getConversationMessages, 
@@ -54,8 +54,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const { user: currentUser, token } = useAuth();
   
   // Use friendship hook to get real-time friendship status
-  const { getFriendshipStatus } = useFriendRequests();
-  const friendshipStatus = chat?.participantId ? getFriendshipStatus(chat.participantId).status : 'none';
+  // const { getFriendshipStatus } = useFriendRequests();
+  // const friendshipStatus = chat?.participantId ? getFriendshipStatus(chat.participantId).status : 'none';
   
   // Determine if users are friends based on real friendship status
   // const areFriends = friendshipStatus === 'friends';

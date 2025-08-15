@@ -157,6 +157,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   }, [activeFilters.distance, activeFilters.interests, hasSearched, performSearch]);
 
   // Determine which users to display: search results if searched, otherwise nearby users with basic filtering
+
   const baseDisplayUsers = hasSearched ? searchResults : nearbyUsers
     .filter(user =>
       !hiddenUserIds.has(user.id) && // Exclude hidden users

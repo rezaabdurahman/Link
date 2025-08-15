@@ -234,6 +234,14 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
               email_verified: true,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+              interests: [],
+              social_links: [],
+              additional_photos: [],
+              privacy_settings: {
+                show_age: true,
+                show_location: false,
+                show_mutual_friends: true
+              }
             };
 
             dispatch({
@@ -282,6 +290,14 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
                 email_verified: userResponse.email_verified,
                 created_at: userResponse.created_at,
                 updated_at: userResponse.updated_at,
+                interests: (userResponse as any).interests || [],
+                social_links: (userResponse as any).social_links || [],
+                additional_photos: (userResponse as any).additional_photos || [],
+                privacy_settings: (userResponse as any).privacy_settings || {
+                  show_age: true,
+                  show_location: false,
+                  show_mutual_friends: true
+                }
               };
 
               dispatch({

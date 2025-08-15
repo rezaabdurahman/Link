@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   FaInstagram, 
-  FaTwitter, 
+  // FaTwitter, 
   FaFacebook, 
   FaSpotify, 
   FaLinkedin, 

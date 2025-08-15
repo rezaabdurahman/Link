@@ -25,19 +25,17 @@ const ViewTransition: React.FC<ViewTransitionProps> = ({
     },
     animate: {
       opacity: 1,
-      transition: {
-        duration: 0.25,
-        ease: [0.25, 0.1, 0.25, 1], // Smooth easing for natural fade
-      },
     },
     exit: {
       opacity: 0,
-      transition: {
-        duration: 0.2,
-        ease: [0.4, 0.0, 1, 1], // Slightly faster fade out
-      },
     },
   };
+
+  // Transition settings applied at component level
+  // const transition = {
+  //   duration: 0.2,
+  //   ease: "easeInOut"
+  // };
 
   if (!animate) {
     // Fallback for browsers without JS animation support

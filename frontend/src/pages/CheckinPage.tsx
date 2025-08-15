@@ -124,7 +124,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
 
   // Composer state
   const [searchText, setSearchText] = useState<string>('');
-  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  // const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
   const [mediaAttachments, setMediaAttachments] = useState<MediaAttachment[]>([]);
   const [fileAttachments, setFileAttachments] = useState<FileAttachment[]>([]);
   const [voiceNote, setVoiceNote] = useState<VoiceNote | null>(null);
@@ -347,7 +347,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
     setVoiceNote(null);
     setLocationAttachment(null);
     setManualTags([]);
-    setIsSearchFocused(false);
+    // setIsSearchFocused(false);
     // setIsPosting(false);
   };
 
@@ -491,8 +491,8 @@ const CheckinPage: React.FC = (): JSX.Element => {
               <textarea
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
+                // onFocus={() => setIsSearchFocused(true)}
+                // onBlur={() => setIsSearchFocused(false)}
                 placeholder="What's happening?"
                 style={{
                   flex: '1',

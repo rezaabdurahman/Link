@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { 
-  Edit, Settings, Send, Camera, MapPin, Hash, Mic, Paperclip, X, Plus, Clock, Edit3, Trash2, Share, Loader2, Check
+  Edit, Settings, /* Send, */ Camera, MapPin, Hash, Mic, Paperclip, X, Plus, Clock, Edit3, Trash2, Share, /* Loader2, */ Check
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FaInstagram, FaTwitter, FaLinkedin } from 'react-icons/fa';
@@ -116,7 +116,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
   
   // New check-in form state (for modal)
   const [searchText, setSearchText] = useState<string>('');
-  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  // const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
   const [mediaAttachments, setMediaAttachments] = useState<MediaAttachment[]>([]);
   const [fileAttachments, setFileAttachments] = useState<FileAttachment[]>([]);
   const [voiceNote, setVoiceNote] = useState<VoiceNote | null>(null);
@@ -256,15 +256,8 @@ const ProfilePage: React.FC = (): JSX.Element => {
   };
 
   const getTagColor = (label: string): string => {
-    const colors = [
-      '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
-      '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
-    ];
-    let hash = 0;
-    for (let i = 0; i < label.length; i++) {
-      hash = label.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
+    // Use consistent aqua brand colors from design system
+    return '#14b8a6'; // Primary aqua color from design system
   };
 
   const getFilteredTagSuggestions = () => {
@@ -300,7 +293,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
     setVoiceNote(null);
     setLocationAttachment(null);
     setManualTags([]);
-    setIsSearchFocused(false);
+    // setIsSearchFocused(false);
     setShowNewCheckinModal(false);
   };
 
@@ -549,15 +542,9 @@ const ProfilePage: React.FC = (): JSX.Element => {
                     className="flex gap-3 overflow-x-auto scrollbar-hide pb-2"
                     style={{
                       scrollbarWidth: 'none',
-                      msOverflowStyle: 'none',
-                      WebkitScrollbar: { display: 'none' }
+                      msOverflowStyle: 'none'
                     }}
                   >
-                    <style jsx>{`
-                      div::-webkit-scrollbar {
-                        display: none;
-                      }
-                    `}</style>
                     
                     {checkIns.map((checkin, index) => (
                       <motion.div
@@ -652,8 +639,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
                             {checkin.tags.slice(0, 3).map((tag) => (
                               <span
                                 key={tag.id}
-                                className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium text-white"
-                                style={{ backgroundColor: tag.color }}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-aqua text-white"
                               >
                                 #{tag.label}
                               </span>
@@ -699,15 +685,9 @@ const ProfilePage: React.FC = (): JSX.Element => {
               style={{
                 scrollbarWidth: 'none',
                 msOverflowStyle: 'none',
-                WebkitScrollbar: { display: 'none' },
                 maxHeight: '28px' // height of single label + padding
               }}
             >
-              <style jsx>{`
-                div::-webkit-scrollbar {
-                  display: none;
-                }
-              `}</style>
               {/* General label always shown first */}
               <span
                 className="bg-aqua text-white px-2 py-1 rounded-full text-xs font-medium flex-shrink-0"
@@ -959,8 +939,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
                         key={tag.id}
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-white"
-                        style={{ backgroundColor: tag.color }}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-aqua text-white"
                       >
                         #{tag.label}
                         <button

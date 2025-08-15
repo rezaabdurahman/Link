@@ -3,7 +3,8 @@ import { BroadcastResponse } from '../services/broadcastClient';
 import { AvailabilityResponse } from '../services/availabilityClient';
 import {
   OnboardingStatusResponse,
-  OnboardingStatusType
+  OnboardingStatusType,
+  OnboardingStepType
 } from '../services/onboardingClient';
 import {
   ConversationsResponse,
@@ -254,7 +255,7 @@ export const broadcastHandlers = [
 // Helper function to convert UI Chat to API Conversation
 const convertChatToConversation = (chat: typeof chats[0]): Conversation => {
   // Find the participant user from nearbyUsers
-  const participant = nearbyUsers.find(user => user.id === chat.participantId);
+  // const participant = nearbyUsers.find(user => user.id === chat.participantId);
   
   const conversationParticipant: ConversationParticipant = {
     id: chat.participantId,
@@ -1163,11 +1164,11 @@ export const onboardingHandlers = [
       const body = await request.json() as { initial_step?: string };
       const initialStep = body.initial_step || 'profile_picture';
       
-      const onboardingStatus = {
+      const onboardingStatus: OnboardingStatusResponse = {
         user_id: userId,
         status: 'in_progress' as OnboardingStatusType,
-        current_step: initialStep,
-        completed_steps: [],
+        current_step: initialStep as OnboardingStepType,
+        completed_steps: [] as OnboardingStepType[],
         created_at: now(),
         updated_at: now(),
       };
@@ -1254,7 +1255,7 @@ export const onboardingHandlers = [
       const currentIndex = stepOrder.indexOf(body.step);
       const nextStep = currentIndex < stepOrder.length - 1 ? stepOrder[currentIndex + 1] : null;
       
-      onboardingStatus.current_step = nextStep;
+      onboardingStatus.current_step = nextStep as OnboardingStepType | undefined;
       onboardingStatus.updated_at = now();
       
       // If this is the last step, mark as completed
@@ -1450,7 +1451,7 @@ export const onboardingHandlers = [
       const currentIndex = stepOrder.indexOf(body.step);
       const nextStep = currentIndex < stepOrder.length - 1 ? stepOrder[currentIndex + 1] : null;
       
-      onboardingStatus.current_step = nextStep;
+      onboardingStatus.current_step = nextStep as OnboardingStepType | undefined;
       onboardingStatus.updated_at = now();
       
       // If this was the last step, mark as completed
