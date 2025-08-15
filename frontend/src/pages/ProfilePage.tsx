@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { FaInstagram, FaTwitter, FaLinkedin } from 'react-icons/fa';
 import { currentUser } from '../data/mockData';
 import ProfileDetailModal from '../components/ProfileDetailModal';
-import { useAuth } from '../contexts/AuthContext';
 
 const ProfilePage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
@@ -239,57 +238,6 @@ const ProfilePage: React.FC = (): JSX.Element => {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="ios-card" style={{ padding: '20px', marginBottom: '32px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
-          Your Connections
-        </h3>
-        <div style={{ 
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '20px'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: '#06b6d4',
-              marginBottom: '4px'
-            }}>
-              12
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              Active Chats
-            </div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: '#06b6d4',
-              marginBottom: '4px'
-            }}>
-              3
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              Close Friends
-            </div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: '700', 
-              color: '#06b6d4',
-              marginBottom: '4px'
-            }}>
-              8
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              This Month
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Profile Detail Modal for editing */}
       {showProfileModal && (
