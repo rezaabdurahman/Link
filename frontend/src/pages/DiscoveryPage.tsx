@@ -542,6 +542,16 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       {/* Scrollable Content Area */}
       <div className="pt-48 pb-4 overflow-y-auto">
         <div className="px-4">
+          {/* View Mode Description */}
+          {isAvailable && displayUsers.length > 0 && !isSearching && !searchError && (
+            <div className={`${showFeedAnimation ? 'animate-fade-in' : 'opacity-0'} transition-opacity duration-300 mb-4`}>
+              <p className="text-xs text-gray-500 text-center" aria-live="polite">
+                {isGridView
+                  ? 'Grid mode: Showing users by distance (up to 2mi.)'
+                  : 'Feed mode: Showing users by similarity (AI)'}
+              </p>
+            </div>
+          )}
         {/* Users Display - Feed or Grid View */}
         {isAvailable ? (
           <div className={isGridView ? 'max-w-sm mx-auto px-4' : 'flex flex-col'}>

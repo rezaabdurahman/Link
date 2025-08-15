@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive design system documentation with onboarding examples
 - Environment parity support across development, staging, and production
 - Enhanced accessibility audit tooling and WCAG AA compliance tracking
+- View mode description in Discovery page showing current sorting criteria (Grid: distance, Feed: AI similarity)
 
 ### Changed
 - **BREAKING**: Search API migration from legacy endpoints to unified `/api/v1/search`
