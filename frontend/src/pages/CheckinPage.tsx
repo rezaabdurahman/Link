@@ -1096,6 +1096,13 @@ const CheckinPage: React.FC = (): JSX.Element => {
                   <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <span className="text-xs font-semibold text-aqua">3</span>
                   </div>
+                  <p><strong className="text-text-primary">Interest montage:</strong> The tags from your check-ins automatically update your profile's interest montage, showing friends what you're genuinely passionate about.</p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">4</span>
+                  </div>
                   <p><strong className="text-text-primary">Smart opportunities:</strong> Your check-ins help us suggest relevant social opportunities, events, and connections based on your interests and activities.</p>
                 </div>
               </div>
