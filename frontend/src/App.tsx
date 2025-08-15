@@ -5,6 +5,7 @@ import ChatPage from './pages/ChatPage';
 import CheckinPage from './pages/CheckinPage';
 import OpportunitiesPage from './pages/OpportunitiesPage';
 import ProfilePage from './pages/ProfilePage';
+import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import FriendRequestsPage from './pages/FriendRequestsPage';
@@ -51,6 +52,7 @@ const App: React.FC = (): JSX.Element => {
                 <Route path="checkin" element={<CheckinPage />} />
                 <Route path="opportunities" element={<OpportunitiesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
+                <Route path="settings" element={<SettingsPage />} />
               </Route>
               {/* Friend Requests - separate layout */}
               <Route path="friend-requests" element={<FriendRequestsPage />} />
