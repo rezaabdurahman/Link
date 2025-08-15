@@ -116,3 +116,6 @@ env/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Temporary/duplicate directories
+Link-*/
