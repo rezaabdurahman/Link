@@ -6,3 +6,4 @@ export { server } from './server';
 
 // Handlers (for custom usage)
 export { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers, friendHandlers, userHandlers } from './handlers';
+export { montageHandlers } from './montageHandlers';

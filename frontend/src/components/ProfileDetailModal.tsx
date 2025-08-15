@@ -8,6 +8,8 @@ import IconActionButton from './IconActionButton';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { getUserProfile, UserProfileResponse, getProfileErrorMessage, blockUser, getBlockingErrorMessage } from '../services/userClient';
 import ConfirmationModal from './ConfirmationModal';
+import { useMontage } from '../hooks/useMontage';
+import MontageCarousel from './MontageCarousel';
 
 interface ProfileDetailModalProps {
   userId: string;
@@ -48,10 +50,24 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   const [showBlockConfirmation, setShowBlockConfirmation] = useState<boolean>(false);
   const [blockingLoading, setBlockingLoading] = useState<boolean>(false);
   const [blockingError, setBlockingError] = useState<string | undefined>(undefined);
+  const [selectedMontageInterest, setSelectedMontageInterest] = useState<string | undefined>(undefined);
   
   // Use the friendship hook to get real friendship status
   const { getFriendshipStatus } = useFriendRequests();
   const friendshipStatus = getFriendshipStatus(userId).status;
+  
+  // Montage hook for fetching user's montage data
+  const {
+    items: montageItems,
+    isLoading: isMontageLoading,
+    error: montageError,
+    hasMore: hasMontageMore,
+    isLoadingMore: isMontageLoadingMore,
+    loadMore: loadMoreMontage,
+  } = useMontage(userId, selectedMontageInterest, {
+    initialPageSize: 10,
+    errorRetryCount: 2,
+  });
 
   // Fetch user profile data when modal mounts or userId changes
   useEffect(() => {
@@ -116,6 +132,17 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
   const cancelBlockUser = (): void => {
     setShowBlockConfirmation(false);
     setBlockingError(undefined);
+  };
+
+  // Handle montage item click - open existing check-in detail modal
+  const handleMontageItemClick = (checkinId: string): void => {
+    // TODO: Implement check-in detail modal opening
+    console.log('Opening check-in detail for:', checkinId);
+  };
+
+  // Get top 5 interests for montage toggle pills
+  const getTopInterests = (interests: string[]): string[] => {
+    return interests.slice(0, 5);
   };
 
 
@@ -401,6 +428,54 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                   )}
                 </div>
               </div>
+
+              {/* Montage Section */}
+              {user.profileType === 'public' && (
+                <div className="px-4 mb-4">
+                  {/* Montage divider */}
+                  <div className="mb-3 border-t border-gray-300/30 w-16 mx-auto"></div>
+                  
+                  {/* Montage toggle pills */}
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <button
+                      onClick={() => setSelectedMontageInterest(undefined)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                        selectedMontageInterest === undefined
+                          ? 'bg-aqua text-white shadow-sm'
+                          : 'bg-surface-hover text-text-secondary hover:bg-aqua/10 hover:text-aqua'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {user.interests && getTopInterests(user.interests).map((interest, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setSelectedMontageInterest(interest)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                          selectedMontageInterest === interest
+                            ? 'bg-aqua text-white shadow-sm'
+                            : 'bg-surface-hover text-text-secondary hover:bg-aqua/10 hover:text-aqua'
+                        }`}
+                      >
+                        {interest}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Montage carousel */}
+                  <MontageCarousel
+                    items={montageItems}
+                    onItemClick={handleMontageItemClick}
+                    isLoading={isMontageLoading}
+                    hasError={!!montageError}
+                    errorMessage={montageError || undefined}
+                    onLoadMore={hasMontageMore ? loadMoreMontage : undefined}
+                    hasMore={hasMontageMore}
+                    isLoadingMore={isMontageLoadingMore}
+                    className="min-h-[180px]"
+                  />
+                </div>
+              )}
 
               {/* Photos - no header, scrollable, only show for public profiles */}
               {user.profileType === 'public' && additionalPhotos.length > 0 && (

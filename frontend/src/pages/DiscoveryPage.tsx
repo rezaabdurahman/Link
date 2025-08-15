@@ -836,7 +836,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       {isAvailable && (
         <button
           onClick={handleOpenCheckIn}
-          className="absolute bottom-20 right-6 w-14 h-14 bg-aqua text-white rounded-full shadow-lg hover:bg-aqua/90 hover:shadow-xl transition-all duration-200 flex items-center justify-center z-20 group"
+          className="fixed bottom-20 right-6 w-14 h-14 bg-aqua text-white rounded-full shadow-lg hover:bg-aqua/90 hover:shadow-xl transition-all duration-200 flex items-center justify-center z-20 group"
           title="Check in"
         >
           <Plus size={24} className="group-hover:scale-110 transition-transform duration-200" />

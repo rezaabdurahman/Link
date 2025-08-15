@@ -5,3 +5,4 @@ export * from './searchClient';
 export * from './userClient';
 export * from './chatClient';
 export * from './aiClient';
+export * from './montageClient';

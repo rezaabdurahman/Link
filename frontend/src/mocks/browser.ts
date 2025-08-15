@@ -1,5 +1,6 @@
 import { setupWorker } from 'msw/browser';
 import { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers, friendHandlers, userHandlers } from './handlers';
+import { montageHandlers } from './montageHandlers';
 
 // Setup the service worker with our handlers
 export const worker = setupWorker(
@@ -9,7 +10,8 @@ export const worker = setupWorker(
   ...authHandlers,
   ...chatHandlers,
   ...friendHandlers,
-  ...userHandlers
+  ...userHandlers,
+  ...montageHandlers
 );
 
 // Start the worker in development/demo mode
@@ -68,7 +70,8 @@ export const startMockWorker = async () => {
         'Friends': '/friends/status, /friends/requests',
         'Onboarding': '/onboarding/status, /onboarding/start, /onboarding/step',
         'Availability': '/availability',
-        'Broadcasts': '/broadcasts'
+        'Broadcasts': '/broadcasts',
+        'Montage': '/users/:id/montage'
       });
       console.log('🔒 MSW: All backend calls will be mocked - no real server needed');
     } catch (error) {

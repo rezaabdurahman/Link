@@ -167,6 +167,11 @@ All environments must define the following variables:
 #### Development & Testing
 - `VITE_ENABLE_MOCKING` - Enable API mocking (true/false)
 
+#### Montage Feature (Backend)
+- `MONTAGE_BATCH_CRON` - Cron schedule for montage generation (default: "0 */6 * * *")
+- `MONTAGE_BATCH_ENABLED` - Enable/disable batch montage generation (true/false)
+- `MONTAGE_CACHE_TTL` - Cache TTL in hours (default: 24)
+
 ### Environment Setup
 
 #### For Local Development
@@ -211,6 +216,28 @@ To maintain consistency across environments:
 **Important**: Never commit sensitive data like API keys or secrets to git. Use environment variables and ensure `.env.local` and `.env.test` are in `.gitignore`.
 
 ## Features
+
+### 🎨 Montage System
+The application includes an advanced montage feature that curates user check-in content into engaging visual collections:
+
+- **AI-Powered Curation**: Automatically generates montages from user check-ins
+- **Interest-Based Filtering**: Create specialized montages for specific interests (coffee, travel, fitness, etc.)
+- **Smooth Carousel Interface**: Horizontal scrolling with snap behavior and lazy loading
+- **Accessibility First**: Full keyboard navigation and screen reader support
+- **Real-time Updates**: Infinite scroll with cursor-based pagination
+- **Rich Media Support**: Images, videos, text content with thumbnail generation
+
+#### Montage Components
+- `MontageCarousel`: Horizontal scrolling carousel with Framer Motion animations
+- `MontageCard`: Individual montage item with media thumbnails, tags, and metadata
+- `useMontage`: SWR-based hook for data fetching with caching and pagination
+
+#### API Integration
+- **GET** `/users/:id/montage` - Fetch user's montage with optional interest filtering
+- **POST** `/users/:id/montage/regenerate` - Trigger montage regeneration
+- **DELETE** `/users/:id/montage` - Delete user's montage cache
+
+*See [docs/montage.md](docs/montage.md) for comprehensive documentation*
 
 ### Friend Search in Chat
 
