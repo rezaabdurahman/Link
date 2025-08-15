@@ -482,13 +482,11 @@ const CheckinPage: React.FC = (): JSX.Element => {
           <div 
             className={`relative transition-all duration-200 mb-4`}
             style={{
-              border: isSearchFocused ? '2px solid #06b6d4' : '1px solid rgba(6, 182, 212, 0.2)',
               borderRadius: '12px',
-              background: isSearchFocused ? 'rgba(255, 255, 255, 0.95)' : 'rgba(6, 182, 212, 0.05)',
-              backdropFilter: 'blur(10px)'
+              background: '#f5f5f5'
             }}
           >
-            <div style={{ padding: '12px', display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+            <div style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <textarea
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -503,7 +501,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
                   color: '#000000',
                   fontSize: '16px',
                   resize: 'none',
-                  minHeight: '24px',
+                  minHeight: '20px',
                   maxHeight: '120px',
                   fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
                 }}
@@ -519,7 +517,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
                 style={{ width: '32px', height: '32px' }}
                 disabled={!(searchText.trim() || hasAttachments)}
               >
-                <Send size={16} className={(searchText.trim() || hasAttachments) ? 'text-white' : 'text-gray-600'} />
+                <Send size={16} className="text-white" fill="currentColor" />
               </button>
             </div>
           </div>
@@ -541,7 +539,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
               `}</style>
               <button
                 onClick={() => mediaInputRef.current?.click()}
-                className="flex items-center gap-2 px-2.5 py-1.5 bg-aqua/20 hover:bg-aqua/30 text-aqua rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 whitespace-nowrap"
+                className="flex items-center gap-2 px-2.5 py-1.5 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 whitespace-nowrap"
               >
                 <Camera size={14} />
                 Media
@@ -551,8 +549,8 @@ const CheckinPage: React.FC = (): JSX.Element => {
                 onClick={isRecording ? handleStopRecording : handleStartRecording}
                 className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 whitespace-nowrap ${
                   isRecording 
-                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400' 
-                    : 'bg-aqua/20 hover:bg-aqua/30 text-aqua'
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-aqua hover:bg-aqua-dark text-white'
                 }`}
               >
                 <Mic size={14} />
@@ -561,7 +559,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
 
               <button
                 onClick={handleAddLocation}
-                className="flex items-center gap-2 px-2.5 py-1.5 bg-aqua/20 hover:bg-aqua/30 text-aqua rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 whitespace-nowrap"
+                className="flex items-center gap-2 px-2.5 py-1.5 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 whitespace-nowrap"
               >
                 <MapPin size={14} />
                 Location
@@ -569,7 +567,7 @@ const CheckinPage: React.FC = (): JSX.Element => {
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-2.5 py-1.5 bg-aqua/20 hover:bg-aqua/30 text-aqua rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 whitespace-nowrap"
+                className="flex items-center gap-2 px-2.5 py-1.5 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 whitespace-nowrap"
               >
                 <Paperclip size={14} />
                 Files
@@ -751,7 +749,8 @@ const CheckinPage: React.FC = (): JSX.Element => {
                       }
                     }}
                     placeholder="Add tags... (press Enter)"
-                    className="w-full px-3 py-2 text-sm border border-surface-border rounded-ios bg-surface-hover focus:bg-surface-primary focus:border-aqua focus:outline-none transition-all"
+                    className="w-full px-3 py-2 text-sm rounded-ios bg-surface-hover focus:bg-surface-primary focus:outline-none transition-all"
+                    style={{ border: 'none' }}
                   />
                   
                   {/* Tag Suggestions Dropdown */}
