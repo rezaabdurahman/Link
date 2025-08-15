@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 import { FaInstagram, FaTwitter, FaLinkedin } from 'react-icons/fa';
 import { currentUser } from '../data/mockData';
 import ProfileDetailModal from '../components/ProfileDetailModal';
-import InstagramWidget from '../components/InstagramWidget';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Import types for the share thoughts functionality
@@ -54,6 +53,15 @@ interface CheckIn {
   aiSuggestions?: Tag[];
   aiSuggestionsPending?: boolean;
   timestamp: Date;
+  source?: 'manual' | 'instagram' | 'twitter' | 'other';
+  instagramData?: {
+    username: string;
+    profilePicture: string;
+    likes: number;
+    imageUrl: string;
+    caption: string;
+    hashtags: string[];
+  };
 }
 
 const COMMON_TAGS = [
@@ -63,6 +71,28 @@ const COMMON_TAGS = [
 
 // Mock check-ins data
 const generateMockCheckIns = (): CheckIn[] => [
+  {
+    id: 'checkin-instagram-1',
+    text: 'Beautiful sunset at the beach today! 🌅 Nothing beats those golden hour vibes',
+    mediaAttachments: [],
+    fileAttachments: [],
+    voiceNote: null,
+    locationAttachment: null,
+    tags: [
+      { id: 'tag-ig-1', label: 'sunset', type: 'manual', color: '#F59E0B' },
+      { id: 'tag-ig-2', label: 'beach', type: 'manual', color: '#3B82F6' }
+    ],
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+    source: 'instagram',
+    instagramData: {
+      username: 'alexthompson',
+      profilePicture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
+      likes: 247,
+      imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop',
+      caption: 'Beautiful sunset at the beach today! 🌅 Nothing beats those golden hour vibes',
+      hashtags: ['#sunset', '#beach', '#goldenhour']
+    }
+  },
   {
     id: 'checkin-1',
     text: 'Just finished an amazing workout session at the gym! Feeling energized and ready to tackle the rest of the day.',
@@ -74,7 +104,8 @@ const generateMockCheckIns = (): CheckIn[] => [
       { id: 'tag-1', label: 'workout', type: 'manual', color: '#10B981' },
       { id: 'tag-2', label: 'fitness', type: 'ai', color: '#3B82F6' }
     ],
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
+    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
+    source: 'manual'
   },
   {
     id: 'checkin-2',
@@ -300,6 +331,13 @@ const ProfilePage: React.FC = (): JSX.Element => {
 
   const hasAttachments = mediaAttachments.length > 0 || fileAttachments.length > 0 || voiceNote || locationAttachment;
 
+  // Tag editing state
+  const [editingTagsCheckinId, setEditingTagsCheckinId] = useState<string | null>(null);
+  const [editingTags, setEditingTags] = useState<Tag[]>([]);
+  const [editTagInput, setEditTagInput] = useState<string>('');
+  const [showEditTagSuggestions, setShowEditTagSuggestions] = useState<boolean>(false);
+  const [showTagInput, setShowTagInput] = useState<Record<string, boolean>>({});
+
   // Check-in management
   const handleEditCheckin = (checkinId: string) => {
     const checkin = checkIns.find(c => c.id === checkinId);
@@ -307,6 +345,50 @@ const ProfilePage: React.FC = (): JSX.Element => {
       setEditingCheckinId(checkinId);
       setEditText(checkin.text);
     }
+  };
+
+  // Tag editing functions
+  const handleEditTags = (checkinId: string) => {
+    const checkin = checkIns.find(c => c.id === checkinId);
+    if (checkin) {
+      setEditingTagsCheckinId(checkinId);
+      setEditingTags([...checkin.tags]);
+    }
+  };
+
+  const handleAddEditTag = (tagLabel: string) => {
+    const newTag: Tag = {
+      id: `manual-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      label: tagLabel.toLowerCase(),
+      type: 'manual',
+      color: getTagColor(tagLabel)
+    };
+    setEditingTags(prev => [...prev, newTag]);
+    setEditTagInput('');
+    setShowEditTagSuggestions(false);
+  };
+
+  const handleRemoveEditTag = (tagId: string) => {
+    setEditingTags(prev => prev.filter(tag => tag.id !== tagId));
+  };
+
+  const handleSaveTagsEdit = (checkinId: string) => {
+    setCheckIns(prev => prev.map(checkin => 
+      checkin.id === checkinId 
+        ? { ...checkin, tags: [...editingTags] }
+        : checkin
+    ));
+    setEditingTagsCheckinId(null);
+    setEditingTags([]);
+    setEditTagInput('');
+  };
+
+  const getFilteredEditTagSuggestions = () => {
+    if (!editTagInput.trim()) return [];
+    return COMMON_TAGS.filter(tag => 
+      tag.toLowerCase().includes(editTagInput.toLowerCase()) &&
+      !editingTags.some(existingTag => existingTag.label === tag)
+    ).slice(0, 5);
   };
 
   const handleSaveEdit = (checkinId: string) => {
@@ -524,7 +606,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
             </div>
 
             {/* Check-ins Horizontal Carousel */}
-            <div className="ios-card" style={{ padding: '12px', margin: '0' }}>
+            <div style={{ padding: '12px', margin: '0', background: 'transparent' }}>
               {checkIns.length === 0 ? (
                 <div className="text-center py-6">
                   <p className="text-text-secondary text-sm mb-2">No check-ins yet</p>
@@ -553,104 +635,426 @@ const ProfilePage: React.FC = (): JSX.Element => {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.1 }}
-                        className="bg-white/50 rounded-lg p-3 border border-white/20 flex-shrink-0"
-                        style={{ minWidth: '280px', maxWidth: '320px' }}
+                        className={`${checkin.source === 'instagram' 
+                          ? 'bg-white rounded-lg overflow-hidden'
+                          : 'bg-white/50 rounded-lg p-3'
+                        } border ${checkin.source === 'instagram' 
+                          ? 'border-white/20'
+                          : 'border-white/20'
+                        } flex-shrink-0 ios-card`}
+                        style={{
+                          minWidth: '250px', 
+                          maxWidth: '280px',
+                          maxHeight: '400px',
+                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                        }}
                       >
-                        {/* Check-in Header */}
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Clock size={11} className="text-gray-500" />
-                            <span className="text-xs text-gray-500">{formatTimeAgo(checkin.timestamp)}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleEditCheckin(checkin.id)}
-                              className="p-1 hover:bg-white/20 rounded-full transition-colors"
-                              title="Edit"
+                        {checkin.source === 'instagram' && checkin.instagramData ? (
+                          /* Instagram Post Layout - Wrapped Container */
+                          <div className="flex flex-col h-full">
+                            {/* Instagram Card with Pink Border - Now includes Tags */}
+                            <div 
+                              className="bg-white rounded-lg overflow-hidden border-2 border-transparent flex-1"
+                              style={{
+                                backgroundImage: 'linear-gradient(white, white), linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
+                                backgroundOrigin: 'border-box',
+                                backgroundClip: 'content-box, border-box'
+                              }}
                             >
-                              <Edit3 size={11} className="text-gray-500" />
-                            </button>
-                            <button
-                              onClick={() => handleShareCheckin(checkin)}
-                              className="p-1 hover:bg-white/20 rounded-full transition-colors"
-                              title="Share"
-                            >
-                              <Share size={11} className="text-gray-500" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCheckin(checkin.id)}
-                              className="p-1 hover:bg-red-500/20 rounded-full transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 size={11} className="text-red-500" />
-                            </button>
-                          </div>
-                        </div>
+                              {/* Instagram Header */}
+                              <div className="flex items-center justify-between p-3 pb-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full overflow-hidden border border-white shadow-sm">
+                                    <img
+                                      src={checkin.instagramData.profilePicture}
+                                      alt="Instagram User"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-semibold text-gray-900 text-xs">{checkin.instagramData.username}</span>
+                                    <FaInstagram size={10} className="text-pink-500" />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-gray-500">{formatTimeAgo(checkin.timestamp)}</span>
+                                </div>
+                              </div>
 
-                        {/* Check-in Content */}
-                        {editingCheckinId === checkin.id ? (
-                          <div className="mb-2">
-                            <textarea
-                              value={editText}
-                              onChange={(e) => setEditText(e.target.value)}
-                              className="w-full p-2 text-sm rounded-md border border-gray-200 resize-none"
-                              style={{ minHeight: '50px' }}
-                            />
-                            <div className="flex gap-2 mt-2">
-                              <button
-                                onClick={() => handleSaveEdit(checkin.id)}
-                                className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded-full text-xs transition-colors"
-                              >
-                                <Check size={10} />
-                              </button>
-                              <button
-                                onClick={() => setEditingCheckinId(null)}
-                                className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded-full text-xs transition-colors"
-                              >
-                                <X size={10} />
-                              </button>
+                              {/* Instagram Image */}
+                              <div className="relative mb-3">
+                                <img
+                                  src={checkin.instagramData.imageUrl}
+                                  alt="Instagram Post"
+                                  className="w-full h-48 object-cover"
+                                />
+                                <div className="absolute top-2 left-2">
+                                  <div className="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                                    <div className="w-1 h-1 bg-aqua rounded-full animate-pulse"></div>
+                                    <span>Reposted</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Instagram Content */}
+                              <div className="px-3 pb-2">
+                                {/* Likes */}
+                                <div className="mb-2">
+                                  <span className="font-semibold text-xs text-gray-900">{checkin.instagramData.likes} likes</span>
+                                </div>
+
+                                {/* Caption */}
+                                <div className="text-xs text-gray-700 leading-relaxed mb-2">
+                                  <span className="font-semibold text-gray-900">{checkin.instagramData.username}</span>{' '}
+                                  <span>{checkin.instagramData.caption}</span>
+                                  {checkin.instagramData.hashtags.length > 0 && (
+                                    <div className="text-gray-500 text-xs mt-1">
+                                      {checkin.instagramData.hashtags.join(' ')}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* User-Generated Tags Inside Pink Border */}
+                              <div className="px-3 pb-3 border-t border-gray-200/30">
+                                <div className="flex items-center justify-between mb-1 pt-2">
+                                  <span className="text-xs font-medium text-gray-600">Your Tags</span>
+                                </div>
+                              
+                              {editingTagsCheckinId === checkin.id ? (
+                                /* Tag Editing Mode */
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap gap-1 items-center">
+                                    {editingTags.map((tag) => (
+                                      <motion.span
+                                        key={tag.id}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-aqua text-white"
+                                      >
+                                        #{tag.label}
+                                        <button
+                                          onClick={() => handleRemoveEditTag(tag.id)}
+                                          className="hover:bg-white/20 rounded-full w-3 h-3 flex items-center justify-center"
+                                        >
+                                          <X size={8} />
+                                        </button>
+                                      </motion.span>
+                                    ))}
+                                    
+                                    {showTagInput[checkin.id] ? (
+                                      <div className="relative">
+                                        <input
+                                          type="text"
+                                          value={editTagInput}
+                                          onChange={(e) => {
+                                            setEditTagInput(e.target.value);
+                                            setShowEditTagSuggestions(e.target.value.length > 0);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && editTagInput.trim()) {
+                                              e.preventDefault();
+                                              handleAddEditTag(editTagInput.trim());
+                                            }
+                                            if (e.key === 'Escape') {
+                                              setShowTagInput(prev => ({ ...prev, [checkin.id]: false }));
+                                              setShowEditTagSuggestions(false);
+                                            }
+                                          }}
+                                          onBlur={(e) => {
+                                            // Delay closing to allow clicking on suggestions
+                                            setTimeout(() => {
+                                              setShowTagInput(prev => ({ ...prev, [checkin.id]: false }));
+                                              setShowEditTagSuggestions(false);
+                                            }, 150);
+                                          }}
+                                          placeholder="Add tag..."
+                                          className="w-20 px-2 py-1 text-xs rounded border border-gray-200 focus:outline-none focus:border-aqua"
+                                          autoFocus
+                                        />
+                                        
+                                        {showEditTagSuggestions && getFilteredEditTagSuggestions().length > 0 && (
+                                          <motion.div
+                                            initial={{ opacity: 0, y: -5 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg z-20 max-h-24 overflow-y-auto min-w-24"
+                                          >
+                                            {getFilteredEditTagSuggestions().map((suggestion) => (
+                                              <button
+                                                key={suggestion}
+                                                onClick={() => handleAddEditTag(suggestion)}
+                                                className="w-full text-left px-2 py-1 text-xs hover:bg-gray-50 transition-colors whitespace-nowrap"
+                                              >
+                                                #{suggestion}
+                                              </button>
+                                            ))}
+                                          </motion.div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => setShowTagInput(prev => ({ ...prev, [checkin.id]: true }))}
+                                        className="w-4 h-4 rounded-full bg-gray-300 hover:bg-gray-400 flex items-center justify-center transition-colors"
+                                        title="Add tag"
+                                      >
+                                        <Plus size={10} className="text-gray-600" />
+                                      </button>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex gap-1 justify-center mt-2">
+                                    <button
+                                      onClick={() => handleSaveTagsEdit(checkin.id)}
+                                      className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-full text-xs font-medium transition-colors flex items-center gap-1"
+                                    >
+                                      <Check size={10} /> Save
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setEditingTagsCheckinId(null);
+                                        setShowTagInput(prev => ({ ...prev, [checkin.id]: false }));
+                                      }}
+                                      className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded-full text-xs font-medium transition-colors flex items-center gap-1"
+                                    >
+                                      <X size={10} /> Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                /* Tag Display Mode */
+                                <div 
+                                  className="flex flex-wrap gap-1 items-center cursor-pointer"
+                                  onClick={() => handleEditTags(checkin.id)}
+                                  title="Click to edit tags"
+                                >
+                                  {checkin.tags.slice(0, 3).map((tag) => (
+                                    <span
+                                      key={tag.id}
+                                      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-aqua text-white"
+                                    >
+                                      #{tag.label}
+                                    </span>
+                                  ))}
+                                  {checkin.tags.length > 3 && (
+                                    <span className="text-xs text-gray-500 px-1">
+                                      +{checkin.tags.length - 3}
+                                    </span>
+                                  )}
+                                  {checkin.tags.length === 0 && (
+                                    <span className="text-xs text-gray-400 italic">
+                                      Click to add tags
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              </div>
                             </div>
                           </div>
                         ) : (
-                          <p 
-                            className="text-sm text-gray-700 mb-2 leading-relaxed"
-                            style={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            {checkin.text}
-                          </p>
-                        )}
+                          /* Regular Check-in Layout */
+                          <>
+                            {/* Check-in Header */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Clock size={11} className="text-gray-500" />
+                                <span className="text-xs text-gray-500">{formatTimeAgo(checkin.timestamp)}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleEditCheckin(checkin.id)}
+                                  className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                                  title="Edit"
+                                >
+                                  <Edit3 size={11} className="text-gray-500" />
+                                </button>
+                                <button
+                                  onClick={() => handleShareCheckin(checkin)}
+                                  className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                                  title="Share"
+                                >
+                                  <Share size={11} className="text-gray-500" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCheckin(checkin.id)}
+                                  className="p-1 hover:bg-red-500/20 rounded-full transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={11} className="text-red-500" />
+                                </button>
+                              </div>
+                            </div>
 
-                        {/* Location */}
-                        {checkin.locationAttachment && (
-                          <div className="flex items-center gap-1 mb-2">
-                            <MapPin size={11} className="text-aqua" />
-                            <span className="text-xs text-aqua truncate">{checkin.locationAttachment.name}</span>
-                          </div>
-                        )}
-
-                        {/* Tags */}
-                        {checkin.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {checkin.tags.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag.id}
-                                className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-aqua text-white"
+                            {/* Check-in Content */}
+                            {editingCheckinId === checkin.id ? (
+                              <div className="mb-2">
+                                <textarea
+                                  value={editText}
+                                  onChange={(e) => setEditText(e.target.value)}
+                                  className="w-full p-2 text-sm rounded-md border border-gray-200 resize-none"
+                                  style={{ minHeight: '50px' }}
+                                />
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    onClick={() => handleSaveEdit(checkin.id)}
+                                    className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded-full text-xs transition-colors"
+                                  >
+                                    <Check size={10} />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCheckinId(null)}
+                                    className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded-full text-xs transition-colors"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p 
+                                className="text-sm text-gray-700 mb-2 leading-relaxed"
+                                style={{
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 3,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden'
+                                }}
                               >
-                                #{tag.label}
-                              </span>
-                            ))}
-                            {checkin.tags.length > 3 && (
-                              <span className="text-xs text-gray-500 px-1">
-                                +{checkin.tags.length - 3}
-                              </span>
+                                {checkin.text}
+                              </p>
                             )}
-                          </div>
+
+                            {/* Location */}
+                            {checkin.locationAttachment && (
+                              <div className="flex items-center gap-1 mb-2">
+                                <MapPin size={11} className="text-aqua" />
+                                <span className="text-xs text-aqua truncate">{checkin.locationAttachment.name}</span>
+                              </div>
+                            )}
+
+                            {/* Tags - Display or Edit Mode */}
+                            {editingTagsCheckinId === checkin.id ? (
+                              /* Tag Editing Mode for Regular Check-ins */
+                              <div className="space-y-2 mb-2">
+                                <div className="flex flex-wrap gap-1 items-center">
+                                  {editingTags.map((tag) => (
+                                    <motion.span
+                                      key={tag.id}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-aqua text-white"
+                                    >
+                                      #{tag.label}
+                                      <button
+                                        onClick={() => handleRemoveEditTag(tag.id)}
+                                        className="hover:bg-white/20 rounded-full w-3 h-3 flex items-center justify-center"
+                                      >
+                                        <X size={8} />
+                                      </button>
+                                    </motion.span>
+                                  ))}
+                                  
+                                  {showTagInput[checkin.id] ? (
+                                    <div className="relative">
+                                      <input
+                                        type="text"
+                                        value={editTagInput}
+                                        onChange={(e) => {
+                                          setEditTagInput(e.target.value);
+                                          setShowEditTagSuggestions(e.target.value.length > 0);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && editTagInput.trim()) {
+                                            e.preventDefault();
+                                            handleAddEditTag(editTagInput.trim());
+                                          }
+                                          if (e.key === 'Escape') {
+                                            setShowTagInput(prev => ({ ...prev, [checkin.id]: false }));
+                                            setShowEditTagSuggestions(false);
+                                          }
+                                        }}
+                                        onBlur={(e) => {
+                                          // Delay closing to allow clicking on suggestions
+                                          setTimeout(() => {
+                                            setShowTagInput(prev => ({ ...prev, [checkin.id]: false }));
+                                            setShowEditTagSuggestions(false);
+                                          }, 150);
+                                        }}
+                                        placeholder="Add tag..."
+                                        className="w-20 px-2 py-1 text-xs rounded border border-gray-200 focus:outline-none focus:border-aqua"
+                                        autoFocus
+                                      />
+                                      
+                                      {showEditTagSuggestions && getFilteredEditTagSuggestions().length > 0 && (
+                                        <motion.div
+                                          initial={{ opacity: 0, y: -5 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg z-20 max-h-24 overflow-y-auto min-w-24"
+                                        >
+                                          {getFilteredEditTagSuggestions().map((suggestion) => (
+                                            <button
+                                              key={suggestion}
+                                              onClick={() => handleAddEditTag(suggestion)}
+                                              className="w-full text-left px-2 py-1 text-xs hover:bg-gray-50 transition-colors whitespace-nowrap"
+                                            >
+                                              #{suggestion}
+                                            </button>
+                                          ))}
+                                        </motion.div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setShowTagInput(prev => ({ ...prev, [checkin.id]: true }))}
+                                      className="w-5 h-5 rounded-full bg-gray-300 hover:bg-gray-400 flex items-center justify-center transition-colors"
+                                      title="Add tag"
+                                    >
+                                      <Plus size={12} className="text-gray-600" />
+                                    </button>
+                                  )}
+                                </div>
+                                
+                                <div className="flex gap-1 justify-center mt-2">
+                                  <button
+                                    onClick={() => handleSaveTagsEdit(checkin.id)}
+                                    className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-full text-xs font-medium transition-colors flex items-center gap-1"
+                                  >
+                                    <Check size={10} /> Save
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingTagsCheckinId(null);
+                                      setShowTagInput(prev => ({ ...prev, [checkin.id]: false }));
+                                    }}
+                                    className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded-full text-xs font-medium transition-colors flex items-center gap-1"
+                                  >
+                                    <X size={10} /> Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              /* Tag Display Mode */
+                              <div 
+                                className="flex flex-wrap gap-1 items-center cursor-pointer"
+                                onClick={() => handleEditTags(checkin.id)}
+                                title="Click to edit tags"
+                              >
+                                {checkin.tags.slice(0, 3).map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-aqua text-white"
+                                  >
+                                    #{tag.label}
+                                  </span>
+                                ))}
+                                {checkin.tags.length > 3 && (
+                                  <span className="text-xs text-gray-500 px-1">
+                                    +{checkin.tags.length - 3}
+                                  </span>
+                                )}
+                                {checkin.tags.length === 0 && (
+                                  <span className="text-xs text-gray-400 italic">
+                                    Click to add tags
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </>
                         )}
                       </motion.div>
                     ))}
@@ -707,14 +1111,6 @@ const ProfilePage: React.FC = (): JSX.Element => {
             </div>
           </div>
 
-          {/* Instagram Widget */}
-          <div className="px-4 mb-4 mt-4">
-            <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
-            <p className="text-text-primary text-sm mb-3 font-bold">
-              Latest from Instagram
-            </p>
-            <InstagramWidget />
-          </div>
 
           {/* Photos - scrollable, similar to ProfileDetailModal */}
           {additionalPhotos.length > 0 && (

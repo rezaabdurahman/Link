@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users } from 'lucide-react';
+import { Users, Plus } from 'lucide-react';
 import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
 import { User } from '../types';
 import UserCard from '../components/UserCard';
@@ -8,6 +8,8 @@ import ProfileDetailModal from '../components/ProfileDetailModal';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import AddCuesModal from '../components/AddCuesModal';
 import AddBroadcastModal from '../components/AddBroadcastModal';
+import CheckInModal from '../components/CheckInModal';
+import CheckInSnackbar from '../components/CheckInSnackbar';
 import Toast from '../components/Toast';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
@@ -67,6 +69,11 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   //   'Art', 'Music', 'Travel', 'Food', 'Fitness', 'Technology',
   //   'Books', 'Movies', 'Gaming', 'Photography', 'Nature', 'Business'
   // ]);
+
+  // Check-in modal state
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState<boolean>(false);
+  const [showCheckInSnackbar, setShowCheckInSnackbar] = useState<boolean>(false);
+  const [lastCheckInText, setLastCheckInText] = useState<string>('');
 
   // Search functionality - NEW unified search implementation  
   const performSearch = useCallback(async (): Promise<void> => {
@@ -384,8 +391,51 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     clearFilters();
   };
 
+  // Check-in handlers
+  const handleOpenCheckIn = (): void => {
+    setIsCheckInModalOpen(true);
+  };
+
+  const handleCloseCheckIn = (): void => {
+    setIsCheckInModalOpen(false);
+  };
+
+  const handleCheckInSubmit = (checkInText: string): void => {
+    // Store the check-in text for the snackbar
+    setLastCheckInText(checkInText);
+    
+    // Close modal and show success snackbar
+    setIsCheckInModalOpen(false);
+    setShowCheckInSnackbar(true);
+    
+    // Here you would typically save the check-in to your backend
+    console.log('New check-in from Discovery:', checkInText);
+    
+    // Auto-hide snackbar after 5 seconds
+    setTimeout(() => {
+      setShowCheckInSnackbar(false);
+    }, 5000);
+  };
+
+  const handleViewProfile = (): void => {
+    setShowCheckInSnackbar(false);
+    navigate('/profile');
+  };
+
+  const handleUndoCheckIn = (): void => {
+    setShowCheckInSnackbar(false);
+    // Here you would typically delete the check-in from your backend
+    console.log('Undoing check-in:', lastCheckInText);
+    
+    setToast({
+      isVisible: true,
+      message: 'Check-in has been removed',
+      type: 'success'
+    });
+  };
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative">
       {/* Fixed Header Section */}
       <div className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-ios border-b border-gray-100 z-10">
         <div className="max-w-sm mx-auto px-4 pt-12">
@@ -774,6 +824,31 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
           currentBroadcast={currentUser.broadcast}
         />
       )}
+
+      {/* Check-in Modal */}
+      <CheckInModal
+        isOpen={isCheckInModalOpen}
+        onClose={handleCloseCheckIn}
+        onSubmit={handleCheckInSubmit}
+      />
+
+      {/* Floating Action Button for Check-in - only show when available */}
+      {isAvailable && (
+        <button
+          onClick={handleOpenCheckIn}
+          className="absolute bottom-20 right-6 w-14 h-14 bg-aqua text-white rounded-full shadow-lg hover:bg-aqua/90 hover:shadow-xl transition-all duration-200 flex items-center justify-center z-20 group"
+          title="Check in"
+        >
+          <Plus size={24} className="group-hover:scale-110 transition-transform duration-200" />
+        </button>
+      )}
+
+      {/* Check-in Success Snackbar */}
+      <CheckInSnackbar
+        isVisible={showCheckInSnackbar}
+        onViewProfile={handleViewProfile}
+        onUndo={handleUndoCheckIn}
+      />
       
       {/* Toast Notification */}
       <Toast
