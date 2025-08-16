@@ -1,17 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useReducer } from 'react';
 import { Calendar, Clock, MapPin, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { opportunities } from '../data/mockData';
 import { Opportunity } from '../types';
+import { CheckinState, CheckinAction } from '../types/checkin';
+import { generateMockOpportunities } from '../mocks/checkinData';
 import OpportunityCard from '../components/OpportunityCard';
+
+// State reducer for managing check-in related opportunities
+const opportunityReducer = (state: Pick<CheckinState, 'opportunities'>, action: CheckinAction): Pick<CheckinState, 'opportunities'> => {
+  switch (action.type) {
+    case 'UPDATE_OPPORTUNITY':
+      return {
+        opportunities: state.opportunities.map(opp => 
+          opp.id === action.payload.id
+            ? { ...opp, status: action.payload.status }
+            : opp
+        )
+      };
+    case 'REFRESH_OPPORTUNITIES':
+      return {
+        opportunities: [...action.payload, ...state.opportunities.filter(opp => opp.status !== 'rejected')]
+      };
+    default:
+      return state;
+  }
+};
 
 const OpportunitiesPage: React.FC = (): JSX.Element => {
   const [filter, setFilter] = useState<string>('all');
+  
+  // Social opportunities state from check-ins
+  const [socialOpportunitiesState, socialOpportunitiesDispatch] = useReducer(opportunityReducer, {
+    opportunities: generateMockOpportunities()
+  });
+  
+  const opportunitiesRef = useRef<HTMLDivElement>(null);
 
   const filteredOpportunities = opportunities.filter(opp => {
     if (filter === 'all') return true;
     return opp.type === filter;
   });
 
+  // Opportunity management for social opportunities
+  const handleSocialOpportunityAction = (opportunityId: string, action: 'accepted' | 'rejected') => {
+    socialOpportunitiesDispatch({
+      type: 'UPDATE_OPPORTUNITY',
+      payload: { id: opportunityId, status: action }
+    });
+  };
+  
   const handleOpportunityAction = (opportunity: Opportunity, action: string): void => {
     console.log(`${action} opportunity:`, opportunity.title);
     // Here you would implement the actual action logic
@@ -21,6 +59,8 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
     if (filterType === 'all') return opportunities.length;
     return opportunities.filter(opp => opp.type === filterType).length;
   };
+  
+  const pendingSocialOpportunities = socialOpportunitiesState.opportunities.filter(opp => opp.status === 'pending');
 
   return (
     <div className="ios-safe-area" style={{ padding: '0 20px' }}>
@@ -113,6 +153,73 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
           );
         })}
       </div>
+
+      {/* Social Opportunities Carousel - From Check-ins */}
+      {pendingSocialOpportunities.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-text-primary">Social Opportunities</h2>
+            <div className="text-xs text-text-muted">Swipe to explore</div>
+          </div>
+          
+          <div 
+            ref={opportunitiesRef}
+            className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+            {pendingSocialOpportunities.map((opportunity) => (
+              <motion.div
+                key={opportunity.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex-shrink-0 w-64 ios-card p-4"
+              >
+                <div className="mb-3">
+                  <div className="text-sm font-semibold text-text-primary mb-1">
+                    {opportunity.title}
+                  </div>
+                  <div className="text-xs text-text-secondary line-clamp-2">
+                    {opportunity.description}
+                  </div>
+                </div>
+                
+                {opportunity.details && (
+                  <div className="text-xs text-text-muted mb-3">
+                    {opportunity.details.date && (
+                      <div className="flex items-center gap-1 mb-1">
+                        <Clock size={10} />
+                        <span>{opportunity.details.date}</span>
+                      </div>
+                    )}
+                    {opportunity.details.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin size={10} />
+                        <span>{opportunity.details.location}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSocialOpportunityAction(opportunity.id, 'rejected')}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-text-muted border border-surface-border rounded-ios hover:bg-surface-hover transition-colors"
+                  >
+                    Pass
+                  </button>
+                  <button
+                    onClick={() => handleSocialOpportunityAction(opportunity.id, 'accepted')}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-white bg-aqua hover:bg-aqua-dark rounded-ios transition-colors"
+                  >
+                    {opportunity.actionLabel || 'Accept'}
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Opportunities List */}
       <div style={{ marginBottom: '20px', paddingBottom: '4px' }}>

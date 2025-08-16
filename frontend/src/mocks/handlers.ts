@@ -22,8 +22,46 @@ const generateId = () => crypto.randomUUID();
 // Helper to get current timestamp
 const now = () => new Date().toISOString();
 
+// Helper to calculate expiration time
+const getExpirationTime = (hours: number = 24) => {
+  const expiration = new Date();
+  expiration.setHours(expiration.getHours() + hours);
+  return expiration.toISOString();
+};
+
 // Mock database for broadcasts
 const mockBroadcasts: Map<string, BroadcastResponse> = new Map();
+
+// Initialize some demo broadcast data
+mockBroadcasts.set('2', {
+  id: generateId(),
+  user_id: '2',
+  message: '🔌 Anyone have a phone charger I can borrow?',
+  is_active: true,
+  expires_at: getExpirationTime(48), // expires in 48 hours
+  created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
+  updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+});
+
+mockBroadcasts.set('3', {
+  id: generateId(),
+  user_id: '3',
+  message: '🏃‍♀️ Training for the SF Marathon!',
+  is_active: true,
+  expires_at: getExpirationTime(24), // expires in 24 hours
+  created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
+  updated_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+});
+
+mockBroadcasts.set('4', {
+  id: generateId(),
+  user_id: '4',
+  message: '🎵 Playing at The Fillmore tonight!',
+  is_active: true,
+  expires_at: getExpirationTime(12), // expires in 12 hours
+  created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+  updated_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+});
 
 // Mock database for availability
 const mockAvailability: Map<string, AvailabilityResponse> = new Map();
@@ -64,14 +102,7 @@ mockAvailability.set('user-jane', {
   updated_at: now(),
 });
 
-// Helper to calculate expiration time
-const getExpirationTime = (hours: number = 24) => {
-  const expiration = new Date();
-  expiration.setHours(expiration.getHours() + hours);
-  return expiration.toISOString();
-};
-
-// SECURITY: Helper to safely extract and validate user ID  
+// SECURITY: Helper to safely extract and validate user ID
 const extractUserId = (req: any): string | null => {
   const authHeader = req.headers.get('Authorization');
   const userIdHeader = req.headers.get('X-User-ID');
@@ -249,6 +280,57 @@ export const broadcastHandlers = [
         { status: 400 }
       );
     }
+  }),
+  
+  // GET /broadcasts/:userId - Get specific user's public broadcast
+  http.get('*/broadcasts/:userId', ({ request, params }) => {
+    const { userId } = params;
+    const requestingUserId = extractUserId(request);
+    
+    console.log('🔍 MSW: GET broadcast for user:', userId, 'requested by:', requestingUserId);
+    
+    // This is a public endpoint, but we still validate the requesting user in some contexts
+    
+    const broadcast = mockBroadcasts.get(userId as string);
+    
+    if (!broadcast) {
+      console.log('📻 MSW: No broadcast found for user:', userId);
+      return HttpResponse.json(
+        {
+          error: 'not_found',
+          message: 'No active broadcast found',
+          code: 404,
+          timestamp: now(),
+        },
+        { status: 404 }
+      );
+    }
+    
+    // Check if broadcast is expired
+    if (broadcast.expires_at && new Date(broadcast.expires_at) < new Date()) {
+      mockBroadcasts.delete(userId as string);
+      console.log('📻 MSW: Broadcast expired for user:', userId);
+      return HttpResponse.json(
+        {
+          error: 'not_found',
+          message: 'No active broadcast found',
+          code: 404,
+          timestamp: now(),
+        },
+        { status: 404 }
+      );
+    }
+    
+    // Return public broadcast data (without sensitive info like id)
+    const publicBroadcast = {
+      user_id: broadcast.user_id,
+      message: broadcast.message,
+      created_at: broadcast.created_at,
+      updated_at: broadcast.updated_at,
+    };
+    
+    console.log('📻 MSW: Returning public broadcast for user:', userId, publicBroadcast);
+    return HttpResponse.json(publicBroadcast, { status: 200 });
   }),
 ];
 

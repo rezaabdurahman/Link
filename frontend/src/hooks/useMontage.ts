@@ -145,7 +145,7 @@ export function useMontage(
 
   // SWR hook for fetching data
   const {
-    data: swrData,
+    data: _swrData,
     error: swrError,
     isLoading: isInitialLoading,
     mutate,
