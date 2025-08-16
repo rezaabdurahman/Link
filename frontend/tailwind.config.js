@@ -56,6 +56,14 @@ module.exports = {
           'copper-dark': '#92400e',  // Dark copper
           charcoal: '#374151',       // Charcoal gray
           pink: '#ec4899',           // Pink accent
+        },
+        // 🌈 Aqua-Copper Gradient System (Instagram-inspired)
+        gradient: {
+          // Primary brand gradient: aqua → pink-rose → copper
+          'aqua-copper': ['#06b6d4 0%', '#ec4899 50%', '#b45309 100%'],
+          // Alternative gradients for variety
+          'aqua-rose': ['#06b6d4 0%', '#f43f5e 100%'],
+          'aqua-purple': ['#06b6d4 0%', '#8b5cf6 100%'],
         }
       },
       fontFamily: {
@@ -81,6 +89,14 @@ module.exports = {
       },
       backdropBlur: {
         'ios': '20px',
+      },
+      backgroundImage: {
+        // Linear gradients for backgrounds
+        'gradient-aqua-copper': 'linear-gradient(135deg, #06b6d4 0%, #ec4899 50%, #b45309 100%)',
+        'gradient-aqua-rose': 'linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%)',
+        'gradient-aqua-purple': 'linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)',
+        // Conic gradients for avatar rings (Instagram-style)
+        'conic-aqua-copper': 'conic-gradient(from 180deg at 50% 50%, #06b6d4 0deg, #ec4899 120deg, #b45309 240deg, #06b6d4 360deg)',
       },
       boxShadow: {
         'ios': '0 4px 16px rgba(0, 0, 0, 0.1)',

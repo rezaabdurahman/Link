@@ -1,0 +1,235 @@
+/* 🌈 Aqua-Copper Gradient System - Instagram-inspired Effects */
+
+/* ============================== */
+/* GRADIENT BORDERS (Instagram-style) */
+/* ============================== */
+
+.border-gradient-aqua-copper {
+  position: relative;
+  background: transparent;
+}
+
+.border-gradient-aqua-copper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px; /* Border width */
+  border-radius: inherit;
+  background: linear-gradient(135deg, #06b6d4 0%, #ec4899 50%, #b45309 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.border-gradient-aqua-rose {
+  position: relative;
+  background: transparent;
+}
+
+.border-gradient-aqua-rose::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.border-gradient-aqua-purple {
+  position: relative;
+  background: transparent;
+}
+
+.border-gradient-aqua-purple::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Thin border variants (1px) */
+.border-gradient-aqua-copper-thin::before {
+  padding: 1px;
+}
+
+.border-gradient-aqua-rose-thin::before {
+  padding: 1px;
+}
+
+.border-gradient-aqua-purple-thin::before {
+  padding: 1px;
+}
+
+/* Thick border variants (3px) */
+.border-gradient-aqua-copper-thick::before {
+  padding: 3px;
+}
+
+/* ============================== */
+/* COMPONENT CLASSES */
+/* ============================== */
+
+/* Gradient Button */
+.gradient-btn {
+  @apply bg-gradient-aqua-copper text-white font-semibold rounded-ios px-6 py-3 transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95;
+}
+
+.gradient-btn-sm {
+  @apply bg-gradient-aqua-copper text-white font-medium rounded-ios px-4 py-2 text-sm transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95;
+}
+
+.gradient-btn-lg {
+  @apply bg-gradient-aqua-copper text-white font-bold rounded-ios px-8 py-4 text-lg transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95;
+}
+
+/* Gradient Cards */
+.gradient-card {
+  @apply border-gradient-aqua-copper rounded-card p-4 bg-surface-card relative z-10;
+}
+
+.gradient-card-sm {
+  @apply border-gradient-aqua-copper rounded-ios p-3 bg-surface-card relative z-10;
+}
+
+.gradient-card-lg {
+  @apply border-gradient-aqua-copper rounded-modal p-6 bg-surface-card relative z-10;
+}
+
+/* Avatar Ring (Instagram-style) */
+.avatar-ring {
+  @apply relative inline-block rounded-full;
+}
+
+.avatar-ring::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: conic-gradient(from 180deg at 50% 50%, #06b6d4 0deg, #ec4899 120deg, #b45309 240deg, #06b6d4 360deg);
+  z-index: -1;
+  animation: spin 3s linear infinite;
+}
+
+.avatar-ring img {
+  @apply relative z-10 rounded-full border-2 border-white;
+}
+
+/* Size variants for avatar rings */
+.avatar-ring-sm::before {
+  inset: -2px;
+}
+
+.avatar-ring-sm img {
+  @apply border border-white;
+}
+
+.avatar-ring-lg::before {
+  inset: -4px;
+}
+
+.avatar-ring-lg img {
+  @apply border-4 border-white;
+}
+
+/* ============================== */
+/* TEXT GRADIENTS */
+/* ============================== */
+
+.text-gradient-aqua-copper {
+  background: linear-gradient(135deg, #06b6d4 0%, #ec4899 50%, #b45309 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-aqua-rose {
+  background: linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ============================== */
+/* HOVER EFFECTS */
+/* ============================== */
+
+.hover-gradient-glow:hover {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3), 0 0 40px rgba(236, 72, 153, 0.2), 0 0 60px rgba(180, 83, 9, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+/* ============================== */
+/* ANIMATIONS */
+/* ============================== */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Pause animation on hover for better UX */
+.avatar-ring:hover::before {
+  animation-play-state: paused;
+}
+
+/* ============================== */
+/* ACCESSIBILITY & REDUCED MOTION */
+/* ============================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-ring::before {
+    animation: none;
+  }
+  
+  .gradient-btn,
+  .gradient-btn-sm,
+  .gradient-btn-lg {
+    transition: opacity 0.2s ease;
+  }
+  
+  .hover-gradient-glow:hover {
+    transition: none;
+  }
+}
+
+/* ============================== */
+/* DARK MODE VARIANTS */
+/* ============================== */
+
+@media (prefers-color-scheme: dark) {
+  .gradient-card,
+  .gradient-card-sm,
+  .gradient-card-lg {
+    @apply bg-gray-900;
+  }
+  
+  .avatar-ring img {
+    @apply border-gray-900;
+  }
+  
+  .avatar-ring-sm img {
+    @apply border-gray-900;
+  }
+  
+  .avatar-ring-lg img {
+    @apply border-gray-900;
+  }
+}
