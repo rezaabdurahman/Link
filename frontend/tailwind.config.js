@@ -54,15 +54,18 @@ module.exports = {
           copper: '#b45309',         // Main copper brown
           'copper-light': '#d97706', // Light copper
           'copper-dark': '#92400e',  // Dark copper
+          sand: '#d2b48c',           // Sand beige
+          'sand-light': '#ddbf94',   // Light sand
+          'sand-dark': '#c19a6b',    // Dark sand
           charcoal: '#374151',       // Charcoal gray
           pink: '#ec4899',           // Pink accent
         },
-        // 🌈 Aqua-Copper Gradient System (Instagram-inspired)
+        // 🌈 Aqua-Sand-Copper Gradient System 
         gradient: {
-          // Primary brand gradient: aqua → pink-rose → copper
-          'aqua-copper': ['#06b6d4 0%', '#ec4899 50%', '#b45309 100%'],
+          // Primary brand gradient: aqua → sand → copper
+          'aqua-copper': ['#06b6d4 0%', '#d2b48c 50%', '#b45309 100%'],
           // Alternative gradients for variety
-          'aqua-rose': ['#06b6d4 0%', '#f43f5e 100%'],
+          'aqua-sand': ['#06b6d4 0%', '#d2b48c 100%'],
           'aqua-purple': ['#06b6d4 0%', '#8b5cf6 100%'],
         }
       },
@@ -92,11 +95,11 @@ module.exports = {
       },
       backgroundImage: {
         // Linear gradients for backgrounds
-        'gradient-aqua-copper': 'linear-gradient(135deg, #06b6d4 0%, #ec4899 50%, #b45309 100%)',
-        'gradient-aqua-rose': 'linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%)',
+        'gradient-aqua-copper': 'linear-gradient(135deg, #06b6d4 0%, #d2b48c 50%, #b45309 100%)',
+        'gradient-aqua-sand': 'linear-gradient(135deg, #06b6d4 0%, #d2b48c 100%)',
         'gradient-aqua-purple': 'linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)',
         // Conic gradients for avatar rings (Instagram-style)
-        'conic-aqua-copper': 'conic-gradient(from 180deg at 50% 50%, #06b6d4 0deg, #ec4899 120deg, #b45309 240deg, #06b6d4 360deg)',
+        'conic-aqua-copper': 'conic-gradient(from 180deg at 50% 50%, #06b6d4 0deg, #d2b48c 120deg, #b45309 240deg, #06b6d4 360deg)',
       },
       boxShadow: {
         'ios': '0 4px 16px rgba(0, 0, 0, 0.1)',

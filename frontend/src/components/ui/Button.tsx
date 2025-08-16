@@ -1,7 +1,7 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'gradient';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -97,6 +97,12 @@ export const Button: React.FC<ButtonProps> = ({
       text-text-inverse font-semibold
       shadow-sm hover:shadow-md hover:shadow-red-500/20
       disabled:bg-gray-300 disabled:shadow-none
+    `,
+    gradient: `
+      bg-gradient-aqua-copper hover:opacity-90 active:scale-95
+      text-text-inverse font-semibold
+      shadow-sm hover:shadow-md hover-gradient-glow
+      disabled:opacity-50 disabled:shadow-none
     `,
   };
 

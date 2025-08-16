@@ -15,7 +15,7 @@
   inset: 0;
   padding: 2px; /* Border width */
   border-radius: inherit;
-  background: linear-gradient(135deg, #06b6d4 0%, #ec4899 50%, #b45309 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #d2b48c 50%, #b45309 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -34,7 +34,7 @@
   inset: 0;
   padding: 2px;
   border-radius: inherit;
-  background: linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #d2b48c 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -85,15 +85,15 @@
 
 /* Gradient Button */
 .gradient-btn {
-  @apply bg-gradient-aqua-copper text-white font-semibold rounded-ios px-6 py-3 transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95;
+  @apply bg-aqua text-white font-semibold rounded-ios px-6 py-3 transition-all duration-200 hover:bg-aqua-dark hover:scale-105 active:scale-95;
 }
 
 .gradient-btn-sm {
-  @apply bg-gradient-aqua-copper text-white font-medium rounded-ios px-4 py-2 text-sm transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95;
+  @apply bg-aqua text-white font-medium rounded-ios px-4 py-2 text-sm transition-all duration-200 hover:bg-aqua-dark hover:scale-105 active:scale-95;
 }
 
 .gradient-btn-lg {
-  @apply bg-gradient-aqua-copper text-white font-bold rounded-ios px-8 py-4 text-lg transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95;
+  @apply bg-aqua text-white font-bold rounded-ios px-8 py-4 text-lg transition-all duration-200 hover:bg-aqua-dark hover:scale-105 active:scale-95;
 }
 
 /* Gradient Cards */
@@ -119,7 +119,7 @@
   position: absolute;
   inset: -3px;
   border-radius: inherit;
-  background: conic-gradient(from 180deg at 50% 50%, #06b6d4 0deg, #ec4899 120deg, #b45309 240deg, #06b6d4 360deg);
+  background: conic-gradient(from 180deg at 50% 50%, #06b6d4 0deg, #d2b48c 120deg, #b45309 240deg, #06b6d4 360deg);
   z-index: -1;
   animation: spin 3s linear infinite;
 }
@@ -150,17 +150,61 @@
 /* ============================== */
 
 .text-gradient-aqua-copper {
-  background: linear-gradient(135deg, #06b6d4 0%, #ec4899 50%, #b45309 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #d2b48c 50%, #b45309 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.text-gradient-aqua-rose {
-  background: linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%);
+.text-gradient-aqua-sand {
+  background: linear-gradient(135deg, #06b6d4 0%, #d2b48c 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* Additional text gradient utility classes */
+.text-gradient-aqua-purple {
+  background: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Gradient for outline/stroke icons */
+.stroke-gradient-aqua-copper {
+  stroke: url(#aqua-copper-gradient);
+}
+
+.stroke-gradient-aqua-sand {
+  stroke: url(#aqua-sand-gradient);
+}
+
+/* SVG icon gradient classes */
+.icon-gradient-aqua-copper {
+  background: linear-gradient(135deg, #06b6d4 0%, #d2b48c 50%, #b45309 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Icon gradient wrapper that applies gradient as mask */
+.icon-gradient-wrapper {
+  background: linear-gradient(135deg, #06b6d4 0%, #d2b48c 50%, #b45309 100%);
+  -webkit-mask: var(--icon-mask);
+  mask: var(--icon-mask);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+/* Simpler gradient icon approach using filter */
+.icon-with-gradient {
+  filter: url(#aqua-copper-gradient-filter);
 }
 
 /* ============================== */
@@ -168,7 +212,7 @@
 /* ============================== */
 
 .hover-gradient-glow:hover {
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3), 0 0 40px rgba(236, 72, 153, 0.2), 0 0 60px rgba(180, 83, 9, 0.1);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3), 0 0 40px rgba(210, 180, 140, 0.2), 0 0 60px rgba(180, 83, 9, 0.1);
   transition: box-shadow 0.3s ease;
 }
 

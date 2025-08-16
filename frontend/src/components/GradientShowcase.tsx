@@ -108,9 +108,9 @@ const GradientShowcase: React.FC<GradientShowcaseProps> = ({ className = '' }) =
             <p className="text-xs opacity-90">Primary brand gradient</p>
           </div>
           
-          <div className="bg-gradient-aqua-rose p-4 rounded-card text-white text-center">
+          <div className="bg-gradient-aqua-sand p-4 rounded-card text-white text-center">
             <Heart className="w-8 h-8 mx-auto mb-2" />
-            <h3 className="font-bold">Aqua-Rose</h3>
+            <h3 className="font-bold">Aqua-Sand</h3>
             <p className="text-xs opacity-90">Alternative gradient</p>
           </div>
           
@@ -129,7 +129,7 @@ const GradientShowcase: React.FC<GradientShowcaseProps> = ({ className = '' }) =
           <h3 className="text-gradient-aqua-copper text-2xl font-bold">
             Welcome to Link
           </h3>
-          <h4 className="text-gradient-aqua-rose text-lg font-semibold">
+          <h4 className="text-gradient-aqua-sand text-lg font-semibold">
             Connect with amazing people around you
           </h4>
           <p className="text-secondary">
