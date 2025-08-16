@@ -30,7 +30,7 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 				"error":     "AUTHENTICATION_ERROR",
 				"message":   "Authorization token required",
 				"code":      "MISSING_TOKEN",
-				"timestamp": c.GetTime(),
+				"timestamp": time.Now(),
 			})
 			c.Abort()
 			return
@@ -43,7 +43,7 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 				"error":     "AUTHENTICATION_ERROR",
 				"message":   "Invalid or expired token",
 				"code":      "INVALID_TOKEN",
-				"timestamp": c.GetTime(),
+				"timestamp": time.Now(),
 			})
 			c.Abort()
 			return

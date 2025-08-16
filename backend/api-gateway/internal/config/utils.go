@@ -5,12 +5,17 @@ import (
 	"os"
 )
 
-// getEnv gets an environment variable with a default value
+// getEnv gets an environment variable with a default value (private)
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
 	return defaultValue
+}
+
+// GetEnv gets an environment variable with a default value (public)
+func GetEnv(key, defaultValue string) string {
+	return getEnv(key, defaultValue)
 }
 
 // getEnvAsInt gets an environment variable as integer with default

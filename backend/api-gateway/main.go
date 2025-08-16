@@ -50,6 +50,7 @@ func main() {
 			"endpoints": gin.H{
 				"auth":          "/auth/*",
 				"users":         "/users/*",
+				"montage":       "/users/:id/montage",
 				"location":      "/location/*",
 				"chat":          "/chat/*",
 				"ai":            "/ai/*",

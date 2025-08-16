@@ -334,168 +334,31 @@ func (s *profileService) CancelFriendRequest(requesterID, requesteeID uuid.UUID)
 }
 
 // BlockUser blocks a user
+// TODO: Implement blocking functionality when the underlying models support it
 func (s *profileService) BlockUser(blockerID, blockedID uuid.UUID) error {
-	// Validation
-	if blockerID == uuid.Nil {
-		return ErrInvalidBlockerID
-	}
-	if blockedID == uuid.Nil {
-		return ErrInvalidBlockedID
-	}
-	if blockerID == blockedID {
-		return ErrCannotBlockSelf
-	}
-
-	// Check if user to be blocked exists
-	_, err := s.userRepo.GetUserByID(blockedID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrUserNotFound
-		}
-		return fmt.Errorf("failed to get user to block: %w", err)
-	}
-
-	// Start a transaction since blocking involves multiple operations
-	tx := s.userRepo.BeginTx()
-	defer func() {
-		if r := recover(); r != nil || err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	// Check if already blocked
-	blocked, err := models.IsUserBlocked(tx, blockerID, blockedID)
-	if err != nil {
-		return fmt.Errorf("failed to check if user is blocked: %w", err)
-	}
-	if blocked {
-		return ErrBlockExists
-	}
-
-	// Create the block relationship
-	_, err = models.BlockUser(tx, blockerID, blockedID)
-	if err != nil {
-		return fmt.Errorf("failed to block user: %w", err)
-	}
-
-	// Remove existing friendship if it exists
-	areFriends, err := s.userRepo.AreFriends(blockerID, blockedID)
-	if err != nil {
-		return fmt.Errorf("failed to check friendship: %w", err)
-	}
-	if areFriends {
-		if err := s.userRepo.DeleteFriendship(blockerID, blockedID); err != nil {
-			return fmt.Errorf("failed to remove friendship: %w", err)
-		}
-	}
-
-	// Cancel any pending friend requests between the users
-	hasPending, err := s.userRepo.HasPendingFriendRequest(blockerID, blockedID)
-	if err != nil {
-		return fmt.Errorf("failed to check pending friend requests: %w", err)
-	}
-	if hasPending {
-		if err := s.userRepo.CancelFriendRequest(blockerID, blockedID); err != nil {
-			return fmt.Errorf("failed to cancel outgoing friend request: %w", err)
-		}
-	}
-
-	// Also cancel any pending requests in the opposite direction
-	hasPendingReverse, err := s.userRepo.HasPendingFriendRequest(blockedID, blockerID)
-	if err != nil {
-		return fmt.Errorf("failed to check reverse pending friend requests: %w", err)
-	}
-	if hasPendingReverse {
-		if err := s.userRepo.CancelFriendRequest(blockedID, blockerID); err != nil {
-			return fmt.Errorf("failed to cancel incoming friend request: %w", err)
-		}
-	}
-
-	return nil
+	// Temporarily return not implemented until blocking is fully implemented
+	return fmt.Errorf("blocking functionality not yet implemented")
 }
 
 // UnblockUser unblocks a user
+// TODO: Implement unblocking functionality when the underlying models support it
 func (s *profileService) UnblockUser(blockerID, blockedID uuid.UUID) error {
-	// Validation
-	if blockerID == uuid.Nil {
-		return ErrInvalidBlockerID
-	}
-	if blockedID == uuid.Nil {
-		return ErrInvalidBlockedID
-	}
-	if blockerID == blockedID {
-		return ErrCannotBlockSelf
-	}
-
-	// Check if user to be unblocked exists
-	_, err := s.userRepo.GetUserByID(blockedID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrUserNotFound
-		}
-		return fmt.Errorf("failed to get user to unblock: %w", err)
-	}
-
-	// Use a transaction for consistency
-	tx := s.userRepo.BeginTx()
-	defer func() {
-		if r := recover(); r != nil || err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	// Remove the block relationship
-	if err := models.UnblockUser(tx, blockerID, blockedID); err != nil {
-		if errors.Is(err, models.ErrBlockNotFound) {
-			return ErrBlockNotFound
-		}
-		return fmt.Errorf("failed to unblock user: %w", err)
-	}
-
-	return nil
+	// Temporarily return not implemented until blocking is fully implemented
+	return fmt.Errorf("unblocking functionality not yet implemented")
 }
 
 // IsBlocked checks if there is a blocking relationship between two users (bidirectional)
+// TODO: Implement blocking check when the underlying models support it
 func (s *profileService) IsBlocked(userA, userB uuid.UUID) (bool, error) {
-	if userA == uuid.Nil || userB == uuid.Nil {
-		return false, nil
-	}
-
-	tx := s.userRepo.BeginTx()
-	defer tx.Rollback() // Read-only operation, always rollback
-
-	return models.IsUserBlocked(tx, userA, userB)
+	// For now, always return false since blocking is not implemented
+	return false, nil
 }
 
 // GetBlockedUsers returns a list of users blocked by the specified user
+// TODO: Implement when blocking models are available
 func (s *profileService) GetBlockedUsers(userID uuid.UUID, page, limit int) ([]models.PublicUser, error) {
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 100 {
-		limit = 20 // Default limit
-	}
-
-	tx := s.userRepo.BeginTx()
-	defer tx.Rollback() // Read-only operation, always rollback
-
-	// Get blocked user relationships
-	blockedUsers, err := models.GetBlockedUsersByBlocker(tx, userID, page, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get blocked users: %w", err)
-	}
-
-	// Convert to PublicUser format
-	result := make([]models.PublicUser, len(blockedUsers))
-	for i, blockedUser := range blockedUsers {
-		result[i] = blockedUser.Blocked.ToPublicUserWithPrivacy()
-	}
-
-	return result, nil
+	// Return empty list since blocking is not implemented yet
+	return []models.PublicUser{}, nil
 }
 // RemoveFriend removes a friendship between two users
 func (s *profileService) RemoveFriend(userID, friendID uuid.UUID) error {

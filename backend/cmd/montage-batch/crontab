@@ -1,0 +1,14 @@
+# Montage Batch Job Crontab
+# Run daily at 3 AM UTC
+0 3 * * * appuser cd /app && /app/montage-batch once >> /var/log/montage-batch/batch.log 2>&1
+
+# Health check every 30 minutes (optional)
+*/30 * * * * appuser cd /app && /app/montage-batch health >> /var/log/montage-batch/health.log 2>&1
+
+# Cleanup old logs weekly (keep last 7 days)
+0 4 * * 0 appuser find /var/log/montage-batch -name "*.log" -mtime +7 -delete
+
+# Note: For production, consider using:
+# - Kubernetes CronJob instead of container-based cron
+# - External log rotation (logrotate)
+# - Monitoring/alerting on job failures

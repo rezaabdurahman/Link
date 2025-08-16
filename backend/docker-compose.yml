@@ -222,9 +222,69 @@ services:
       retries: 3
       start_period: 10s
 
+  # Montage Batch Job Service
+  montage-batch:
+    build:
+      context: .
+      dockerfile: ./cmd/montage-batch/Dockerfile
+    environment:
+      # Database configuration (shared with user-svc)
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: link_user
+      DB_PASSWORD: link_pass
+      DB_NAME: link_app
+      DB_SSLMODE: disable
+      
+      # Montage-specific configuration
+      MONTAGE_MAX_ITEMS: 20
+      MONTAGE_MIN_INTEREST_OCCURRENCE: 3
+      MONTAGE_INTEREST_LOOKBACK_DAYS: 30
+      MONTAGE_BATCH_SIZE: 100
+      MAX_CONCURRENT_GENERATIONS: 10
+      
+      # External service URLs (when check-in service exists)
+      CHECKIN_SERVICE_URL: http://checkin-svc:8080
+      USER_SERVICE_URL: http://user-svc:8080
+      
+      # Feature flags
+      ENABLE_BATCH_PROCESSING: true
+      ENABLE_REALTIME_GENERATION: false
+      ENABLE_ANALYTICS: true
+      
+      # Scheduling configuration
+      BATCH_MODE: once  # Use 'scheduler' for daemon mode
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      
+      # Performance settings
+      BATCH_PROCESSING_TIMEOUT: 30m
+      CACHE_TTL: 1h
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-svc:
+        condition: service_healthy
+    volumes:
+      - montage_batch_logs:/var/log/montage-batch
+    # For cron-based execution, restart policy handles failures
+    restart: on-failure
+    # Health check to ensure the batch job can connect to dependencies
+    healthcheck:
+      test: ["/app/montage-batch", "health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Profile for different deployment modes
+    profiles:
+      - batch
+      - full
+
 volumes:
   postgres_data:
   redis_data:
+  montage_batch_logs:
 
 networks:
   default:

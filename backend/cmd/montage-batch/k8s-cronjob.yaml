@@ -1,0 +1,213 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: montage-batch-daily
+  namespace: link-app
+  labels:
+    app: montage-batch
+    component: batch-job
+    version: "1.0.0"
+spec:
+  # Run daily at 3 AM UTC
+  schedule: "0 3 * * *"
+  
+  # Keep last 3 successful jobs and 1 failed job for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  
+  # Allow 1 hour for job completion
+  startingDeadlineSeconds: 3600
+  
+  # Don't start new job if previous one is still running
+  concurrencyPolicy: Forbid
+  
+  jobTemplate:
+    spec:
+      # Allow 90 minutes for job completion before terminating
+      activeDeadlineSeconds: 5400
+      
+      template:
+        metadata:
+          labels:
+            app: montage-batch
+            component: batch-job
+            version: "1.0.0"
+        spec:
+          restartPolicy: OnFailure
+          
+          # Use service account with necessary permissions
+          serviceAccountName: montage-batch
+          
+          containers:
+          - name: montage-batch
+            image: link-app/montage-batch:latest
+            imagePullPolicy: IfNotPresent
+            
+            command: ["/app/montage-batch"]
+            args: ["once"]
+            
+            env:
+            # Database configuration
+            - name: DB_HOST
+              value: "postgres-service"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "link_app"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: DB_SSLMODE
+              value: "require"
+            
+            # Montage-specific configuration
+            - name: MONTAGE_MAX_ITEMS
+              value: "20"
+            - name: MONTAGE_MIN_INTEREST_OCCURRENCE
+              value: "3"
+            - name: MONTAGE_INTEREST_LOOKBACK_DAYS
+              value: "30"
+            - name: MONTAGE_BATCH_SIZE
+              value: "500"  # Higher for production
+            - name: MAX_CONCURRENT_GENERATIONS
+              value: "50"   # Higher for production
+            
+            # External service URLs
+            - name: CHECKIN_SERVICE_URL
+              value: "http://checkin-service:8080"
+            - name: USER_SERVICE_URL
+              value: "http://user-service:8080"
+            
+            # Service authentication
+            - name: CHECKIN_SERVICE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: service-api-keys
+                  key: checkin-service-key
+            - name: USER_SERVICE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: service-api-keys
+                  key: user-service-key
+            
+            # Feature flags
+            - name: ENABLE_BATCH_PROCESSING
+              value: "true"
+            - name: ENABLE_REALTIME_GENERATION
+              value: "false"
+            - name: ENABLE_ANALYTICS
+              value: "true"
+            
+            # Runtime configuration
+            - name: BATCH_MODE
+              value: "once"
+            - name: ENVIRONMENT
+              value: "production"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: BATCH_PROCESSING_TIMEOUT
+              value: "60m"
+            - name: CACHE_TTL
+              value: "4h"  # Longer cache in production
+            
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "1Gi"
+                cpu: "500m"
+            
+            # Health check for startup
+            livenessProbe:
+              exec:
+                command: ["/app/montage-batch", "health"]
+              initialDelaySeconds: 30
+              periodSeconds: 60
+              timeoutSeconds: 10
+              failureThreshold: 3
+            
+            # Volume mounts for logging
+            volumeMounts:
+            - name: log-volume
+              mountPath: /var/log/montage-batch
+          
+          # Volumes
+          volumes:
+          - name: log-volume
+            emptyDir: {}
+          
+          # Node selection (optional)
+          nodeSelector:
+            workload: batch
+          
+          # Tolerations for dedicated batch nodes (optional)
+          tolerations:
+          - key: "batch-workload"
+            operator: "Equal"
+            value: "true"
+            effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: montage-batch
+  namespace: link-app
+  labels:
+    app: montage-batch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: montage-batch
+  namespace: link-app
+rules:
+# Add minimal permissions needed for the batch job
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: montage-batch
+  namespace: link-app
+subjects:
+- kind: ServiceAccount
+  name: montage-batch
+  namespace: link-app
+roleRef:
+  kind: Role
+  name: montage-batch
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Monitoring configuration (optional)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: montage-batch
+  namespace: link-app
+  labels:
+    app: montage-batch
+spec:
+  selector:
+    matchLabels:
+      app: montage-batch
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics

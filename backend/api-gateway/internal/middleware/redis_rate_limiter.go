@@ -62,18 +62,18 @@ func NewRedisRateLimiter(config *RedisRateLimiterConfig) *RedisRateLimiter {
 }
 
 // AddRule adds a new rate limiting rule
-func (r *RedisRateLimiter) AddRule(name string, rule RateLimitRule) {
-	r.rules[name] = rule
+func (limiter *RedisRateLimiter) AddRule(name string, rule RateLimitRule) {
+	limiter.rules[name] = rule
 }
 
 // RedisRateLimitMiddleware creates a middleware function for Redis-based rate limiting
 func RedisRateLimitMiddleware(limiter *RedisRateLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get client identifier (IP + User ID if available)
-		clientID := r.getClientID(c)
+		clientID := limiter.getClientID(c)
 		
 		// Find applicable rule
-		rule := r.findRule(c.Request.URL.Path)
+		rule := limiter.findRule(c.Request.URL.Path)
 		
 		// Check rate limit using sliding window algorithm
 		allowed, remaining, resetTime, err := limiter.checkRateLimit(clientID, rule, c.Request.URL.Path)
@@ -113,7 +113,7 @@ func RedisRateLimitMiddleware(limiter *RedisRateLimiter) gin.HandlerFunc {
 }
 
 // getClientID creates a unique identifier for the client
-func (r *RedisRateLimiter) getClientID(c *gin.Context) string {
+func (limiter *RedisRateLimiter) getClientID(c *gin.Context) string {
 	// Use user ID if authenticated, otherwise fall back to IP
 	if userID, exists := c.Get("user_id"); exists {
 		return fmt.Sprintf("user:%v", userID)
@@ -125,9 +125,9 @@ func (r *RedisRateLimiter) getClientID(c *gin.Context) string {
 }
 
 // findRule finds the appropriate rate limiting rule for a path
-func (r *RedisRateLimiter) findRule(path string) RateLimitRule {
+func (limiter *RedisRateLimiter) findRule(path string) RateLimitRule {
 	// Check specific rules first
-	for _, rule := range r.rules {
+	for _, rule := range limiter.rules {
 		if matchesPattern(path, rule.Pattern) {
 			return rule
 		}
@@ -135,14 +135,14 @@ func (r *RedisRateLimiter) findRule(path string) RateLimitRule {
 
 	// Return default rule
 	return RateLimitRule{
-		Limit:     r.config.DefaultLimit,
-		Window:    r.config.DefaultWindow,
-		BurstSize: r.config.BurstLimit,
+		Limit:     limiter.config.DefaultLimit,
+		Window:    limiter.config.DefaultWindow,
+		BurstSize: limiter.config.BurstLimit,
 	}
 }
 
 // checkRateLimit implements sliding window rate limiting using Redis
-func (r *RedisRateLimiter) checkRateLimit(clientID string, rule RateLimitRule, path string) (allowed bool, remaining int, resetTime int64, err error) {
+func (limiter *RedisRateLimiter) checkRateLimit(clientID string, rule RateLimitRule, path string) (allowed bool, remaining int, resetTime int64, err error) {
 	now := time.Now()
 	window := rule.Window
 	limit := rule.Limit
@@ -150,20 +150,20 @@ func (r *RedisRateLimiter) checkRateLimit(clientID string, rule RateLimitRule, p
 	// Redis key for this client and window
 	key := fmt.Sprintf("rate_limit:%s:%d", clientID, now.Truncate(window).Unix())
 	
-	pipe := r.config.RedisClient.Pipeline()
+	pipe := limiter.config.RedisClient.Pipeline()
 	
 	// Increment counter for current window
-	incr := pipe.Incr(r.ctx, key)
+	incr := pipe.Incr(limiter.ctx, key)
 	// Set expiration for the key
-	pipe.Expire(r.ctx, key, window+time.Minute) // Extra minute for cleanup
+	pipe.Expire(limiter.ctx, key, window+time.Minute) // Extra minute for cleanup
 	
 	// Also check previous window for smoother rate limiting
 	prevWindow := now.Add(-window).Truncate(window).Unix()
 	prevKey := fmt.Sprintf("rate_limit:%s:%d", clientID, prevWindow)
-	prevCount := pipe.Get(r.ctx, prevKey)
+	prevCount := pipe.Get(limiter.ctx, prevKey)
 	
 	// Execute pipeline
-	_, err = pipe.Exec(r.ctx)
+	_, err = pipe.Exec(limiter.ctx)
 	if err != nil {
 		return false, 0, 0, err
 	}
@@ -219,7 +219,7 @@ func matchesPattern(path, pattern string) bool {
 }
 
 // CleanupExpiredKeys removes expired rate limiting keys (call periodically)
-func (r *RedisRateLimiter) CleanupExpiredKeys() error {
+func (limiter *RedisRateLimiter) CleanupExpiredKeys() error {
 	// Redis handles expiration automatically, but we can implement
 	// additional cleanup logic here if needed
 	return nil

@@ -11,6 +11,7 @@ import (
 	"github.com/link-app/user-svc/internal/config"
 	"github.com/link-app/user-svc/internal/events"
 	"github.com/link-app/user-svc/internal/middleware"
+	"github.com/link-app/user-svc/internal/montage"
 	"github.com/link-app/user-svc/internal/onboarding"
 	"github.com/link-app/user-svc/internal/profile"
 	"github.com/link-app/user-svc/internal/repository"
@@ -39,17 +40,28 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	onboardingRepo := onboarding.NewGormRepository(db)
+	montageRepo := montage.NewRepository(db)
 
 	// Initialize services
 	onboardingService := onboarding.NewService(onboardingRepo, eventBus)
 	onboardingInterface := onboarding.NewOnboardingInterface(onboardingService)
 	authService := auth.NewAuthService(userRepo, jwtService, eventBus, onboardingInterface)
 	profileService := profile.NewProfileService(userRepo)
+	
+	// Initialize montage dependencies
+	checkinClient := montage.NewMockCheckinClient() // Use mock for now
+	permissionChecker := montage.NewProfilePermissionChecker(profileService)
+	montageConfig := montage.DefaultConfig()
+	montageService := montage.NewService(montageRepo, checkinClient, permissionChecker, montageConfig)
+	
+	// Initialize middleware
+	montagePermissionMiddleware := montage.NewMontagePermissionMiddleware(profileService)
 
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
 	profileHandler := profile.NewProfileHandler(profileService)
 	onboardingHandler := onboarding.NewHandler(onboardingService)
+	montageHandler := montage.NewHandler(montageService, permissionChecker)
 
 	// Initialize Gin router
 	router := gin.Default()
@@ -75,6 +87,25 @@ func main() {
 		auth.RegisterRoutes(v1, authHandler)
 		profile.RegisterRoutes(v1, profileHandler)
 		onboarding.RegisterRoutes(v1, onboardingHandler)
+		
+		// Register montage routes with middleware
+		users := v1.Group("/users")
+		{
+			// Apply authentication and rate limiting middleware to montage routes
+			montageGroup := users.Group("/:id/montage")
+			montageGroup.Use(middleware.RequireAuth())
+			montageGroup.Use(montagePermissionMiddleware.RateLimitMontage())
+			montageGroup.Use(montagePermissionMiddleware.CheckMontageAccess())
+			{
+				montageGroup.GET("", montageHandler.GetMontage)
+				montageGroup.POST("/regenerate", montagePermissionMiddleware.CheckPrivateProfileAccess(), montageHandler.RegenerateMontage)
+				montageGroup.DELETE("", montagePermissionMiddleware.CheckPrivateProfileAccess(), montageHandler.DeleteMontage)
+				montageGroup.GET("/stats", montagePermissionMiddleware.CheckPrivateProfileAccess(), montageHandler.GetUserStats)
+			}
+		}
+		
+		// Health check for montage service
+		v1.GET("/health/montage", montageHandler.HealthCheck)
 
 		// Admin endpoints (could be secured differently)
 		admin := v1.Group("/admin")
@@ -89,6 +120,22 @@ func main() {
 				}
 				c.JSON(http.StatusOK, gin.H{
 					"message": "Session cleanup completed",
+				})
+			})
+			
+			// Admin montage management endpoints
+			admin.POST("/montage/cleanup", func(c *gin.Context) {
+				count, err := montageService.CleanupExpiredMontages(c.Request.Context())
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"error":   "CLEANUP_FAILED",
+						"message": "Failed to cleanup expired montages",
+					})
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{
+					"message": "Montage cleanup completed",
+					"deleted_count": count,
 				})
 			})
 		}
