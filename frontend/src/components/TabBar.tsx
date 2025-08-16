@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Users, MessageCircle, CheckCircle, Calendar, User } from 'lucide-react';
+import { Users, MessageCircle, Calendar, User } from 'lucide-react';
 
 interface TabItem {
   path: string;
@@ -32,11 +32,6 @@ const TabBar: React.FC = (): JSX.Element => {
       path: '/opportunities',
       icon: <Calendar size={24} />,
       label: 'Opportunities'
-    },
-    {
-      path: '/checkin',
-      icon: <CheckCircle size={24} />,
-      label: 'Check-in'
     }
   ];
 
