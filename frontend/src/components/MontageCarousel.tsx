@@ -15,6 +15,8 @@ interface MontageCarouselProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  mode?: 'own' | 'other'; // Added mode prop to customize messages
+  userName?: string; // Name of the user whose profile this is
 }
 
 const MontageCarousel: React.FC<MontageCarouselProps> = ({
@@ -27,6 +29,8 @@ const MontageCarousel: React.FC<MontageCarouselProps> = ({
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
+  mode = 'other',
+  userName = 'User',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -150,23 +154,59 @@ const MontageCarousel: React.FC<MontageCarouselProps> = ({
     </div>
   );
 
-  // Error state
-  const ErrorState = () => (
-    <div className="flex flex-col items-center justify-center py-8 text-center">
-      <AlertCircle size={32} className="text-red-400 mb-2" />
-      <p className="text-red-400 font-medium mb-1">Unable to load montage</p>
-      <p className="text-red-300 text-sm">{errorMessage || 'Something went wrong'}</p>
-    </div>
-  );
+  // Error state with context-aware messaging
+  const ErrorState = () => {
+    const retryAction = () => {
+      // TODO: Implement proper retry mechanism
+      window.location.reload();
+    };
 
-  // Empty state
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <AlertCircle size={32} className="text-red-400 mb-3" />
+        <p className="text-red-400 font-medium mb-1">
+          {mode === 'own' 
+            ? 'Unable to load your montage'
+            : `Unable to load ${userName}'s montage`
+          }
+        </p>
+        <p className="text-red-300 text-sm mb-3">{errorMessage || 'Please try again'}</p>
+        <button
+          onClick={retryAction}
+          className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  };
+
+  // Empty state with context-aware messaging
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center py-8 text-center">
       <div className="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center mb-3">
         <div className="text-text-secondary text-2xl">📸</div>
       </div>
-      <p className="text-text-secondary font-medium mb-1">No montage items yet</p>
-      <p className="text-text-muted text-sm">Check-ins with media will appear here</p>
+      <p className="text-text-secondary font-medium mb-1">
+        {mode === 'own' 
+          ? 'No montage items yet'
+          : `${userName} hasn't shared any montage items`
+        }
+      </p>
+      <p className="text-text-muted text-sm">
+        {mode === 'own' 
+          ? 'Check-ins with media will appear here automatically'
+          : 'Visual memories from check-ins will appear here'
+        }
+      </p>
+      {mode === 'own' && (
+        <div className="mt-3 px-4 py-2 bg-aqua/10 border border-aqua/20 rounded-lg">
+          <p className="text-aqua text-xs font-medium">💡 Tip</p>
+          <p className="text-aqua/80 text-xs mt-1">
+            Add photos or videos to your check-ins to build your montage
+          </p>
+        </div>
+      )}
     </div>
   );
 

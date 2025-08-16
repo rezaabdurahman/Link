@@ -400,16 +400,16 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setIsCheckInModalOpen(false);
   };
 
-  const handleCheckInSubmit = (checkInText: string): void => {
+  const handleCheckInSubmit = (checkInData: { text: string; mediaAttachments: any[]; fileAttachments: any[]; voiceNote: any; locationAttachment: any; tags: any[] }): void => {
     // Store the check-in text for the snackbar
-    setLastCheckInText(checkInText);
+    setLastCheckInText(checkInData.text);
     
     // Close modal and show success snackbar
     setIsCheckInModalOpen(false);
     setShowCheckInSnackbar(true);
     
     // Here you would typically save the check-in to your backend
-    console.log('New check-in from Discovery:', checkInText);
+    console.log('New check-in from Discovery:', checkInData);
     
     // Auto-hide snackbar after 5 seconds
     setTimeout(() => {
@@ -802,6 +802,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         <ProfileDetailModal
           userId={selectedUserId}
           onClose={handleCloseProfile}
+          mode="other"
         />
       )}
 

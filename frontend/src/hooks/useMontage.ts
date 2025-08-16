@@ -63,9 +63,12 @@ export interface UseMontageReturn {
  * SWR fetcher function for montage data
  */
 const montageFetcher = async (key: string): Promise<MontageResponse> => {
+  console.log('🔄 useMontage: Fetcher called with key:', key);
+  
   // Parse the serialized key back to MontageKey
   const parts = key.split(':');
   if (parts.length < 2 || parts[0] !== 'montage') {
+    console.error('❌ useMontage: Invalid key format:', key, parts);
     throw new Error('Invalid montage key format');
   }
   
@@ -84,7 +87,16 @@ const montageFetcher = async (key: string): Promise<MontageResponse> => {
     }
   }
   
-  return fetchMontage(userId, options);
+  console.log('🔍 useMontage: Fetching montage for:', { userId, options });
+  
+  try {
+    const result = await fetchMontage(userId, options);
+    console.log('✅ useMontage: Fetch successful:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ useMontage: Fetch failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -133,6 +145,7 @@ export function useMontage(
 
   // SWR hook for fetching data
   const {
+    data: swrData,
     error: swrError,
     isLoading: isInitialLoading,
     mutate,

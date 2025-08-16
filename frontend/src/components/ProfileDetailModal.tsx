@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, MapPin, Users, Ban } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus } from 'lucide-react';
 import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
+import { CheckIn } from '../types/checkin';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
 import IconActionButton from './IconActionButton';
@@ -10,11 +11,16 @@ import { getUserProfile, UserProfileResponse, getProfileErrorMessage, blockUser,
 import ConfirmationModal from './ConfirmationModal';
 import { useMontage } from '../hooks/useMontage';
 import MontageCarousel from './MontageCarousel';
+import { motion } from 'framer-motion';
 
 interface ProfileDetailModalProps {
   userId: string;
   onClose: () => void;
   onBlock?: (userId: string) => void;
+  mode?: 'own' | 'other'; // 'own' for viewing own profile, 'other' for viewing others
+  isEmbedded?: boolean; // true when used in ProfilePage, false when used as modal
+  showMontageByDefault?: boolean; // true to show montage section by default
+  isEditing?: boolean; // true when in editing mode
 }
 
 // Helper function to convert UserProfileResponse to User type
@@ -41,16 +47,117 @@ const mapUserProfileToUser = (profile: UserProfileResponse): User => {
   };
 };
 
-const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose, onBlock }): JSX.Element => {
+// Extended CheckIn interface for modal use
+interface ExtendedCheckIn extends CheckIn {
+  source?: 'manual' | 'instagram' | 'twitter' | 'other';
+  instagramData?: {
+    username: string;
+    profilePicture: string;
+    likes: number;
+    imageUrl: string;
+    caption: string;
+    hashtags: string[];
+  };
+}
+
+// Mock check-ins data for own profile view
+const generateMockCheckIns = (): ExtendedCheckIn[] => [
+  {
+    id: 'checkin-instagram-1',
+    text: 'Beautiful sunset at the beach today! 🌅 Nothing beats those golden hour vibes',
+    mediaAttachments: [],
+    fileAttachments: [],
+    voiceNote: null,
+    locationAttachment: null,
+    tags: [
+      { id: 'tag-ig-1', label: 'sunset', type: 'manual', color: '#F59E0B' },
+      { id: 'tag-ig-2', label: 'beach', type: 'manual', color: '#3B82F6' }
+    ],
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+    source: 'instagram',
+    instagramData: {
+      username: 'alexthompson',
+      profilePicture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
+      likes: 247,
+      imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop',
+      caption: 'Beautiful sunset at the beach today! 🌅 Nothing beats those golden hour vibes',
+      hashtags: ['#sunset', '#beach', '#goldenhour']
+    }
+  },
+  {
+    id: 'checkin-1',
+    text: 'Just finished an amazing workout session at the gym! Feeling energized and ready to tackle the rest of the day.',
+    mediaAttachments: [],
+    fileAttachments: [],
+    voiceNote: null,
+    locationAttachment: { id: 'loc-1', name: 'FitnessFirst Gym', coordinates: { lat: 37.7749, lng: -122.4194 } },
+    tags: [
+      { id: 'tag-1', label: 'workout', type: 'manual', color: '#10B981' },
+      { id: 'tag-2', label: 'fitness', type: 'ai', color: '#3B82F6' }
+    ],
+    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
+    source: 'manual'
+  }
+];
+
+// Time formatting utility
+const formatTimeAgo = (timestamp: Date): string => {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - timestamp.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return 'just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  return timestamp.toLocaleDateString();
+};
+
+const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ 
+  userId, 
+  onClose, 
+  onBlock, 
+  mode = 'other',
+  isEmbedded = false,
+  showMontageByDefault = false,
+  isEditing = false
+}): JSX.Element => {
   const [user, setUser] = useState<User | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
   const [showBlockConfirmation, setShowBlockConfirmation] = useState<boolean>(false);
   const [blockingLoading, setBlockingLoading] = useState<boolean>(false);
   const [blockingError, setBlockingError] = useState<string | undefined>(undefined);
   const [selectedMontageInterest, setSelectedMontageInterest] = useState<string | undefined>(undefined);
+  
+  // Check-ins state (only for own profile view)
+  const [checkIns, setCheckIns] = useState<ExtendedCheckIn[]>([]);
+  
+  // Initialize check-ins based on mode
+  useEffect(() => {
+    if (mode === 'own') {
+      setCheckIns(generateMockCheckIns());
+    } else {
+      // For 'other' mode, show all check-ins (read-only)
+      setCheckIns(generateMockCheckIns());
+    }
+  }, [mode]);
+  
+  // Check-ins handlers
+  const handleEditCheckin = (checkinId: string): void => {
+    console.log('Edit checkin:', checkinId);
+    // TODO: Implement edit functionality
+  };
+  
+  const handleShareCheckin = (checkin: CheckIn): void => {
+    console.log('Share checkin:', checkin);
+    // TODO: Implement share functionality
+  };
+  
+  const handleDeleteCheckin = (checkinId: string): void => {
+    console.log('Delete checkin:', checkinId);
+    // TODO: Implement delete functionality
+  };
   
   // Use the friendship hook to get real friendship status
   const { getFriendshipStatus } = useFriendRequests();
@@ -68,6 +175,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     initialPageSize: 10,
     errorRetryCount: 2,
   });
+
 
   // Fetch user profile data when modal mounts or userId changes
   useEffect(() => {
@@ -195,16 +303,6 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     url: link.url
   })) || [];
 
-  // Use additional photos from backend and filter out broken ones
-  const additionalPhotos = profileResponse?.additional_photos?.filter(photo => 
-    photo && !brokenImages.has(photo)
-  ) || [];
-
-  // Handle broken images
-  const handleImageError = (photoUrl: string) => {
-    setBrokenImages(prev => new Set([...prev, photoUrl]));
-  };
-
   // Loading skeleton component
   const ProfileSkeleton = () => (
     <div className="text-center mb-6">
@@ -236,32 +334,11 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
     </div>
   );
 
-  return (
-    <div 
-      className="modal-overlay" 
-      onClick={onClose}
-      onKeyDown={handleModalKeyDown}
-      role="dialog"
-      aria-modal="true"
-      tabIndex={-1}
-    >
-      <div 
-        className="modal-content" 
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        {/* Fixed Header - Only Close Button */}
-        <div className="flex justify-end items-center px-3 pt-2 pb-1">
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
-          >
-            <X size={16} className="text-white" />
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="max-h-[80vh] overflow-y-auto scrollbar-hide">
+  // Content component to avoid duplication
+  const ProfileContent = () => (
+    <>
+      {/* Scrollable Content */}
+      <div className={isEmbedded ? "" : "max-h-[80vh] overflow-y-auto scrollbar-hide"}>
           {loading && <ProfileSkeleton />}
           
           {error && <ErrorDisplay errorMessage={error} />}
@@ -429,105 +506,377 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({ userId, onClose
                 </div>
               </div>
 
-              {/* Montage Section */}
-              {user.profileType === 'public' && (
-                <div className="px-4 mb-4">
-                  {/* Montage divider */}
+              {/* Check-ins Section (read-only for others, editable for own) */}
+              <div className="px-4 mb-4">
+                  {/* Check-ins divider */}
                   <div className="mb-3 border-t border-gray-300/30 w-16 mx-auto"></div>
                   
-                  {/* Montage toggle pills */}
-                  <div className="flex flex-wrap gap-1.5 mb-3">
+                  {/* Section Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-text-primary">Check-Ins</h3>
+                  </div>
+
+                  {/* Check-ins Horizontal Carousel */}
+                  {checkIns.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-text-secondary text-sm mb-2">No check-ins yet</p>
+                      <button
+                        onClick={() => console.log('Add new check-in')}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                      >
+                        <Plus size={16} />
+                        Share your first thought
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      {/* Horizontal scrollable container */}
+                      <div 
+                        className="flex gap-3 overflow-x-auto scrollbar-hide pb-2"
+                        style={{
+                          scrollbarWidth: 'none',
+                          msOverflowStyle: 'none'
+                        }}
+                      >
+                        {checkIns.map((checkin, index) => (
+                          <motion.div
+                            key={checkin.id}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className={`${
+                              checkin.source === 'instagram'
+                                ? 'bg-white rounded-lg overflow-hidden'
+                                : 'bg-white/50 rounded-lg p-3'
+                            } border border-white/20 flex-shrink-0`}
+                            style={{
+                              minWidth: '250px',
+                              maxWidth: '280px',
+                              maxHeight: '480px',
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                            }}
+                          >
+                            {checkin.source === 'instagram' && checkin.instagramData ? (
+                              /* Instagram Post Layout */
+                              <div className="flex flex-col h-full">
+                                {/* Instagram Header */}
+                                <div className="flex items-center justify-between p-3 pb-2">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white shadow-sm">
+                                      <img
+                                        src={checkin.instagramData.profilePicture}
+                                        alt="Instagram User"
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-semibold text-gray-900 text-xs">{checkin.instagramData.username}</span>
+                                      <FaInstagram size={10} className="text-pink-500" />
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-gray-500">{formatTimeAgo(checkin.timestamp)}</span>
+                                  </div>
+                                </div>
+                                
+                                {/* Instagram Image */}
+                                <div className="relative mb-3">
+                                  <img
+                                    src={checkin.instagramData.imageUrl}
+                                    alt="Instagram Post"
+                                    className="w-full h-48 object-cover"
+                                  />
+                                  <div className="absolute top-2 left-2">
+                                    <div className="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                                      <div className="w-1 h-1 bg-aqua rounded-full animate-pulse"></div>
+                                      <span>Reposted</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Instagram Content */}
+                                <div className="px-3 pb-2">
+                                  {/* Likes */}
+                                  <div className="mb-2">
+                                    <span className="font-semibold text-xs text-gray-900">{checkin.instagramData.likes} likes</span>
+                                  </div>
+                                  
+                                  {/* Caption */}
+                                  <div className="text-xs text-gray-700 leading-relaxed mb-2">
+                                    <span className="font-semibold text-gray-900">{checkin.instagramData.username}</span>{' '}
+                                    <span>{checkin.instagramData.caption}</span>
+                                    {checkin.instagramData.hashtags.length > 0 && (
+                                      <div className="text-gray-500 text-xs mt-1">
+                                        {checkin.instagramData.hashtags.join(' ')}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* User-Generated Tags */}
+                                <div className="px-3 pb-3 border-t border-gray-200/30">
+                                  <div className="flex items-center justify-between mb-1 pt-2">
+                                    <span className="text-xs font-medium text-gray-600">Your Tags</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1 items-center">
+                                    {checkin.tags.map((tag) => (
+                                      <span
+                                        key={tag.id}
+                                        className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-aqua text-white"
+                                      >
+                                        #{tag.label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              /* Regular Check-in Layout */
+                              <>
+                                {/* Check-in Header */}
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Clock size={11} className="text-gray-500" />
+                                    <span className="text-xs text-gray-500">{formatTimeAgo(checkin.timestamp)}</span>
+                                  </div>
+                                  
+                                  {mode === 'own' && (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleEditCheckin(checkin.id)}
+                                        className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                                        title="Edit"
+                                      >
+                                        <Edit3 size={11} className="text-gray-500" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleShareCheckin(checkin)}
+                                        className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                                        title="Share"
+                                      >
+                                        <Share size={11} className="text-gray-500" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteCheckin(checkin.id)}
+                                        className="p-1 hover:bg-red-500/20 rounded-full transition-colors"
+                                        title="Delete"
+                                      >
+                                        <Trash2 size={11} className="text-red-500" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Check-in Content */}
+                                <p className="text-sm text-gray-700 mb-2 leading-relaxed">
+                                  {checkin.text}
+                                </p>
+                                
+                                {/* Location */}
+                                {checkin.locationAttachment && (
+                                  <div className="flex items-center gap-1 mb-2">
+                                    <MapPin size={11} className="text-aqua" />
+                                    <span className="text-xs text-aqua truncate">{checkin.locationAttachment.name}</span>
+                                  </div>
+                                )}
+                                
+                                {/* Tags */}
+                                <div className="flex flex-wrap gap-1 items-center">
+                                  {checkin.tags.slice(0, 3).map((tag) => (
+                                    <span
+                                      key={tag.id}
+                                      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-aqua text-white"
+                                    >
+                                      #{tag.label}
+                                    </span>
+                                  ))}
+                                  {checkin.tags.length > 3 && (
+                                    <span className="text-xs text-gray-500 px-1">
+                                      +{checkin.tags.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </motion.div>
+                        ))}
+                      </div>
+                      
+                      {/* Scroll Indicator */}
+                      {checkIns.length > 1 && (
+                        <div className="flex justify-center mt-2">
+                          <div className="flex gap-1">
+                            {checkIns.slice(0, Math.min(checkIns.length, 5)).map((_, index) => (
+                              <div
+                                key={index}
+                                className="w-1.5 h-1.5 rounded-full bg-gray-300"
+                                style={{ opacity: index === 0 ? 1 : 0.3 }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              {/* Montage Section - Show for both own and other modes */}
+              <div className="px-4 mb-4">
+                {/* Montage divider */}
+                <div className="mb-3 border-t border-gray-300/30 w-16 mx-auto"></div>
+                
+                {/* Montage section header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-text-primary">
+                      {mode === 'own' ? 'Your Montage' : `${user.name}'s Montage`}
+                    </h3>
+                  </div>
+                  {mode === 'own' && !isEmbedded && (
+                    <div className="flex items-center gap-2">
+                      {/* Refresh button for own profile */}
+                      <button
+                        onClick={() => window.location.reload()} // TODO: Replace with proper refresh action
+                        className="p-1.5 hover:bg-surface-hover rounded-full transition-colors"
+                        title="Refresh montage"
+                      >
+                        <svg 
+                          width="14" 
+                          height="14" 
+                          viewBox="0 0 24 24" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          strokeWidth="2" 
+                          className="text-text-secondary hover:text-text-primary transition-colors"
+                        >
+                          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                          <path d="M21 3v5h-5" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Montage toggle pills */}
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  <button
+                    onClick={() => setSelectedMontageInterest(undefined)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                      selectedMontageInterest === undefined
+                        ? 'bg-aqua text-white shadow-sm'
+                        : 'bg-surface-hover text-text-secondary hover:bg-aqua/10 hover:text-aqua'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {user.interests && getTopInterests(user.interests).map((interest, index) => (
                     <button
-                      onClick={() => setSelectedMontageInterest(undefined)}
+                      key={index}
+                      onClick={() => setSelectedMontageInterest(interest)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
-                        selectedMontageInterest === undefined
+                        selectedMontageInterest === interest
                           ? 'bg-aqua text-white shadow-sm'
                           : 'bg-surface-hover text-text-secondary hover:bg-aqua/10 hover:text-aqua'
                       }`}
                     >
-                      All
+                      {interest}
                     </button>
-                    {user.interests && getTopInterests(user.interests).map((interest, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedMontageInterest(interest)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
-                          selectedMontageInterest === interest
-                            ? 'bg-aqua text-white shadow-sm'
-                            : 'bg-surface-hover text-text-secondary hover:bg-aqua/10 hover:text-aqua'
-                        }`}
-                      >
-                        {interest}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Montage carousel */}
-                  <MontageCarousel
-                    items={montageItems}
-                    onItemClick={handleMontageItemClick}
-                    isLoading={isMontageLoading}
-                    hasError={!!montageError}
-                    errorMessage={montageError || undefined}
-                    onLoadMore={hasMontageMore ? loadMoreMontage : undefined}
-                    hasMore={hasMontageMore}
-                    isLoadingMore={isMontageLoadingMore}
-                    className="min-h-[180px]"
-                  />
+                  ))}
                 </div>
-              )}
 
-              {/* Photos - no header, scrollable, only show for public profiles */}
-              {user.profileType === 'public' && additionalPhotos.length > 0 && (
-                <>
-                  {/* Divider line before photos */}
-                  <div className="mx-4 mb-1 border-t border-white/10"></div>
-                  
-                  <div className="px-4 mb-2">
-                    <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-                      <div className="grid grid-cols-2 gap-2">
-                        {additionalPhotos.map((photo, index) => (
-                          <img
-                            key={photo}
-                            src={photo}
-                            alt={`${user.name}'s photo ${index + 1}`}
-                            className="w-full aspect-square rounded-lg object-cover cursor-pointer hover:scale-105 transition-transform duration-200 hover-glow"
-                            onError={() => handleImageError(photo)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
+                {/* Montage carousel */}
+                <MontageCarousel
+                  items={montageItems}
+                  onItemClick={handleMontageItemClick}
+                  isLoading={isMontageLoading}
+                  hasError={!!montageError}
+                  errorMessage={montageError || undefined}
+                  onLoadMore={hasMontageMore ? loadMoreMontage : undefined}
+                  hasMore={hasMontageMore}
+                  isLoadingMore={isMontageLoadingMore}
+                  className="min-h-[180px]"
+                  mode={mode}
+                  userName={user.name}
+                />
+              </div>
+
             </>
           )}
+      </div>
+
+      {/* ConversationModal */}
+      {chatData && (
+        <ConversationModal
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          chat={chatData}
+          onAddFriend={() => handleFriendAction('send', true)}
+          isFriend={isFriend}
+        />
+      )}
+      
+      {/* Block Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showBlockConfirmation}
+        onClose={cancelBlockUser}
+        onConfirm={confirmBlockUser}
+        title="Block User"
+        message={user ? `Are you sure you want to block ${user.name}? This will prevent both of you from seeing each other's profiles and messaging each other.` : "Are you sure you want to block this user?"}
+        confirmText="Block"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-500 hover:bg-red-600 text-white"
+        loading={blockingLoading}
+        error={blockingError}
+      />
+    </>
+  );
+
+  // Return content with or without modal wrapper based on embedded flag
+  if (isEmbedded) {
+    return (
+      <div 
+        className="ios-card" 
+        style={{
+          position: 'relative',
+          margin: '0 auto',
+          marginBottom: '32px',
+          maxWidth: '400px',
+          padding: '0',
+          background: 'white',
+          border: 'none',
+          boxShadow: 'none'
+        }}
+      >
+        <ProfileContent />
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="modal-overlay" 
+      onClick={onClose}
+      onKeyDown={handleModalKeyDown}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+    >
+      <div 
+        className="modal-content" 
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {/* Fixed Header - Only Close Button */}
+        <div className="flex justify-end items-center px-3 pt-2 pb-1">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
+          >
+            <X size={16} className="text-white" />
+          </button>
         </div>
 
-        {/* ConversationModal */}
-        {chatData && (
-          <ConversationModal
-            isOpen={isChatOpen}
-            onClose={() => setIsChatOpen(false)}
-            chat={chatData}
-            onAddFriend={() => handleFriendAction('send', true)}
-            isFriend={isFriend}
-          />
-        )}
-        
-        {/* Block Confirmation Modal */}
-        <ConfirmationModal
-          isOpen={showBlockConfirmation}
-          onClose={cancelBlockUser}
-          onConfirm={confirmBlockUser}
-          title="Block User"
-          message={user ? `Are you sure you want to block ${user.name}? This will prevent both of you from seeing each other's profiles and messaging each other.` : "Are you sure you want to block this user?"}
-          confirmText="Block"
-          cancelText="Cancel"
-          confirmButtonClass="bg-red-500 hover:bg-red-600 text-white"
-          loading={blockingLoading}
-          error={blockingError}
-        />
+        <ProfileContent />
       </div>
     </div>
   );

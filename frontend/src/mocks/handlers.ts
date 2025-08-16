@@ -14,7 +14,7 @@ import {
   MessagesResponse,
   CreateConversationRequest
 } from '../services/chatClient';
-import { nearbyUsers, chats } from '../data/mockData';
+import { nearbyUsers, chats, currentUser } from '../data/mockData';
 
 // Helper to generate UUID
 const generateId = () => crypto.randomUUID();
@@ -104,7 +104,7 @@ const extractUserId = (req: any): string | null => {
                  (import.meta?.env?.VITE_ENABLE_MOCKING === 'true');
   
   if (isDemo || (!authHeader && !userIdHeader)) {
-    const defaultUserId = 'user-jane'; // Use jane as default demo user
+    const defaultUserId = currentUser.id; // Use currentUser as default demo user
     console.log('🎭 MSW: Using default demo user ID for demo mode:', defaultUserId);
     return defaultUserId;
   }
@@ -1663,8 +1663,14 @@ export const userHandlers = [
       );
     }
 
-    // Find user in nearbyUsers mock data
-    const user = nearbyUsers.find(u => u.id === userId);
+    // Check if this is the current user first
+    let user = null;
+    if (userId === currentUser.id) {
+      user = currentUser;
+    } else {
+      // Find user in nearbyUsers mock data
+      user = nearbyUsers.find(u => u.id === userId);
+    }
     
     if (!user) {
       return HttpResponse.json(

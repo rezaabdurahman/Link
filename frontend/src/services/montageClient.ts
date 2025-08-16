@@ -35,9 +35,12 @@ export async function fetchMontage(
   userId: string,
   options?: MontageOptions
 ): Promise<MontageResponse> {
+  console.log('🚀 montageClient: fetchMontage called with:', { userId, options });
+  
   try {
     // Validate userId parameter
     if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+      console.error('❌ montageClient: Invalid userId:', userId);
       throw new AuthServiceError({
         type: 'VALIDATION_ERROR',
         message: 'User ID is required and must be a non-empty string',
@@ -63,7 +66,9 @@ export async function fetchMontage(
       ? `${MONTAGE_ENDPOINTS.montage(userId.trim())}?${queryString}`
       : MONTAGE_ENDPOINTS.montage(userId.trim());
 
+    console.log('🔗 montageClient: Making request to endpoint:', endpoint);
     const response = await apiClient.get<MontageResponse>(endpoint);
+    console.log('✅ montageClient: Response received:', response);
     
     // Validate response structure
     if (!isMontageResponse(response)) {
