@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import DiscoveryPage from './pages/DiscoveryPage';
 import ChatPage from './pages/ChatPage';
-import CheckinPage from './pages/CheckinPage';
 import OpportunitiesPage from './pages/OpportunitiesPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
@@ -49,7 +48,6 @@ const App: React.FC = (): JSX.Element => {
                 <Route index element={<DiscoveryPage />} />
                 <Route path="discovery" element={<DiscoveryPage />} />
                 <Route path="chat" element={<ChatPage />} />
-                <Route path="checkin" element={<CheckinPage />} />
                 <Route path="opportunities" element={<OpportunitiesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="settings" element={<SettingsPage />} />

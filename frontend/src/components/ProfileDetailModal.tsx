@@ -1,17 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Radio, Megaphone } from 'lucide-react';
 import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
 import { CheckIn } from '../types/checkin';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
 import IconActionButton from './IconActionButton';
+import CheckInModal from './CheckInModal';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { getUserProfile, UserProfileResponse, getProfileErrorMessage, blockUser, getBlockingErrorMessage } from '../services/userClient';
 import ConfirmationModal from './ConfirmationModal';
 import { useMontage } from '../hooks/useMontage';
 import MontageCarousel from './MontageCarousel';
 import { motion } from 'framer-motion';
+import { getUserBroadcast, PublicBroadcastResponse, getBroadcastErrorMessage, isBroadcastError } from '../services/broadcastClient';
 
 interface ProfileDetailModalProps {
   userId: string;
@@ -97,6 +99,21 @@ const generateMockCheckIns = (): ExtendedCheckIn[] => [
     ],
     timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
     source: 'manual'
+  },
+  {
+    id: 'checkin-2',
+    text: 'Coffee shop vibes on this cozy Sunday morning ☕️ Perfect spot to catch up on some reading.',
+    mediaAttachments: [],
+    fileAttachments: [],
+    voiceNote: null,
+    locationAttachment: { id: 'loc-2', name: 'Blue Bottle Coffee', coordinates: { lat: 37.7849, lng: -122.4094 } },
+    tags: [
+      { id: 'tag-3', label: 'coffee', type: 'manual', color: '#8B4513' },
+      { id: 'tag-4', label: 'reading', type: 'ai', color: '#9333EA' },
+      { id: 'tag-5', label: 'weekend', type: 'manual', color: '#EF4444' }
+    ],
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+    source: 'manual'
   }
 ];
 
@@ -118,8 +135,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   onBlock, 
   mode = 'other',
   isEmbedded = false,
-  showMontageByDefault = false,
-  isEditing = false
+  showMontageByDefault: _showMontageByDefault = false,
+  isEditing: _isEditing = false
 }): JSX.Element => {
   const [user, setUser] = useState<User | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
@@ -132,6 +149,17 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   
   // Check-ins state (only for own profile view)
   const [checkIns, setCheckIns] = useState<ExtendedCheckIn[]>([]);
+  const [showCheckInModal, setShowCheckInModal] = useState<boolean>(false);
+  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  
+  // Broadcast state
+  const [broadcast, setBroadcast] = useState<PublicBroadcastResponse | null>(null);
+  const [broadcastLoading, setBroadcastLoading] = useState<boolean>(false);
+  const [broadcastError, setBroadcastError] = useState<string | undefined>(undefined);
+  
+  // State to preserve scroll position during montage filter changes
+  const [preserveScrollPosition, setPreserveScrollPosition] = useState<number>(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Initialize check-ins based on mode
   useEffect(() => {
@@ -159,6 +187,30 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     // TODO: Implement delete functionality
   };
   
+  // Handle new check-in submission
+  const handleNewCheckInSubmit = (checkInData: any): void => {
+    // Create new check-in from the modal data
+    const newCheckIn: ExtendedCheckIn = {
+      id: `checkin-${Date.now()}`,
+      text: checkInData.text,
+      mediaAttachments: checkInData.mediaAttachments,
+      fileAttachments: checkInData.fileAttachments,
+      voiceNote: checkInData.voiceNote,
+      locationAttachment: checkInData.locationAttachment,
+      tags: checkInData.tags,
+      timestamp: new Date(),
+      source: 'manual'
+    };
+    
+    // Add to front of check-ins array
+    setCheckIns(prev => [newCheckIn, ...prev]);
+    
+    // Close modal
+    setShowCheckInModal(false);
+    
+    console.log('New check-in created:', newCheckIn);
+  };
+  
   // Use the friendship hook to get real friendship status
   const { getFriendshipStatus } = useFriendRequests();
   const friendshipStatus = getFriendshipStatus(userId).status;
@@ -175,6 +227,20 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     initialPageSize: 10,
     errorRetryCount: 2,
   });
+  
+  // Effect to restore scroll position after montage filter changes
+  useEffect(() => {
+    if (preserveScrollPosition > 0 && scrollContainerRef.current && !isMontageLoading) {
+      const timer = setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = preserveScrollPosition;
+          setPreserveScrollPosition(0); // Reset after restoring
+        }
+      }, 50); // Small delay to ensure content is rendered
+      
+      return () => clearTimeout(timer);
+    }
+  }, [preserveScrollPosition, isMontageLoading, montageItems]);
 
 
   // Fetch user profile data when modal mounts or userId changes
@@ -199,6 +265,33 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     };
 
     fetchUserProfile();
+  }, [userId]);
+  
+  // Fetch user's broadcast when modal mounts or userId changes
+  useEffect(() => {
+    const fetchUserBroadcast = async () => {
+      if (!userId) return;
+      
+      setBroadcastLoading(true);
+      setBroadcastError(undefined);
+      setBroadcast(null);
+      
+      try {
+        const broadcastResponse = await getUserBroadcast(userId);
+        setBroadcast(broadcastResponse);
+      } catch (err: any) {
+        // Only set error for non-404 errors (404 means no broadcast exists)
+        if (isBroadcastError(err) && err.code !== 404) {
+          console.error('Failed to fetch user broadcast:', err);
+          setBroadcastError(getBroadcastErrorMessage(err));
+        }
+        // If 404, just leave broadcast as null (user has no broadcast)
+      } finally {
+        setBroadcastLoading(false);
+      }
+    };
+
+    fetchUserBroadcast();
   }, [userId]);
 
   // Determine if users are friends based on friendship status
@@ -338,28 +431,33 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const ProfileContent = () => (
     <>
       {/* Scrollable Content */}
-      <div className={isEmbedded ? "" : "max-h-[80vh] overflow-y-auto scrollbar-hide"}>
+      <div 
+        ref={scrollContainerRef}
+        className={isEmbedded ? "" : "max-h-[80vh] overflow-y-auto scrollbar-hide"}
+      >
           {loading && <ProfileSkeleton />}
           
           {error && <ErrorDisplay errorMessage={error} />}
           
           {user && !loading && !error && (
             <>
-              {/* Profile Title & Block Button */}
-              <div className="flex justify-between items-center px-4 pt-0 pb-1">
-                <h2 className="text-xl font-bold m-0 text-gradient-aqua">
-                  Profile
-                </h2>
-                {onBlock && (
-                  <IconActionButton
-                    Icon={Ban}
-                    label="Block user"
-                    onClick={handleBlockUser}
-                    variant="secondary"
-                    size="small"
-                  />
-                )}
-              </div>
+              {/* Profile Title & Block Button - Only show for other users */}
+              {mode !== 'own' && (
+                <div className="flex justify-between items-center px-4 pt-0 pb-1">
+                  <h2 className="text-xl font-bold m-0 text-gradient-aqua">
+                    Profile
+                  </h2>
+                  {onBlock && (
+                    <IconActionButton
+                      Icon={Ban}
+                      label="Block user"
+                      onClick={handleBlockUser}
+                      variant="secondary"
+                      size="small"
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Instagram-style Profile Header */}
               <div className="flex gap-4 items-center px-4 mb-1">
@@ -479,32 +577,48 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Interests */}
-              <div className="px-4 mb-1 mt-3">
-                {user.interests && user.interests.length > 0 && (
-                  <>
-                    {/* Subtle divider line */}
-                    <div className="mb-2 border-t border-gray-300/30 w-16 mx-auto"></div>
-                    <p className="text-text-primary text-sm mb-1 font-bold">
-                      Interest Montages
-                    </p>
-                  </>
-                )}
-                <div className="flex flex-wrap gap-1.5">
-                  {user.interests && user.interests.length > 0 ? (
-                    user.interests.map((interest, index) => (
-                      <span
-                        key={index}
-                        className="bg-aqua/20 text-aqua px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm"
-                      >
-                        {interest}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-text-secondary text-xs">No interests listed</span>
-                  )}
+              {/* Broadcast Section - Show when user has a broadcast */}
+              {broadcast && (
+                <div className="px-4 mb-4">
+                  {/* Broadcast divider */}
+                  <div className="mb-3 border-t border-gray-300/30 w-16 mx-auto"></div>
+                  
+                  {/* Section Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-text-primary">Broadcast</h3>
+                      <Megaphone size={14} className="text-aqua" />
+                    </div>
+                  </div>
+
+                  {/* Broadcast Card */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-4 border border-teal-100 shadow-sm relative overflow-hidden"
+                  >
+                    {/* Animated background pattern */}
+                    <div className="absolute inset-0 opacity-5">
+                      <div className="absolute top-2 right-2 w-12 h-12 bg-aqua/30 rounded-full animate-pulse"></div>
+                      <div className="absolute bottom-4 left-4 w-8 h-8 bg-aqua/20 rounded-full animate-pulse delay-1000"></div>
+                    </div>
+                    
+                    <div className="relative z-10">
+                      {/* Broadcast indicator */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs text-gray-500">
+                          {formatTimeAgo(new Date(broadcast.updated_at))}
+                        </span>
+                      </div>
+                      
+                      {/* Broadcast message */}
+                      <p className="text-sm text-gray-800 leading-relaxed font-medium">
+                        {broadcast.message}
+                      </p>
+                    </div>
+                  </motion.div>
                 </div>
-              </div>
+              )}
 
               {/* Check-ins Section (read-only for others, editable for own) */}
               <div className="px-4 mb-4">
@@ -513,7 +627,25 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   
                   {/* Section Header */}
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-text-primary">Check-Ins</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-text-primary">Check-Ins</h3>
+                      <button
+                        onClick={() => setShowHelpModal(true)}
+                        className="w-5 h-5 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
+                        title="What happens when you check-in?"
+                      >
+                        <HelpCircle size={14} />
+                      </button>
+                    </div>
+                    {mode === 'own' && checkIns.length > 0 && (
+                      <button
+                        onClick={() => setShowCheckInModal(true)}
+                        className="flex items-center justify-center w-8 h-8 bg-aqua hover:bg-aqua-dark text-white rounded-full transition-all duration-200 hover:scale-105"
+                        title="Add new check-in"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    )}
                   </div>
 
                   {/* Check-ins Horizontal Carousel */}
@@ -521,7 +653,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                     <div className="text-center py-6">
                       <p className="text-text-secondary text-sm mb-2">No check-ins yet</p>
                       <button
-                        onClick={() => console.log('Add new check-in')}
+                        onClick={() => setShowCheckInModal(true)}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
                       >
                         <Plus size={16} />
@@ -546,19 +678,23 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                             transition={{ delay: index * 0.1 }}
                             className={`${
                               checkin.source === 'instagram'
-                                ? 'bg-white rounded-lg overflow-hidden'
-                                : 'bg-white/50 rounded-lg p-3'
-                            } border border-white/20 flex-shrink-0`}
+                                ? 'rounded-lg overflow-hidden'
+                                : 'bg-white/50 rounded-lg p-3 border border-white/20'
+                            } flex-shrink-0`}
                             style={{
                               minWidth: '250px',
                               maxWidth: '280px',
                               maxHeight: '480px',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                              ...(checkin.source === 'instagram' && {
+                                background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)',
+                                padding: '2px'
+                              })
                             }}
                           >
                             {checkin.source === 'instagram' && checkin.instagramData ? (
                               /* Instagram Post Layout */
-                              <div className="flex flex-col h-full">
+                              <div className="flex flex-col h-full bg-white rounded-lg">
                                 {/* Instagram Header */}
                                 <div className="flex items-center justify-between p-3 pb-2">
                                   <div className="flex items-center gap-3">
@@ -760,7 +896,13 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 {/* Montage toggle pills */}
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   <button
-                    onClick={() => setSelectedMontageInterest(undefined)}
+                    onClick={() => {
+                      // Preserve scroll position before filter change
+                      if (scrollContainerRef.current) {
+                        setPreserveScrollPosition(scrollContainerRef.current.scrollTop);
+                      }
+                      setSelectedMontageInterest(undefined);
+                    }}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
                       selectedMontageInterest === undefined
                         ? 'bg-aqua text-white shadow-sm'
@@ -772,7 +914,13 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   {user.interests && getTopInterests(user.interests).map((interest, index) => (
                     <button
                       key={index}
-                      onClick={() => setSelectedMontageInterest(interest)}
+                      onClick={() => {
+                        // Preserve scroll position before filter change
+                        if (scrollContainerRef.current) {
+                          setPreserveScrollPosition(scrollContainerRef.current.scrollTop);
+                        }
+                        setSelectedMontageInterest(interest);
+                      }}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
                         selectedMontageInterest === interest
                           ? 'bg-aqua text-white shadow-sm'
@@ -828,6 +976,71 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         loading={blockingLoading}
         error={blockingError}
       />
+      
+      {/* Check-In Modal */}
+      {mode === 'own' && (
+        <CheckInModal
+          isOpen={showCheckInModal}
+          onClose={() => setShowCheckInModal(false)}
+          onSubmit={handleNewCheckInSubmit}
+        />
+      )}
+      
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl max-w-md w-full shadow-2xl"
+          >
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">What happens when you check-in?</h3>
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">1</span>
+                  </div>
+                  <p><strong className="text-gray-900">Friends get summaries:</strong> When you chat with friends, they'll see a summary of your recent check-ins to stay connected with what's happening in your life.</p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">2</span>
+                  </div>
+                  <p><strong className="text-gray-900">Bio updates:</strong> Friends can see your check-in details in your profile bio, giving them insight into your current interests and activities.</p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">3</span>
+                  </div>
+                  <p><strong className="text-gray-900">Interest montage:</strong> The tags from your check-ins automatically update your profile's interest montage, showing friends what you're genuinely passionate about.</p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-aqua/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-semibold text-aqua">4</span>
+                  </div>
+                  <p><strong className="text-gray-900">Smart opportunities:</strong> Your check-ins help us suggest relevant social opportunities, events, and connections based on your interests and activities.</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </>
   );
 
