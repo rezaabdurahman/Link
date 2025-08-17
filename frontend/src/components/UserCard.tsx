@@ -195,13 +195,13 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
                   {mutualInterests.slice(0, 4).map((interest, index) => (
                     <span
                       key={index}
-                      className="bg-gradient-aqua-copper text-white px-3 py-1.5 rounded-full text-sm font-medium backdrop-blur-sm drop-shadow-lg"
+                      className="bg-aqua text-white px-3 py-1.5 rounded-full text-sm font-medium backdrop-blur-sm drop-shadow-lg"
                     >
                       {interest}
                     </span>
                   ))}
                   {mutualInterests.length > 4 && (
-                    <span className="bg-gradient-aqua-copper text-white px-3 py-1.5 rounded-full text-sm backdrop-blur-sm drop-shadow-lg">
+                    <span className="bg-aqua text-white px-3 py-1.5 rounded-full text-sm backdrop-blur-sm drop-shadow-lg">
                       +{mutualInterests.length - 4}
                     </span>
                   )}
@@ -264,13 +264,13 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
               {mutualInterests.slice(0, 2).map((interest, index) => (
                 <span
                   key={index}
-                  className="bg-gradient-aqua-copper text-white px-2 py-0.5 rounded-full text-xs font-medium drop-shadow-sm"
+                  className="bg-aqua text-white px-2 py-0.5 rounded-full text-xs font-medium drop-shadow-sm"
                 >
                   {interest}
                 </span>
               ))}
               {mutualInterests.length > 2 && (
-                <span className="bg-gradient-aqua-copper text-white px-2 py-0.5 rounded-full text-xs drop-shadow-sm">
+                <span className="bg-aqua text-white px-2 py-0.5 rounded-full text-xs drop-shadow-sm">
                   ...
                 </span>
               )}
