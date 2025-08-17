@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { Edit, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { currentUser as initialCurrentUser } from '../data/mockData';
-import { User } from '../types';
 import ProfileDetailModal from '../components/ProfileDetailModal';
 import { setUserAvailability, isAvailabilityError, getAvailabilityErrorMessage } from '../services/availabilityClient';
 
 const ProfilePage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [currentUser, setCurrentUser] = useState<User>(initialCurrentUser);
+  const currentUser = initialCurrentUser;
   const [isAvailable, setIsAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
   const [isAvailabilitySubmitting, setIsAvailabilitySubmitting] = useState<boolean>(false);
 
