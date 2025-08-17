@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Check } from 'lucide-react';
-import { User } from '../types';
 import { friends as allFriends, closeFriends } from '../data/mockData';
 
 interface CloseFriendsModalProps {
@@ -65,11 +64,17 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-md mx-4 max-h-[90vh] bg-white rounded-modal shadow-xl overflow-hidden">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm motion-reduce:bg-black/75 motion-reduce:backdrop-blur-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="close-friends-title"
+      aria-describedby="close-friends-description"
+    >
+      <div className="relative w-full max-w-md mx-4 max-h-[90vh] bg-white rounded-modal shadow-xl overflow-hidden sm:max-w-sm max-[375px]:mx-0 max-[375px]:max-w-full max-[375px]:h-full max-[375px]:rounded-none">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-xl font-semibold text-gray-900">Close Friends</h2>
+          <h2 id="close-friends-title" className="text-xl font-semibold text-gray-900">Close Friends</h2>
           <button
             onClick={handleCancel}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
@@ -88,10 +93,11 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search friends..."
-              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-ios focus:outline-none focus:ring-2 focus:ring-aqua focus:border-aqua transition-colors"
+              aria-label="Search friends"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-ios focus:outline-none focus:ring-2 focus:ring-aqua focus:border-aqua focus:ring-offset-0 transition-colors"
             />
           </div>
-          <p className="text-xs text-gray-500 mt-2">
+          <p id="close-friends-description" className="text-xs text-gray-500 mt-2">
             Select friends to share close friend content with
           </p>
         </div>
@@ -115,7 +121,9 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
                   <button
                     key={friend.id}
                     onClick={() => handleToggleFriend(friend.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-ios hover:bg-gray-50 transition-colors ${
+                    aria-pressed={isSelected}
+                    aria-label={`${isSelected ? 'Remove' : 'Add'} ${friend.name} as close friend`}
+                    className={`w-full flex items-center gap-3 p-3 rounded-ios hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-aqua focus:ring-offset-2 transition-colors motion-reduce:transition-none ${
                       isSelected ? 'bg-aqua/10 hover:bg-aqua/15' : ''
                     }`}
                   >
