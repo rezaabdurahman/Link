@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Radio, Megaphone } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Megaphone } from 'lucide-react';
 import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
 import { CheckIn } from '../types/checkin';
@@ -154,8 +154,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   
   // Broadcast state
   const [broadcast, setBroadcast] = useState<PublicBroadcastResponse | null>(null);
-  const [broadcastLoading, setBroadcastLoading] = useState<boolean>(false);
-  const [broadcastError, setBroadcastError] = useState<string | undefined>(undefined);
+  const [, setBroadcastLoading] = useState<boolean>(false);
+  const [, setBroadcastError] = useState<string | undefined>(undefined);
   
   // State to preserve scroll position during montage filter changes
   const [preserveScrollPosition, setPreserveScrollPosition] = useState<number>(0);

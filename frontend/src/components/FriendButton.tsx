@@ -85,13 +85,13 @@ const FriendButton: React.FC<FriendButtonProps> = ({
       case 'pending_received':
         return variant === 'outline'
           ? 'border-aqua text-aqua hover:bg-aqua/10'
-          : 'bg-aqua text-white hover:bg-aqua-dark';
+          : 'bg-gray-200 text-gray-800 hover:bg-gray-300';
       
       case 'none':
       default:
         return variant === 'outline'
           ? 'border-aqua text-aqua hover:bg-aqua/10'
-          : 'bg-aqua text-white hover:bg-aqua/90';
+          : 'bg-gray-200 text-gray-800 hover:bg-gray-300';
     }
   };
 
@@ -181,10 +181,10 @@ export const FriendButtonMini: React.FC<FriendButtonMiniProps> = ({
       case 'pending_sent':
         return 'bg-gray-400 cursor-not-allowed';
       case 'pending_received':
-        return 'bg-aqua hover:bg-aqua-dark';
+        return 'bg-gray-200 text-gray-800 hover:bg-gray-300';
       case 'none':
       default:
-        return 'bg-aqua hover:bg-aqua/90';
+        return 'bg-gray-200 text-gray-800 hover:bg-gray-300';
     }
   };
 

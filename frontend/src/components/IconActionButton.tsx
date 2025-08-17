@@ -6,7 +6,7 @@ interface IconActionButtonProps {
   label: string;                   // aria-label for accessibility
   Icon: LucideIcon;               // Lucide icon component
   onClick: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'gradient';
   disabled?: boolean;
   className?: string;
   size?: 'small' | 'medium' | 'large';
@@ -25,11 +25,12 @@ const mapLegacySize = (size: 'small' | 'medium' | 'large'): ButtonSize => {
 };
 
 // Map legacy variants to new standardized variants
-const mapLegacyVariant = (variant: 'primary' | 'secondary' | 'danger'): ButtonVariant => {
+const mapLegacyVariant = (variant: 'primary' | 'secondary' | 'danger' | 'gradient'): ButtonVariant => {
   const variantMap = {
     primary: 'primary' as const,
     secondary: 'outline' as const,  // Map secondary to outline for icon buttons
     danger: 'danger' as const,
+    gradient: 'gradient' as const,  // New gradient variant
   };
   return variantMap[variant];
 };

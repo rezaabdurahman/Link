@@ -310,7 +310,7 @@ const ChatPage: React.FC = (): JSX.Element => {
         {/* Header */}
         <div className="flex justify-between items-center py-3">
           <div>
-            <h1 className="text-2xl font-bold text-gradient-aqua leading-tight">
+            <h1 className="text-2xl font-bold text-gradient-aqua-copper leading-tight">
               Chats
             </h1>
             <p className="text-secondary text-sm">

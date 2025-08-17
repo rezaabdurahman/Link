@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus } from 'lucide-react';
 import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
 import { User } from '../types';
 import UserCard from '../components/UserCard';
@@ -442,7 +441,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         {/* Header */}
         <div className="flex justify-between items-center py-3">
           <div>
-            <h1 className="text-2xl font-bold text-gradient-aqua leading-tight">
+            <h1 className="text-2xl font-bold text-gradient-aqua-copper leading-tight">
               Discover
             </h1>
           </div>
@@ -488,7 +487,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                     ) : (
                       // Grid icon (when in feed view, show grid icon to switch to grid)
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                       </svg>
                     )}
                   </button>
@@ -523,7 +522,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                   className="relative w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
                   title="Friend Requests"
                 >
-                  <Users size={16} />
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
                   {/* Badge */}
                   {friendRequestsBadgeCount > 0 && (
                     <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center px-1">
@@ -837,10 +838,12 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       {isAvailable && (
         <button
           onClick={handleOpenCheckIn}
-          className="fixed bottom-20 right-6 w-14 h-14 bg-aqua text-white rounded-full shadow-lg hover:bg-aqua/90 hover:shadow-xl transition-all duration-200 flex items-center justify-center z-20 group"
+          className="fixed bottom-20 right-6 w-14 h-14 bg-gradient-to-br from-aqua to-accent-sand text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center z-20 group"
           title="Check in"
         >
-          <Plus size={24} className="group-hover:scale-110 transition-transform duration-200" />
+          <svg className="w-6 h-6 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
         </button>
       )}
 

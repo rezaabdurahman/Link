@@ -30,7 +30,7 @@ const ProfilePage: React.FC = (): JSX.Element => {
         marginBottom: '32px',
         paddingTop: '20px'
       }}>
-        <h1 className="text-gradient-aqua" style={{ fontSize: '28px', fontWeight: '700' }}>
+        <h1 className="text-gradient-aqua-copper" style={{ fontSize: '28px', fontWeight: '700' }}>
           Profile
         </h1>
         <div style={{ display: 'flex', gap: '8px' }}>

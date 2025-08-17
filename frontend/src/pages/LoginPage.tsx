@@ -197,7 +197,7 @@ const LoginPage: React.FC = (): JSX.Element => {
                 flex items-center justify-center gap-3
                 transition-all duration-200
                 ${isFormValid && !isLoading
-                  ? 'bg-aqua text-white hover:bg-aqua-dark shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
+                  ? 'bg-gradient-aqua-copper text-white hover:opacity-90 shadow-lg hover:shadow-xl transform hover:scale-[1.02] hover-gradient-glow'
                   : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }
               `}

@@ -61,6 +61,58 @@ accent-charcoal:     #374151  /* Charcoal gray */
 accent-pink:         #ec4899  /* Pink accent */
 ```
 
+## 🌈 Aqua-Copper Gradient System (Instagram-inspired)
+
+### Primary Brand Gradient
+```css
+gradient-aqua-copper: linear-gradient(135deg, #06b6d4 0%, #ec4899 50%, #b45309 100%)
+```
+**Color Story:** Cool aqua → Warm pink → Rich copper  
+**Rationale:** Pink acts as a bridge between cool aqua and warm copper, creating visual harmony while maintaining Instagram's gradient aesthetic.
+
+### Alternative Gradients
+```css
+gradient-aqua-rose:   linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%)
+gradient-aqua-purple: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)
+conic-aqua-copper:    conic-gradient(from 180deg, #06b6d4 0deg, #ec4899 120deg, #b45309 240deg, #06b6d4 360deg)
+```
+
+### Usage Guidelines
+- **Fill Gradients:** Use for buttons, backgrounds, and emphasis elements
+- **Border Gradients:** Use for cards, containers, and avatar rings (Instagram-style)
+- **Text Gradients:** Use sparingly for headlines and special emphasis
+- **Accessibility:** Ensure sufficient contrast when used with text
+
+### Component Classes
+```css
+/* Buttons */
+.gradient-btn        /* Standard gradient button */
+.gradient-btn-sm     /* Small variant */
+.gradient-btn-lg     /* Large variant */
+
+/* Cards */
+.gradient-card       /* Card with gradient border */
+.gradient-card-sm    /* Small variant */
+.gradient-card-lg    /* Large variant */
+
+/* Avatar Rings (Instagram-style) */
+.avatar-ring         /* Rotating conic gradient ring */
+.avatar-ring-sm      /* Small variant */
+.avatar-ring-lg      /* Large variant */
+
+/* Borders */
+.border-gradient-aqua-copper     /* 2px gradient border */
+.border-gradient-aqua-copper-thin /* 1px gradient border */
+.border-gradient-aqua-copper-thick /* 3px gradient border */
+
+/* Text */
+.text-gradient-aqua-copper       /* Gradient text */
+.text-gradient-aqua-rose         /* Alternative gradient text */
+
+/* Effects */
+.hover-gradient-glow             /* Gradient glow on hover */
+```
+
 ## 🧩 Component System
 
 ### Cards
@@ -210,6 +262,71 @@ import { MessageCircle, Ban, EyeOff } from 'lucide-react';
   <div className="w-3 h-3 bg-aqua rounded-full" />
   <span className="text-aqua text-sm font-medium">Available</span>
 </div>
+```
+
+### Gradient System Examples
+
+#### Gradient Primary Button
+```tsx
+<button className="gradient-btn hover-gradient-glow">
+  Get Started
+</button>
+
+{/* Size variants */}
+<button className="gradient-btn-sm">Small Button</button>
+<button className="gradient-btn-lg">Large Button</button>
+```
+
+#### Instagram-Style Avatar Ring
+```tsx
+<div className="avatar-ring avatar-ring-lg">
+  <img 
+    src="/path/to/avatar.jpg" 
+    alt="User Avatar" 
+    className="w-16 h-16 object-cover" 
+  />
+</div>
+
+{/* Size variants */}
+<div className="avatar-ring avatar-ring-sm">
+  <img src="/avatar.jpg" alt="Avatar" className="w-10 h-10 object-cover" />
+</div>
+```
+
+#### Gradient Border Card
+```tsx
+<div className="gradient-card hover-gradient-glow">
+  <h3 className="text-gradient-aqua-copper font-bold text-lg mb-2">
+    Premium Feature
+  </h3>
+  <p className="text-secondary">
+    This card features our signature gradient border effect.
+  </p>
+</div>
+```
+
+#### Background Gradients
+```tsx
+{/* Full background gradients */}
+<div className="bg-gradient-aqua-copper p-6 rounded-card text-white">
+  <h2>Gradient Background</h2>
+</div>
+
+{/* Conic gradient for special elements */}
+<div className="bg-conic-aqua-copper p-4 rounded-full">
+  <span className="text-white font-bold">NEW</span>
+</div>
+```
+
+#### Gradient Text Effects
+```tsx
+<h1 className="text-gradient-aqua-copper text-4xl font-bold">
+  Welcome to Link
+</h1>
+
+<p className="text-gradient-aqua-rose text-lg">
+  Connect with amazing people
+</p>
 ```
 
 ## 🎓 Onboarding Examples
