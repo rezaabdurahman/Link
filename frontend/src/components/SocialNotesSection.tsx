@@ -19,7 +19,7 @@ const SocialNotesSection: React.FC<SocialNotesSectionProps> = ({ onFriendSelect 
     friend.bio.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const activeFriend = activeFriendId ? friends.find(f => f.id === activeFriendId) : null;
+  // const activeFriend = activeFriendId ? friends.find(f => f.id === activeFriendId) : null;
 
   const handleFriendSelect = (friend: UserType): void => {
     setActiveFriendId(friend.id);
@@ -62,7 +62,11 @@ const SocialNotesSection: React.FC<SocialNotesSectionProps> = ({ onFriendSelect 
             onChange={(e) => handleSearchChange(e.target.value)}
             onFocus={handleSearchFocus}
             placeholder="Search for a friend..."
-            className="w-full pl-10 pr-10 py-2 text-sm border border-gray-200 rounded-ios focus:outline-none focus:ring-2 focus:ring-aqua focus:border-aqua transition-colors"
+            aria-label="Search for a friend to view notes"
+            aria-expanded={isDropdownOpen}
+            aria-haspopup="listbox"
+            role="combobox"
+            className="w-full pl-10 pr-10 py-2 text-sm border border-gray-200 rounded-ios focus:outline-none focus:ring-2 focus:ring-aqua focus:border-aqua focus:ring-offset-0 transition-colors"
           />
           <ChevronDown 
             size={16} 
@@ -74,7 +78,11 @@ const SocialNotesSection: React.FC<SocialNotesSectionProps> = ({ onFriendSelect 
 
         {/* Dropdown */}
         {isDropdownOpen && filteredFriends.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-ios shadow-lg z-10 max-h-48 overflow-y-auto">
+          <div 
+            className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-ios shadow-lg z-10 max-h-48 overflow-y-auto"
+            role="listbox"
+            aria-label="Friend search results"
+          >
             {filteredFriends.map((friend) => {
               const profilePicture = friend.profileMedia?.thumbnail || friend.profilePicture;
               
@@ -82,7 +90,9 @@ const SocialNotesSection: React.FC<SocialNotesSectionProps> = ({ onFriendSelect 
                 <button
                   key={friend.id}
                   onClick={() => handleFriendSelect(friend)}
-                  className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors text-left"
+                  role="option"
+                  aria-selected={activeFriendId === friend.id}
+                  className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-aqua focus:ring-offset-2 transition-colors motion-reduce:transition-none text-left"
                 >
                   <img
                     src={profilePicture}
@@ -105,8 +115,9 @@ const SocialNotesSection: React.FC<SocialNotesSectionProps> = ({ onFriendSelect 
         <AISummaryCard 
           friendId={activeFriendId}
           onEditClick={() => {
-            // This will be handled by the parent component
-            console.log('Edit notes for friend:', activeFriendId);
+            if (onFriendSelect && activeFriendId) {
+              onFriendSelect(activeFriendId);
+            }
           }}
         />
       )}
