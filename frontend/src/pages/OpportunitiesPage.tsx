@@ -5,6 +5,7 @@ import { CheckinState, CheckinAction } from '../types/checkin';
 import { generateMockOpportunities } from '../mocks/checkinData';
 import CloseFriendsModal from '../components/CloseFriendsModal';
 import SocialNotesSection from '../components/SocialNotesSection';
+import NoteEditModal from '../components/NoteEditModal';
 // Additional imports will be added as we build new components
 
 // State reducer for managing check-in related opportunities
@@ -36,10 +37,14 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
   // Close Friends modal state
   const [isCloseFriendsModalOpen, setIsCloseFriendsModalOpen] = useState<boolean>(false);
   
+  // Note Edit modal state
+  const [isNoteEditModalOpen, setIsNoteEditModalOpen] = useState<boolean>(false);
+  const [selectedFriendForNotes, setSelectedFriendForNotes] = useState<string | null>(null);
+  
   const opportunitiesRef = useRef<HTMLDivElement>(null);
 
   // Opportunity management for social opportunities
-  const handleSocialOpportunityAction = (opportunityId: string, action: 'accepted' | 'rejected') => {
+  const handleSocialOpportunityAction = (opportunityId: string, action: 'accepted' | 'rejected'): void => {
     socialOpportunitiesDispatch({
       type: 'UPDATE_OPPORTUNITY',
       payload: { id: opportunityId, status: action }
@@ -52,6 +57,24 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
   const handleCloseFriendsSave = (selectedFriendIds: string[]): void => {
     console.log('Close friends updated:', selectedFriendIds);
     // TODO: Persist to context or API
+  };
+
+  // Handle opening note edit modal
+  const handleEditNotes = (friendId: string): void => {
+    setSelectedFriendForNotes(friendId);
+    setIsNoteEditModalOpen(true);
+  };
+
+  // Handle saving notes
+  const handleSaveNotes = (notes: unknown[]): void => {
+    console.log('Notes saved:', notes);
+    // TODO: Persist notes to state/API
+  };
+
+  // Handle generating AI summary
+  const handleGenerateAISummary = (friendId: string): void => {
+    console.log('Regenerating AI summary for:', friendId);
+    // TODO: Trigger AI summary regeneration
   };
 
   return (
@@ -140,7 +163,7 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
       <div className="flex justify-center mb-8">
         <button
           onClick={() => setIsCloseFriendsModalOpen(true)}
-          className="gradient-btn-sm hover:scale-105 transition-transform duration-200"
+          className="gradient-btn-sm hover:scale-105 focus:outline-none focus:ring-2 focus:ring-aqua focus:ring-offset-2 transition-transform duration-200 motion-reduce:transition-none"
           aria-label="Manage close friends list"
         >
           Close Friends
@@ -150,10 +173,7 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
       {/* Social Notes Section */}
       <div className="mb-8">
         <SocialNotesSection 
-          onFriendSelect={(friendId) => {
-            console.log('Selected friend for notes:', friendId);
-            // TODO: Handle opening NoteEditModal
-          }}
+          onFriendSelect={handleEditNotes}
         />
       </div>
       
@@ -162,6 +182,18 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
         isOpen={isCloseFriendsModalOpen}
         onClose={() => setIsCloseFriendsModalOpen(false)}
         onSave={handleCloseFriendsSave}
+      />
+      
+      {/* Note Edit Modal */}
+      <NoteEditModal
+        isOpen={isNoteEditModalOpen}
+        friendId={selectedFriendForNotes}
+        onClose={() => {
+          setIsNoteEditModalOpen(false);
+          setSelectedFriendForNotes(null);
+        }}
+        onSave={handleSaveNotes}
+        onGenerateAISummary={handleGenerateAISummary}
       />
     </div>
   );
