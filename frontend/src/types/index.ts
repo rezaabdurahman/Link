@@ -227,3 +227,17 @@ export function createInitialAuthState(): AuthState {
     isInitialized: false,
   } as const;
 }
+
+// Social Notes Types
+export interface SocialNote {
+  id: string;
+  friendId: string;
+  text: string;
+  updatedAt: Date;
+}
+
+// Close Friends Management
+export interface CloseFriend {
+  userId: string;
+  addedAt: Date;
+}

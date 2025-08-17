@@ -1,11 +1,11 @@
 import React, { useState, useRef, useReducer } from 'react';
-import { Calendar, Clock, MapPin, Sparkles } from 'lucide-react';
+import { Clock, MapPin } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { opportunities } from '../data/mockData';
-import { Opportunity } from '../types';
 import { CheckinState, CheckinAction } from '../types/checkin';
 import { generateMockOpportunities } from '../mocks/checkinData';
-import OpportunityCard from '../components/OpportunityCard';
+import CloseFriendsModal from '../components/CloseFriendsModal';
+import SocialNotesSection from '../components/SocialNotesSection';
+// Additional imports will be added as we build new components
 
 // State reducer for managing check-in related opportunities
 const opportunityReducer = (state: Pick<CheckinState, 'opportunities'>, action: CheckinAction): Pick<CheckinState, 'opportunities'> => {
@@ -28,19 +28,15 @@ const opportunityReducer = (state: Pick<CheckinState, 'opportunities'>, action: 
 };
 
 const OpportunitiesPage: React.FC = (): JSX.Element => {
-  const [filter, setFilter] = useState<string>('all');
-  
   // Social opportunities state from check-ins
   const [socialOpportunitiesState, socialOpportunitiesDispatch] = useReducer(opportunityReducer, {
     opportunities: generateMockOpportunities()
   });
   
+  // Close Friends modal state
+  const [isCloseFriendsModalOpen, setIsCloseFriendsModalOpen] = useState<boolean>(false);
+  
   const opportunitiesRef = useRef<HTMLDivElement>(null);
-
-  const filteredOpportunities = opportunities.filter(opp => {
-    if (filter === 'all') return true;
-    return opp.type === filter;
-  });
 
   // Opportunity management for social opportunities
   const handleSocialOpportunityAction = (opportunityId: string, action: 'accepted' | 'rejected') => {
@@ -50,108 +46,27 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
     });
   };
   
-  const handleOpportunityAction = (opportunity: Opportunity, action: string): void => {
-    console.log(`${action} opportunity:`, opportunity.title);
-    // Here you would implement the actual action logic
-  };
-
-  const getFilterCount = (filterType: string): number => {
-    if (filterType === 'all') return opportunities.length;
-    return opportunities.filter(opp => opp.type === filterType).length;
-  };
-  
   const pendingSocialOpportunities = socialOpportunitiesState.opportunities.filter(opp => opp.status === 'pending');
+
+  // Handle close friends save
+  const handleCloseFriendsSave = (selectedFriendIds: string[]): void => {
+    console.log('Close friends updated:', selectedFriendIds);
+    // TODO: Persist to context or API
+  };
 
   return (
     <div className="ios-safe-area" style={{ padding: '0 20px' }}>
       {/* Header */}
       <div style={{ 
-        marginBottom: '24px',
+        marginBottom: '32px',
         paddingTop: '20px'
       }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '4px' }}>
+        <h1 className="text-2xl font-bold text-gradient-aqua-copper" style={{ marginBottom: '4px' }}>
           Opportunities
         </h1>
         <p className="text-secondary" style={{ fontSize: '14px' }}>
-          AI-powered suggestions to strengthen your connections
+          Manage your social connections and close friends
         </p>
-      </div>
-
-      {/* AI Insights Card */}
-      <div className="ios-card fade-in" style={{ 
-        padding: '20px', 
-        marginBottom: '24px',
-        background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(45, 212, 191, 0.1) 100%)',
-        borderColor: 'rgba(6, 182, 212, 0.3)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-          <Sparkles size={24} color="#06b6d4" />
-          <h3 style={{ fontSize: '16px', fontWeight: '600' }}>
-            AI Insights
-          </h3>
-        </div>
-        <p className="text-secondary" style={{ fontSize: '14px', lineHeight: '1.4' }}>
-          You have <strong className="text-primary">3 friends</strong> you haven't connected with in over a month. 
-          The best time for meetups is <strong className="text-primary">weekends</strong> based on everyone's activity patterns.
-        </p>
-      </div>
-
-      {/* Filter Tabs */}
-      <div style={{ 
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '24px',
-        overflowX: 'auto',
-        paddingBottom: '4px'
-      }}>
-        {[
-          { key: 'all', label: 'All', icon: Calendar },
-          { key: 'reminder', label: 'Reminders', icon: Clock },
-          { key: 'ai-suggestion', label: 'AI Suggested', icon: Sparkles },
-          { key: 'seasonal', label: 'Seasonal', icon: MapPin }
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = filter === tab.key;
-          const count = getFilterCount(tab.key);
-          
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key)}
-              className="haptic-light"
-              style={{
-                background: isActive ? '#06b6d4' : 'rgba(255, 255, 255, 0.1)',
-                border: isActive ? 'none' : '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '20px',
-                padding: '8px 16px',
-                color: isActive ? 'white' : '#000000',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <Icon size={16} />
-              {tab.label}
-              {count > 0 && (
-                <span style={{
-                  background: isActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(6, 182, 212, 0.3)',
-                  borderRadius: '10px',
-                  padding: '2px 6px',
-                  fontSize: '12px',
-                  minWidth: '18px',
-                  textAlign: 'center'
-                }}>
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
       </div>
 
       {/* Social Opportunities Carousel - From Check-ins */}
@@ -220,34 +135,34 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
           </div>
         </div>
       )}
-
-      {/* Opportunities List */}
-      <div style={{ marginBottom: '20px', paddingBottom: '4px' }}>
-        {filteredOpportunities.map((opportunity) => (
-          <OpportunityCard
-            key={opportunity.id}
-            opportunity={opportunity}
-            onAccept={() => handleOpportunityAction(opportunity, 'accept')}
-            onDismiss={() => handleOpportunityAction(opportunity, 'dismiss')}
-          />
-        ))}
+      
+      {/* Close Friends Entry Point */}
+      <div className="flex justify-center mb-8">
+        <button
+          onClick={() => setIsCloseFriendsModalOpen(true)}
+          className="gradient-btn-sm hover:scale-105 transition-transform duration-200"
+          aria-label="Manage close friends list"
+        >
+          Close Friends
+        </button>
       </div>
-
-      {filteredOpportunities.length === 0 && (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: '40px 20px',
-          color: 'rgba(235, 235, 245, 0.6)'
-        }}>
-          <Calendar size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
-          <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>
-            No opportunities yet
-          </h3>
-          <p style={{ fontSize: '14px' }}>
-            Check back later for AI-powered suggestions to connect with friends!
-          </p>
-        </div>
-      )}
+      
+      {/* Social Notes Section */}
+      <div className="mb-8">
+        <SocialNotesSection 
+          onFriendSelect={(friendId) => {
+            console.log('Selected friend for notes:', friendId);
+            // TODO: Handle opening NoteEditModal
+          }}
+        />
+      </div>
+      
+      {/* Close Friends Modal */}
+      <CloseFriendsModal
+        isOpen={isCloseFriendsModalOpen}
+        onClose={() => setIsCloseFriendsModalOpen(false)}
+        onSave={handleCloseFriendsSave}
+      />
     </div>
   );
 };
