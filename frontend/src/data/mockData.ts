@@ -1,4 +1,4 @@
-import { User, Chat, Story, Opportunity } from '../types';
+import { User, Chat, Story, Opportunity, SocialNote, CloseFriend } from '../types';
 
 export const currentUser: User = {
   id: '1',
@@ -633,3 +633,90 @@ export const opportunities: Opportunity[] = [
     location: 'Ferry Building Marketplace'
   }
 ];
+
+// Friends list - users that are friends with current user based on chat.isFriend
+export const friends: User[] = nearbyUsers.filter(user => {
+  const chat = chats.find(c => c.participantId === user.id);
+  return chat?.isFriend === true;
+});
+
+// Close friends - subset of friends
+export const closeFriends: CloseFriend[] = [
+  { userId: '2', addedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Reza - added 1 week ago
+  { userId: '3', addedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) }, // Marcus - added 2 weeks ago
+];
+
+// Social notes about friends
+export const socialNotes: SocialNote[] = [
+  {
+    id: 'note1',
+    friendId: '2',
+    text: 'Reza loves discussing indie films, especially European cinema. Has a passion for volleyball and plays every Tuesday. Owns the app we\'re using - very entrepreneurial mindset.',
+    updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+  },
+  {
+    id: 'note2',
+    friendId: '2',
+    text: 'Mentioned wanting feedback on the app. Should ask him about new features and user experience.',
+    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+  },
+  {
+    id: 'note3',
+    friendId: '3',
+    text: 'Marcus is really into rock climbing and runs a tech startup. Good connection for networking events. Always has interesting insights about the startup ecosystem.',
+    updatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+  },
+  {
+    id: 'note4',
+    friendId: '6',
+    text: 'Sofia has amazing taste in interior design. Could collaborate on home projects. Loves plants and baking - always brings homemade treats to gatherings.',
+    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+  },
+  {
+    id: 'note5',
+    friendId: '7',
+    text: 'Ryan is incredibly knowledgeable about craft beer. Great musician - plays guitar in a local band. Works as a software developer but passionate about music.',
+    updatedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  },
+  {
+    id: 'note6',
+    friendId: '9',
+    text: 'Maya is training for a marathon - very disciplined with her running schedule. Data scientist with expertise in AI. Great chess player.',
+    updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)
+  },
+  {
+    id: 'note7',
+    friendId: '11',
+    text: 'Aria is a medical student and talented violinist. Has sophisticated taste in classical music. Loves trying different types of tea.',
+    updatedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)
+  },
+  {
+    id: 'note8',
+    friendId: '13',
+    text: 'Luna has incredible knowledge about astronomy and writes sci-fi stories. Great stargazing guide - knows all the best spots around the city.',
+    updatedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+  }
+];
+
+// Helper function to generate AI summary of notes for a friend
+export const generateAISummary = (friendId: string): string => {
+  const friendNotes = socialNotes.filter(note => note.friendId === friendId);
+  const friend = friends.find(f => f.id === friendId);
+  
+  if (!friend || friendNotes.length === 0) {
+    return `No notes available for ${friend?.name || 'this friend'} yet.`;
+  }
+  
+  // Mock AI-generated summaries based on the notes
+  const summaries: { [key: string]: string } = {
+    '2': 'Reza is the entrepreneurial founder with a passion for indie films and volleyball. Currently seeking user feedback for app improvements.',
+    '3': 'Marcus is a tech entrepreneur and rock climbing enthusiast. Great networking contact with valuable startup insights.',
+    '6': 'Sofia is a creative interior designer who loves plants and baking. Known for bringing homemade treats and having excellent design taste.',
+    '7': 'Ryan is a multitalented software developer and musician with deep knowledge of craft beer. Plays guitar in a local band.',
+    '9': 'Maya is a disciplined marathon runner and AI-focused data scientist. Also skilled at chess with a structured approach to challenges.',
+    '11': 'Aria balances medical studies with classical violin performance. Has refined taste in music and enjoys exploring different teas.',
+    '13': 'Luna combines astronomical expertise with sci-fi writing. Excellent stargazing guide who knows the best observation spots in the city.'
+  };
+  
+  return summaries[friendId] || `${friend.name} is an interesting person with diverse interests and experiences.`;
+};
