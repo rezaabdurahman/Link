@@ -12,7 +12,7 @@ export const currentUser: User = {
     lng: -122.4194,
     proximityMiles: 1.2
   },
-  isAvailable: false,
+  isAvailable: true,
   mutualFriends: [],
   connectionPriority: 'regular',
   lastSeen: new Date(),

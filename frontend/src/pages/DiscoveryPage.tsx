@@ -10,9 +10,9 @@ import AddBroadcastModal from '../components/AddBroadcastModal';
 import CheckInModal from '../components/CheckInModal';
 import CheckInSnackbar from '../components/CheckInSnackbar';
 import Toast from '../components/Toast';
+import ExpandableFAB from '../components/ExpandableFAB';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
-import { setUserAvailability, isAvailabilityError, getAvailabilityErrorMessage } from '../services/availabilityClient';
 import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, UnifiedSearchRequest } from '../services/unifiedSearchClient';
 // Legacy import - this will show deprecation warnings in console
 import { isSearchError, getSearchErrorMessage } from '../services/searchClient';
@@ -32,7 +32,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
   // User state management
   const [currentUser, setCurrentUser] = useState<User>(initialCurrentUser);
-  const [isAvailable, setIsAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
+  const [isAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
   
   // UI state management  
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -51,8 +51,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   // Loading state for broadcast operations
   const [isBroadcastSubmitting, setIsBroadcastSubmitting] = useState<boolean>(false);
   
-  // Loading state for availability operations
-  const [isAvailabilitySubmitting, setIsAvailabilitySubmitting] = useState<boolean>(false);
 
   // Search and filter state
   const [searchResults, setSearchResults] = useState<User[]>([]);
@@ -193,76 +191,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     ? createGridChunks(usersWithLikelihood) 
     : [];
 
-  const toggleAvailability = async (): Promise<void> => {
-    if (isAvailabilitySubmitting) return; // Prevent multiple submissions
-    
-    // Capture current state for potential rollback
-    const prevAvailability = isAvailable;
-    const nextAvailability = !isAvailable;
-    
-    setIsAvailabilitySubmitting(true);
-    
-    // Immediate UI update for responsiveness
-    setIsAvailable(nextAvailability);
-    
-    // Handle animation smoothly without forcing resets
-    if (nextAvailability && !showFeedAnimation) {
-      // Only animate if we're going to available and not already animating
-      setTimeout(() => {
-        setShowFeedAnimation(true);
-      }, 150); // Slightly longer delay for smoother feel
-    } else if (!nextAvailability) {
-      // Immediately hide animation when going to unavailable
-      setShowFeedAnimation(false);
-    }
-    
-    try {
-      // Make API call to persist the availability change
-      await setUserAvailability(nextAvailability);
-      
-      // Success: show toast only after successful API call
-      const message = nextAvailability 
-        ? "You're now discoverable by others nearby" 
-        : "You've been removed from the discovery feed";
-      
-      setToast({
-        isVisible: true,
-        message,
-        type: 'success'
-      });
-      
-      console.log('Availability updated successfully:', nextAvailability);
-      
-    } catch (error) {
-      console.error('Failed to update availability:', error);
-      
-      // Revert UI state on failure
-      setIsAvailable(prevAvailability);
-      
-      // Revert animation state smoothly
-      if (prevAvailability && !showFeedAnimation) {
-        setTimeout(() => {
-          setShowFeedAnimation(true);
-        }, 150);
-      } else if (!prevAvailability) {
-        setShowFeedAnimation(false);
-      }
-      
-      // Show error toast
-      let errorMessage = 'Failed to update availability. Please try again.';
-      if (isAvailabilityError(error)) {
-        errorMessage = getAvailabilityErrorMessage(error);
-      }
-      
-      setToast({
-        isVisible: true,
-        message: errorMessage,
-        type: 'error'
-      });
-    } finally {
-      setIsAvailabilitySubmitting(false);
-    }
-  };
 
   const toggleViewMode = (): void => {
     setIsGridView(!isGridView);
@@ -446,29 +374,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* Toggle Switch for Availability */}
-            <span className={`text-xs font-medium transition-colors duration-200 ${
-              isAvailable ? 'text-aqua' : 'text-gray-500'
-            }`}>
-              {isAvailable ? 'Available' : 'Busy'}
-            </span>
-            <button
-              onClick={toggleAvailability}
-              disabled={isAvailabilitySubmitting}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${
-                isAvailabilitySubmitting
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : isAvailable 
-                    ? 'bg-aqua' 
-                    : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
-                  isAvailable ? 'translate-x-5' : 'translate-x-1'
-                }`}
-              />
-            </button>
             {/* Action buttons - only show when available */}
             {isAvailable && (
               <div className="flex gap-1">
@@ -488,33 +393,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                       // Grid icon (when in feed view, show grid icon to switch to grid)
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                      </svg>
-                    )}
-                  </button>
-                )}
-                {/* Cues Icon - Feature Flagged */}
-                {isFeatureEnabled('DISCOVERY_CUES') && (
-                  <button
-                    onClick={handleOpenAddCues}
-                    className="w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
-                    title="Add Social Cues"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  </button>
-                )}
-                {/* Broadcast Icon - Feature Flagged */}
-                {isFeatureEnabled('DISCOVERY_BROADCAST') && (
-                  <button
-                    onClick={handleOpenAddBroadcast}
-                    className="w-7 h-7 rounded-full bg-transparent text-aqua hover:bg-aqua/10 transition-all duration-200 flex items-center justify-center"
-                    title="Create Broadcast"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                    </svg>
-                  </button>
+                        </svg>
+                      )}
+                    </button>
                 )}
                 {/* Friend Requests Icon */}
                 <button
@@ -527,7 +408,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                   </svg>
                   {/* Badge */}
                   {friendRequestsBadgeCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center px-1">
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-accent-copper text-white text-xs font-bold flex items-center justify-center px-1 border border-white/20">
                       {friendRequestsBadgeCount > 99 ? '99+' : friendRequestsBadgeCount}
                     </span>
                   )}
@@ -536,8 +417,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
             )}
           </div>
         </div>
-
-          {/* Search */}
           {isAvailable && (
             <div className={`${showFeedAnimation ? 'animate-search-slide-down' : 'opacity-0'} transition-opacity duration-500 pb-2`}>
               <AnimatedSearchInput
@@ -834,18 +713,15 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         onSubmit={handleCheckInSubmit}
       />
 
-      {/* Floating Action Button for Check-in - only show when available */}
-      {isAvailable && (
-        <button
-          onClick={handleOpenCheckIn}
-          className="fixed bottom-20 right-6 w-14 h-14 bg-gradient-to-br from-aqua to-accent-sand text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center z-20 group"
-          title="Check in"
-        >
-          <svg className="w-6 h-6 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      )}
+      {/* Expandable Floating Action Button - only show when available */}
+      <ExpandableFAB
+        isVisible={isAvailable}
+        onOpenAddCues={handleOpenAddCues}
+        onOpenAddBroadcast={handleOpenAddBroadcast}
+        onOpenCheckIn={handleOpenCheckIn}
+        isCuesActive={false} // TODO: Add cues tracking state when implemented
+        isBroadcastActive={!!currentUser.broadcast && currentUser.broadcast.trim().length > 0}
+      />
 
       {/* Check-in Success Snackbar */}
       <CheckInSnackbar
