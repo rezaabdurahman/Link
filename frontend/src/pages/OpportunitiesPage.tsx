@@ -97,7 +97,13 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-text-primary">Social Opportunities</h2>
-            <div className="text-xs text-text-muted">Swipe to explore</div>
+            <button
+              onClick={() => setIsCloseFriendsModalOpen(true)}
+              className="text-xs text-aqua hover:text-aqua-dark focus:outline-none focus:ring-2 focus:ring-aqua focus:ring-offset-2 rounded transition-colors motion-reduce:transition-none"
+              aria-label="Manage close friends list"
+            >
+              Manage Close Friends
+            </button>
           </div>
           
           <div 
@@ -158,17 +164,6 @@ const OpportunitiesPage: React.FC = (): JSX.Element => {
           </div>
         </div>
       )}
-      
-      {/* Close Friends Entry Point */}
-      <div className="flex justify-center mb-8">
-        <button
-          onClick={() => setIsCloseFriendsModalOpen(true)}
-          className="gradient-btn-sm hover:scale-105 focus:outline-none focus:ring-2 focus:ring-aqua focus:ring-offset-2 transition-transform duration-200 motion-reduce:transition-none"
-          aria-label="Manage close friends list"
-        >
-          Close Friends
-        </button>
-      </div>
       
       {/* Social Notes Section */}
       <div className="mb-8">
