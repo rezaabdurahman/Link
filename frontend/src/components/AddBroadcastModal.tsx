@@ -76,7 +76,7 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({
             {currentBroadcast ? 'Edit Broadcast' : 'Add Broadcast'}
           </h2>
           <p className="text-sm text-gray-600 leading-relaxed">
-            Share what you want people to know — it'll appear on your card in the discovery grid.
+            Share what you want people to know when they view your profile.
           </p>
         </div>
 
@@ -87,13 +87,13 @@ const AddBroadcastModal: React.FC<AddBroadcastModalProps> = ({
             onChange={(e) => setBroadcastText(e.target.value)}
             placeholder="e.g. Just moved in and looking to make friends with neighbors"
             className="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm text-gray-900 placeholder:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            maxLength={200}
+            maxLength={100}
             disabled={isSubmitting}
             aria-label="Broadcast message"
           />
           <div className="text-right mt-2">
             <span className="text-xs text-gray-400">
-              {broadcastText.length}/200
+              {broadcastText.length}/100
             </span>
           </div>
         </div>

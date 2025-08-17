@@ -119,7 +119,7 @@ const ExpandableFAB: React.FC<ExpandableFABProps> = memo(({
                   </svg>
                   {/* Cues Status Badge */}
                   <div className={`absolute -top-2 -right-2 px-1 py-0.5 rounded-full text-[8px] font-semibold text-white border border-white/20 ${
-                    isCuesActive ? 'bg-accent-copper' : 'bg-gray-400'
+                    isCuesActive ? 'bg-accent-copper' : 'bg-black'
                   }`}>
                     {isCuesActive ? 'ON' : 'OFF'}
                   </div>
@@ -153,7 +153,7 @@ const ExpandableFAB: React.FC<ExpandableFABProps> = memo(({
                   </svg>
                   {/* Broadcast Status Badge */}
                   <div className={`absolute -top-2 -right-2 px-1 py-0.5 rounded-full text-[8px] font-semibold text-white border border-white/20 ${
-                    isBroadcastActive ? 'bg-accent-copper' : 'bg-gray-400'
+                    isBroadcastActive ? 'bg-accent-copper' : 'bg-black'
                   }`}>
                     {isBroadcastActive ? 'ON' : 'OFF'}
                   </div>

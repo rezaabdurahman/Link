@@ -42,7 +42,7 @@ const AddCuesModal: React.FC<AddCuesModalProps> = ({ isOpen, onClose, onSubmit }
             Add Social Cues
           </h2>
           <p className="text-sm text-gray-600 leading-relaxed">
-            Social cues are subtle contexts that you can add to indicate the reason for your availability. Our AI uses it to prioritize both you and other user's grid.
+            Want to find someone without broadcasting it? Share a few hints with us — we'll highlight potential shared interests with an asterisk(*) on their card. Your cues stay private.
           </p>
         </div>
 
@@ -51,7 +51,7 @@ const AddCuesModal: React.FC<AddCuesModalProps> = ({ isOpen, onClose, onSubmit }
           <textarea
             value={cueText}
             onChange={(e) => setCueText(e.target.value)}
-            placeholder="e.g., into making neighborhood friends, preferrably married couple"
+            placeholder="e.g., the guy who just passed by me in front of gate 7"
             className="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-aqua focus:border-transparent text-sm text-gray-900 placeholder:text-gray-400"
             maxLength={200}
           />
