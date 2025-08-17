@@ -79,10 +79,12 @@ The backend follows a microservices architecture with:
 - **Priority-based chat ordering**
 
 ### Opportunities Page
-- **AI-suggested connection activities**
-- **Friendship reminders** based on interaction patterns
-- **Seasonal and contextual suggestions**
-- **Smart filtering** by opportunity type
+- **Social Opportunities Carousel** - Connection opportunities from check-ins and user activity
+- **Close Friends Management** - Searchable modal for selecting and managing your close friends list
+- **Social Notes System** - Personal notes about friends with AI-powered summaries
+- **AI Summary Generation** - Intelligent summaries of your notes about each friend
+- **Responsive Design** - Full-screen modals on narrow viewports (≤375px)
+- **Accessibility Features** - ARIA labels, focus management, and motion reduction support
 
 ### Profile Page
 - **Editable bio and interests**
