@@ -2,12 +2,13 @@ import { HttpResponse } from 'msw';
 import { now } from './mockHelpers';
 
 // Common error response builders
-export const createAuthError = () => {
+export const createAuthError = (message?: string, code?: string) => {
   return HttpResponse.json(
     {
-      error: 'Authentication required',
-      message: 'You must be logged in to perform this action',
-      code: 'AUTH_REQUIRED',
+      type: 'AUTHENTICATION_ERROR',
+      error: 'Authentication error',
+      message: message || 'You must be logged in to perform this action',
+      code: code || 'AUTH_REQUIRED',
       timestamp: now(),
     },
     { status: 401 }
@@ -63,7 +64,7 @@ export const createServerError = (message: string = 'Internal server error') => 
 };
 
 // Common success response builders
-export const createSuccessResponse = <T>(data: T, status: number = 200) => {
+export const createSuccessResponse = (data: any, status: number = 200) => {
   return HttpResponse.json(data, { status });
 };
 

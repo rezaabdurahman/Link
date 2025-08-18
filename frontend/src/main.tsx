@@ -5,6 +5,7 @@ import './utils/devAuth' // Load dev authentication helper in development
 import './index.css'
 
 // Conditionally start MSW for API mocking in development/demo
+// Always enable in DEV mode unless explicitly disabled
 const enableMocks = import.meta.env.DEV || 
                    import.meta.env.VITE_APP_MODE === 'demo' || 
                    import.meta.env.VITE_ENABLE_MOCKING === 'true';

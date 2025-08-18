@@ -1,0 +1,192 @@
+import { http } from 'msw';
+import { nearbyUsers, currentUser } from '../../data/mockData';
+import { extractUserId, now } from '../utils/mockHelpers';
+import { createAuthError, createNotFoundError, createSuccessResponse } from '../utils/responseBuilders';
+import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
+
+// Mock database for user profiles
+const mockUserProfiles: Map<string, any> = new Map();
+
+export const handlers = [
+  // GET /users/profile/me - Get current user's profile
+  http.get(buildApiUrl(API_ENDPOINTS.USERS.me), ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    // Get user profile from mock database
+    const userProfile = mockUserProfiles.get(userId);
+    
+    if (!userProfile) {
+      // Create a default profile for the authenticated user
+      const defaultProfile = {
+        id: userId,
+        email: `user${userId}@example.com`,
+        username: `user${userId}`,
+        first_name: 'Current',
+        last_name: 'User',
+        bio: 'Hello, I\'m using Link!',
+        profile_picture: null,
+        location: null,
+        email_verified: true,
+        created_at: now(),
+        updated_at: now(),
+        // Additional profile fields for full profile response
+        age: 25,
+        interests: ['technology', 'music', 'travel'],
+        social_links: [
+          {
+            platform: 'instagram',
+            url: 'https://instagram.com/currentuser',
+            username: 'currentuser'
+          }
+        ],
+        additional_photos: [],
+        privacy_settings: {
+          show_age: true,
+          show_location: false,
+          show_mutual_friends: true,
+        },
+        mutual_friends: 5,
+        last_login_at: now(),
+      };
+      
+      mockUserProfiles.set(userId, defaultProfile);
+      return createSuccessResponse(defaultProfile);
+    }
+
+    // Return the stored profile with additional fields for complete profile response
+    const completeProfile = {
+      ...userProfile,
+      // Ensure all expected fields are present for current user's complete profile
+      age: userProfile.age || 25,
+      interests: userProfile.interests || ['technology', 'music'],
+      social_links: userProfile.social_links || [],
+      additional_photos: userProfile.additional_photos || [],
+      privacy_settings: userProfile.privacy_settings || {
+        show_age: true,
+        show_location: false,
+        show_mutual_friends: true,
+      },
+      mutual_friends: userProfile.mutual_friends || 0,
+      last_login_at: userProfile.last_login_at || now(),
+    };
+
+    return createSuccessResponse(completeProfile);
+  }),
+
+  // GET /users/profile/:userId - Get user profile
+  http.get(buildApiUrl('/users/profile/:userId'), ({ request, params }) => {
+    const { userId } = params;
+    const requestingUserId = extractUserId(request);
+    
+    console.log('🔍 MSW: GET /users/profile/:userId - userId:', userId, 'requestingUserId:', requestingUserId);
+    
+    if (!requestingUserId) {
+      return createAuthError();
+    }
+
+    // Check if this is the current user first
+    let user = null;
+    if (userId === currentUser.id) {
+      user = currentUser;
+    } else {
+      // Find user in nearbyUsers mock data
+      user = nearbyUsers.find(u => u.id === userId);
+    }
+    
+    if (!user) {
+      return createNotFoundError('User not found');
+    }
+
+    // Convert User type to UserProfileResponse format matching backend
+    const profileResponse = {
+      id: user.id,
+      email: `${user.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+      username: user.name.toLowerCase().replace(/\s+/g, '_'),
+      first_name: user.name.split(' ')[0],
+      last_name: user.name.split(' ').slice(1).join(' ') || 'User',
+      bio: user.bio,
+      profile_picture: user.profilePicture || null,
+      location: user.location ? `${user.location.proximityMiles} miles away` : null,
+      date_of_birth: user.age ? new Date(Date.now() - user.age * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined,
+      email_verified: true,
+      created_at: now(),
+      updated_at: now(),
+      // New backend fields matching updated API
+      age: user.profileType === 'public' ? user.age : undefined, // Respect privacy settings
+      interests: user.interests || [], // Real interests from mock data
+      social_links: [ // Mock social links
+        {
+          platform: 'instagram',
+          url: 'https://instagram.com/' + user.name.toLowerCase().replace(/\s+/g, '_'),
+          username: user.name.toLowerCase().replace(/\s+/g, '_')
+        }
+      ],
+      additional_photos: [], // Empty for now
+      privacy_settings: {
+        show_age: user.profileType === 'public',
+        show_location: user.profileType === 'public',
+        show_mutual_friends: user.profileType === 'public',
+      },
+      // Friend-related fields
+      is_friend: user.id === '2' || user.id === '3', // Mock some as friends
+      mutual_friends: (user.profileType === 'public' && (user.id === '2' || user.id === '3')) ? user.mutualFriends?.length || 0 : undefined, // Respect privacy
+      last_login_at: user.lastSeen?.toISOString() || now(), // Changed from last_active to match backend
+    };
+
+    console.log('🔍 MSW: Returning user profile:', profileResponse);
+    return createSuccessResponse(profileResponse);
+  }),
+
+  // GET /auth/me - Get current user info (legacy endpoint)
+  http.get(buildApiUrl(API_ENDPOINTS.AUTH.me), ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    // Return the current demo user
+    const user = {
+      id: 'user-jane',
+      email: 'jane@example.com',
+      username: 'janesmith',
+      first_name: 'Jane',
+      last_name: 'Smith',
+      profile_picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+      bio: 'Demo user for Link chat app',
+      location: 'San Francisco, CA',
+      date_of_birth: '1990-01-01',
+      email_verified: true,
+      created_at: now(),
+      updated_at: now(),
+    };
+
+    return createSuccessResponse(user);
+  }),
+
+  // POST /auth/refresh - Refresh token
+  http.post(buildApiUrl(API_ENDPOINTS.AUTH.refresh), ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    
+    if (!authHeader || !authHeader.includes('dev-token-')) {
+      return createAuthError();
+    }
+
+    // Return a new demo token
+    const response = {
+      token: `dev-token-${Date.now()}`,
+      message: 'Token refreshed successfully',
+    };
+
+    return createSuccessResponse(response);
+  }),
+
+  // POST /auth/logout - Logout
+  http.post(buildApiUrl(API_ENDPOINTS.AUTH.logout), () => {
+    return createSuccessResponse({ message: 'Logout successful' });
+  }),
+];

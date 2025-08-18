@@ -9,29 +9,24 @@
 import { handlers as auth } from './auth';
 import { handlers as availability } from './availability';
 import { handlers as broadcast } from './broadcast';
-
-// Import other handler files as they are created
-// import { handlers as chat } from './chat';
-// import { handlers as friends } from './friends';
-// import { handlers as ranking } from './ranking';
+import { handlers as chat } from './chat';
+import { handlers as friends } from './friends';
+import { handlers as users } from './users';
+import { handlers as onboarding } from './onboarding';
+import { handlers as montage } from './montage';
 
 /**
  * Combined handlers array for MSW setup
- * 
- * Add new handler arrays here as you create them:
- * export const handlers = [
- *   ...auth,
- *   ...availability, 
- *   ...broadcast,
- *   ...chat,
- *   ...friends,
- *   ...ranking,
- * ];
  */
 export const handlers = [
   ...auth,
   ...availability,
   ...broadcast,
+  ...chat,
+  ...friends,
+  ...users,
+  ...onboarding,
+  ...montage,
 ];
 
 /**
@@ -42,4 +37,9 @@ export {
   auth as authHandlers,
   availability as availabilityHandlers,
   broadcast as broadcastHandlers,
+  chat as chatHandlers,
+  friends as friendsHandlers,
+  users as usersHandlers,
+  onboarding as onboardingHandlers,
+  montage as montageHandlers,
 };

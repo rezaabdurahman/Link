@@ -4,8 +4,8 @@
   "private": true,
   "description": "Link iOS Frontend Mockup - connect with people around you",
   "scripts": {
-    "start": "vite",
-    "dev": "vite",
+    "start": "vite --open",
+    "dev": "vite --open",
     "build": "tsc && vite build",
     "build:demo": "vite build --mode demo",
     "build:preview": "tsc && vite build --mode preview",
@@ -29,7 +29,8 @@
     "test:e2e:dev": "cypress open",
     "audit:contrast": "node scripts/contrast-audit.js",
     "audit:a11y": "npm run lint",
-    "audit:full": "npm run audit:contrast && npm run audit:a11y"
+    "audit:full": "npm run audit:contrast && npm run audit:a11y",
+    "postinstall": "msw init public --save"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

@@ -1,8 +1,10 @@
 // MSW mock handlers for montage API endpoints
 // Provides realistic mock responses for development and testing
 
-import { http, HttpResponse } from 'msw';
-import { MontageResponse, MontageItem, MontageRegenerateResponse, MontageDeleteResponse } from '../types/montage';
+import { http } from 'msw';
+import { MontageResponse, MontageItem, MontageRegenerateResponse, MontageDeleteResponse } from '../../types/montage';
+import { buildApiUrl } from '../utils/config';
+import { createAuthError, createNotFoundError, createSuccessResponse, createServerError } from '../utils/responseBuilders';
 
 // Mock montage items data
 const mockMontageItems: MontageItem[] = [
@@ -105,9 +107,9 @@ const paginateItems = (items: MontageItem[], cursor?: string, limit = 20) => {
   };
 };
 
-export const montageHandlers = [
+export const handlers = [
   // GET /users/:userId/montage - Fetch user montage
-  http.get('*/users/:userId/montage', ({ params, request }) => {
+  http.get(buildApiUrl('/users/:userId/montage'), ({ params, request }) => {
     const { userId } = params;
     const url = new URL(request.url);
     const interest = url.searchParams.get('interest');
@@ -117,36 +119,15 @@ export const montageHandlers = [
 
     // Simulate different user scenarios
     if (userId === 'blocked-user') {
-      return HttpResponse.json(
-        {
-          error: 'ACCESS_DENIED',
-          message: "You don't have permission to view this user's montage",
-          code: 'ACCESS_DENIED',
-        },
-        { status: 403 }
-      );
+      return createAuthError("You don't have permission to view this user's montage", 'ACCESS_DENIED');
     }
 
     if (userId === 'not-found-user') {
-      return HttpResponse.json(
-        {
-          error: 'NOT_FOUND',
-          message: 'User not found',
-          code: 'USER_NOT_FOUND',
-        },
-        { status: 404 }
-      );
+      return createNotFoundError('User not found');
     }
 
     if (userId === 'no-data-user') {
-      return HttpResponse.json(
-        {
-          error: 'MONTAGE_NOT_FOUND',
-          message: "This user doesn't have enough check-ins to generate a montage",
-          code: 'INSUFFICIENT_DATA',
-        },
-        { status: 404 }
-      );
+      return createNotFoundError("This user doesn't have enough check-ins to generate a montage");
     }
 
     // Filter and paginate items
@@ -167,38 +148,21 @@ export const montageHandlers = [
       ...(interest && { interest }),
     };
 
-    return HttpResponse.json(
-      response,
-      { status: 200 }
-    );
+    return createSuccessResponse(response);
   }),
 
   // POST /users/:userId/montage/regenerate - Regenerate user montage
-  http.post('*/users/:userId/montage/regenerate', ({ params }) => {
+  http.post(buildApiUrl('/users/:userId/montage/regenerate'), ({ params }) => {
     const { userId } = params;
 
     // Simulate permission error
     if (userId === 'blocked-user') {
-      return HttpResponse.json(
-        {
-          error: 'ACCESS_DENIED',
-          message: "You don't have permission to regenerate this user's montage",
-          code: 'ACCESS_DENIED',
-        },
-        { status: 403 }
-      );
+      return createAuthError("You don't have permission to regenerate this user's montage", 'ACCESS_DENIED');
     }
 
     // Simulate server error occasionally
     if (Math.random() < 0.1) {
-      return HttpResponse.json(
-        {
-          error: 'MONTAGE_GENERATION_FAILED',
-          message: 'Failed to regenerate montage. Please try again later.',
-          code: 'INTERNAL_SERVER_ERROR',
-        },
-        { status: 500 }
-      );
+      return createServerError('Failed to regenerate montage. Please try again later.');
     }
 
     const response: MontageRegenerateResponse = {
@@ -207,28 +171,18 @@ export const montageHandlers = [
       timestamp: new Date().toISOString(),
     };
 
-    return HttpResponse.json(
-      response,
-      { status: 200 }
-    );
+    return createSuccessResponse(response);
   }),
 
   // DELETE /users/:userId/montage - Delete user montage
-  http.delete('*/users/:userId/montage', ({ params, request }) => {
+  http.delete(buildApiUrl('/users/:userId/montage'), ({ params, request }) => {
     const { userId } = params;
     const url = new URL(request.url);
     const interest = url.searchParams.get('interest');
 
     // Simulate permission error
     if (userId === 'blocked-user') {
-      return HttpResponse.json(
-        {
-          error: 'ACCESS_DENIED',
-          message: "You don't have permission to delete this user's montage",
-          code: 'ACCESS_DENIED',
-        },
-        { status: 403 }
-      );
+      return createAuthError("You don't have permission to delete this user's montage", 'ACCESS_DENIED');
     }
 
     const response: MontageDeleteResponse = {
@@ -238,11 +192,6 @@ export const montageHandlers = [
       user_id: userId as string,
     };
 
-    return HttpResponse.json(
-      response,
-      { status: 200 }
-    );
+    return createSuccessResponse(response);
   }),
 ];
-
-export default montageHandlers;

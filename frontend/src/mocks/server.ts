@@ -1,6 +1,5 @@
 import { setupServer } from 'msw/node';
-import { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers, friendHandlers, userHandlers } from './handlers';
-import { montageHandlers } from './montageHandlers';
+import { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers, friendsHandlers, usersHandlers, montageHandlers } from './handlers';
 
 // Setup the server for Node.js environment (testing)
 export const server = setupServer(
@@ -9,8 +8,8 @@ export const server = setupServer(
   ...onboardingHandlers,
   ...authHandlers,
   ...chatHandlers,
-  ...friendHandlers,
-  ...userHandlers,
+  ...friendsHandlers,
+  ...usersHandlers,
   ...montageHandlers
 );
 
