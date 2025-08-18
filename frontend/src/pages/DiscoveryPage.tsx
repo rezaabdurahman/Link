@@ -650,6 +650,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                             user={user}
                             onClick={() => handleUserClick(user)}
                             isVerticalLayout={true}
+                            showFriendButton={false}
+                            showBroadcast={false}
                           />
                         </div>
                       );
