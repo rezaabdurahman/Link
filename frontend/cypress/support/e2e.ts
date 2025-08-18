@@ -16,5 +16,8 @@
 // Import commands.js using ES2015 syntax:
 import './commands'
 
+// Percy visual testing support
+import '@percy/cypress'
+
 // Alternatively you can use CommonJS syntax:
 // require('./commands')

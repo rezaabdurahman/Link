@@ -1,4 +1,4 @@
-import { User, Chat, Story, Opportunity, SocialNote, CloseFriend } from '../types';
+import { User, Chat, Opportunity, SocialNote, CloseFriend } from '../types';
 
 export const currentUser: User = {
   id: '1',
@@ -586,23 +586,6 @@ export const chats: Chat[] = [
   }
 ];
 
-export const stories: Story[] = [
-  {
-    id: 'story1',
-    userId: '2',
-    content: "Just discovered this amazing coffee shop in the Mission District! The indie vibes are perfect for afternoon writing sessions ☕️📚",
-    media: ['https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=300&fit=crop'],
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    viewers: ['1']
-  },
-  {
-    id: 'story2',
-    userId: '4',
-    content: "Yoga session in Golden Gate Park this morning was incredible! Nothing beats outdoor practice 🧘‍♀️🌳",
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    viewers: []
-  }
-];
 
 export const opportunities: Opportunity[] = [
   {

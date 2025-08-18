@@ -50,11 +50,15 @@ npm run build
 - `npm run type-check` - Run TypeScript type checking
 
 ### Testing
-- `npm run test` - Run unit tests
+- `npm run test` - Run unit tests (Jest)
 - `npm run test:watch` - Run unit tests in watch mode
-- `npm run test:coverage` - Run unit tests with coverage
-- `npm run test:e2e` - Run E2E tests headlessly
+- `npm run test:coverage` - Run unit tests with coverage report
+- `npm run test:coverage:enforce` - Run tests with 60% coverage threshold enforcement
+- `npm run test:e2e` - Run E2E tests headlessly (Cypress)
 - `npm run test:e2e:dev` - Open Cypress test runner
+- `npm run test:visual` - Run visual regression tests (Percy + Cypress)
+- `npm run test:visual:dev` - Interactive visual testing
+- `npm run test:visual:ci` - CI-optimized visual tests
 - `npm run cypress:open` - Open Cypress test runner
 - `npm run cypress:run` - Run Cypress tests headlessly
 

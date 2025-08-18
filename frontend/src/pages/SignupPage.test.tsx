@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -34,7 +34,7 @@ jest.mock('../utils/secureTokenStorage', () => ({
   __esModule: true,
   default: {
     setToken: jest.fn(),
-    getToken: jest.fn(),
+    getToken: jest.fn().mockResolvedValue(null),
     clearAll: jest.fn(),
   },
 }));
@@ -56,12 +56,40 @@ jest.mock('../components/Toast', () => {
   };
 });
 
-// Test wrapper with router and auth context
+// Mock the AuthContext module
+jest.mock('../contexts/AuthContext', () => {
+  const mockAuthContext = {
+    user: null,
+    token: null,
+    isLoading: false,
+    error: null,
+    isInitialized: true,
+    login: jest.fn(),
+    register: jest.fn(),
+    logout: jest.fn(),
+    refresh: jest.fn(),
+    updateUser: jest.fn(),
+    clearError: jest.fn(),
+    isAuthenticated: false
+  };
+
+  return {
+    useAuth: jest.fn(() => mockAuthContext),
+    AuthProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  };
+});
+
+// Helper to update mock auth context
+const updateMockAuth = (newValues: any) => {
+  const mockUseAuth = require('../contexts/AuthContext').useAuth as jest.Mock;
+  const currentMock = mockUseAuth();
+  mockUseAuth.mockReturnValue({ ...currentMock, ...newValues });
+};
+
+// Test wrapper with router
 const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <BrowserRouter>
-    <AuthProvider>
-      {children}
-    </AuthProvider>
+    {children}
   </BrowserRouter>
 );
 
@@ -74,12 +102,14 @@ describe('SignupPage', () => {
   });
 
   describe('Rendering', () => {
-    it('should render signup form with all required fields', () => {
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+    it('should render signup form with all required fields', async () => {
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       expect(screen.getByText('Join Link')).toBeInTheDocument();
       expect(screen.getByText('Create your account and start connecting')).toBeInTheDocument();
@@ -93,12 +123,14 @@ describe('SignupPage', () => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
     });
 
-    it('should render submit button as disabled initially', () => {
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+    it('should render submit button as disabled initially', async () => {
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const submitButton = screen.getByRole('button', { name: /create account/i });
       expect(submitButton).toBeDisabled();
@@ -109,24 +141,32 @@ describe('SignupPage', () => {
   describe('Form Validation', () => {
     it('should show first name validation errors', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const firstNameInput = screen.getByLabelText('First Name');
       
       // Test required error
-      await user.click(firstNameInput);
-      await user.tab();
+      await act(async () => {
+        await user.click(firstNameInput);
+        await user.tab();
+      });
+      
       await waitFor(() => {
         expect(screen.getByText('First name is required')).toBeInTheDocument();
       });
 
       // Test minimum length error
-      await user.type(firstNameInput, 'A');
-      await user.tab();
+      await act(async () => {
+        await user.type(firstNameInput, 'A');
+        await user.tab();
+      });
+      
       await waitFor(() => {
         expect(screen.getByText('First name must be at least 2 characters')).toBeInTheDocument();
       });
@@ -134,25 +174,33 @@ describe('SignupPage', () => {
 
     it('should show username validation errors', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const usernameInput = screen.getByLabelText('Username');
       
       // Test invalid characters
-      await user.type(usernameInput, 'user@name!');
-      await user.tab();
+      await act(async () => {
+        await user.type(usernameInput, 'user@name!');
+        await user.tab();
+      });
+      
       await waitFor(() => {
         expect(screen.getByText('Username can only contain letters, numbers, and underscores')).toBeInTheDocument();
       });
 
       // Clear and test minimum length
-      await user.clear(usernameInput);
-      await user.type(usernameInput, 'ab');
-      await user.tab();
+      await act(async () => {
+        await user.clear(usernameInput);
+        await user.type(usernameInput, 'ab');
+        await user.tab();
+      });
+      
       await waitFor(() => {
         expect(screen.getByText('Username must be at least 3 characters')).toBeInTheDocument();
       });
@@ -160,15 +208,20 @@ describe('SignupPage', () => {
 
     it('should show email validation error for invalid email', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const emailInput = screen.getByLabelText('Email Address');
-      await user.type(emailInput, 'invalid-email');
-      await user.tab();
+      
+      await act(async () => {
+        await user.type(emailInput, 'invalid-email');
+        await user.tab();
+      });
 
       await waitFor(() => {
         expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
@@ -177,25 +230,33 @@ describe('SignupPage', () => {
 
     it('should show password validation errors for weak password', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const passwordInput = screen.getByLabelText('Password');
       
       // Test minimum length
-      await user.type(passwordInput, '123');
-      await user.tab();
+      await act(async () => {
+        await user.type(passwordInput, '123');
+        await user.tab();
+      });
+      
       await waitFor(() => {
         expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
       });
 
       // Test complexity requirement
-      await user.clear(passwordInput);
-      await user.type(passwordInput, 'weakpassword');
-      await user.tab();
+      await act(async () => {
+        await user.clear(passwordInput);
+        await user.type(passwordInput, 'weakpassword');
+        await user.tab();
+      });
+      
       await waitFor(() => {
         expect(screen.getByText('Password must contain at least one uppercase letter, one lowercase letter, and one number')).toBeInTheDocument();
       });
@@ -203,18 +264,22 @@ describe('SignupPage', () => {
 
     it('should show password confirmation mismatch error', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const passwordInput = screen.getByLabelText('Password');
       const confirmPasswordInput = screen.getByLabelText('Confirm Password');
       
-      await user.type(passwordInput, 'Password123');
-      await user.type(confirmPasswordInput, 'Password456');
-      await user.tab();
+      await act(async () => {
+        await user.type(passwordInput, 'Password123');
+        await user.type(confirmPasswordInput, 'Password456');
+        await user.tab();
+      });
 
       await waitFor(() => {
         expect(screen.getByText("Passwords don't match")).toBeInTheDocument();
@@ -223,11 +288,13 @@ describe('SignupPage', () => {
 
     it('should enable submit button when all fields are valid and filled', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const firstNameInput = screen.getByLabelText('First Name');
       const lastNameInput = screen.getByLabelText('Last Name');
@@ -237,12 +304,14 @@ describe('SignupPage', () => {
       const confirmPasswordInput = screen.getByLabelText('Confirm Password');
       const submitButton = screen.getByRole('button', { name: /create account/i });
 
-      await user.type(firstNameInput, 'John');
-      await user.type(lastNameInput, 'Doe');
-      await user.type(usernameInput, 'johndoe');
-      await user.type(emailInput, 'john@example.com');
-      await user.type(passwordInput, 'Password123');
-      await user.type(confirmPasswordInput, 'Password123');
+      await act(async () => {
+        await user.type(firstNameInput, 'John');
+        await user.type(lastNameInput, 'Doe');
+        await user.type(usernameInput, 'johndoe');
+        await user.type(emailInput, 'john@example.com');
+        await user.type(passwordInput, 'Password123');
+        await user.type(confirmPasswordInput, 'Password123');
+      });
 
       await waitFor(() => {
         expect(submitButton).toBeEnabled();
@@ -294,23 +363,21 @@ describe('SignupPage', () => {
       const user = userEvent.setup();
       const mockRegister = jest.fn().mockResolvedValue(undefined);
       
-      // Mock the useAuth hook to return our mock register function
-      jest.doMock('../contexts/AuthContext', () => ({
-        useAuth: () => ({
-          register: mockRegister,
-          isLoading: false,
-          error: null,
-          clearError: jest.fn(),
-          user: null,
-        }),
-        AuthProvider: ({ children }: any) => children,
-      }));
+      // Update the existing mock
+      updateMockAuth({
+        register: mockRegister,
+        isLoading: false,
+        error: null,
+        user: null,
+      });
 
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const firstNameInput = screen.getByLabelText('First Name');
       const lastNameInput = screen.getByLabelText('Last Name');
@@ -320,13 +387,15 @@ describe('SignupPage', () => {
       const confirmPasswordInput = screen.getByLabelText('Confirm Password');
       const submitButton = screen.getByRole('button', { name: /create account/i });
 
-      await user.type(firstNameInput, 'John');
-      await user.type(lastNameInput, 'Doe');
-      await user.type(usernameInput, 'johndoe');
-      await user.type(emailInput, 'john@example.com');
-      await user.type(passwordInput, 'Password123');
-      await user.type(confirmPasswordInput, 'Password123');
-      await user.click(submitButton);
+      await act(async () => {
+        await user.type(firstNameInput, 'John');
+        await user.type(lastNameInput, 'Doe');
+        await user.type(usernameInput, 'johndoe');
+        await user.type(emailInput, 'john@example.com');
+        await user.type(passwordInput, 'Password123');
+        await user.type(confirmPasswordInput, 'Password123');
+        await user.click(submitButton);
+      });
 
       await waitFor(() => {
         expect(mockRegister).toHaveBeenCalledWith({
@@ -341,23 +410,21 @@ describe('SignupPage', () => {
     it('should show loading state during registration', async () => {
       const user = userEvent.setup();
       
-      // Mock loading state
-      jest.doMock('../contexts/AuthContext', () => ({
-        useAuth: () => ({
-          register: jest.fn().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100))),
-          isLoading: true,
-          error: null,
-          clearError: jest.fn(),
-          user: null,
-        }),
-        AuthProvider: ({ children }: any) => children,
-      }));
+      // Update mock to loading state
+      updateMockAuth({
+        register: jest.fn().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100))),
+        isLoading: true,
+        error: null,
+        user: null,
+      });
 
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const firstNameInput = screen.getByLabelText('First Name');
       const lastNameInput = screen.getByLabelText('Last Name');
@@ -366,12 +433,14 @@ describe('SignupPage', () => {
       const passwordInput = screen.getByLabelText('Password');
       const confirmPasswordInput = screen.getByLabelText('Confirm Password');
 
-      await user.type(firstNameInput, 'John');
-      await user.type(lastNameInput, 'Doe');
-      await user.type(usernameInput, 'johndoe');
-      await user.type(emailInput, 'john@example.com');
-      await user.type(passwordInput, 'Password123');
-      await user.type(confirmPasswordInput, 'Password123');
+      await act(async () => {
+        await user.type(firstNameInput, 'John');
+        await user.type(lastNameInput, 'Doe');
+        await user.type(usernameInput, 'johndoe');
+        await user.type(emailInput, 'john@example.com');
+        await user.type(passwordInput, 'Password123');
+        await user.type(confirmPasswordInput, 'Password123');
+      });
 
       // Check loading state
       const submitButton = screen.getByRole('button', { name: /creating account/i });
@@ -384,22 +453,21 @@ describe('SignupPage', () => {
       const user = userEvent.setup();
       const mockRegister = jest.fn().mockRejectedValue(new Error('Email already exists'));
       
-      jest.doMock('../contexts/AuthContext', () => ({
-        useAuth: () => ({
-          register: mockRegister,
-          isLoading: false,
-          error: 'Email already exists',
-          clearError: jest.fn(),
-          user: null,
-        }),
-        AuthProvider: ({ children }: any) => children,
-      }));
+      // Update mock with error state
+      updateMockAuth({
+        register: mockRegister,
+        isLoading: false,
+        error: 'Email already exists',
+        user: null,
+      });
 
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const firstNameInput = screen.getByLabelText('First Name');
       const lastNameInput = screen.getByLabelText('Last Name');
@@ -409,13 +477,15 @@ describe('SignupPage', () => {
       const confirmPasswordInput = screen.getByLabelText('Confirm Password');
       const submitButton = screen.getByRole('button', { name: /create account/i });
 
-      await user.type(firstNameInput, 'John');
-      await user.type(lastNameInput, 'Doe');
-      await user.type(usernameInput, 'johndoe');
-      await user.type(emailInput, 'existing@example.com');
-      await user.type(passwordInput, 'Password123');
-      await user.type(confirmPasswordInput, 'Password123');
-      await user.click(submitButton);
+      await act(async () => {
+        await user.type(firstNameInput, 'John');
+        await user.type(lastNameInput, 'Doe');
+        await user.type(usernameInput, 'johndoe');
+        await user.type(emailInput, 'existing@example.com');
+        await user.type(passwordInput, 'Password123');
+        await user.type(confirmPasswordInput, 'Password123');
+        await user.click(submitButton);
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('toast')).toBeInTheDocument();
@@ -427,22 +497,22 @@ describe('SignupPage', () => {
       const user = userEvent.setup();
       const mockRegister = jest.fn().mockResolvedValue(undefined);
       
-      jest.doMock('../contexts/AuthContext', () => ({
-        useAuth: () => ({
-          register: mockRegister,
-          isLoading: false,
-          error: null,
-          clearError: jest.fn(),
-          user: { id: '123', name: 'John Doe', email: 'john@example.com' },
-        }),
-        AuthProvider: ({ children }: any) => children,
-      }));
+      // Update mock with success state
+      updateMockAuth({
+        register: mockRegister,
+        isLoading: false,
+        error: null,
+        user: { id: '123', name: 'John Doe', email: 'john@example.com' },
+        isAuthenticated: true,
+      });
 
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const firstNameInput = screen.getByLabelText('First Name');
       const lastNameInput = screen.getByLabelText('Last Name');
@@ -452,13 +522,15 @@ describe('SignupPage', () => {
       const confirmPasswordInput = screen.getByLabelText('Confirm Password');
       const submitButton = screen.getByRole('button', { name: /create account/i });
 
-      await user.type(firstNameInput, 'John');
-      await user.type(lastNameInput, 'Doe');
-      await user.type(usernameInput, 'johndoe');
-      await user.type(emailInput, 'john@example.com');
-      await user.type(passwordInput, 'Password123');
-      await user.type(confirmPasswordInput, 'Password123');
-      await user.click(submitButton);
+      await act(async () => {
+        await user.type(firstNameInput, 'John');
+        await user.type(lastNameInput, 'Doe');
+        await user.type(usernameInput, 'johndoe');
+        await user.type(emailInput, 'john@example.com');
+        await user.type(passwordInput, 'Password123');
+        await user.type(confirmPasswordInput, 'Password123');
+        await user.click(submitButton);
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('toast')).toBeInTheDocument();
@@ -474,34 +546,34 @@ describe('SignupPage', () => {
   });
 
   describe('Navigation', () => {
-    it('should redirect to home if user is already authenticated', () => {
-      jest.doMock('../contexts/AuthContext', () => ({
-        useAuth: () => ({
-          register: jest.fn(),
-          isLoading: false,
-          error: null,
-          clearError: jest.fn(),
-          user: { id: '123', name: 'Test User', email: 'test@example.com' },
-        }),
-        AuthProvider: ({ children }: any) => children,
-      }));
+    it('should redirect to home if user is already authenticated', async () => {
+      // Update mock with authenticated user
+      updateMockAuth({
+        user: { id: '123', name: 'Test User', email: 'test@example.com' },
+        isAuthenticated: true,
+      });
 
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
     });
 
     it('should navigate to login page when sign in link is clicked', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const signInLink = screen.getByText('Sign in');
       await user.click(signInLink);
@@ -513,12 +585,14 @@ describe('SignupPage', () => {
   });
 
   describe('Accessibility', () => {
-    it('should have proper form labels and accessibility attributes', () => {
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+    it('should have proper form labels and accessibility attributes', async () => {
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const firstNameInput = screen.getByLabelText('First Name');
       const lastNameInput = screen.getByLabelText('Last Name');
@@ -540,15 +614,21 @@ describe('SignupPage', () => {
 
     it('should announce form validation errors to screen readers', async () => {
       const user = userEvent.setup();
-      render(
-        <TestWrapper>
-          <SignupPage />
-        </TestWrapper>
-      );
+      
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <SignupPage />
+          </TestWrapper>
+        );
+      });
 
       const emailInput = screen.getByLabelText('Email Address');
-      await user.type(emailInput, 'invalid');
-      await user.tab();
+      
+      await act(async () => {
+        await user.type(emailInput, 'invalid');
+        await user.tab();
+      });
 
       await waitFor(() => {
         const errorMessage = screen.getByText('Please enter a valid email address');

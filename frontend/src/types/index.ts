@@ -62,14 +62,6 @@ export interface Chat {
   isFriend?: boolean; // New property to track friendship status
 }
 
-export interface Story {
-  id: string;
-  userId: string;
-  content: string;
-  media?: string[];
-  timestamp: Date;
-  viewers: string[];
-}
 
 export interface FriendProfile {
   userId: string;

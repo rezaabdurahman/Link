@@ -10,7 +10,13 @@ export default defineConfig({
     video: false,
     screenshotOnRunFailure: true,
     setupNodeEvents(on, config) {
-      // implement node event listeners here
+      // Percy integration
+      // Load Percy plugin if running with Percy
+      if (config.env.percy) {
+        require('@percy/cypress/task')(on, config)
+      }
+      
+      return config
     },
   },
 })

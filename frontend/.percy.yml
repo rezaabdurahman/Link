@@ -1,0 +1,35 @@
+# Percy configuration
+version: 2
+
+# Snapshot options
+snapshot:
+  widths:
+    - 414    # Mobile (iPhone 14)
+    - 768    # Tablet
+    - 1200   # Desktop
+  minHeight: 1024
+  
+# Discovery options
+discovery:
+  requestHeaders:
+    User-Agent: "Percy/Cypress"
+  allowedHostnames:
+    - "localhost"
+    - "127.0.0.1"
+  
+# Static snapshots (for component-level testing)
+static:
+  baseUrl: "http://localhost:5173"
+  cleanUrls: true
+  rewrites:
+    - source: "**"
+      destination: "/index.html"
+
+# Agent options
+agent:
+  assetDiscovery:
+    requestHeaders:
+      User-Agent: "Percy/Agent"
+    allowedHostnames:
+      - "localhost"
+      - "127.0.0.1"
