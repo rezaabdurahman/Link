@@ -1,16 +1,10 @@
 import { setupWorker } from 'msw/browser';
-import { broadcastHandlers, availabilityHandlers, onboardingHandlers, authHandlers, chatHandlers, friendHandlers, userHandlers } from './handlers';
+import { handlers } from './handlers';
 import { montageHandlers } from './montageHandlers';
 
 // Setup the service worker with our handlers
 export const worker = setupWorker(
-  ...broadcastHandlers, 
-  ...availabilityHandlers, 
-  ...onboardingHandlers,
-  ...authHandlers,
-  ...chatHandlers,
-  ...friendHandlers,
-  ...userHandlers,
+  ...handlers,
   ...montageHandlers
 );
 
