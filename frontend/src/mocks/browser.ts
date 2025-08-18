@@ -1,11 +1,10 @@
 import { setupWorker } from 'msw/browser';
-import { handlers } from './handlers';
-import { montageHandlers } from './montageHandlers';
+import { handlers } from './handlers/index';
+import { logMSWConfig } from './utils/config';
 
 // Setup the service worker with our handlers
 export const worker = setupWorker(
-  ...handlers,
-  ...montageHandlers
+  ...handlers
 );
 
 // Start the worker in development/demo mode
@@ -50,9 +49,20 @@ export const startMockWorker = async () => {
   // Only start MSW in safe environments
   // Allow demo builds to run on localhost or when specifically enabled
   if (isDev || isDemo || enableMocks) {
+    // Log MSW configuration for debugging
+    logMSWConfig();
+    
     try {
       await worker.start({
-        onUnhandledRequest: 'bypass',
+        onUnhandledRequest: (request) => {
+          // Log unhandled requests to help debug
+          console.warn('🚫 MSW: Unhandled request:', {
+            method: request.method,
+            url: request.url,
+            headers: Object.fromEntries(request.headers.entries())
+          });
+          // Still bypass, but with logging
+        },
         quiet: false, // Always show logs in demo mode for debugging
       });
       

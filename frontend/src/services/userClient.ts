@@ -6,12 +6,12 @@ import { AuthUser } from '../types/index';
 
 // API endpoints
 const USER_ENDPOINTS = {
-  myProfile: '/api/v1/users/profile',
-  profile: (userId: string) => `/api/v1/users/profile/${userId}`,
-  searchFriends: '/api/v1/users/friends/search',
-  block: '/api/v1/users/block',
-  unblock: (userId: string) => `/api/v1/users/block/${userId}`,
-  blockedUsers: '/api/v1/users/blocked',
+  myProfile: '/users/profile/me',
+  profile: (userId: string) => `/users/profile/${userId}`,
+  searchFriends: '/users/friends/search',
+  block: '/users/block',
+  unblock: (userId: string) => `/users/block/${userId}`,
+  blockedUsers: '/users/blocked',
 } as const;
 
 // Social Link Interface

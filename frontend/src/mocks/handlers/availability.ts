@@ -2,6 +2,7 @@ import { http } from 'msw';
 import { AvailabilityResponse } from '../../services/availabilityClient';
 import { extractUserId, generateId, now, parsePaginationParams } from '../utils/mockHelpers';
 import { createAuthError, createValidationError, createSuccessResponse, createPaginatedResponse } from '../utils/responseBuilders';
+import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
 
 // Mock database for availability
 const mockAvailability: Map<string, AvailabilityResponse> = new Map();
@@ -44,7 +45,7 @@ mockAvailability.set('user-jane', {
 
 export const handlers = [
   // GET /availability - Get current user's availability
-  http.get('*/availability', ({ request }) => {
+  http.get(buildApiUrl(API_ENDPOINTS.AVAILABILITY.status), ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -69,7 +70,7 @@ export const handlers = [
   }),
 
   // PUT /availability - Update current user's availability (TOGGLE FUNCTIONALITY)
-  http.put('*/availability', async ({ request }) => {
+  http.put(buildApiUrl(API_ENDPOINTS.AVAILABILITY.update), async ({ request }) => {
     console.log('🔄 MSW: Availability PUT request received', {
       url: request.url,
       method: request.method,
@@ -125,7 +126,7 @@ export const handlers = [
   }),
   
   // GET /availability/:userId - Get specific user's availability
-  http.get('*/availability/:userId', ({ request, params }) => {
+  http.get(buildApiUrl('/availability/:userId'), ({ request, params }) => {
     const { userId } = params;
     const requestingUserId = extractUserId(request);
     
@@ -155,7 +156,7 @@ export const handlers = [
   }),
   
   // GET /available-users - Get list of available users
-  http.get('*/available-users', ({ request }) => {
+  http.get(buildApiUrl('/available-users'), ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -182,7 +183,7 @@ export const handlers = [
   }),
   
   // POST /availability/heartbeat - Send heartbeat to maintain availability
-  http.post('*/availability/heartbeat', ({ request }) => {
+  http.post(buildApiUrl('/availability/heartbeat'), ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {

@@ -2,6 +2,7 @@ import { http } from 'msw';
 import { BroadcastResponse } from '../../services/broadcastClient';
 import { extractUserId, generateId, now, getExpirationTime, simulateDelay } from '../utils/mockHelpers';
 import { createAuthError, createValidationError, createNotFoundError, createConflictError, createSuccessResponse } from '../utils/responseBuilders';
+import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
 
 // Mock database for broadcasts
 const mockBroadcasts: Map<string, BroadcastResponse> = new Map();
@@ -39,7 +40,7 @@ mockBroadcasts.set('4', {
 
 export const handlers = [
   // GET /broadcasts - Get current user's broadcast
-  http.get('*/broadcasts', ({ request }) => {
+  http.get(buildApiUrl(API_ENDPOINTS.BROADCASTS.list), ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -62,7 +63,7 @@ export const handlers = [
   }),
 
   // POST /broadcasts - Create new broadcast
-  http.post('*/broadcasts', async ({ request }) => {
+  http.post(buildApiUrl(API_ENDPOINTS.BROADCASTS.create), async ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -109,7 +110,7 @@ export const handlers = [
   }),
   
   // PUT /broadcasts - Update existing broadcast
-  http.put('*/broadcasts', async ({ request }) => {
+  http.put(buildApiUrl(API_ENDPOINTS.BROADCASTS.list), async ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -153,7 +154,7 @@ export const handlers = [
   }),
 
   // DELETE /broadcasts - Delete current user's broadcast
-  http.delete('*/broadcasts', ({ request }) => {
+  http.delete(buildApiUrl(API_ENDPOINTS.BROADCASTS.list), ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -171,11 +172,12 @@ export const handlers = [
   }),
   
   // GET /broadcasts/:userId - Get specific user's public broadcast
-  http.get('*/broadcasts/:userId', ({ request, params }) => {
+  http.get(buildApiUrl('/broadcasts/:userId'), ({ request, params }) => {
     const { userId } = params;
     const requestingUserId = extractUserId(request);
     
-    console.log('🔍 MSW: GET broadcast for user:', userId, 'requested by:', requestingUserId);
+    console.log('📻 MSW: GET /broadcasts/:userId - userId:', userId, 'requestingUserId:', requestingUserId);
+    console.log('📻 MSW: GET broadcast for user:', userId, 'requested by:', requestingUserId);
     
     const broadcast = mockBroadcasts.get(userId as string);
     
