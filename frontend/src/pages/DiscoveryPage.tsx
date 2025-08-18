@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { nearbyUsers, currentUser as initialCurrentUser } from '../data/mockData';
+import { currentUser as initialCurrentUser } from '../data/mockData';
 import { User } from '../types';
 import UserCard from '../components/UserCard';
 import ProfileDetailModal from '../components/ProfileDetailModal';
@@ -160,9 +160,16 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     }
   }, [activeFilters.distance, activeFilters.interests, hasSearched, performSearch]);
 
-  // Determine which users to display: search results if searched, otherwise nearby users with basic filtering
+  // Effect to load initial users when available
+  useEffect(() => {
+    if (isAvailable && !hasSearched && searchResults.length === 0 && !isSearching) {
+      // Auto-perform initial search when becoming available to populate discovery feed
+      performSearch();
+    }
+  }, [isAvailable, hasSearched, searchResults.length, isSearching, performSearch]);
 
-  const baseDisplayUsers = hasSearched ? searchResults : nearbyUsers
+  // Determine which users to display: search results only (we always use real client data)
+  const baseDisplayUsers = searchResults
     .filter(user =>
       !hiddenUserIds.has(user.id) && // Exclude hidden users
       (searchQuery === '' || 
@@ -176,7 +183,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       // Grid mode: sort by distance (closest first)
       // Feed mode: maintain original order (simulating AI similarity)
       if (isGridView) {
-        return a.location.proximityMiles - b.location.proximityMiles;
+        return a.location?.proximityMiles ?? 0 - (b.location?.proximityMiles ?? 0);
       }
       return 0; // Maintain original order for feed mode
     });
