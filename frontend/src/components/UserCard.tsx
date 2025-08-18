@@ -10,9 +10,10 @@ interface UserCardProps {
   onClick?: () => void;
   isVerticalLayout?: boolean;
   showFriendButton?: boolean;
+  showBroadcast?: boolean;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = false, showFriendButton = true }): JSX.Element => {
+const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = false, showFriendButton = true, showBroadcast = true }): JSX.Element => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -180,7 +181,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
             {/* Bottom section - Broadcast and Interests */}
             <div className="space-y-3">
               {/* Broadcast */}
-              {user.broadcast && (
+              {showBroadcast && user.broadcast && (
                 <div className="bg-black/40 backdrop-blur-sm rounded-ios px-4 py-3">
                   <ScrollingText 
                     text={user.broadcast}
@@ -249,7 +250,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
         {/* Bottom Overlay Content */}
         <div className="overlay-content absolute bottom-0 left-0 right-0 p-2 space-y-2">
           {/* User Broadcast */}
-          {user.broadcast && (
+          {showBroadcast && user.broadcast && (
             <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-1">
               <ScrollingText 
                 text={user.broadcast}

@@ -5,6 +5,7 @@ import { User, Chat } from '../types';
 import { CheckIn } from '../types/checkin';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
+import BlockButton from './BlockButton';
 import IconActionButton from './IconActionButton';
 import CheckInModal from './CheckInModal';
 import { useFriendRequests } from '../hooks/useFriendRequests';
@@ -573,6 +574,14 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                       variant="default"
                       className="bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-xs min-w-0 whitespace-nowrap"
                     />
+                    {mode !== 'own' && (
+                      <BlockButton
+                        userId={user.id}
+                        size="small"
+                        variant="default"
+                        className="bg-red-500 hover:bg-red-600 text-white py-1.5 px-2 rounded-md transition-colors duration-200 text-xs min-w-0"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -595,24 +604,17 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-4 border border-teal-100 shadow-sm relative overflow-hidden"
+                    className="bg-surface-card rounded-card p-4 border border-surface-border shadow-card relative overflow-hidden"
                   >
-                    {/* Animated background pattern */}
-                    <div className="absolute inset-0 opacity-5">
-                      <div className="absolute top-2 right-2 w-12 h-12 bg-aqua/30 rounded-full animate-pulse"></div>
-                      <div className="absolute bottom-4 left-4 w-8 h-8 bg-aqua/20 rounded-full animate-pulse delay-1000"></div>
+                    {/* Subtle background accent */}
+                    <div className="absolute inset-0 opacity-[0.02]">
+                      <div className="absolute top-2 right-2 w-12 h-12 bg-aqua rounded-full"></div>
+                      <div className="absolute bottom-4 left-4 w-8 h-8 bg-aqua rounded-full"></div>
                     </div>
                     
                     <div className="relative z-10">
-                      {/* Broadcast indicator */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs text-gray-500">
-                          {formatTimeAgo(new Date(broadcast.updated_at))}
-                        </span>
-                      </div>
-                      
                       {/* Broadcast message */}
-                      <p className="text-sm text-gray-800 leading-relaxed font-medium">
+                      <p className="text-sm text-text-primary leading-relaxed font-medium">
                         {broadcast.message}
                       </p>
                     </div>
@@ -1085,7 +1087,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center"
           >
-            <X size={16} className="text-white" />
+            <X size={16} className="text-black" />
           </button>
         </div>
 
