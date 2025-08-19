@@ -121,12 +121,12 @@ Link-*/
 Link-pdm-tweaks/
 Link-chat-tweaks/
 
-# Exclude most markdown files (reduced from 124+ to 55 essential files)
 *.md
 # But keep essential documentation
 !README.md
 !CHANGELOG.md
 !docs/architecture/*.md
+
 !docs/architecture/**/*.md
 !docs/api/*.md
 !docs/security/*.md
