@@ -1,0 +1,195 @@
+# AI Indexing Optimization - Exclude large/irrelevant files from Warp AI context
+# Based on .gitignore patterns + additional AI-specific exclusions
+
+# Dependencies (largest token consumers)
+node_modules/
+*/node_modules/
+**/node_modules/**
+vendor/
+*/vendor/
+**/vendor/**
+.venv/
+venv/
+env/
+ENV/
+
+# Build outputs and artifacts
+dist/
+dist-ssr/
+build/
+out/
+*/dist/
+*/build/
+*/out/
+**/dist/**
+**/build/**
+**/out/**
+.next/
+.nuxt/
+.output/
+.vercel/
+
+# Test coverage and reports
+coverage/
+*/coverage/
+**/coverage/**
+coverage.out
+*/coverage.out
+coverage.html
+*/coverage.html
+coverage_report.md
+*.coverage
+*.lcov
+*.prof
+*.test
+
+# Compiled binaries and executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*/main
+*/cmd/main
+*-svc
+*.o
+*.a
+bin/
+*/bin/
+
+# Logs and temporary files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+
+# Environment files (contain secrets, not needed for AI context)
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# IDE and editor files
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Version control
+.git/
+.svn/
+.hg/
+
+# Infrastructure state files
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Database files
+*.sqlite3
+*.db
+
+# Docker artifacts
+*.tar
+.dockerignore
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Duplicate/temporary project directories
+Link-*/
+Link-pdm-tweaks/
+Link-chat-tweaks/
+
+# Exclude most markdown files (4,298+ files consuming excessive tokens)
+*.md
+# But keep essential documentation
+!README.md
+!CHANGELOG.md
+!docs/architecture/*.md
+!docs/api/*.md
+!*/README.md
+!*/CHANGELOG.md
+
+# Exclude media files unless critical
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.mp4
+*.avi
+*.mov
+*.webm
+*.ico
+# Keep critical assets
+!public/assets/critical/**
+!src/assets/icons/**
+!docs/images/architecture/**
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+wheels/
+*.whl
+
+# Package manager files (large lock files)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+go.sum
+# Keep package.json and go.mod for dependency context
+!package.json
+!*/package.json
+!go.mod
+!*/go.mod
+
+# Keep essential config files for AI context
+!Dockerfile*
+!docker-compose*
+!*.yaml
+!*.yml
+!*.json
+!*.toml
+!*.js
+!*.ts
+!*.tsx
+!*.jsx
+!*.cjs
+!*.mjs
+!.eslintrc*
+!tsconfig*.json
+!.prettierrc*
+!vite.config.*
+!webpack.config.*
+!rollup.config.*
+!jest.config.*
+!cypress.config.*
+!tailwind.config.*
+!postcss.config.*
+!babel.config.*
