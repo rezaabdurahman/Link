@@ -263,6 +263,57 @@ jobs:
         with:
           fail-on-severity: moderate
 
+  warp-indexing-check:
+    name: Warp AI Indexing Optimization Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Count total files
+        id: file-count
+        run: |
+          TOTAL_FILES=$(find . -type f | wc -l)
+          echo "total_files=$TOTAL_FILES" >> $GITHUB_OUTPUT
+          echo "Total files in repository: $TOTAL_FILES"
+      
+      - name: Count files that would be indexed by AI
+        id: indexed-count
+        run: |
+          # Simulate .warpignore filtering (approximate)
+          INDEXED_FILES=$(find . -type f | \
+            grep -v -E "(node_modules|Link-|coverage|\.git|dist|build|out|\.log$|\.tmp$|vendor)" | \
+            grep -v -E "\.(md|png|jpg|jpeg|gif|svg|mp4|avi|mov|webm|ico)$" | \
+            wc -l)
+          echo "indexed_files=$INDEXED_FILES" >> $GITHUB_OUTPUT
+          echo "Files that would be indexed: $INDEXED_FILES"
+      
+      - name: Calculate indexing efficiency
+        run: |
+          TOTAL=${{ steps.file-count.outputs.total_files }}
+          INDEXED=${{ steps.indexed-count.outputs.indexed_files }}
+          PERCENTAGE=$(( (INDEXED * 100) / TOTAL ))
+          echo "Indexing efficiency: $INDEXED / $TOTAL files ($PERCENTAGE%)"
+          
+          # Fail if more than 5% of files would be indexed (indicating bloat)
+          if [ $PERCENTAGE -gt 5 ]; then
+            echo "❌ Too many files would be indexed ($PERCENTAGE%). Expected ≤5%."
+            echo "This indicates potential repository bloat affecting AI performance."
+            echo "Consider updating .warpignore or removing unnecessary files."
+            exit 1
+          else
+            echo "✅ Indexing efficiency is optimal ($PERCENTAGE% ≤ 5%)"
+          fi
+      
+      - name: Verify .warpignore exists
+        run: |
+          if [ ! -f .warpignore ]; then
+            echo "❌ .warpignore file not found!"
+            echo "AI indexing optimization requires a .warpignore file."
+            exit 1
+          else
+            echo "✅ .warpignore file exists"
+          fi
+
   deploy-staging:
     name: Deploy Staging
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
