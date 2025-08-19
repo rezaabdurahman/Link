@@ -121,15 +121,20 @@ Link-*/
 Link-pdm-tweaks/
 Link-chat-tweaks/
 
-# Exclude most markdown files (4,298+ files consuming excessive tokens)
 *.md
 # But keep essential documentation
 !README.md
 !CHANGELOG.md
 !docs/architecture/*.md
+
+!docs/architecture/**/*.md
 !docs/api/*.md
+!docs/security/*.md
+!docs/processes/*.md
 !*/README.md
 !*/CHANGELOG.md
+!ADR-*.md
+!Project\ Vision.md
 
 # Exclude media files unless critical
 *.png
