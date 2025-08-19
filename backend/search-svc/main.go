@@ -14,10 +14,29 @@ import (
 	"github.com/link-app/search-svc/internal/handlers"
 	"github.com/link-app/search-svc/internal/middleware"
 	"github.com/link-app/search-svc/internal/repository"
+	"github.com/link-app/search-svc/internal/sentry"
 	"github.com/link-app/search-svc/internal/service"
+	"github.com/link-app/search-svc/internal/tracing"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
+	// Initialize Sentry for error reporting
+	if err := sentry.InitSentry(); err != nil {
+		log.Printf("Failed to initialize Sentry: %v", err)
+		// Continue running even if Sentry fails
+	}
+	defer sentry.Flush(2 * time.Second)
+
+	// Initialize OpenTelemetry tracing
+	cleanupTracing, err := tracing.InitTracing("search-svc")
+	if err != nil {
+		log.Printf("Failed to initialize tracing: %v", err)
+	} else {
+		log.Printf("Distributed tracing initialized successfully")
+		defer cleanupTracing()
+	}
+
 	// Initialize database with pgvector extension
 	db, err := config.ConnectDatabase()
 	if err != nil {
@@ -65,9 +84,15 @@ func main() {
 	router := gin.Default()
 
 	// Global middleware
+	router.Use(sentry.GinSentryMiddleware()) // Add Sentry middleware early
+	router.Use(tracing.GinMiddleware("search-svc")) // Add distributed tracing middleware
+	router.Use(middleware.PrometheusMiddleware()) // Add Prometheus metrics collection
 	router.Use(corsMiddleware())
 	router.Use(middleware.RequestLogger())
 	router.Use(middleware.ErrorHandler())
+
+	// Metrics endpoint for Prometheus scraping
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {

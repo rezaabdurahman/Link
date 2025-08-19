@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -52,7 +53,7 @@ func CSRFMiddleware() gin.HandlerFunc {
 					"error":     "CSRF_ERROR",
 					"message":   "Invalid or missing CSRF token",
 					"code":      "CSRF_TOKEN_MISMATCH",
-					"timestamp": c.GetTime(),
+					"timestamp": time.Now(),
 				})
 				c.Abort()
 				return

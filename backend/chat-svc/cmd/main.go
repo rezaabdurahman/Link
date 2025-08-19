@@ -20,7 +20,11 @@ import (
 	"github.com/link-app/chat-svc/internal/db"
 	"github.com/link-app/chat-svc/internal/handler"
 	authmw "github.com/link-app/chat-svc/internal/middleware"
+	metricsmw "github.com/link-app/chat-svc/internal/middleware"
+	"github.com/link-app/chat-svc/internal/sentry"
 	"github.com/link-app/chat-svc/internal/service"
+	"github.com/link-app/chat-svc/internal/tracing"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // @title Chat Service API
@@ -29,8 +33,24 @@ import (
 // @host localhost:8080
 // @BasePath /api/v1
 func main() {
+	// Initialize Sentry for error reporting
+	if err := sentry.InitSentry(); err != nil {
+		logrus.Printf("Failed to initialize Sentry: %v", err)
+		// Continue running even if Sentry fails
+	}
+	defer sentry.Flush(2 * time.Second)
+
 	// Initialize logger
 	logger := logrus.New()
+
+	// Initialize OpenTelemetry tracing
+	cleanupTracing, err := tracing.InitTracing("chat-svc")
+	if err != nil {
+		logger.WithError(err).Warn("Failed to initialize tracing")
+	} else {
+		logger.Info("Distributed tracing initialized successfully")
+		defer cleanupTracing()
+	}
 	logger.SetFormatter(&logrus.JSONFormatter{})
 	
 	// Load configuration
@@ -71,6 +91,9 @@ func main() {
 	r := chi.NewRouter()
 
 	// Basic middleware
+	r.Use(sentry.ChiSentryMiddleware) // Add Sentry middleware early
+	r.Use(tracing.ChiMiddleware("chat-svc")) // Add distributed tracing middleware
+	r.Use(metricsmw.PrometheusMiddleware(logger)) // Add Prometheus metrics collection
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
@@ -113,6 +136,9 @@ func main() {
 
 	// Request timeout
 	r.Use(middleware.Timeout(60 * time.Second))
+
+	// Metrics endpoint for Prometheus scraping
+	r.Get("/metrics", http.HandlerFunc(promhttp.Handler().ServeHTTP))
 
 	// Health check endpoints
 	r.Get("/health", healthHandler.HandleHealth)        // Comprehensive health check with DB & Redis

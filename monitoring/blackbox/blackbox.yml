@@ -1,0 +1,138 @@
+modules:
+  # HTTP 2xx probe - standard health check
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_http_versions:
+        - "HTTP/1.1"
+        - "HTTP/2.0"
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+
+  # HTTP 2xx probe with JSON validation for API endpoints
+  http_2xx_json:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      headers:
+        Accept: application/json
+        Content-Type: application/json
+      valid_http_versions:
+        - "HTTP/1.1"
+        - "HTTP/2.0"
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200]
+      fail_if_body_not_matches_regexp:
+        - '.*"status".*'
+
+  # HTTP POST probe for API endpoints
+  http_post_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: POST
+      headers:
+        Content-Type: application/json
+      body: '{"test": true}'
+      valid_http_versions:
+        - "HTTP/1.1" 
+        - "HTTP/2.0"
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200, 201, 202]
+
+  # TCP connectivity check
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # PostgreSQL connectivity check
+  postgres_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # Redis connectivity check  
+  redis_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # ICMP ping check
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+
+  # DNS resolution check
+  dns_resolution:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: "ip4"
+      query_name: "linkchatsummary.com"
+      query_type: "A"
+
+  # HTTP with authentication (for protected endpoints)
+  http_2xx_auth:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      headers:
+        Authorization: "Bearer ${HEALTH_CHECK_TOKEN}"
+      valid_http_versions:
+        - "HTTP/1.1"
+        - "HTTP/2.0"
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200]
+
+  # Frontend application health check
+  frontend_health:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      headers:
+        User-Agent: "Prometheus-Blackbox-Exporter"
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      valid_http_versions:
+        - "HTTP/1.1"
+        - "HTTP/2.0"
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200]
+      fail_if_body_not_matches_regexp:
+        - "(?i)<html"
+        - "(?i)<title"
+
+  # API Gateway specific health check
+  api_gateway_health:
+    prober: http
+    timeout: 15s
+    http:
+      method: GET
+      headers:
+        Accept: application/json
+      valid_http_versions:
+        - "HTTP/1.1"
+        - "HTTP/2.0"
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      valid_status_codes: [200]
+      fail_if_body_not_matches_regexp:
+        - '.*"service".*"Link API Gateway".*'
+        - '.*"status".*"healthy".*'

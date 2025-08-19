@@ -1,0 +1,323 @@
+groups:
+  - name: database-performance
+    rules:
+      # Database Connection Pool Alerts
+      - alert: DatabaseConnectionPoolHigh
+        expr: |
+          (database_pool_used_connections / 
+           (database_pool_used_connections + database_pool_idle_connections)) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool usage is high"
+          description: |
+            Database connection pool usage is {{ $value | humanizePercentage }} for service {{ $labels.service }}.
+            This may indicate connection leaks or insufficient pool size.
+
+      - alert: DatabaseConnectionPoolCritical
+        expr: |
+          (database_pool_used_connections / 
+           (database_pool_used_connections + database_pool_idle_connections)) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool is nearly exhausted"
+          description: |
+            Database connection pool usage is {{ $value | humanizePercentage }} for service {{ $labels.service }}.
+            Service may be unable to serve new requests soon.
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: database_pool_idle_connections == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool is exhausted"
+          description: |
+            No idle database connections available for service {{ $labels.service }}.
+            New requests cannot be served.
+
+      # Slow Query Alerts
+      - alert: DatabaseSlowQueriesHigh
+        expr: |
+          rate(database_slow_queries_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High rate of slow database queries"
+          description: |
+            Service {{ $labels.service }} is experiencing {{ $value }} slow queries per second
+            on table {{ $labels.table }} for operation {{ $labels.operation }}.
+
+      - alert: DatabaseSlowQueriesCritical
+        expr: |
+          rate(database_slow_queries_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Critical rate of slow database queries"
+          description: |
+            Service {{ $labels.service }} is experiencing {{ $value }} slow queries per second
+            on table {{ $labels.table }} for operation {{ $labels.operation }}.
+            Performance is severely degraded.
+
+      # Query Error Rate Alerts
+      - alert: DatabaseQueryErrorRateHigh
+        expr: |
+          rate(database_query_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database query error rate"
+          description: |
+            Service {{ $labels.service }} is experiencing {{ $value }} query errors per second
+            on table {{ $labels.table }} with error type {{ $labels.error_type }}.
+
+      - alert: DatabaseQueryErrorRateCritical
+        expr: |
+          rate(database_query_errors_total[5m]) > 0.2
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Critical database query error rate"
+          description: |
+            Service {{ $labels.service }} is experiencing {{ $value }} query errors per second
+            on table {{ $labels.table }} with error type {{ $labels.error_type }}.
+            Database operations are failing frequently.
+
+      # Query Duration Alerts
+      - alert: DatabaseQueryDurationHigh
+        expr: |
+          histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database query duration"
+          description: |
+            95th percentile query duration for service {{ $labels.service }} 
+            is {{ $value }}s for operation {{ $labels.operation }} on table {{ $labels.table }}.
+
+      - alert: DatabaseQueryDurationCritical
+        expr: |
+          histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m])) > 2.0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Critical database query duration"
+          description: |
+            95th percentile query duration for service {{ $labels.service }} 
+            is {{ $value }}s for operation {{ $labels.operation }} on table {{ $labels.table }}.
+            Database performance is severely degraded.
+
+      # Service-Specific Alerts
+      - alert: ChatServiceDatabaseSlowQueries
+        expr: |
+          rate(database_slow_queries_total{service="chat-svc"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+          service: chat-svc
+        annotations:
+          summary: "Chat service experiencing slow database queries"
+          description: |
+            Chat service is experiencing {{ $value }} slow queries per second.
+            This may impact real-time messaging performance.
+
+      - alert: SearchServiceVectorQueriesSlow
+        expr: |
+          histogram_quantile(0.95, rate(database_query_duration_seconds_bucket{service="search-svc"}[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          service: search-svc
+        annotations:
+          summary: "Search service vector queries are slow"
+          description: |
+            Search service vector queries are taking {{ $value }}s at 95th percentile.
+            Search functionality may be degraded.
+
+      - alert: LocationServicePostGISQueries
+        expr: |
+          histogram_quantile(0.95, rate(database_query_duration_seconds_bucket{service="location-svc"}[5m])) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          service: location-svc
+        annotations:
+          summary: "Location service PostGIS queries are slow"
+          description: |
+            Location service spatial queries are taking {{ $value }}s at 95th percentile.
+            Location-based features may be impacted.
+
+      # Transaction Alerts
+      - alert: DatabaseTransactionErrorRateHigh
+        expr: |
+          rate(database_transactions_total{status="error"}[5m]) / 
+          rate(database_transactions_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database transaction error rate"
+          description: |
+            Database transaction error rate is {{ $value | humanizePercentage }} 
+            for service {{ $labels.service }}.
+
+      # Specific Error Type Alerts
+      - alert: DatabaseConnectionErrors
+        expr: |
+          rate(database_query_errors_total{error_type="connection"}[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection errors detected"
+          description: |
+            Service {{ $labels.service }} is experiencing database connection errors
+            at {{ $value }} per second on table {{ $labels.table }}.
+
+      - alert: DatabaseConstraintViolations
+        expr: |
+          rate(database_query_errors_total{error_type=~"constraint_.*"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database constraint violations detected"
+          description: |
+            Service {{ $labels.service }} is experiencing {{ $labels.error_type }} violations
+            at {{ $value }} per second on table {{ $labels.table }}.
+
+      - alert: DatabaseTimeoutErrors
+        expr: |
+          rate(database_query_errors_total{error_type="timeout"}[5m]) > 0.02
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database timeout errors detected"
+          description: |
+            Service {{ $labels.service }} is experiencing timeout errors
+            at {{ $value }} per second on table {{ $labels.table }}.
+
+  - name: database-capacity
+    rules:
+      # Rows Affected Monitoring
+      - alert: DatabaseMassUpdatesDetected
+        expr: |
+          histogram_quantile(0.95, rate(database_rows_affected_bucket[5m])) > 1000
+        for: 10m
+        labels:
+          severity: info
+          component: database
+        annotations:
+          summary: "Large database operations detected"
+          description: |
+            Service {{ $labels.service }} performed operations affecting {{ $value }} rows
+            on table {{ $labels.table }} for operation {{ $labels.operation }}.
+            Monitor for performance impact.
+
+      # Query Rate Monitoring
+      - alert: DatabaseQueryRateHigh
+        expr: |
+          rate(database_queries_total[5m]) > 100
+        for: 10m
+        labels:
+          severity: info
+          component: database
+        annotations:
+          summary: "High database query rate detected"
+          description: |
+            Service {{ $labels.service }} is executing {{ $value }} queries per second.
+            Monitor for capacity planning.
+
+      - alert: DatabaseQueryRateSpike
+        expr: |
+          rate(database_queries_total[5m]) / rate(database_queries_total[30m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database query rate spike detected"
+          description: |
+            Service {{ $labels.service }} query rate is {{ $value }}x higher than normal.
+            Investigate potential traffic spike or inefficient queries.
+
+  - name: database-health
+    rules:
+      # Overall Health Indicators
+      - alert: DatabaseHealthDegraded
+        expr: |
+          (
+            rate(database_query_errors_total[5m]) > 0.01 or
+            rate(database_slow_queries_total[5m]) > 0.05 or
+            (database_pool_used_connections / (database_pool_used_connections + database_pool_idle_connections)) > 0.8
+          )
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database health appears degraded"
+          description: |
+            Service {{ $labels.service }} database shows signs of performance degradation:
+            - Error rate or slow query rate above threshold
+            - Connection pool usage above 80%
+            Consider investigating database performance.
+
+      # SLO-based Alerts (assuming 99.9% availability SLO)
+      - alert: DatabaseSLOBreach
+        expr: |
+          (
+            rate(database_queries_total{status="success"}[30m]) /
+            rate(database_queries_total[30m])
+          ) < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+          slo: availability
+        annotations:
+          summary: "Database SLO breach detected"
+          description: |
+            Database availability SLO (99.9%) breached for service {{ $labels.service }}.
+            Current success rate: {{ $value | humanizePercentage }}.
+            
+      - alert: DatabaseLatencySLOBreach
+        expr: |
+          histogram_quantile(0.99, rate(database_query_duration_seconds_bucket[30m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+          slo: latency
+        annotations:
+          summary: "Database latency SLO breach detected"
+          description: |
+            Database latency SLO (99th percentile < 100ms) breached for service {{ $labels.service }}.
+            Current P99 latency: {{ $value }}s.

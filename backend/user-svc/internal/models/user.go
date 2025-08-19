@@ -234,3 +234,20 @@ type Session struct {
 	// Relationships
 	User User `json:"user,omitempty" gorm:"foreignKey:UserID"`
 }
+
+// Block represents a user blocking relationship
+type Block struct {
+	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	BlockerID uuid.UUID `json:"blocker_id" gorm:"type:uuid;not null;index"`
+	BlockedID uuid.UUID `json:"blocked_id" gorm:"type:uuid;not null;index"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+
+	// Relationships
+	Blocker User `json:"blocker,omitempty" gorm:"foreignKey:BlockerID"`
+	Blocked User `json:"blocked,omitempty" gorm:"foreignKey:BlockedID"`
+}
+
+// Unique constraint on blocker_id and blocked_id combination
+func (Block) TableName() string {
+	return "blocks"
+}

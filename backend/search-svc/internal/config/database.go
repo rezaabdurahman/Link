@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
+	"github.com/link-app/shared/database/monitoring"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -45,6 +47,40 @@ func ConnectDatabase() (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
+
+	// Set up database monitoring for vector operations
+	monitoringConfig := monitoring.DefaultConfig("search-svc")
+	// Vector queries (embeddings) can be computationally intensive
+	if os.Getenv("ENVIRONMENT") == "production" {
+		monitoringConfig.SlowQueryThreshold = 500 * time.Millisecond // Higher threshold for vector operations
+	} else {
+		monitoringConfig.SlowQueryThreshold = 1 * time.Second
+	}
+
+	// Initialize monitoring plugins
+	monitoringPlugin := monitoring.NewGormMonitoringPlugin(monitoringConfig)
+	if err := db.Use(monitoringPlugin); err != nil {
+		return nil, fmt.Errorf("failed to initialize database monitoring: %w", err)
+	}
+
+	// Initialize Sentry integration for database errors
+	if getEnv("SENTRY_DSN", "") != "" {
+		sentryPlugin := monitoring.NewGormSentryPlugin(monitoringConfig)
+		if err := db.Use(sentryPlugin); err != nil {
+			return nil, fmt.Errorf("failed to initialize database Sentry integration: %w", err)
+		}
+	}
+
+	// Configure connection pool for vector operations
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	// Vector queries can be resource-intensive, so configure accordingly
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetMaxOpenConns(25) // Lower than other services due to computational load
+	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	// Enable pgvector extension
 	if err := enablePgVectorExtension(db); err != nil {

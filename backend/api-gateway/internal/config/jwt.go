@@ -97,6 +97,7 @@ func IsPublicEndpoint(method, path string) bool {
 		},
 		"GET": {
 			"/health",
+			"/metrics", // Prometheus metrics endpoint
 			"/users/profile/", // Public user profiles (will check if path contains /users/profile/)
 		},
 		"OPTIONS": {"*"}, // Allow all OPTIONS requests for CORS

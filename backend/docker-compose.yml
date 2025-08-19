@@ -54,6 +54,10 @@ services:
       # Server configuration
       PORT: 8080
       ENVIRONMENT: development
+      APP_VERSION: ${APP_VERSION:-development}
+      
+      # Monitoring and Error Reporting
+      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
       
       # Redis configuration
       REDIS_URL: redis://redis:6379
@@ -96,6 +100,10 @@ services:
       # Server configuration
       PORT: 8080
       ENVIRONMENT: development
+      APP_VERSION: ${APP_VERSION:-development}
+      
+      # Monitoring and Error Reporting
+      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
     ports:
       - "8083:8080"  # Expose on different port to avoid conflict
     depends_on:
@@ -124,6 +132,10 @@ services:
       # Server configuration
       PORT: 8080
       ENVIRONMENT: development
+      APP_VERSION: ${APP_VERSION:-development}
+      
+      # Monitoring and Error Reporting
+      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
     ports:
       - "8082:8080"  # Expose on different port to avoid conflict
     depends_on:
@@ -144,6 +156,11 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: your-secret-key-change-this-in-production-make-it-very-long-and-complex
       PORT: 8080
+      ENVIRONMENT: development
+      APP_VERSION: ${APP_VERSION:-development}
+      
+      # Monitoring and Error Reporting
+      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
     depends_on:
       postgres:
         condition: service_healthy
@@ -167,6 +184,10 @@ services:
       # Server configuration
       PORT: 8080
       ENVIRONMENT: development
+      APP_VERSION: ${APP_VERSION:-development}
+      
+      # Monitoring and Error Reporting
+      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
       
       # JWT configuration (must match user service)
       JWT_SECRET: your-secret-key-change-this-in-production-make-it-very-long-and-complex

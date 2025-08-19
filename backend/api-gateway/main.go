@@ -1,17 +1,43 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/link-app/api-gateway/internal/config"
 	"github.com/link-app/api-gateway/internal/handlers"
+	"github.com/link-app/api-gateway/internal/logger"
+	"github.com/link-app/api-gateway/internal/metrics"
 	"github.com/link-app/api-gateway/internal/middleware"
+	"github.com/link-app/api-gateway/internal/sentry"
+	"github.com/link-app/api-gateway/internal/tracing"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
+	// Initialize structured logger
+	log := logger.InitLogger()
+
+	// Initialize Sentry for error reporting
+	if err := sentry.InitSentry(); err != nil {
+		log.WithError(err).Warn("Failed to initialize Sentry - continuing without error reporting")
+		// Continue running even if Sentry fails
+	} else {
+		log.Info("Sentry initialized successfully")
+	}
+	defer sentry.Flush(2 * time.Second)
+
+	// Initialize OpenTelemetry tracing
+	cleanupTracing, err := tracing.InitTracing("api-gateway")
+	if err != nil {
+		log.WithError(err).Warn("Failed to initialize tracing - continuing without distributed tracing")
+	} else {
+		log.Info("Distributed tracing initialized successfully")
+		defer cleanupTracing()
+	}
+
 	// Initialize configurations
 	jwtConfig := config.GetJWTConfig()
 	jwtValidator := config.NewJWTValidator(jwtConfig)
@@ -26,16 +52,26 @@ func main() {
 	router.SetTrustedProxies(nil)
 
 	// Global middleware
-	router.Use(middleware.RequestLoggingMiddleware())
+	router.Use(sentry.GinSentryMiddleware()) // Add Sentry middleware early
+	router.Use(tracing.GinMiddleware("api-gateway")) // Add distributed tracing middleware
+	router.Use(logger.CorrelationIDMiddleware()) // Add correlation ID tracking
+	router.Use(metrics.PrometheusMiddleware()) // Add Prometheus metrics collection
+	router.Use(logger.StructuredLoggingMiddleware()) // Replace basic logging with structured logging
 	router.Use(middleware.CORSMiddleware())
 	router.Use(middleware.RateLimitingMiddleware())
 
 	// Recovery middleware
 	router.Use(gin.Recovery())
 
+	// JWT metrics middleware (before auth middleware to track attempts)
+	router.Use(metrics.JWTMetricsMiddleware())
+	
 	// Authentication middleware (validates JWT and sets user context headers)
 	router.Use(middleware.AuthMiddleware(jwtValidator, jwtConfig))
 
+	// Metrics endpoint for Prometheus scraping - no auth required
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	
 	// Health check endpoint - no auth required
 	router.GET("/health", proxyHandler.HealthHandler)
 
@@ -144,21 +180,26 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("🚀 API Gateway starting on port %s", port)
-	log.Printf("📊 Health check available at: http://localhost:%s/health", port)
-	log.Printf("📖 API documentation at: http://localhost:%s/docs/", port)
-	log.Printf("🔐 JWT Secret: %s...", jwtConfig.Secret[:10])
-	
+	// Log service startup information
+	log.WithFields(map[string]interface{}{
+		"port":           port,
+		"health_endpoint": "/health",
+		"docs_endpoint":  "/docs/",
+		"jwt_configured": len(jwtConfig.Secret) > 0,
+	}).Info("🚀 API Gateway starting up")
+
 	// Log service URLs for debugging
 	serviceConfig := config.GetServiceConfig()
-	log.Printf("🏢 Services:")
-	log.Printf("   User Service: %s", serviceConfig.UserService.URL)
-	log.Printf("   Location Service: %s", serviceConfig.LocationService.URL)
-	log.Printf("   Chat Service: %s", serviceConfig.ChatService.URL)
-	log.Printf("   AI Service: %s", serviceConfig.AIService.URL)
-	log.Printf("   Discovery Service: %s", serviceConfig.DiscoveryService.URL)
+	log.WithFields(map[string]interface{}{
+		"user_service":      serviceConfig.UserService.URL,
+		"location_service":  serviceConfig.LocationService.URL,
+		"chat_service":      serviceConfig.ChatService.URL,
+		"ai_service":        serviceConfig.AIService.URL,
+		"discovery_service": serviceConfig.DiscoveryService.URL,
+	}).Debug("Service URLs configured")
 
+	log.Info("🚀 API Gateway server started successfully")
 	if err := router.Run(":" + port); err != nil {
-		log.Fatal("Failed to start API Gateway:", err)
+		log.WithError(err).Fatal("Failed to start API Gateway server")
 	}
 }
