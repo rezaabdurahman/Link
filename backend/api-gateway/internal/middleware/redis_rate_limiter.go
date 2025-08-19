@@ -70,10 +70,10 @@ func (r *RedisRateLimiter) AddRule(name string, rule RateLimitRule) {
 func RedisRateLimitMiddleware(limiter *RedisRateLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get client identifier (IP + User ID if available)
-		clientID := r.getClientID(c)
+		clientID := limiter.getClientID(c)
 		
 		// Find applicable rule
-		rule := r.findRule(c.Request.URL.Path)
+		rule := limiter.findRule(c.Request.URL.Path)
 		
 		// Check rate limit using sliding window algorithm
 		allowed, remaining, resetTime, err := limiter.checkRateLimit(clientID, rule, c.Request.URL.Path)

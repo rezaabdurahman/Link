@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -10,6 +11,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/link-app/api-gateway/internal/config"
 )
+
+// getEnv gets an environment variable with a default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
 // AuthMiddleware provides JWT authentication for API Gateway
 func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConfig) gin.HandlerFunc {
@@ -30,7 +39,7 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 				"error":     "AUTHENTICATION_ERROR",
 				"message":   "Authorization token required",
 				"code":      "MISSING_TOKEN",
-				"timestamp": c.GetTime(),
+				"timestamp": time.Now(),
 			})
 			c.Abort()
 			return
@@ -43,7 +52,7 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 				"error":     "AUTHENTICATION_ERROR",
 				"message":   "Invalid or expired token",
 				"code":      "INVALID_TOKEN",
-				"timestamp": c.GetTime(),
+				"timestamp": time.Now(),
 			})
 			c.Abort()
 			return
@@ -86,7 +95,7 @@ func CORSMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		if originAllowed || config.GetEnv("ENVIRONMENT", "development") == "development" {
+		if originAllowed || getEnv("ENVIRONMENT", "development") == "development" {
 			c.Header("Access-Control-Allow-Origin", origin)
 		}
 

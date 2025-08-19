@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { captureError } from '../utils/sentry';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -36,11 +37,15 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   };
 
   const handleReportError = (): void => {
-    // In a real app, this would send error to logging service
-    console.error('Error reported:', { error, errorInfo });
-    
-    // Example: Send to error reporting service
-    // errorReportingService.report({ error, errorInfo, userAgent: navigator.userAgent });
+    if (error) {
+      captureError(error, {
+        errorInfo,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        reportedBy: 'user',
+      });
+      console.log('Error reported to Sentry');
+    }
   };
 
   return (
@@ -174,14 +179,12 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       errorInfo,
     });
 
-    // In production, send error to logging service
-    if (process.env.NODE_ENV === 'production') {
-      // Example: Send to error reporting service
-      // errorReportingService.captureException(error, {
-      //   extra: errorInfo,
-      //   tags: { boundary: 'global' }
-      // });
-    }
+    // Send error to Sentry
+    captureError(error, {
+      errorInfo,
+      tags: { boundary: 'global' },
+      timestamp: new Date().toISOString(),
+    });
   }
 
   /**

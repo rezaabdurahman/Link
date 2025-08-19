@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build:demo",
+  "buildCommand": "npm run build:production",
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [

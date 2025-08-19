@@ -1,0 +1,47 @@
+groups:
+- name: database-performance
+  rules:
+  - alert: DatabaseSlowQueries
+    expr: rate(database_slow_queries_total[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High rate of slow database queries in {{ $labels.service }}"
+      description: "Service {{ $labels.service }} is experiencing {{ $value }} slow queries per second"
+      
+  - alert: DatabaseConnectionPoolHigh
+    expr: database_connections_active / 20 > 0.8
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Database connection pool usage high in {{ $labels.service }}"
+      description: "Connection pool usage is {{ $value | humanizePercentage }} in {{ $labels.service }}"
+      
+  - alert: DatabaseErrorRate
+    expr: rate(database_errors_total[5m]) > 0.01
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Database error rate elevated in {{ $labels.service }}"
+      description: "Database error rate is {{ $value }} errors per second in {{ $labels.service }}"
+      
+  - alert: DatabaseConnectionPoolExhausted
+    expr: database_connections_active / 20 > 0.95
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Database connection pool nearly exhausted in {{ $labels.service }}"
+      description: "Connection pool usage is {{ $value | humanizePercentage }} in {{ $labels.service }}"
+      
+  - alert: DatabaseQueryDuration
+    expr: histogram_quantile(0.95, database_query_duration_seconds_bucket) > 1.0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "95th percentile database query duration high in {{ $labels.service }}"
+      description: "95th percentile query duration is {{ $value }}s in {{ $labels.service }}"

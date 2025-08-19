@@ -1,0 +1,47 @@
+apiVersion: 1
+
+datasources:
+  # Prometheus data source
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.40.0
+      cacheLevel: 'High'
+      disableRecordingRules: false
+      incrementalQueryOverlapWindow: 10m
+
+  # AlertManager data source
+  - name: AlertManager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    editable: true
+    jsonData:
+      implementation: prometheus
+
+  # Loki data source for logs
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        # Extract request_id from log lines to link with traces
+        - name: request_id
+          label: request_id
+          regex: '"request_id":"([^"]+)"'
+          url: '/explore?left=%5B"now-1h","now","Loki",%7B"expr":"%7Brequest_id%3D\"$${__value.text}\"%7D"%7D%5D'
+        # Extract user_id from log lines  
+        - name: user_id
+          label: user_id
+          regex: '"user_id":"([^"]+)"'
+          url: '/explore?left=%5B"now-1h","now","Loki",%7B"expr":"%7Buser_id%3D\"$${__value.text}\"%7D"%7D%5D'

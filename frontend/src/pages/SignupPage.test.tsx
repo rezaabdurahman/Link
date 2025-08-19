@@ -2,7 +2,6 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter, useNavigate } from 'react-router-dom';
-import { AuthProvider } from '../contexts/AuthContext';
 import SignupPage from './SignupPage';
 
 // Mock modules

@@ -7,6 +7,7 @@ import (
 
 	"github.com/link-app/user-svc/internal/models"
 	"github.com/link-app/user-svc/internal/onboarding"
+	"github.com/link-app/shared/database/monitoring"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -56,6 +57,27 @@ func ConnectDatabase() (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Set up database monitoring
+	monitoringConfig := monitoring.DefaultConfig("user-svc")
+	// Adjust slow query threshold based on environment
+	if getEnv("ENVIRONMENT", "development") == "production" {
+		monitoringConfig.SlowQueryThreshold = 50 * time.Millisecond
+	}
+
+	// Initialize monitoring plugins
+	monitoringPlugin := monitoring.NewGormMonitoringPlugin(monitoringConfig)
+	if err := db.Use(monitoringPlugin); err != nil {
+		return nil, fmt.Errorf("failed to initialize database monitoring: %w", err)
+	}
+
+	// Initialize Sentry integration for database errors
+	if getEnv("SENTRY_DSN", "") != "" {
+		sentryPlugin := monitoring.NewGormSentryPlugin(monitoringConfig)
+		if err := db.Use(sentryPlugin); err != nil {
+			return nil, fmt.Errorf("failed to initialize database Sentry integration: %w", err)
+		}
 	}
 
 	// Configure connection pool

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/link-app/backend/location-svc/internal/models"
+	"github.com/link-app/shared/database/monitoring"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -55,6 +56,29 @@ func ConnectDatabase() (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Set up database monitoring with PostGIS-aware configuration
+	monitoringConfig := monitoring.DefaultConfig("location-svc")
+	// PostGIS queries can be more complex, so adjust thresholds
+	if getEnv("ENVIRONMENT", "development") == "production" {
+		monitoringConfig.SlowQueryThreshold = 200 * time.Millisecond // Higher threshold for spatial queries
+	} else {
+		monitoringConfig.SlowQueryThreshold = 500 * time.Millisecond
+	}
+
+	// Initialize monitoring plugins
+	monitoringPlugin := monitoring.NewGormMonitoringPlugin(monitoringConfig)
+	if err := db.Use(monitoringPlugin); err != nil {
+		return nil, fmt.Errorf("failed to initialize database monitoring: %w", err)
+	}
+
+	// Initialize Sentry integration for database errors
+	if getEnv("SENTRY_DSN", "") != "" {
+		sentryPlugin := monitoring.NewGormSentryPlugin(monitoringConfig)
+		if err := db.Use(sentryPlugin); err != nil {
+			return nil, fmt.Errorf("failed to initialize database Sentry integration: %w", err)
+		}
 	}
 
 	// Configure connection pool

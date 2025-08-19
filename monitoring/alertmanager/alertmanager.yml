@@ -1,0 +1,187 @@
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@linkchatsummary.com'
+  smtp_auth_username: 'alerts@linkchatsummary.com'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  
+  # Slack webhook URL (set via environment variable)
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+# Template files for custom alert formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Alert routing rules
+route:
+  # Default receiver for all alerts
+  receiver: 'default-receiver'
+  # Group alerts by alertname and instance for 30 seconds
+  group_by: ['alertname', 'instance']
+  # Wait 30s before sending notification for new group
+  group_wait: 30s
+  # Wait 5m before sending notification for new alerts in existing group
+  group_interval: 5m
+  # Wait 12h before re-sending a resolved alert
+  repeat_interval: 12h
+
+  routes:
+    # Critical alerts go to multiple channels
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      # Don't wait for grouping on critical alerts
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+
+    # Warning alerts with lower urgency
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 1m
+      group_interval: 5m
+      repeat_interval: 6h
+
+    # Infrastructure-specific alerts
+    - match:
+        job: postgres
+      receiver: 'database-alerts'
+    - match:
+        job: redis
+      receiver: 'database-alerts'
+
+    # Service-specific alerts
+    - match_re:
+        job: '(api-gateway|user-service|chat-service|discovery-service)'
+      receiver: 'service-alerts'
+
+receivers:
+  # Default receiver (console log)
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://localhost:9093/webhook'
+        send_resolved: true
+
+  # Critical alerts - multiple notification channels
+  - name: 'critical-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL:-admin@linkchatsummary.com}'
+        subject: '🚨 CRITICAL: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        body: |
+          {{ range .Alerts }}
+          **Alert**: {{ .Annotations.summary }}
+          **Description**: {{ .Annotations.description }}
+          **Severity**: {{ .Labels.severity }}
+          **Instance**: {{ .Labels.instance }}
+          **Time**: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+        send_resolved: true
+
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-critical'
+        color: 'danger'
+        title: '🚨 Critical Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          *Instance:* {{ .Labels.instance }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+        send_resolved: true
+
+    # Webhook for integration with other tools (PagerDuty, etc.)
+    webhook_configs:
+      - url: '${WEBHOOK_URL}'
+        send_resolved: true
+        http_config:
+          bearer_token: '${WEBHOOK_TOKEN}'
+
+  # Warning alerts - less intrusive notifications
+  - name: 'warning-alerts'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-warnings'
+        color: 'warning'
+        title: '⚠️ Warning Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          *Instance:* {{ .Labels.instance }}
+          {{ end }}
+        send_resolved: true
+
+    email_configs:
+      - to: '${ALERT_EMAIL:-admin@linkchatsummary.com}'
+        subject: '⚠️ WARNING: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        body: |
+          {{ range .Alerts }}
+          **Alert**: {{ .Annotations.summary }}
+          **Description**: {{ .Annotations.description }}
+          **Instance**: {{ .Labels.instance }}
+          **Time**: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+        send_resolved: true
+
+  # Database alerts
+  - name: 'database-alerts'
+    email_configs:
+      - to: '${DB_ADMIN_EMAIL:-dba@linkchatsummary.com}'
+        subject: '🗄️ Database Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        body: |
+          {{ range .Alerts }}
+          **Alert**: {{ .Annotations.summary }}
+          **Description**: {{ .Annotations.description }}
+          **Database**: {{ .Labels.job }}
+          **Instance**: {{ .Labels.instance }}
+          **Time**: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+        send_resolved: true
+
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#database-alerts'
+        color: 'danger'
+        title: '🗄️ Database Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          *Database:* {{ .Labels.job }}
+          *Instance:* {{ .Labels.instance }}
+          {{ end }}
+        send_resolved: true
+
+  # Service alerts
+  - name: 'service-alerts'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#service-alerts'
+        color: 'warning'
+        title: '🔧 Service Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          *Service:* {{ .Labels.job }}
+          *Instance:* {{ .Labels.instance }}
+          {{ end }}
+        send_resolved: true
+
+# Inhibition rules to prevent spam
+inhibit_rules:
+  # Inhibit warning alerts if critical alert is firing for same instance
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['instance']
+
+  # Inhibit HTTP service alerts if main service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match:
+      alertname: 'HTTPServiceDown'
+    equal: ['instance']

@@ -8,5 +8,6 @@ use (
 	./backend/chat-svc
 	./backend/discovery-svc
 	./backend/search-svc
+	./backend/shared
 	./backend/user-svc
 )

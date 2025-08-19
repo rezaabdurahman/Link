@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -10,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/link-app/search-svc/internal/dto"
 	"golang.org/x/time/rate"
@@ -163,10 +160,8 @@ func RateLimit(store *RateLimiterStore) gin.HandlerFunc {
 		}
 
 		limiter := store.GetLimiter(userID.(string))
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
 
-		if !limiter.AllowN(ctx.Done(), 1) {
+		if !limiter.AllowN(time.Now(), 1) {
 			c.Header("X-RateLimit-Limit", strconv.Itoa(int(store.limit*60))) // Show per-minute limit
 			c.Header("X-RateLimit-Remaining", "0")
 			c.Header("Retry-After", "60")

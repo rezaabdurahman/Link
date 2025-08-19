@@ -1,8 +1,11 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.tsx'
-import './utils/devAuth' // Load dev authentication helper in development
-import './index.css'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.tsx';
+import './index.css';
+
+// Initialize Sentry as early as possible
+import { initSentry } from './utils/sentry';
+initSentry();
 
 // Conditionally start MSW for API mocking in development/demo
 // Always enable in DEV mode unless explicitly disabled
