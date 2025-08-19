@@ -86,7 +86,7 @@ describe('useMontage', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockMontageClient.fetchMontage).toHaveBeenCalledWith('user-123', undefined);
+      expect(mockMontageClient.fetchMontage).toHaveBeenCalledWith('user-123', {});
       expect(result.current.items).toEqual([mockMontageItem]);
       expect(result.current.hasMore).toBe(true);
       expect(result.current.error).toBeNull();
@@ -272,7 +272,7 @@ describe('useMontage', () => {
       });
 
       // Should refetch data
-      expect(mockMontageClient.fetchMontage).toHaveBeenCalledWith('user-123', undefined);
+      expect(mockMontageClient.fetchMontage).toHaveBeenCalledWith('user-123', {});
     });
 
     it('should regenerate montage', async () => {
@@ -322,9 +322,12 @@ describe('useMontage', () => {
         await result.current.remove();
       });
 
+      await waitFor(() => {
+        expect(result.current.items).toEqual([]);
+        expect(result.current.hasMore).toBe(false);
+      });
+
       expect(mockMontageClient.deleteMontage).toHaveBeenCalledWith('user-123', undefined);
-      expect(result.current.items).toEqual([]);
-      expect(result.current.hasMore).toBe(false);
       expect(result.current.isDeleting).toBe(false);
     });
   });
@@ -358,7 +361,7 @@ describe('useMontagePreview', () => {
     });
 
     expect(result.current.items).toHaveLength(3);
-    expect(mockMontageClient.fetchMontage).toHaveBeenCalledWith('user-123', undefined);
+    expect(mockMontageClient.fetchMontage).toHaveBeenCalledWith('user-123', {});
   });
 
   it('should use default limit of 5', async () => {

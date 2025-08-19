@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/react";
-import { BrowserTracing } from "@sentry/tracing";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const isTest = process.env.NODE_ENV === "test";
@@ -13,16 +12,9 @@ export const initSentry = () => {
     dsn: process.env.VITE_SENTRY_DSN,
     environment: process.env.NODE_ENV,
     
-    // Performance Monitoring
+    // Performance Monitoring - using the new v10+ API
     integrations: [
-      new BrowserTracing({
-        // Set tracing origin patterns
-        tracePropagationTargets: [
-          "localhost",
-          /^https:\/\/api\.yourdomain\.com/,
-          /^https:\/\/yourdomain\.com/,
-        ],
-      }),
+      Sentry.browserTracingIntegration(),
     ],
 
     // Performance traces sample rate (adjust for production)
@@ -108,9 +100,13 @@ export const addBreadcrumb = (
   });
 };
 
+// Use the new v10+ API for manual transactions
 export const startTransaction = (name: string, op?: string) => {
-  return Sentry.startTransaction({
-    name,
-    op: op || "navigation",
-  });
+  return Sentry.startSpan(
+    {
+      name,
+      op: op || "navigation",
+    },
+    (span) => span
+  );
 };

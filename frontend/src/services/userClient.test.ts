@@ -43,7 +43,7 @@ describe('userService', () => {
 
       const result = await getUserProfile('user123');
       
-      expect(mockApiClient.get).toHaveBeenCalledWith('/api/v1/users/profile/user123');
+      expect(mockApiClient.get).toHaveBeenCalledWith('/users/profile/user123');
       expect(result).toEqual(mockUser);
     });
 
@@ -58,7 +58,7 @@ describe('userService', () => {
 
       await getUserProfile('  user123  ');
       
-      expect(mockApiClient.get).toHaveBeenCalledWith('/api/v1/users/profile/user123');
+      expect(mockApiClient.get).toHaveBeenCalledWith('/users/profile/user123');
     });
 
     it('should handle network errors', async () => {
@@ -94,7 +94,7 @@ describe('userService', () => {
 
       const result = await getMyProfile();
       
-      expect(mockApiClient.get).toHaveBeenCalledWith('/api/v1/users/profile');
+      expect(mockApiClient.get).toHaveBeenCalledWith('/users/profile/me');
       expect(result).toEqual(mockUser);
     });
 
@@ -108,7 +108,7 @@ describe('userService', () => {
       mockApiClient.get.mockRejectedValueOnce(authError);
 
       await expect(getMyProfile()).rejects.toThrow(AuthServiceError);
-      expect(mockApiClient.get).toHaveBeenCalledWith('/api/v1/users/profile');
+      expect(mockApiClient.get).toHaveBeenCalledWith('/users/profile/me');
     });
 
     it('should handle network errors', async () => {

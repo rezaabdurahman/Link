@@ -1,30 +1,40 @@
 import '@testing-library/jest-dom';
-import 'cross-fetch/polyfill';
 
-// Polyfill for TextEncoder/TextDecoder used by MSW (must be before MSW import)
-import { TextEncoder, TextDecoder } from 'util';
+// Mock Sentry to avoid errors in tests
+jest.mock('@sentry/react', () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+  captureMessage: jest.fn(),
+  setUser: jest.fn(),
+  setContext: jest.fn(),
+  addBreadcrumb: jest.fn(),
+  startSpan: jest.fn(() => ({
+    finish: jest.fn(),
+    setTag: jest.fn(),
+    setData: jest.fn(),
+  })),
+  browserTracingIntegration: jest.fn(),
+}));
 
-if (typeof global.TextEncoder === 'undefined') {
-  // @ts-expect-error - Node.js util TextEncoder not compatible with DOM TextEncoder type
-  global.TextEncoder = TextEncoder;
-}
+// Jest mocks are handled via moduleNameMapper in jest.config.js
 
-if (typeof global.TextDecoder === 'undefined') {
-  // @ts-expect-error - Node.js util TextDecoder not compatible with DOM TextDecoder type
-  global.TextDecoder = TextDecoder;
-}
+// Mock console.warn for cleaner test output
+const originalWarn = console.warn;
+beforeAll(() => {
+  console.warn = (...args) => {
+    // Suppress known React Router warnings in tests
+    if (args[0]?.includes?.('React Router Future Flag Warning')) {
+      return;
+    }
+    originalWarn(...args);
+  };
+});
 
-// Ensure fetch globals are available before importing MSW
-if (typeof global.fetch === 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const fetch = require('cross-fetch');
-  global.fetch = fetch;
-  global.Request = fetch.Request;
-  global.Response = fetch.Response;
-  global.Headers = fetch.Headers;
-}
+afterAll(() => {
+  console.warn = originalWarn;
+});
 
-// Conditional MSW setup - only import if module is available
+// MSW setup for API mocking
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { server } = require('./mocks/server');
@@ -47,11 +57,14 @@ try {
   });
 } catch (error) {
   console.warn('MSW setup skipped due to module resolution issues:', error instanceof Error ? error.message : String(error));
+  
   // Provide mock implementations for tests that depend on MSW
-  (global as any).mockServer = {
-    listen: () => {},
-    close: () => {},
-    resetHandlers: () => {},
-    use: () => {},
+  const mockServer = {
+    listen: jest.fn(),
+    close: jest.fn(), 
+    resetHandlers: jest.fn(),
+    use: jest.fn(),
   };
+  
+  (global as unknown as { mockServer: typeof mockServer }).mockServer = mockServer;
 }

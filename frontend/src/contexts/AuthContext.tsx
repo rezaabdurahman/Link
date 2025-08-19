@@ -96,6 +96,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return {
         ...state,
         isInitialized: true,
+        isLoading: false,
       };
 
     default:
@@ -196,6 +197,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   // Initialize authentication state from storage
   useEffect(() => {
     const initializeAuth = async (): Promise<void> => {
+      dispatch({ type: 'AUTH_START' });
       try {
         const storedToken = await secureTokenStorage.getToken();
         

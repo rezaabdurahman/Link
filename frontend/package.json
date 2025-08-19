@@ -78,14 +78,17 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "jest-fetch-mock": "^3.0.3",
     "mock-socket": "^9.3.1",
     "msw": "^2.10.5",
+    "node-fetch": "^2.7.0",
     "postcss": "^8.5.6",
     "tailwind-scrollbar-hide": "^4.0.0",
     "tailwindcss": "^3.4.17",
     "ts-jest": "^29.1.1",
     "typescript": "^5.2.2",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "whatwg-fetch": "^3.6.20"
   },
   "msw": {
     "workerDirectory": [

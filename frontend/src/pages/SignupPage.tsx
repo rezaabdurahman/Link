@@ -1,49 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, User, Mail, Lock, UserPlus, ArrowRight } from 'lucide-react';
+// Using existing Toast component
 import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';
 import AuthFormField from '../components/AuthFormField';
-
-// Validation schema using Zod
-const signupSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, 'First name is required')
-    .min(2, 'First name must be at least 2 characters')
-    .max(50, 'First name must be less than 50 characters'),
-  lastName: z
-    .string()
-    .min(1, 'Last name is required')
-    .min(2, 'Last name must be at least 2 characters')
-    .max(50, 'Last name must be less than 50 characters'),
-  username: z
-    .string()
-    .min(1, 'Username is required')
-    .min(3, 'Username must be at least 3 characters')
-    .max(30, 'Username must be less than 30 characters')
-    .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores'),
-  email: z
-    .string()
-    .min(1, 'Email is required')
-    .email('Please enter a valid email address'),
-  password: z
-    .string()
-    .min(1, 'Password is required')
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password must contain at least one uppercase letter, one lowercase letter, and one number'),
-  confirmPassword: z
-    .string()
-    .min(1, 'Please confirm your password'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
-
-type SignupFormData = z.infer<typeof signupSchema>;
+import { signupSchema, transformSignupData } from '../components/signup/signupSchema';
+import type { SignupFormData } from '../components/signup/signupSchema';
 
 const SignupPage: React.FC = (): JSX.Element => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -75,11 +40,11 @@ const SignupPage: React.FC = (): JSX.Element => {
   const {
     register: formRegister,
     handleSubmit,
-    formState: { errors, isValid },
+    formState: { errors, isValid, isSubmitting },
     watch,
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    mode: 'onChange',
+    mode: 'onBlur',
   });
 
   // Watch form values to determine if form is valid and filled
@@ -94,27 +59,19 @@ const SignupPage: React.FC = (): JSX.Element => {
 
   const onSubmit = async (data: SignupFormData): Promise<void> => {
     try {
-      // Transform the form data to match the RegisterRequest interface
-      const registerData = {
-        username: data.username,
-        first_name: data.firstName,
-        last_name: data.lastName,
-        email: data.email,
-        password: data.password,
-        confirmPassword: data.confirmPassword,
-      };
+      // Transform the form data using the schema's transform function
+      const registerData = transformSignupData(data);
 
       await register(registerData);
       
-      // Success toast
+      // Success toast notification using existing Toast component
       setToastMessage('Account created successfully! Welcome to Link!');
       setToastType('success');
       setShowToast(true);
       
-      // Redirect to onboarding after successful registration
-      // The auth context already handles setting the user state
+      // Redirect to home after successful registration
       setTimeout(() => {
-        navigate('/onboarding', { replace: true });
+        navigate('/home', { replace: true });
       }, 1500);
     } catch (err) {
       // Error handling is done via useEffect watching auth context error
@@ -272,18 +229,19 @@ const SignupPage: React.FC = (): JSX.Element => {
             <div className="pt-4">
               <button
                 type="submit"
-                disabled={!isFormValid || isLoading}
+                disabled={!isFormValid || isSubmitting || isLoading}
+                aria-describedby="signup-submit-help"
                 className={`
                   w-full py-4 px-6 rounded-2xl font-semibold text-base
                   flex items-center justify-center gap-3
                   transition-all duration-200
-                  ${isFormValid && !isLoading
+                  ${isFormValid && !isSubmitting && !isLoading
                     ? 'bg-gradient-aqua-copper text-white hover:opacity-90 shadow-lg hover:shadow-xl transform hover:scale-[1.02] hover-gradient-glow'
                     : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                   }
                 `}
               >
-                {isLoading ? (
+                {(isSubmitting || isLoading) ? (
                   <>
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
                     Creating account...
@@ -295,6 +253,9 @@ const SignupPage: React.FC = (): JSX.Element => {
                   </>
                 )}
               </button>
+              <p id="signup-submit-help" className="sr-only">
+                Submit button will be enabled when all required fields are valid
+              </p>
             </div>
           </form>
 

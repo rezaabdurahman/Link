@@ -6,7 +6,10 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
   roots: ['<rootDir>/src'],
-  setupFiles: ['<rootDir>/src/testEnv.ts'],
+  setupFiles: [
+    'jest-fetch-mock/setupJest.js',
+    '<rootDir>/src/testEnv.ts'
+  ],
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
   
   // Test file patterns
@@ -40,7 +43,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss)$': 'identity-obj-proxy',
-    '^msw/node$': '<rootDir>/node_modules/msw/lib/node/index.js'
+    '^msw/node$': require.resolve('msw/node')
   },
   
   // CRITICAL: Force ts-jest to handle TypeScript, not Babel
@@ -48,8 +51,27 @@ module.exports = {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
       tsconfig: '<rootDir>/tsconfig.json',
       // Enable isolated modules for better performance
-      isolatedModules: true
+      isolatedModules: true,
+      // Handle import.meta for Jest
+      useESM: false
     }]
+  },
+  
+  // Define globals for import.meta
+  globals: {
+    'ts-jest': {
+      tsconfig: {
+        target: 'es2020',
+        module: 'commonjs'
+      }
+    },
+    'import.meta': {
+      env: {
+        VITE_API_BASE_URL: 'http://localhost:8080',
+        VITE_API_URL: 'http://localhost:8080',
+        NODE_ENV: 'test'
+      }
+    }
   },
   
   // Transform patterns

@@ -191,7 +191,7 @@ export const handlers = [
     }
 
     // Update last heartbeat timestamp
-    let availability = mockAvailability.get(userId);
+    const availability = mockAvailability.get(userId);
     if (availability && availability.is_available) {
       availability.last_available_at = now();
       availability.updated_at = now();

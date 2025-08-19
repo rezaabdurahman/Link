@@ -258,24 +258,38 @@ export function useMontage(
     try {
       await deleteMontage(userId, targetInterest || interest);
       
-      // Clear local data
+      const keyToUpdate = serializeMontageKey(createMontageKey(userId, {
+        interest: targetInterest || interest
+      }));
+
+      const emptyResponse: MontageResponse = {
+          type: 'general',
+          items: [],
+          metadata: {
+              total_count: 0,
+              page_size: initialPageSize,
+              generated_at: new Date().toISOString(),
+              next_cursor: undefined,
+              has_more: false,
+          },
+          user_id: userId,
+      };
+
+      // Update SWR cache to prevent re-fetching stale data
+      await globalMutate(keyToUpdate, emptyResponse, { revalidate: false });
+
+      // Manually update the local state as globalMutate doesn't trigger onSuccess
       setAllItems([]);
       setCurrentCursor(undefined);
       setHasMore(false);
       
-      // Invalidate cache
-      const keyToInvalidate = createMontageKey(userId, { 
-        interest: targetInterest || interest 
-      });
-      await globalMutate(serializeMontageKey(keyToInvalidate));
-      
-    } catch (error) {
+    } catch (error) { 
       console.error('Failed to delete montage:', error);
-      throw error; // Re-throw for component error handling
+      throw error;
     } finally {
       setIsDeleting(false);
     }
-  }, [userId, interest, isDeleting, globalMutate]);
+  }, [userId, interest, isDeleting, globalMutate, initialPageSize]);
 
   return {
     // Data
