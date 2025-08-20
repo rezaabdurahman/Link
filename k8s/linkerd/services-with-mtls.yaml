@@ -1,0 +1,556 @@
+---
+# API Gateway Deployment with Linkerd mTLS
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: link-services
+  labels:
+    app: api-gateway
+    component: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        component: gateway
+      annotations:
+        # Linkerd will automatically inject mTLS proxy
+        linkerd.io/inject: enabled
+        # Configure proxy settings for better performance
+        config.linkerd.io/proxy-cpu-request: "100m"
+        config.linkerd.io/proxy-memory-request: "64Mi"
+        config.linkerd.io/proxy-cpu-limit: "200m"
+        config.linkerd.io/proxy-memory-limit: "128Mi"
+    spec:
+      containers:
+      - name: api-gateway
+        image: link/api-gateway:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: PORT
+          value: "8080"
+        # Service URLs - Linkerd handles mTLS automatically
+        - name: USER_SVC_URL
+          value: "http://user-svc.link-services.svc.cluster.local:8080"
+        - name: CHAT_SVC_URL
+          value: "http://chat-svc.link-services.svc.cluster.local:8080"
+        - name: DISCOVERY_SVC_URL
+          value: "http://discovery-svc.link-services.svc.cluster.local:8080"
+        - name: AI_SVC_URL
+          value: "http://ai-svc.link-services.svc.cluster.local:8080"
+        - name: SEARCH_SVC_URL
+          value: "http://search-svc.link-services.svc.cluster.local:8080"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# API Gateway Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: link-services
+  labels:
+    app: api-gateway
+  annotations:
+    # Linkerd observability annotations
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: api-gateway
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# User Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-svc
+  namespace: link-services
+  labels:
+    app: user-svc
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: user-svc
+  template:
+    metadata:
+      labels:
+        app: user-svc
+        component: backend
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      containers:
+      - name: user-svc
+        image: link/user-svc:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: ENVIRONMENT
+          value: "production"
+        # Database credentials from Terraform-generated secrets
+        - name: DB_HOST
+          value: "postgres.link-internal.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "link_users"
+        - name: DB_USER
+          value: "link_users_user"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: user-service-db-secret
+              key: password
+        - name: DB_SSLMODE
+          value: "require"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# User Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-svc
+  namespace: link-services
+  labels:
+    app: user-svc
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: user-svc
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# Chat Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-svc
+  namespace: link-services
+  labels:
+    app: chat-svc
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: chat-svc
+  template:
+    metadata:
+      labels:
+        app: chat-svc
+        component: backend
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      containers:
+      - name: chat-svc
+        image: link/chat-svc:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: ENVIRONMENT
+          value: "production"
+        # Database credentials from Terraform-generated secrets
+        - name: DB_HOST
+          value: "postgres.link-internal.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "link_chat"
+        - name: DB_USER
+          value: "link_chat_user"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: chat-service-db-secret
+              key: password
+        - name: DB_SSLMODE
+          value: "require"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Chat Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-svc
+  namespace: link-services
+  labels:
+    app: chat-svc
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: chat-svc
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# Discovery Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discovery-svc
+  namespace: link-services
+  labels:
+    app: discovery-svc
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: discovery-svc
+  template:
+    metadata:
+      labels:
+        app: discovery-svc
+        component: backend
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      containers:
+      - name: discovery-svc
+        image: link/discovery-svc:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: ENVIRONMENT
+          value: "production"
+        # Database credentials from Terraform-generated secrets
+        - name: DB_HOST
+          value: "postgres.link-internal.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "link_discovery"
+        - name: DB_USER
+          value: "link_discovery_user"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: discovery-service-db-secret
+              key: password
+        - name: DB_SSLMODE
+          value: "require"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Discovery Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-svc
+  namespace: link-services
+  labels:
+    app: discovery-svc
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: discovery-svc
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# AI Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-svc
+  namespace: link-services
+  labels:
+    app: ai-svc
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-svc
+  template:
+    metadata:
+      labels:
+        app: ai-svc
+        component: backend
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "100m"
+        config.linkerd.io/proxy-memory-request: "64Mi"
+    spec:
+      containers:
+      - name: ai-svc
+        image: link/ai-svc:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: PORT
+          value: "8000"
+        - name: ENVIRONMENT
+          value: "production"
+        # Database credentials from Terraform-generated secrets
+        - name: DB_HOST
+          value: "postgres.link-internal.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "link_ai"
+        - name: DB_USER
+          value: "link_ai_user"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-db-secret
+              key: password
+        - name: DB_SSLMODE
+          value: "require"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-secret
+              key: openai-api-key
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# AI Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-svc
+  namespace: link-services
+  labels:
+    app: ai-svc
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: ai-svc
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# Search Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-svc
+  namespace: link-services
+  labels:
+    app: search-svc
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: search-svc
+  template:
+    metadata:
+      labels:
+        app: search-svc
+        component: backend
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      containers:
+      - name: search-svc
+        image: link/search-svc:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: ENVIRONMENT
+          value: "production"
+        # Database credentials from Terraform-generated secrets
+        - name: DB_HOST
+          value: "postgres.link-internal.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "link_search"
+        - name: DB_USER
+          value: "link_search_user"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: search-service-db-secret
+              key: password
+        - name: DB_SSLMODE
+          value: "require"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Search Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-svc
+  namespace: link-services
+  labels:
+    app: search-svc
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: search-svc
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP

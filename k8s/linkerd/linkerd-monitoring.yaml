@@ -1,0 +1,179 @@
+---
+# Linkerd Monitoring and Alerting Configuration
+# Integrates with your existing Prometheus setup
+
+# 1. ServiceMonitor for Linkerd Proxy Metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: linkerd-proxy
+  namespace: link-services
+  labels:
+    app: linkerd-proxy
+spec:
+  selector:
+    matchLabels:
+      linkerd.io/control-plane-component: proxy
+  endpoints:
+  - port: linkerd-admin
+    interval: 30s
+    path: /metrics
+
+---
+# 2. PrometheusRule for mTLS Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: linkerd-alerts
+  namespace: link-services
+spec:
+  groups:
+  - name: linkerd.rules
+    rules:
+    # Alert when mTLS success rate drops below 99%
+    - alert: LinkerdmTLSFailureRate
+      expr: |
+        (
+          sum(rate(response_total{classification!="success", tls="true"}[5m])) /
+          sum(rate(response_total{tls="true"}[5m]))
+        ) > 0.01
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High mTLS failure rate detected"
+        description: "mTLS failure rate is {{ $value | humanizePercentage }} for namespace {{ $labels.namespace }}"
+
+    # Alert when service is not using mTLS
+    - alert: LinkerdServiceNotSecured
+      expr: |
+        sum(rate(response_total{tls!="true"}[5m])) by (dst_service_name, dst_service_namespace) > 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Service not using mTLS"
+        description: "Service {{ $labels.dst_service_name }} in namespace {{ $labels.dst_service_namespace }} is receiving unencrypted traffic"
+
+    # Alert when proxy is down
+    - alert: LinkerdProxyDown
+      expr: |
+        up{job="linkerd-proxy"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Linkerd proxy is down"
+        description: "Linkerd proxy for {{ $labels.pod }} is not responding"
+
+    # Alert for high proxy CPU usage
+    - alert: LinkerdProxyHighCPU
+      expr: |
+        rate(process_cpu_seconds_total{job="linkerd-proxy"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Linkerd proxy high CPU usage"
+        description: "Linkerd proxy CPU usage is {{ $value | humanizePercentage }} for pod {{ $labels.pod }}"
+
+---
+# 3. Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkerd-dashboard
+  namespace: link-services
+  labels:
+    grafana_dashboard: "1"
+data:
+  linkerd-mtls.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Link Services mTLS Dashboard",
+        "description": "Monitoring mTLS between Link microservices",
+        "tags": ["linkerd", "mtls", "link"],
+        "templating": {
+          "list": [
+            {
+              "name": "namespace",
+              "type": "query",
+              "query": "label_values(namespace)",
+              "current": {
+                "value": "link-services"
+              }
+            }
+          ]
+        },
+        "panels": [
+          {
+            "title": "mTLS Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(response_total{namespace=\"$namespace\", tls=\"true\", classification=\"success\"}[5m])) / sum(rate(response_total{namespace=\"$namespace\", tls=\"true\"}[5m]))",
+                "legendFormat": "mTLS Success Rate"
+              }
+            ]
+          },
+          {
+            "title": "Service-to-Service Traffic",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(response_total{namespace=\"$namespace\", tls=\"true\"}[5m])) by (dst_service_name)",
+                "legendFormat": "{{ dst_service_name }}"
+              }
+            ]
+          },
+          {
+            "title": "Certificate Expiry",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "identity_cert_expiry_timestamp_seconds{namespace=\"$namespace\"} - time()",
+                "legendFormat": "Days until expiry"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+# 4. PodDisruptionBudget for High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: link-services
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-svc-pdb
+  namespace: link-services
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: user-svc
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chat-svc-pdb
+  namespace: link-services
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: chat-svc

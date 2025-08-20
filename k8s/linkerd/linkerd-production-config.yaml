@@ -1,0 +1,234 @@
+---
+# Production-Ready Linkerd Configuration
+# Additional settings for enterprise-grade mTLS
+
+# 1. Server Authorization Policy (Zero-Trust)
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: user-svc-server
+  namespace: link-services
+spec:
+  podSelector:
+    matchLabels:
+      app: user-svc
+  port: 8080
+  proxyProtocol: HTTP/2
+
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: ServerAuthorization
+metadata:
+  name: user-svc-policy
+  namespace: link-services
+spec:
+  server:
+    name: user-svc-server
+  # Only allow API Gateway to call User Service
+  requiredRoutes:
+  - pathRegex: /api/v1/users.*
+    methods: ["GET", "POST", "PUT", "DELETE"]
+  client:
+    meshTLS:
+      serviceAccounts:
+      - name: api-gateway
+        namespace: link-services
+
+---
+# 2. Server Authorization for Chat Service
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: chat-svc-server
+  namespace: link-services
+spec:
+  podSelector:
+    matchLabels:
+      app: chat-svc
+  port: 8080
+  proxyProtocol: HTTP/2
+
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: ServerAuthorization
+metadata:
+  name: chat-svc-policy
+  namespace: link-services
+spec:
+  server:
+    name: chat-svc-server
+  # Only allow API Gateway and User Service to call Chat Service
+  requiredRoutes:
+  - pathRegex: /api/v1/chat.*
+    methods: ["GET", "POST", "PUT", "DELETE"]
+  client:
+    meshTLS:
+      serviceAccounts:
+      - name: api-gateway
+        namespace: link-services
+      - name: user-svc
+        namespace: link-services
+
+---
+# 3. Traffic Split for Canary Deployments
+apiVersion: split.smi-spec.io/v1alpha1
+kind: TrafficSplit
+metadata:
+  name: user-svc-split
+  namespace: link-services
+spec:
+  service: user-svc
+  backends:
+  - service: user-svc-stable
+    weight: 90
+  - service: user-svc-canary
+    weight: 10
+
+---
+# 4. Service Profiles for Better Observability
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: user-svc.link-services.svc.cluster.local
+  namespace: link-services
+spec:
+  routes:
+  - name: health
+    condition:
+      method: GET
+      pathRegex: /health/.*
+    timeout: 5s
+    retryBudget:
+      retryRatio: 0.2
+      minRetriesPerSecond: 10
+      ttl: 10s
+  - name: users_api
+    condition:
+      method: GET
+      pathRegex: /api/v1/users.*
+    timeout: 30s
+    retryBudget:
+      retryRatio: 0.1
+      minRetriesPerSecond: 5
+      ttl: 10s
+  - name: auth_api
+    condition:
+      method: POST
+      pathRegex: /api/v1/auth.*
+    timeout: 10s
+
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: chat-svc.link-services.svc.cluster.local
+  namespace: link-services
+spec:
+  routes:
+  - name: health
+    condition:
+      method: GET
+      pathRegex: /health/.*
+    timeout: 5s
+  - name: chat_api
+    condition:
+      method: GET
+      pathRegex: /api/v1/chat.*
+    timeout: 30s
+    retryBudget:
+      retryRatio: 0.1
+      minRetriesPerSecond: 5
+      ttl: 10s
+  - name: messages
+    condition:
+      method: POST
+      pathRegex: /api/v1/messages.*
+    timeout: 15s
+
+---
+# 5. HTTPRoute for External Traffic (API Gateway)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-gateway-route
+  namespace: link-services
+spec:
+  parentRefs:
+  - name: api-gateway-gw
+    namespace: link-services
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api/v1
+    backendRefs:
+    - name: api-gateway
+      port: 8080
+
+---
+# 6. Gateway for External Access
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: api-gateway-gw
+  namespace: link-services
+  annotations:
+    # Enable Linkerd injection for the gateway
+    linkerd.io/inject: enabled
+spec:
+  gatewayClassName: linkerd
+  listeners:
+  - name: http
+    port: 8080
+    protocol: HTTP
+  - name: https
+    port: 8443
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: api-gateway-tls
+        kind: Secret
+
+---
+# 7. Network Policy for Zero-Trust (optional but recommended)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: link-services-policy
+  namespace: link-services
+spec:
+  podSelector: {}  # Apply to all pods in namespace
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from Linkerd control plane
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: linkerd
+  # Allow intra-namespace communication (mTLS enforced by Linkerd)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: link-services
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow traffic to Linkerd control plane
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: linkerd
+  # Allow database access
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: link-internal
+    ports:
+    - protocol: TCP
+      port: 5432

@@ -1,0 +1,182 @@
+name: Linkerd mTLS Deployment
+
+# Only handles Linkerd installation/upgrade since Terraform is already automated
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'k8s/linkerd/**'
+      - '.github/workflows/linkerd-deployment.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      upgrade_linkerd:
+        description: 'Upgrade Linkerd if already installed'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  LINKERD_VERSION: 'stable-2.15.1'
+
+jobs:
+  deploy-mtls:
+    name: Deploy mTLS Service Mesh
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure Kubernetes context
+        run: |
+          ENV="${{ github.event.inputs.environment || 'staging' }}"
+          echo "TARGET_ENV=$ENV" >> $GITHUB_ENV
+          
+          if [ "$ENV" = "production" ]; then
+            echo "${{ secrets.KUBE_CONFIG_PROD }}" | base64 -d > ~/.kube/config
+          else
+            echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > ~/.kube/config
+          fi
+          
+          kubectl cluster-info
+
+      - name: Install Linkerd CLI
+        run: |
+          curl -fsL https://run.linkerd.io/install-stable | sh
+          export PATH=$PATH:$HOME/.linkerd2/bin
+          echo "$HOME/.linkerd2/bin" >> $GITHUB_PATH
+          linkerd version --client
+
+      - name: Check Linkerd status
+        id: linkerd_status
+        run: |
+          if linkerd check > /dev/null 2>&1; then
+            echo "✅ Linkerd already installed and healthy"
+            echo "linkerd_installed=true" >> $GITHUB_OUTPUT
+            linkerd version
+          else
+            echo "📦 Linkerd not installed - will install now"
+            echo "linkerd_installed=false" >> $GITHUB_OUTPUT
+            # Still check cluster readiness
+            linkerd check --pre
+          fi
+
+      - name: Install Linkerd (if needed)
+        if: steps.linkerd_status.outputs.linkerd_installed == 'false'
+        run: |
+          echo "🚀 Installing Linkerd..."
+          chmod +x k8s/linkerd/install-linkerd.sh
+          ./k8s/linkerd/install-linkerd.sh
+
+      - name: Upgrade Linkerd (if requested)
+        if: steps.linkerd_status.outputs.linkerd_installed == 'true' && github.event.inputs.upgrade_linkerd == 'true'
+        run: |
+          echo "🔄 Upgrading Linkerd..."
+          linkerd upgrade | kubectl apply -f -
+          kubectl rollout restart deployment -n linkerd
+
+      - name: Deploy services with mTLS
+        run: |
+          echo "🔒 Deploying services with mTLS to $TARGET_ENV..."
+          
+          # Update namespace in service manifests
+          sed "s/namespace: link-services/namespace: link-$TARGET_ENV/g" k8s/linkerd/services-with-mtls.yaml > /tmp/services-$TARGET_ENV.yaml
+          
+          # Apply service deployments
+          kubectl apply -f /tmp/services-$TARGET_ENV.yaml
+          
+          # Wait for deployments to be ready
+          echo "⏳ Waiting for deployments to be ready..."
+          kubectl wait --for=condition=available deployment --all -n link-$TARGET_ENV --timeout=300s
+
+      - name: Configure advanced features
+        run: |
+          echo "⚙️ Configuring advanced Linkerd features..."
+          chmod +x k8s/linkerd/configure-advanced-features.sh
+          
+          # Update namespace in advanced config
+          sed "s/namespace: link-services/namespace: link-$TARGET_ENV/g" k8s/linkerd/linkerd-production-config.yaml > /tmp/prod-config-$TARGET_ENV.yaml
+          sed "s/namespace: link-services/namespace: link-$TARGET_ENV/g" k8s/linkerd/linkerd-monitoring.yaml > /tmp/monitoring-$TARGET_ENV.yaml
+          
+          # Apply configurations
+          kubectl apply -f /tmp/prod-config-$TARGET_ENV.yaml
+          kubectl apply -f /tmp/monitoring-$TARGET_ENV.yaml
+
+      - name: Verify mTLS is working
+        run: |
+          echo "🔍 Verifying mTLS deployment..."
+          
+          # Wait for metrics to populate
+          sleep 60
+          
+          # Validate Linkerd
+          linkerd check
+          
+          # Check service mesh status
+          echo "📊 Service Mesh Status:"
+          linkerd viz stat deployment -n link-$TARGET_ENV
+          
+          # Check if services are communicating with mTLS
+          echo "🔗 Service Communication Graph:"
+          linkerd viz edges -n link-$TARGET_ENV || echo "No inter-service traffic detected yet"
+          
+          # Generate metrics for validation
+          echo "📈 mTLS Metrics:"
+          kubectl get pods -n link-$TARGET_ENV -o wide
+
+      - name: Generate mTLS deployment report
+        run: |
+          {
+            echo "# 🔒 mTLS Deployment Report"
+            echo ""
+            echo "**Environment**: $TARGET_ENV"
+            echo "**Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "**Commit**: ${{ github.sha }}"
+            echo ""
+            echo "## 📊 Linkerd Status"
+            echo '```'
+            linkerd version
+            echo '```'
+            echo ""
+            echo "## 🔗 Service Mesh Statistics"
+            echo '```'
+            linkerd viz stat deployment -n link-$TARGET_ENV
+            echo '```'
+            echo ""
+            echo "## 🎯 Verification Commands"
+            echo "Run these commands to verify the deployment:"
+            echo '```bash'
+            echo "# Check overall health"
+            echo "linkerd check"
+            echo ""
+            echo "# View live traffic"
+            echo "linkerd viz top -n link-$TARGET_ENV"
+            echo ""
+            echo "# Service communication graph"
+            echo "linkerd viz edges -n link-$TARGET_ENV"
+            echo ""
+            echo "# Web dashboard"
+            echo "linkerd viz dashboard"
+            echo '```'
+          } > mtls-deployment-report.md
+
+      - name: Upload mTLS report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtls-deployment-report-${{ github.event.inputs.environment || 'staging' }}-${{ github.run_number }}
+          path: mtls-deployment-report.md
+          retention-days: 30
