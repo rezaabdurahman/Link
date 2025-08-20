@@ -9,7 +9,7 @@ import (
 
 // RankingConfig represents a ranking algorithm configuration parameter
 type RankingConfig struct {
-	ID          uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ID          uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	ConfigKey   string         `json:"config_key" gorm:"type:varchar(100);not null;unique;index"`
 	ConfigValue float64        `json:"config_value" gorm:"type:decimal(3,2);not null"`
 	Description string         `json:"description" gorm:"type:text"`

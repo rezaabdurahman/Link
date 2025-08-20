@@ -2,7 +2,6 @@ package tracing
 
 import (
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	
 	"github.com/link-app/api-gateway/internal/observability"

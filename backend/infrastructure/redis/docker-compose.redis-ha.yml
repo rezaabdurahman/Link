@@ -1,0 +1,234 @@
+version: '3.8'
+
+services:
+  # Redis Master
+  redis-master:
+    image: redis:7-alpine
+    container_name: redis-master
+    hostname: redis-master
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_master_data:/data
+      - ./redis-master.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Slave 1
+  redis-slave-1:
+    image: redis:7-alpine
+    container_name: redis-slave-1
+    hostname: redis-slave-1
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_slave_1_data:/data
+      - ./redis-master.conf:/usr/local/etc/redis/redis-master.conf:ro
+      - ./redis-slave.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Slave 2
+  redis-slave-2:
+    image: redis:7-alpine
+    container_name: redis-slave-2
+    hostname: redis-slave-2
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_slave_2_data:/data
+      - ./redis-master.conf:/usr/local/etc/redis/redis-master.conf:ro
+      - ./redis-slave.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Sentinel 1
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: redis-sentinel-1
+    hostname: redis-sentinel-1
+    ports:
+      - "26379:26379"
+    volumes:
+      - ./sentinel.conf:/usr/local/etc/redis/sentinel.conf:ro
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Sentinel 2
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: redis-sentinel-2
+    hostname: redis-sentinel-2
+    ports:
+      - "26380:26379"
+    volumes:
+      - ./sentinel.conf:/usr/local/etc/redis/sentinel.conf:ro
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Sentinel 3
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: redis-sentinel-3
+    hostname: redis-sentinel-3
+    ports:
+      - "26381:26379"
+    volumes:
+      - ./sentinel.conf:/usr/local/etc/redis/sentinel.conf:ro
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Exporter for monitoring
+  redis-exporter:
+    image: bitnami/redis-exporter:latest
+    container_name: redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-master:6379
+      - REDIS_EXPORTER_LOG_FORMAT=txt
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9121/metrics"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # Redis Commander (Web UI for Redis management)
+  redis-commander:
+    image: ghcr.io/joeferner/redis-commander:latest
+    container_name: redis-commander
+    hostname: redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=master:redis-master:6379,slave1:redis-slave-1:6379,slave2:redis-slave-2:6379
+      - REDIS_SENTINELS=sentinel1:redis-sentinel-1:26379,sentinel2:redis-sentinel-2:26379,sentinel3:redis-sentinel-3:26379
+      - HTTP_USER=admin
+      - HTTP_PASSWORD=admin
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+      - redis-sentinel-1
+      - redis-sentinel-2
+      - redis-sentinel-3
+    networks:
+      - redis-network
+    restart: unless-stopped
+
+networks:
+  redis-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis_master_data:
+    driver: local
+  redis_slave_1_data:
+    driver: local
+  redis_slave_2_data:
+    driver: local

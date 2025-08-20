@@ -1,8 +1,10 @@
 // Authentication service layer for API interactions
 // Provides register, login, refresh, and logout functions with robust error handling
 
+import { getEnvVar } from '../utils/env';
+
 // Base API URL from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_BASE_URL = getEnvVar('VITE_API_BASE_URL') || getEnvVar('VITE_API_URL') || 'http://localhost:8080';
 
 // API endpoints (clean URLs through API Gateway)
 const AUTH_ENDPOINTS = {

@@ -1,21 +1,23 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
-	"path/filepath"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/link-app/discovery-svc/internal/handlers"
 	"github.com/link-app/discovery-svc/internal/middleware"
-	"github.com/link-app/discovery-svc/internal/migrations"
-	"github.com/link-app/discovery-svc/internal/models"
 	"github.com/link-app/discovery-svc/internal/repository"
 	"github.com/link-app/discovery-svc/internal/sentry"
 	"github.com/link-app/discovery-svc/internal/service"
 	"github.com/link-app/discovery-svc/internal/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/link-app/shared-libs/lifecycle"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -23,19 +25,17 @@ import (
 
 func main() {
 	// Initialize Sentry for error reporting
-	if err := sentry.InitSentry(); err != nil {
+	if err := sentry.Init(); err != nil {
 		log.Printf("Failed to initialize Sentry: %v", err)
 		// Continue running even if Sentry fails
 	}
-	defer sentry.Flush(2 * time.Second)
 
 	// Initialize OpenTelemetry tracing
-	cleanupTracing, err := tracing.InitTracing("discovery-svc")
+	err := tracing.Init("discovery-svc", "http://localhost:4318/v1/traces")
 	if err != nil {
 		log.Printf("Failed to initialize tracing: %v", err)
 	} else {
 		log.Printf("Distributed tracing initialized successfully")
-		defer cleanupTracing()
 	}
 
 	// Initialize database
@@ -44,21 +44,15 @@ func main() {
 		log.Fatal("Failed to initialize database:", err)
 	}
 
-	// Run SQL migrations
-	migrationsPath := filepath.Join(".", "migrations")
-	migrator := migrations.NewMigrator(db, migrationsPath)
-	log.Println("Running database migrations...")
-	err = migrator.MigrateUp()
-	if err != nil {
-		log.Fatal("Failed to run migrations:", err)
-	}
-	log.Println("Database migrations completed successfully")
+	// Note: Migrations are now handled by the separate migration tool
+	// They run automatically via docker-entrypoint.sh before this service starts
 
 	// Auto-migrate models (for any GORM schema changes)
-	err = db.AutoMigrate(&models.Broadcast{}, &models.Availability{}, &models.RankingConfig{})
-	if err != nil {
-		log.Fatal("Failed to auto-migrate models:", err)
-	}
+	// Note: Commented out due to "insufficient arguments" error - using SQL migrations instead
+	// err = db.AutoMigrate(&models.Broadcast{}, &models.Availability{}, &models.RankingConfig{})
+	// if err != nil {
+	//	log.Fatal("Failed to auto-migrate models:", err)
+	// }
 
 	// Initialize repositories
 	broadcastRepo := repository.NewBroadcastRepository(db)
@@ -79,9 +73,29 @@ func main() {
 	// Initialize Gin router
 	router := gin.Default()
 
+	// Configure server with lifecycle management
+	port := getEnv("PORT", "8083")
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Initialize lifecycle manager
+	lifecycleManager := lifecycle.NewServiceManager(server)
+	lifecycleManager.SetShutdownTimeout(30 * time.Second)
+	lifecycleManager.SetHealthCheckPeriod(10 * time.Second)
+
+	// Add health checkers
+	if sqlDB, err := db.DB(); err == nil {
+		lifecycleManager.AddHealthChecker("database", lifecycle.NewDatabaseHealthChecker(sqlDB))
+	}
+
 	// Global middleware
-	router.Use(sentry.GinSentryMiddleware()) // Add Sentry middleware early
-	router.Use(tracing.GinMiddleware("discovery-svc")) // Add distributed tracing middleware
+	router.Use(sentry.Middleware()) // Add Sentry middleware early
+	router.Use(tracing.Middleware()) // Add distributed tracing middleware
 	router.Use(middleware.PrometheusMiddleware()) // Add Prometheus metrics collection
 	
 	// Middleware for CORS (if needed)
@@ -101,14 +115,10 @@ func main() {
 	// Metrics endpoint for Prometheus scraping
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":    "healthy",
-			"service":   "discovery-svc",
-			"timestamp": time.Now(),
-		})
-	})
+	// Add the new framework-agnostic health endpoints
+	router.GET("/health/live", gin.WrapH(lifecycleManager.CreateLivenessHandler()))
+	router.GET("/health/ready", gin.WrapH(lifecycleManager.CreateReadinessHandler()))
+	router.GET("/health/detailed", gin.WrapH(lifecycleManager.CreateHealthHandler()))
 
 	// Authentication middleware - extracts user info from API Gateway headers
 	// The API Gateway validates JWT tokens and passes user info via headers
@@ -161,14 +171,46 @@ func main() {
 	// Start cleanup goroutine
 	go startCleanupRoutine(broadcastService)
 
-	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Setup graceful shutdown
+	lifecycleManager.OnShutdown(func(ctx context.Context) error {
+		log.Println("Cleaning up resources...")
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.Close()
+		}
+		return nil
+	})
+
+	// Start lifecycle manager
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := lifecycleManager.Start(ctx); err != nil {
+		log.Fatal("Failed to start lifecycle manager: ", err)
 	}
 
-	log.Printf("Discovery service starting on port %s", port)
-	log.Fatal(router.Run(":" + port))
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Discovery service starting on port %s", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Server failed to start: ", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down discovery service...")
+
+	// Use lifecycle manager for graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := lifecycleManager.Shutdown(shutdownCtx); err != nil {
+		log.Fatal("Server forced to shutdown: ", err)
+	}
+
+	log.Println("Discovery service exited")
 }
 
 func initDB() (*gorm.DB, error) {

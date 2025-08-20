@@ -9,9 +9,12 @@ on:
 env:
   NODE_VERSION: '18'
   GO_VERSION: '1.23'
-  # Test environment variables
+  # Test environment variables (use GitHub Secrets with CI fallbacks)
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key-for-ci' }}
-  SERVICE_AUTH_TOKEN: test-service-token-for-ci
+  SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN || 'test-service-token-for-ci' }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET || 'test-jwt-secret-for-ci-only' }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
+  REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || 'ci_redis_password' }}
 
 jobs:
   backend-unit-tests:
@@ -262,6 +265,38 @@ jobs:
       - uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: moderate
+
+  secret-scanning:
+    name: Secret Scanning (PR only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for gitleaks
+      
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Only needed for Gitleaks-Pro
+      
+      - name: Check for hardcoded patterns
+        run: |
+          echo "🔍 Checking for additional hardcoded patterns..."
+          
+          # Check for obvious hardcoded secrets
+          if grep -r -n --include="*.env*" --exclude="*.example*" -E "(password|secret|key).*=.*[a-zA-Z0-9]{8,}" . | grep -v "\${\|your_\|change_this\|example\|template"; then
+            echo "❌ Found potential hardcoded secrets!"
+            exit 1
+          fi
+          
+          # Check for TODO comments about secrets
+          if grep -r -n --include="*.go" --include="*.ts" --include="*.js" -i "TODO.*secret\|FIXME.*password\|HACK.*key" .; then
+            echo "⚠️ Found TODO comments about secrets - review needed"
+          fi
+          
+          echo "✅ No obvious hardcoded secrets found"
 
   warp-indexing-check:
     name: Warp AI Indexing Optimization Check

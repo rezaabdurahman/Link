@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -7,17 +7,18 @@ WORKDIR /app
 # Install dependencies for building
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy go mod files
-COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
+# Copy shared libs and go mod files
+COPY shared-libs ./shared-libs
+COPY api-gateway/go.mod api-gateway/go.sum ./
 
 # Copy source code
-COPY . .
+COPY api-gateway/ .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+# Tidy dependencies and download
+RUN go mod tidy && go mod download
+
+# Build the integrated API Gateway application (combines legacy + enhanced features)
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main cmd/gateway/integrated_main.go
 
 # Final stage
 FROM alpine:latest
@@ -31,8 +32,8 @@ WORKDIR /root/
 # Copy binary from builder stage
 COPY --from=builder /app/main .
 
-# Copy documentation files if they exist
-COPY --from=builder /app/docs ./docs/ 2>/dev/null || true
+# Copy documentation files if they exist (commented out as docs don't exist yet)
+# COPY --from=builder /app/docs ./docs/
 
 # Create non-root user for security
 RUN addgroup -g 1001 appuser && \

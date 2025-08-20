@@ -1,22 +1,23 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
 # Install dependencies
 RUN apk add --no-cache git
 
-# Copy go mod and sum files
-COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
+# Copy shared libs and go mod and sum files
+COPY shared-libs ./shared-libs
+COPY discovery-svc/go.mod discovery-svc/go.sum ./
 
 # Copy source code
-COPY . .
+COPY discovery-svc/ .
+
+# Tidy dependencies and download
+RUN go mod tidy && go mod download
 
 # Ensure migrations directory is included
-COPY migrations/ ./migrations/
+COPY discovery-svc/migrations/ ./migrations/
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o discovery-svc .
@@ -39,7 +40,7 @@ COPY --from=builder /app/migrate .
 COPY --from=builder /app/migrations/ ./migrations/
 
 # Copy entrypoint script
-COPY docker-entrypoint.sh .
+COPY discovery-svc/docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh
 
 # Expose port

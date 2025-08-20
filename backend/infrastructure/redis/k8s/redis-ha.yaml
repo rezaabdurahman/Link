@@ -1,0 +1,476 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redis-ha
+---
+# Redis ConfigMap for Master
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: redis-ha
+data:
+  redis-master.conf: |
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    daemonize no
+    supervised no
+    loglevel notice
+    databases 16
+    save 900 1
+    save 300 10
+    save 60 10000
+    dir /data
+    dbfilename dump.rdb
+    rdbcompression yes
+    rdbchecksum yes
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    maxmemory-policy allkeys-lru
+    timeout 0
+    tcp-keepalive 300
+    maxclients 10000
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    activerehashing yes
+    hz 10
+    aof-rewrite-incremental-fsync yes
+    rdb-save-incremental-fsync yes
+  
+  redis-slave.conf: |
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    daemonize no
+    supervised no
+    loglevel notice
+    databases 16
+    save 900 1
+    save 300 10
+    save 60 10000
+    dir /data
+    dbfilename dump.rdb
+    rdbcompression yes
+    rdbchecksum yes
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    maxmemory-policy allkeys-lru
+    timeout 0
+    tcp-keepalive 300
+    maxclients 10000
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    activerehashing yes
+    hz 10
+    aof-rewrite-incremental-fsync yes
+    rdb-save-incremental-fsync yes
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-diskless-sync-delay 5
+    repl-ping-replica-period 10
+    repl-timeout 60
+    repl-disable-tcp-nodelay no
+    repl-backlog-size 1mb
+    repl-backlog-ttl 3600
+    replica-priority 100
+
+---
+# Sentinel ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sentinel-config
+  namespace: redis-ha
+data:
+  sentinel.conf: |
+    port 26379
+    bind 0.0.0.0
+    dir /tmp
+    sentinel monitor mymaster redis-master-0.redis-master 6379 2
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel parallel-syncs mymaster 1
+    sentinel failover-timeout mymaster 10000
+    sentinel deny-scripts-reconfig yes
+    loglevel notice
+    logfile ""
+
+---
+# Redis Master Service (Headless)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master
+  namespace: redis-ha
+  labels:
+    app: redis
+    role: master
+spec:
+  clusterIP: None
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  selector:
+    app: redis
+    role: master
+
+---
+# Redis Master StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-master
+  namespace: redis-ha
+  labels:
+    app: redis
+    role: master
+spec:
+  serviceName: redis-master
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: master
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: master
+    spec:
+      initContainers:
+      - name: config
+        image: redis:7-alpine
+        command: ["sh", "-c", "cp /tmp/redis/redis-master.conf /etc/redis/redis.conf"]
+        volumeMounts:
+        - name: redis-config
+          mountPath: /tmp/redis/
+        - name: config
+          mountPath: /etc/redis/
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+          - redis-server
+          - /etc/redis/redis.conf
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /etc/redis/
+        livenessProbe:
+          exec:
+            command:
+              - redis-cli
+              - ping
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          exec:
+            command:
+              - redis-cli
+              - ping
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+      - name: config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Redis Slave Service (Headless)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-slave
+  namespace: redis-ha
+  labels:
+    app: redis
+    role: slave
+spec:
+  clusterIP: None
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  selector:
+    app: redis
+    role: slave
+
+---
+# Redis Slave StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-slave
+  namespace: redis-ha
+  labels:
+    app: redis
+    role: slave
+spec:
+  serviceName: redis-slave
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redis
+      role: slave
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: slave
+    spec:
+      initContainers:
+      - name: config
+        image: redis:7-alpine
+        command: 
+        - sh
+        - -c
+        - |
+          cp /tmp/redis/redis-slave.conf /etc/redis/redis.conf
+          echo "replicaof redis-master-0.redis-master 6379" >> /etc/redis/redis.conf
+        volumeMounts:
+        - name: redis-config
+          mountPath: /tmp/redis/
+        - name: config
+          mountPath: /etc/redis/
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+          - redis-server
+          - /etc/redis/redis.conf
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /etc/redis/
+        livenessProbe:
+          exec:
+            command:
+              - redis-cli
+              - ping
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          exec:
+            command:
+              - redis-cli
+              - ping
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+      - name: config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Sentinel Service (Headless)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel
+  namespace: redis-ha
+  labels:
+    app: redis-sentinel
+spec:
+  clusterIP: None
+  ports:
+    - port: 26379
+      targetPort: 26379
+      name: sentinel
+  selector:
+    app: redis-sentinel
+
+---
+# Sentinel Service (LoadBalancer for external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel-lb
+  namespace: redis-ha
+  labels:
+    app: redis-sentinel
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 26379
+      targetPort: 26379
+      name: sentinel
+  selector:
+    app: redis-sentinel
+
+---
+# Redis Sentinel StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-sentinel
+  namespace: redis-ha
+  labels:
+    app: redis-sentinel
+spec:
+  serviceName: redis-sentinel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis-sentinel
+  template:
+    metadata:
+      labels:
+        app: redis-sentinel
+    spec:
+      initContainers:
+      - name: config
+        image: redis:7-alpine
+        command: ["sh", "-c", "cp /tmp/sentinel/sentinel.conf /etc/redis/sentinel.conf"]
+        volumeMounts:
+        - name: sentinel-config
+          mountPath: /tmp/sentinel/
+        - name: config
+          mountPath: /etc/redis/
+      containers:
+      - name: sentinel
+        image: redis:7-alpine
+        command:
+          - redis-sentinel
+          - /etc/redis/sentinel.conf
+        ports:
+        - containerPort: 26379
+          name: sentinel
+        volumeMounts:
+        - name: config
+          mountPath: /etc/redis/
+        livenessProbe:
+          exec:
+            command:
+              - redis-cli
+              - -p
+              - "26379"
+              - ping
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          exec:
+            command:
+              - redis-cli
+              - -p
+              - "26379"
+              - ping
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: sentinel-config
+        configMap:
+          name: sentinel-config
+      - name: config
+        emptyDir: {}
+
+---
+# Pod Disruption Budget for Master
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-master-pdb
+  namespace: redis-ha
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: master
+
+---
+# Pod Disruption Budget for Slaves
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-slave-pdb
+  namespace: redis-ha
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: slave
+
+---
+# Pod Disruption Budget for Sentinels
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-sentinel-pdb
+  namespace: redis-ha
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: redis-sentinel

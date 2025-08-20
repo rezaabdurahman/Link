@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,7 +36,7 @@ type User struct {
 	Interests       []string         `json:"interests" gorm:"type:text[];serializer:json"`
 	SocialLinks     []SocialLink     `json:"social_links" gorm:"type:jsonb;serializer:json"`
 	AdditionalPhotos []string        `json:"additional_photos" gorm:"type:text[];serializer:json"`
-	PrivacySettings PrivacySettings  `json:"privacy_settings" gorm:"type:jsonb;serializer:json;default:'{"show_age": true, "show_location": true, "show_mutual_friends": true}'"`
+	PrivacySettings PrivacySettings  `json:"privacy_settings" gorm:"type:jsonb;serializer:json;default:'{\"show_age\": true, \"show_location\": true, \"show_mutual_friends\": true}'"`
 	EmailVerified   bool             `json:"email_verified" gorm:"default:false"`
 	IsActive        bool             `json:"is_active" gorm:"default:true"`
 	PasswordHash    string           `json:"-" gorm:"not null"` // Never expose password hash
@@ -250,4 +251,51 @@ type Block struct {
 // Unique constraint on blocker_id and blocked_id combination
 func (Block) TableName() string {
 	return "blocks"
+}
+
+// Block-related errors
+var (
+	ErrBlockNotFound = fmt.Errorf("block relationship not found")
+)
+
+// IsUserBlocked checks if user A has blocked user B or vice versa
+func IsUserBlocked(tx *gorm.DB, userA, userB uuid.UUID) (bool, error) {
+	var count int64
+	err := tx.Model(&Block{}).Where(
+		"(blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)",
+		userA, userB, userB, userA,
+	).Count(&count).Error
+	return count > 0, err
+}
+
+// BlockUser creates a block relationship
+func BlockUser(tx *gorm.DB, blockerID, blockedID uuid.UUID) (*Block, error) {
+	block := &Block{
+		BlockerID: blockerID,
+		BlockedID: blockedID,
+	}
+	return block, tx.Create(block).Error
+}
+
+// UnblockUser removes a block relationship
+func UnblockUser(tx *gorm.DB, blockerID, blockedID uuid.UUID) error {
+	result := tx.Where("blocker_id = ? AND blocked_id = ?", blockerID, blockedID).Delete(&Block{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrBlockNotFound
+	}
+	return nil
+}
+
+// GetBlockedUsersByBlocker returns users blocked by the specified blocker
+func GetBlockedUsersByBlocker(tx *gorm.DB, blockerID uuid.UUID, limit, offset int) ([]Block, error) {
+	var blocks []Block
+	err := tx.Where("blocker_id = ?", blockerID).
+		Preload("Blocked").
+		Offset(offset).
+		Limit(limit).
+		Find(&blocks).Error
+	return blocks, err
 }

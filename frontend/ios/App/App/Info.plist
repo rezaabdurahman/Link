@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+        <string>Link</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	
+	<!-- App Transport Security -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<!-- Add your API domains here -->
+		</dict>
+	</dict>
+	
+	<!-- Location permissions -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Link uses your location to help you discover and connect with people nearby who share your interests.</string>
+	
+	<!-- Camera permissions -->
+	<key>NSCameraUsageDescription</key>
+	<string>Link needs access to your camera to take profile photos and share moments with your connections.</string>
+	
+	<!-- Photo library permissions -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Link needs access to your photo library to select and share photos with your connections.</string>
+	
+	<!-- Microphone permissions (if needed for future features) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Link may use your microphone for voice messages and video calls.</string>
+	
+	<!-- Background modes (if needed) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>background-fetch</string>
+		<string>background-processing</string>
+	</array>
+	
+	<!-- App category -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.social-networking</string>
+	
+	<!-- Privacy sensitive data -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	
+	<!-- URL schemes for deep linking -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.link.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>link</string>
+			</array>
+		</dict>
+	</array>
+	
+	<!-- App description for App Store -->
+	<key>CFBundleGetInfoString</key>
+	<string>Link - Connect with people around you who share your interests</string>
+	
+	<!-- Copyright -->
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2024 Link, Inc. All rights reserved.</string>
+	
+</dict>
+</plist>

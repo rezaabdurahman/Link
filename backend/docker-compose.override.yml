@@ -1,0 +1,54 @@
+# Docker Compose override for Phase 3.2: Stateless Design Verification
+# This file configures scaling settings for testing horizontal scalability
+# Use: docker-compose up --scale user-svc=3 --scale chat-svc=3 etc.
+
+version: '3.8'
+
+services:
+  # For horizontal scaling tests, remove host port mappings for scaled services
+  # The API gateway will discover them via Docker's internal DNS
+  
+  user-svc:
+    # Remove port mapping when scaling (uncomment for scaling tests)
+    # ports: []
+    deploy:
+      replicas: 1  # Can be overridden with --scale flag
+    environment:
+      # Each replica will get the same environment but different internal IPs
+      PORT: "8081"
+      
+  chat-svc:
+    # Remove port mapping when scaling (uncomment for scaling tests)  
+    # ports: []
+    deploy:
+      replicas: 1
+    environment:
+      PORT: "8082"
+      
+  discovery-svc:
+    # Remove port mapping when scaling (uncomment for scaling tests)
+    # ports: []
+    deploy:
+      replicas: 1
+    environment:
+      PORT: "8083"
+      
+  ai-svc:
+    # Remove port mapping when scaling (uncomment for scaling tests)
+    # ports: []
+    deploy:
+      replicas: 1  
+    environment:
+      PORT: "8084"
+      
+  search-svc:
+    # Remove port mapping when scaling (uncomment for scaling tests)
+    # ports: []
+    deploy:
+      replicas: 1
+    environment:
+      PORT: "8085"
+
+# Note: When scaling services, the API gateway will use Docker's built-in 
+# round-robin DNS resolution to discover service instances automatically.
+# Each scaled instance gets the same service name but different internal IP.

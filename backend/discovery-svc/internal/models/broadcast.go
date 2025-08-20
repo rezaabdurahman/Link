@@ -9,7 +9,7 @@ import (
 
 // Broadcast represents a user's broadcast message
 type Broadcast struct {
-	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	UserID    uuid.UUID      `json:"user_id" gorm:"type:uuid;not null;index"`
 	Message   string         `json:"message" gorm:"type:varchar(200);not null"`
 	IsActive  bool           `json:"is_active" gorm:"default:true;index"`

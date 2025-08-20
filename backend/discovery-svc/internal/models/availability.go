@@ -9,7 +9,7 @@ import (
 
 // Availability represents a user's availability status
 type Availability struct {
-	ID              uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ID              uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	UserID          uuid.UUID      `json:"user_id" gorm:"type:uuid;not null;unique;index"`
 	IsAvailable     bool           `json:"is_available" gorm:"default:false;index"`
 	LastAvailableAt *time.Time     `json:"last_available_at,omitempty" gorm:"index"`

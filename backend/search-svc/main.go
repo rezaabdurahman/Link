@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +20,7 @@ import (
 	"github.com/link-app/search-svc/internal/service"
 	"github.com/link-app/search-svc/internal/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/link-app/shared-libs/lifecycle"
 )
 
 func main() {
@@ -83,6 +86,29 @@ func main() {
 	// Initialize Gin router
 	router := gin.Default()
 
+	// Configure server with lifecycle management
+	port := getEnvOrDefault("PORT", "8085")
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Initialize lifecycle manager
+	lifecycleManager := lifecycle.NewServiceManager(server)
+	lifecycleManager.SetShutdownTimeout(30 * time.Second)
+	lifecycleManager.SetHealthCheckPeriod(10 * time.Second)
+
+	// Add health checkers
+	if sqlDB, err := db.DB(); err == nil {
+		lifecycleManager.AddHealthChecker("database", lifecycle.NewDatabaseHealthChecker(sqlDB))
+	}
+	lifecycleManager.AddHealthChecker("embedding_provider", lifecycle.HealthCheckFunc(func(ctx context.Context) error {
+		return embeddingProvider.CheckHealth(ctx)
+	}))
+
 	// Global middleware
 	router.Use(sentry.GinSentryMiddleware()) // Add Sentry middleware early
 	router.Use(tracing.GinMiddleware("search-svc")) // Add distributed tracing middleware
@@ -94,15 +120,10 @@ func main() {
 	// Metrics endpoint for Prometheus scraping
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "healthy",
-			"service":   "search-svc",
-			"timestamp": time.Now(),
-			"version":   "1.0.0",
-		})
-	})
+	// Add the new framework-agnostic health endpoints
+	router.GET("/health/live", gin.WrapH(lifecycleManager.CreateLivenessHandler()))
+	router.GET("/health/ready", gin.WrapH(lifecycleManager.CreateReadinessHandler()))
+	router.GET("/health/detailed", gin.WrapH(lifecycleManager.CreateHealthHandler()))
 
 	// Initialize rate limiter for search endpoint (50 requests per minute per user)
 	rateLimiter := middleware.NewRateLimiterStore(50)
@@ -138,14 +159,46 @@ func main() {
 	// Start availability-based embedding cleanup (privacy safeguard)
 	go searchService.StartAvailabilityCleanup(context.Background())
 
-	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Setup graceful shutdown
+	lifecycleManager.OnShutdown(func(ctx context.Context) error {
+		log.Println("Cleaning up resources...")
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.Close()
+		}
+		return nil
+	})
+
+	// Start lifecycle manager
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := lifecycleManager.Start(ctx); err != nil {
+		log.Fatal("Failed to start lifecycle manager: ", err)
 	}
 
-	log.Printf("Search service starting on port %s", port)
-	log.Fatal(router.Run(":" + port))
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Search service starting on port %s", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Server failed to start: ", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down search service...")
+
+	// Use lifecycle manager for graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := lifecycleManager.Shutdown(shutdownCtx); err != nil {
+		log.Fatal("Server forced to shutdown: ", err)
+	}
+
+	log.Println("Search service exited")
 }
 
 // corsMiddleware handles CORS for development

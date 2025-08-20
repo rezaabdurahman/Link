@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/link-app/ai-svc/internal/ai"
 	"github.com/link-app/ai-svc/internal/cache"
-	"github.com/link-app/ai-svc/internal/client/chat"
 	"github.com/link-app/ai-svc/internal/middleware"
 	"github.com/link-app/ai-svc/internal/model"
 	"github.com/link-app/ai-svc/internal/privacy"
@@ -295,7 +293,7 @@ func (h *SummarizeHandler) SummarizeMessages(w http.ResponseWriter, r *http.Requ
 }
 
 // fetchMessages retrieves messages from the chat service
-func (h *SummarizeHandler) fetchMessages(ctx context.Context, conversationID uuid.UUID, limit int) ([]*chat.ChatMessage, error) {
+func (h *SummarizeHandler) fetchMessages(ctx context.Context, conversationID uuid.UUID, limit int) ([]*service.ChatMessage, error) {
 	// Call chat service to get recent messages
 	chatResponse, err := h.chatService.GetRecentMessages(ctx, conversationID, limit)
 	if err != nil {
@@ -304,13 +302,13 @@ func (h *SummarizeHandler) fetchMessages(ctx context.Context, conversationID uui
 
 	// Convert the response - assuming GetRecentMessages returns a single ChatMessage with nested messages
 	// This might need adjustment based on the actual chat service interface
-	messages := []*chat.ChatMessage{chatResponse}
+	messages := []*service.ChatMessage{chatResponse}
 
 	return messages, nil
 }
 
 // convertToAIMessages converts chat service messages to AI service message format
-func (h *SummarizeHandler) convertToAIMessages(chatMessages []*chat.ChatMessage) []ai.Message {
+func (h *SummarizeHandler) convertToAIMessages(chatMessages []*service.ChatMessage) []ai.Message {
 	aiMessages := make([]ai.Message, len(chatMessages))
 	
 	for i, msg := range chatMessages {
@@ -380,7 +378,7 @@ func (h *SummarizeHandler) logAuditEvent(ctx context.Context, userID, conversati
 		userAgent = req.UserAgent()
 	}
 
-	auditReq := &service.PrivacyAuditLogRequest{
+	auditReq := &privacy.AuditLogRequest{
 		UserID:       &userID,
 		Action:       model.AuditActionMessagesSummarized,
 		ResourceType: "conversation_summary",
@@ -434,25 +432,4 @@ func (h *SummarizeHandler) writeErrorResponse(w http.ResponseWriter, statusCode 
 	}
 }
 
-// getClientIP extracts the client IP address from the request
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (from load balancers/proxies)
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		// Get the first IP in the chain
-		if idx := strings.Index(forwarded, ","); idx != -1 {
-			return strings.TrimSpace(forwarded[:idx])
-		}
-		return strings.TrimSpace(forwarded)
-	}
 
-	// Check X-Real-IP header (from reverse proxies)
-	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		return strings.TrimSpace(realIP)
-	}
-
-	// Fallback to RemoteAddr
-	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
-		return r.RemoteAddr[:idx]
-	}
-	return r.RemoteAddr
-}

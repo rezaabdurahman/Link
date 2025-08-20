@@ -1,36 +1,10 @@
 // Configuration exports
+import { getEnvVar } from '../utils/env';
 
 // Environment variables helper - Jest compatible
 const getEnv = (key: string, defaultValue?: string): string | undefined => {
-  // In test environment, use our mock
-  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
-    return process.env[key] || defaultValue;
-  }
-  
-  // In browser/Vite environment - direct access to import.meta.env
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    const value = (import.meta.env as any)[key];
-    if (value !== undefined) {
-      return value;
-    }
-  }
-  
-  // Fallback for environments that don't support import.meta
-  try {
-    // This will be evaluated at runtime, so Jest won't parse import.meta
-    const importMeta = eval('import.meta');
-    if (importMeta && importMeta.env) {
-      const value = importMeta.env[key];
-      if (value !== undefined) {
-        return value;
-      }
-    }
-  } catch {
-    // Ignore errors in environments that don't support import.meta
-  }
-  
-  // Final fallback
-  return defaultValue;
+  const value = getEnvVar(key, defaultValue);
+  return value || defaultValue;
 };
 
 // Demo and Preview Configuration

@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/link-app/chat-svc/internal/config"
-	"github.com/link-app/shared/database/monitoring"
+	"github.com/link-app/shared-libs/database/monitoring"
 )
 
 // Database wraps the pgx connection pool with monitoring
@@ -125,7 +125,7 @@ func (d *Database) QueryRow(ctx context.Context, sql string, args ...interface{}
 }
 
 // Exec wraps the monitored pool's Exec method with additional Sentry reporting
-func (d *Database) Exec(ctx context.Context, sql string, args ...interface{}) (pgx.CommandTag, error) {
+func (d *Database) Exec(ctx context.Context, sql string, args ...interface{}) (interface{}, error) {
 	if d.sentryWrapper != nil {
 		d.sentryWrapper.AddQueryBreadcrumb(sql, args)
 	}

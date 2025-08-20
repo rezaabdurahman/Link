@@ -89,12 +89,13 @@ func ExampleIntegration(
 func ExampleFullAPISetup(
 	cfg *config.Config,
 	// AI and cache services
-	aiService ai.SummarizationService,
+	aiSummarizationService ai.SummarizationService,
 	chatService service.ChatService,
 	cacheService cache.SummaryCache,
 	// Database and other services
 	dbService service.DatabaseService,
 	redisService service.RedisService,
+	aiService service.AIService,
 	// Privacy service
 	privacyService privacy.PrivacyService,
 	logger *zerolog.Logger,
@@ -108,7 +109,7 @@ func ExampleFullAPISetup(
 
 	// Create handlers
 	summarizeHandler := NewSummarizeHandler(
-		aiService,
+		aiSummarizationService,
 		chatService,
 		privacyService,
 		cacheService,
