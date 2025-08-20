@@ -18,8 +18,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/link-app/ai-svc/internal/config"
-	"github.com/link-app/ai-svc/internal/handler"
 	"github.com/link-app/ai-svc/internal/service"
+	"github.com/link-app/shared-libs/lifecycle"
 )
 
 // @title AI Service API
@@ -53,9 +53,6 @@ func main() {
 	// For now, we'll use placeholder implementations
 	// In a real implementation, these would connect to actual services
 	log.Warn().Msg("Using placeholder service implementations - implement actual services")
-
-	// Initialize handlers
-	healthHandler := handler.NewHealthHandler(dbService, redisService, aiService, &log.Logger)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -126,11 +123,6 @@ func main() {
 	// Request timeout
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// Health check endpoints
-	r.Get("/health", healthHandler.HandleHealth)        // Comprehensive health check with DB, Redis & AI service
-	r.Get("/health/readiness", healthHandler.HandleReadiness) // Readiness probe for K8s
-	r.Get("/health/liveness", healthHandler.HandleLiveness)   // Liveness probe for K8s
-
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		// AI endpoints will be implemented here
@@ -138,6 +130,9 @@ func main() {
 		// r.Mount("/conversations", conversationHandler.Routes())
 		log.Info().Msg("API routes placeholder - implement actual handlers")
 	})
+
+	// Health endpoints (will be registered after lifecycle manager is created)
+	// Note: These are registered after lifecycle manager initialization
 
 	// Metrics endpoint (if enabled)
 	if cfg.EnableMetrics {
@@ -151,6 +146,61 @@ func main() {
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.ServerHost, cfg.ServerPort),
 		Handler: r,
+	}
+
+	// Initialize lifecycle manager
+	lifecycleManager := lifecycle.NewServiceManager(server)
+	lifecycleManager.SetShutdownTimeout(30 * time.Second)
+	lifecycleManager.SetHealthCheckPeriod(10 * time.Second)
+
+	// Add health endpoints to router
+	r.Get("/health/live", func(w http.ResponseWriter, r *http.Request) {
+		lifecycleManager.CreateLivenessHandler().ServeHTTP(w, r)
+	})
+	r.Get("/health/ready", func(w http.ResponseWriter, r *http.Request) {
+		lifecycleManager.CreateReadinessHandler().ServeHTTP(w, r)
+	})
+	r.Get("/health/detailed", func(w http.ResponseWriter, r *http.Request) {
+		lifecycleManager.CreateHealthHandler().ServeHTTP(w, r)
+	})
+
+	// Add health checkers (using placeholder services for now)
+	lifecycleManager.AddHealthChecker("database", lifecycle.HealthCheckFunc(func(ctx context.Context) error {
+		if dbService == nil {
+			return fmt.Errorf("database service not implemented")
+		}
+		return dbService.Health(ctx)
+	}))
+	lifecycleManager.AddHealthChecker("redis", lifecycle.HealthCheckFunc(func(ctx context.Context) error {
+		if redisService == nil {
+			return fmt.Errorf("redis service not implemented")
+		}
+		return redisService.Health(ctx)
+	}))
+	lifecycleManager.AddHealthChecker("ai_service", lifecycle.HealthCheckFunc(func(ctx context.Context) error {
+		if aiService == nil {
+			return fmt.Errorf("ai service not implemented")
+		}
+		return aiService.Health(ctx)
+	}))
+
+	// Setup graceful shutdown
+	lifecycleManager.OnShutdown(func(ctx context.Context) error {
+		log.Info().Msg("Cleaning up resources...")
+		if dbService != nil {
+			dbService.Close()
+		}
+		if redisService != nil {
+			redisService.Close()
+		}
+		return nil
+	})
+
+	// Start lifecycle manager
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := lifecycleManager.Start(ctx); err != nil {
+		log.Fatal().Err(err).Msg("Failed to start lifecycle manager")
 	}
 
 	// Start server in a goroutine
@@ -172,25 +222,12 @@ func main() {
 
 	log.Info().Msg("Shutting down server...")
 
-	// Give outstanding requests 30 seconds to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	// Use lifecycle manager for graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := lifecycleManager.Shutdown(shutdownCtx); err != nil {
 		log.Fatal().Err(err).Msg("Server forced to shutdown")
-	}
-
-	// Close services
-	if dbService != nil {
-		if err := dbService.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close database service")
-		}
-	}
-
-	if redisService != nil {
-		if err := redisService.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close Redis service")
-		}
 	}
 
 	log.Info().Msg("Server exited")

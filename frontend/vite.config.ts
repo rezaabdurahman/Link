@@ -19,4 +19,5 @@ export default defineConfig(({ mode }) => ({
       external: mode === 'production' ? ['msw'] : [],
     },
   },
+  assetsInclude: ['**/*.md'],
 }))

@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/link-app/shared/database/monitoring"
+	"github.com/link-app/shared-libs/database/monitoring"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -82,9 +82,14 @@ func ConnectDatabase() (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(25) // Lower than other services due to computational load
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	// Enable pgvector extension
-	if err := enablePgVectorExtension(db); err != nil {
-		return nil, fmt.Errorf("failed to enable pgvector extension: %w", err)
+	// Enable pgvector extension (skip for development)
+	if getEnv("ENABLE_VECTOR_EXTENSION", "false") == "true" {
+		if err := enablePgVectorExtension(db); err != nil {
+			log.Printf("Warning: Failed to enable pgvector extension: %v", err)
+			log.Println("Vector search features will be disabled")
+		}
+	} else {
+		log.Println("Vector extension disabled - vector search features unavailable")
 	}
 
 	// Auto-migrate models

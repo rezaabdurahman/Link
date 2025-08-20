@@ -179,6 +179,14 @@ func RateLimit(store *RateLimiterStore) gin.HandlerFunc {
 		c.Header("X-RateLimit-Limit", strconv.Itoa(int(store.limit*60)))
 		c.Header("X-RateLimit-Remaining", strconv.Itoa(remaining))
 
-		c.Next()
+	c.Next()
 	}
+}
+
+// PrometheusMiddleware returns a middleware for Prometheus metrics collection
+func PrometheusMiddleware() gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		// Stub implementation - in a real app this would collect metrics
+		c.Next()
+	})
 }

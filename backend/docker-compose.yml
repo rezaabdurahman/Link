@@ -1,252 +1,199 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database with pgvector
   postgres:
-    image: pgvector/pgvector:pg15-v0.5.1
+    image: postgres:13
     environment:
-      POSTGRES_DB: link_app
-      POSTGRES_USER: link_user
-      POSTGRES_PASSWORD: link_pass
+      POSTGRES_USER: ${POSTGRES_USER:-linkuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-linkdb}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U link_user -d link_app"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
+  # API Gateway Redis (rate limiting, JWT sessions)
+  redis-gateway:
+    image: redis:6.2
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - redis_gateway_data:/data
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
-  # User Service
-  user-svc:
-    build:
-      context: ./user-svc
-      dockerfile: Dockerfile
-    environment:
-      # Database configuration
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: link_user
-      DB_PASSWORD: link_pass
-      DB_NAME: link_app
-      DB_SSLMODE: disable
-      
-      # JWT configuration
-      JWT_SECRET: your-secret-key-change-this-in-production-make-it-very-long-and-complex
-      JWT_ISSUER: user-svc
-      JWT_ACCESS_TOKEN_EXPIRY: 1h
-      JWT_REFRESH_TOKEN_EXPIRY: 24h
-      
-      # Server configuration
-      PORT: 8080
-      ENVIRONMENT: development
-      APP_VERSION: ${APP_VERSION:-development}
-      
-      # Monitoring and Error Reporting
-      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
-      
-      # Redis configuration
-      REDIS_URL: redis://redis:6379
+  # User Service Redis (profiles, friends, user sessions)
+  redis-user:
+    image: redis:6.2
     ports:
-      - "8081:8080"  # Expose on different port to avoid conflict with gateway
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - "6380:6379"
+    volumes:
+      - redis_user_data:/data
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
 
-  # Search Service
-  search-svc:
-    build:
-      context: ./search-svc
-      dockerfile: Dockerfile
-    environment:
-      # Database configuration
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: link_user
-      DB_PASSWORD: link_pass
-      DB_NAME: link_app
-      DB_SSLMODE: disable
-      
-      # Embedding configuration
-      EMBEDDING_PROVIDER: openai
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_EMBEDDING_MODEL: text-embedding-3-small
-      
-      # Service authentication
-      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN:-search-service-token-change-in-production}
-      
-      # Server configuration
-      PORT: 8080
-      ENVIRONMENT: development
-      APP_VERSION: ${APP_VERSION:-development}
-      
-      # Monitoring and Error Reporting
-      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
+  # Chat Service Redis (messages, real-time data)
+  redis-chat:
+    image: redis:6.2
     ports:
-      - "8083:8080"  # Expose on different port to avoid conflict
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - "6381:6379"
+    volumes:
+      - redis_chat_data:/data
+    command: redis-server --maxmemory 1gb --maxmemory-policy allkeys-lru
 
-  # Discovery Service
-  discovery-svc:
-    build:
-      context: ./discovery-svc
-      dockerfile: Dockerfile
-    environment:
-      # Database configuration
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: link_user
-      DB_PASSWORD: link_pass
-      DB_NAME: link_app
-      
-      # Server configuration
-      PORT: 8080
-      ENVIRONMENT: development
-      APP_VERSION: ${APP_VERSION:-development}
-      
-      # Monitoring and Error Reporting
-      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
+  # Discovery Service Redis (location data, nearby users)
+  redis-discovery:
+    image: redis:6.2
     ports:
-      - "8082:8080"  # Expose on different port to avoid conflict
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - "6382:6379"
+    volumes:
+      - redis_discovery_data:/data
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
-  # Chat Service
-  chat-svc:
-    build: ./chat-svc
-    environment:
-      DB_HOST: postgres
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: your-secret-key-change-this-in-production-make-it-very-long-and-complex
-      PORT: 8080
-      ENVIRONMENT: development
-      APP_VERSION: ${APP_VERSION:-development}
-      
-      # Monitoring and Error Reporting
-      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    ports:
-      - "8083:8080"  # Expose on different port to avoid conflict
-
-  # API Gateway
   api-gateway:
     build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
-    environment:
-      # Server configuration
-      PORT: 8080
-      ENVIRONMENT: development
-      APP_VERSION: ${APP_VERSION:-development}
-      
-      # Monitoring and Error Reporting
-      SENTRY_DSN: ${BACKEND_SENTRY_DSN:-https://0ff95b38ecab6c8622f29058f707ca71@o4509871403237376.ingest.us.sentry.io/4509871426109440}
-      
-      # JWT configuration (must match user service)
-      JWT_SECRET: your-secret-key-change-this-in-production-make-it-very-long-and-complex
-      JWT_ISSUER: user-svc
-      JWT_COOKIE_NAME: link_auth
-      JWT_COOKIE_SAMESITE: lax
-      
-      # Service URLs
-      USER_SVC_URL: http://user-svc:8080
-      USER_SVC_HEALTH_URL: http://user-svc:8080/health
-      USER_SVC_TIMEOUT: 30
-      
-      LOCATION_SVC_URL: http://location-svc:8080
-      LOCATION_SVC_HEALTH_URL: http://location-svc:8080/health
-      LOCATION_SVC_TIMEOUT: 30
-      
-      CHAT_SVC_URL: http://chat-svc:8080
-      CHAT_SVC_HEALTH_URL: http://chat-svc:8080/health
-      CHAT_SVC_TIMEOUT: 30
-      
-      AI_SVC_URL: http://ai-svc:8000
-      AI_SVC_HEALTH_URL: http://ai-svc:8000/health
-      AI_SVC_TIMEOUT: 60
-      
-      DISCOVERY_SVC_URL: http://discovery-svc:8080
-      DISCOVERY_SVC_HEALTH_URL: http://discovery-svc:8080/health
-      DISCOVERY_SVC_TIMEOUT: 30
-      
-      SEARCH_SVC_URL: http://search-svc:8080
-      SEARCH_SVC_HEALTH_URL: http://search-svc:8080/health
-      SEARCH_SVC_TIMEOUT: 30
-      
-      STORIES_SVC_URL: http://stories-svc:8080
-      STORIES_SVC_HEALTH_URL: http://stories-svc:8080/health
-      STORIES_SVC_TIMEOUT: 30
-      
-      OPPORTUNITIES_SVC_URL: http://opportunities-svc:8080
-      OPPORTUNITIES_SVC_HEALTH_URL: http://opportunities-svc:8080/health
-      OPPORTUNITIES_SVC_TIMEOUT: 30
+      context: .
+      dockerfile: api-gateway/Dockerfile
     ports:
-      - "8080:8080"  # Main gateway port
+      - "8080:8080"
     depends_on:
-      user-svc:
-        condition: service_healthy
-      discovery-svc:
-        condition: service_healthy
-      chat-svc:
-        condition: service_healthy
+      - user-svc
+      - chat-svc
+      - discovery-svc
+      - ai-svc
+      - search-svc
+      - redis-gateway
+    environment:
+      # Service URLs (for backward compatibility)
+      USER_SVC_URL: http://user-svc:8081
+      CHAT_SVC_URL: http://chat-svc:8082
+      DISCOVERY_SVC_URL: http://discovery-svc:8083
+      AI_SVC_URL: http://ai-svc:8084
+      SEARCH_SVC_URL: http://search-svc:8085
+      
+      # Load balancer configuration
+      USER_SVC_LB_STRATEGY: round-robin
+      USER_SVC_LB_MAX_FAILURES: 5
+      USER_SVC_LB_TIMEOUT: 30
+      USER_SVC_LB_RECOVERY_TIMEOUT: 60
+      
+      CHAT_SVC_LB_STRATEGY: round-robin
+      CHAT_SVC_LB_MAX_FAILURES: 5
+      CHAT_SVC_LB_TIMEOUT: 30
+      CHAT_SVC_LB_RECOVERY_TIMEOUT: 60
+      
+      DISCOVERY_SVC_LB_STRATEGY: round-robin
+      AI_SVC_LB_STRATEGY: round-robin
+      SEARCH_SVC_LB_STRATEGY: round-robin
+      
+      # Retry configuration
+      USER_SVC_RETRY_MAX: 3
+      USER_SVC_RETRY_BASE_DELAY: 100
+      USER_SVC_RETRY_MAX_DELAY: 5000
+      USER_SVC_RETRY_JITTER: "true"
+      
+      CHAT_SVC_RETRY_MAX: 3
+      AI_SVC_RETRY_MAX: 2
+      AI_SVC_RETRY_BASE_DELAY: 200
+      
+      # Database and Gateway Redis
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: linkuser
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: linkdb
+      REDIS_HOST: redis-gateway
+      REDIS_PORT: 6379
+
+  user-svc:
+    build:
+      context: .
+      dockerfile: user-svc/Dockerfile
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - redis-user
+    environment:
+      DB_HOST: postgres
+      PORT: 8081
+      REDIS_HOST: redis-user
+      REDIS_PORT: 6379
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health/live"]
+      interval: 10s
+      timeout: 5s
       retries: 3
-      start_period: 10s
+
+  chat-svc:
+    build:
+      context: .
+      dockerfile: chat-svc/Dockerfile
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+      - redis-chat
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis-chat
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  discovery-svc:
+    build:
+      context: .
+      dockerfile: discovery-svc/Dockerfile
+    ports:
+      - "8083:8083"
+    depends_on:
+      - postgres
+      - redis-discovery
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis-discovery
+      REDIS_PORT: 6379
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  ai-svc:
+    build:
+      context: .
+      dockerfile: ai-svc/Dockerfile
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  search-svc:
+    build:
+      context: .
+      dockerfile: search-svc/Dockerfile
+    ports:
+      - "8085:8085"
+    depends_on:
+      - postgres
+    environment:
+      DB_HOST: postgres
+      DISCOVERY_SVC_URL: http://discovery-svc:8083
+      USER_SVC_URL: http://user-svc:8081
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres_data:
-  redis_data:
+  redis_gateway_data:
+  redis_user_data:
+  redis_chat_data:
+  redis_discovery_data:
 
-networks:
-  default:
-    name: link-network

@@ -1,0 +1,132 @@
+groups:
+- name: pgbouncer.rules
+  rules:
+  
+  # Connection pool exhaustion alert
+  - alert: PgBouncerPoolExhaustion
+    expr: |
+      (
+        pgbouncer_pools_client_active_connections + 
+        pgbouncer_pools_client_waiting_connections
+      ) / (
+        pgbouncer_pools_client_active_connections + 
+        pgbouncer_pools_client_waiting_connections + 
+        pgbouncer_pools_server_idle_connections + 10
+      ) > 0.9
+    for: 5m
+    labels:
+      severity: critical
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "PgBouncer connection pool {{ $labels.database }} is near exhaustion"
+      description: "PgBouncer pool for database {{ $labels.database }} is at {{ $value | humanizePercentage }} capacity. This may cause connection rejections and service degradation."
+      runbook_url: "https://wiki.company.com/runbooks/pgbouncer-pool-exhaustion"
+
+  # High client wait time alert
+  - alert: PgBouncerHighClientWaitTime
+    expr: pgbouncer_pools_client_wait_time_seconds > 1.0
+    for: 2m
+    labels:
+      severity: warning
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "High client wait time for PgBouncer pool {{ $labels.database }}"
+      description: "Clients are waiting {{ $value | humanizeDuration }} on average for connections to database {{ $labels.database }}. Consider increasing pool size or investigating database performance."
+
+  # PgBouncer service down alert
+  - alert: PgBouncerDown
+    expr: up{job="pgbouncer"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "PgBouncer instance {{ $labels.instance }} is down"
+      description: "PgBouncer instance {{ $labels.instance }} has been down for more than 1 minute. This will cause database connection failures."
+
+  # High connection churn rate
+  - alert: PgBouncerHighConnectionChurn
+    expr: rate(pgbouncer_pools_server_login_count[5m]) > 10
+    for: 5m
+    labels:
+      severity: warning
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "High connection churn rate for PgBouncer pool {{ $labels.database }}"
+      description: "PgBouncer is creating {{ $value | humanize }} new database connections per second for database {{ $labels.database }}. This may indicate connection leaks or undersized connection pools."
+
+  # Too many waiting connections
+  - alert: PgBouncerTooManyWaitingConnections
+    expr: pgbouncer_pools_client_waiting_connections > 50
+    for: 3m
+    labels:
+      severity: warning
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "Too many waiting connections for PgBouncer pool {{ $labels.database }}"
+      description: "{{ $value }} clients are waiting for connections to database {{ $labels.database }}. This indicates potential bottleneck in the connection pool or database performance issues."
+
+  # PgBouncer memory usage (if available)
+  - alert: PgBouncerHighMemoryUsage
+    expr: |
+      (
+        container_memory_working_set_bytes{pod=~"pgbouncer-.*"} /
+        container_spec_memory_limit_bytes{pod=~"pgbouncer-.*"}
+      ) > 0.8
+    for: 5m
+    labels:
+      severity: warning
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "High memory usage for PgBouncer pod {{ $labels.pod }}"
+      description: "PgBouncer pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its memory limit. Consider increasing memory limits or investigating memory leaks."
+
+  # Low server connection utilization (might indicate over-provisioning)
+  - alert: PgBouncerLowServerUtilization
+    expr: |
+      (
+        pgbouncer_pools_server_active_connections / 
+        (pgbouncer_pools_server_active_connections + pgbouncer_pools_server_idle_connections + 1)
+      ) < 0.1
+    for: 30m
+    labels:
+      severity: info
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "Low server connection utilization for PgBouncer pool {{ $labels.database }}"
+      description: "PgBouncer pool for database {{ $labels.database }} has low server connection utilization ({{ $value | humanizePercentage }}). Consider reducing pool size to optimize resource usage."
+
+  # Query rate anomaly detection
+  - alert: PgBouncerQueryRateAnomaly
+    expr: |
+      (
+        rate(pgbouncer_stats_queries_total[5m]) - 
+        rate(pgbouncer_stats_queries_total[5m] offset 1h)
+      ) / rate(pgbouncer_stats_queries_total[5m] offset 1h) > 2
+    for: 10m
+    labels:
+      severity: warning
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "Unusual query rate for PgBouncer pool {{ $labels.database }}"
+      description: "Query rate for database {{ $labels.database }} has increased significantly ({{ $value | humanizePercentage }} above normal). This may indicate a traffic spike or potential issue."
+
+  # Database errors through PgBouncer (if error metrics are available)
+  - alert: PgBouncerDatabaseErrors
+    expr: rate(pgbouncer_stats_server_error_count[5m]) > 0.1
+    for: 2m
+    labels:
+      severity: critical
+      service: pgbouncer
+      component: connection-pool
+    annotations:
+      summary: "Database errors detected through PgBouncer for {{ $labels.database }}"
+      description: "PgBouncer is reporting {{ $value | humanize }} database errors per second for database {{ $labels.database }}. Investigate database connectivity or configuration issues."

@@ -5,7 +5,8 @@ go 1.23.0
 toolchain go1.24.6
 
 require (
-	github.com/go-chi/chi/v5 v5.2.2
+	github.com/go-chi/chi/v5 v5.0.12
+	github.com/link-app/shared-libs v0.0.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-chi/httprate v0.15.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
@@ -24,6 +25,8 @@ require (
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.30.1
 )
+
+replace github.com/link-app/shared-libs => ../shared-libs
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

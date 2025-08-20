@@ -1,0 +1,19 @@
+; PgBouncer user list format: "username" "password_hash"
+; These will be populated by the startup script with actual hashed passwords
+
+; Service users (will be populated by startup script)
+"user_service_user" ""
+"chat_service_user" ""
+"ai_service_user" ""
+"discovery_service_user" ""
+"search_service_user" ""
+"location_service_user" ""
+"stories_service_user" ""
+"opportunities_service_user" ""
+
+; Legacy user for migration period
+"linkuser" ""
+
+; Admin users
+"pgbouncer_admin" "md5$(echo -n 'admin_password_change_me' | md5sum | cut -d' ' -f1)"
+"pgbouncer_stats" "md5$(echo -n 'stats_password_change_me' | md5sum | cut -d' ' -f1)"

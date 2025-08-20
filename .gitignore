@@ -30,6 +30,11 @@ dist-ssr
 .env.test.local
 .env.production.local
 
+# Generated secrets (never commit!)
+secrets.txt
+*.secrets
+*.secret
+
 # Testing
 coverage/
 *.lcov
@@ -96,11 +101,27 @@ env/
 *.sqlite3
 *.db
 
-# Infrastructure
+# Infrastructure - Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
+*.tfplan
+*.tfplan.*
+backend.tf
+crash.log
+crash.*.log
+
+# Keep terraform.lock.hcl in version control for reproducible builds
+# Commented out to include in repo: .terraform.lock.hcl
+
+# Environment-specific secrets (never commit these)
+*.auto.tfvars
+secrets.tfvars
+*-secrets.tfvars
+
+# Generated Terraform files
+*-generated.tf
+terraform-*.zip
 
 # IDE and editor files
 .vscode/settings.json

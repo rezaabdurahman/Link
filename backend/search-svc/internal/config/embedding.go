@@ -13,6 +13,7 @@ type EmbeddingProvider interface {
 	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
 	GetDimensions() int
 	GetProviderName() string
+	CheckHealth(ctx context.Context) error
 }
 
 // OpenAIEmbeddingProvider implements EmbeddingProvider using OpenAI
@@ -87,4 +88,10 @@ func (p *OpenAIEmbeddingProvider) GetDimensions() int {
 // GetProviderName returns the provider name
 func (p *OpenAIEmbeddingProvider) GetProviderName() string {
 	return "openai"
+}
+
+// CheckHealth checks if the embedding provider is healthy (stub implementation)
+func (p *OpenAIEmbeddingProvider) CheckHealth(ctx context.Context) error {
+	// Stub implementation - in a real app this would ping OpenAI API
+	return nil
 }

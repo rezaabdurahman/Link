@@ -16,6 +16,8 @@ import UserCardDemo from './pages/UserCardDemo';
 import { AuthProvider } from './contexts/AuthContext';
 import { OnboardingProvider } from './contexts/OnboardingContext';
 import OnboardingPage from './pages/OnboardingPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
 import DemoInitializer from './components/DemoInitializer';
 import './App.css';
 
@@ -29,6 +31,10 @@ const App: React.FC = (): JSX.Element => {
             {/* Development Routes (remove in production) */}
             <Route path="/dev" element={<AuthExample />} />
             <Route path="/demo/usercard" element={<UserCardDemo />} />
+            
+            {/* Public Legal Routes */}
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms-of-service" element={<TermsOfServicePage />} />
             
             {/* Guest-only Auth Routes */}
             <Route element={<GuestOnly />}>

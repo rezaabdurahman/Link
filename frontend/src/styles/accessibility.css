@@ -1,0 +1,154 @@
+/* Accessibility improvements for better WCAG compliance */
+
+/* Improved color contrast utilities */
+.text-accessible-primary {
+  color: #1f2937; /* Ensures 14.68:1 ratio on white background */
+}
+
+.text-accessible-secondary {
+  color: #374151; /* Better contrast than text-muted */
+}
+
+.text-accessible-muted {
+  color: #4b5563; /* Ensures 7.56:1 ratio on white background */
+}
+
+/* High contrast mode improvements */
+@media (prefers-contrast: high) {
+  .ios-button {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+    border: 2px solid #000000 !important;
+  }
+  
+  .ios-button-secondary {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border: 2px solid #000000 !important;
+  }
+  
+  .text-primary-400,
+  .text-primary-500,
+  .text-primary-600 {
+    color: #0f766e !important; /* Use darker primary for better contrast */
+  }
+  
+  .bg-primary-400,
+  .bg-primary-500,
+  .bg-primary-600 {
+    background-color: #0f766e !important;
+  }
+}
+
+/* Focus management for better keyboard navigation */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: #000000;
+  color: #ffffff;
+  padding: 8px;
+  z-index: 1000;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.skip-link:focus {
+  top: 6px;
+}
+
+/* Screen reader improvements */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Improved focus indicators */
+.focus-visible:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Better touch targets for mobile */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Loading states with better accessibility */
+.loading-skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .loading-skeleton {
+    animation: none;
+    background: #f3f4f6;
+  }
+}
+
+/* Error and success states with better contrast */
+.error-text {
+  color: #dc2626; /* Ensures good contrast */
+}
+
+.success-text {
+  color: #059669; /* Ensures good contrast */
+}
+
+.warning-text {
+  color: #d97706; /* Ensures good contrast */
+}
+
+/* Form validation improvements */
+.form-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.form-field:invalid {
+  border-color: #dc2626;
+}
+
+.form-field:valid {
+  border-color: #059669;
+}
+
+/* Better link styling */
+.accessible-link {
+  color: #0f766e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.accessible-link:hover {
+  color: #134e4a;
+  text-decoration: underline;
+}
+
+.accessible-link:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
