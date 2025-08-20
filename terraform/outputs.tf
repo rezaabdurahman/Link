@@ -53,6 +53,9 @@ output "scripts_created" {
   }
 }
 
+# Service passwords (use module.service_databases.service_passwords instead of individual outputs)
+# The module already provides all passwords in a structured format
+
 # Infrastructure summary
 output "infrastructure_summary" {
   description = "Summary of infrastructure components created"
