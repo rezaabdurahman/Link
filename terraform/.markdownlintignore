@@ -1,0 +1,12 @@
+# Generated documentation
+TERRAFORM_DOCS.md
+modules/*/README_GENERATED.md
+
+# Changelog
+CHANGELOG.md
+
+# Assessment files (legacy)
+ASSESSMENT*.md
+
+# Large documentation files
+README*.md

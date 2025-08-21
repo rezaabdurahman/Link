@@ -83,7 +83,7 @@ func initializeEnhancedServiceConfig() *EnhancedServiceConfig {
 func createServiceLoadBalancer(serviceName string, instances []ServiceInstanceConfig) *ServiceLoadBalancer {
 	// Get load balancer configuration
 	lbConfig := getLoadBalancerConfig(serviceName)
-	
+
 	// Create load balancer
 	lb := loadbalancer.NewLoadBalancer(
 		lbConfig.Strategy,
@@ -145,7 +145,6 @@ func getSearchServiceInstances() []ServiceInstanceConfig {
 	return getServiceInstances("SEARCH_SVC", "search-svc", 8085, 30*time.Second)
 }
 
-
 // getOpportunitiesServiceInstances returns opportunities service instance configurations
 func getOpportunitiesServiceInstances() []ServiceInstanceConfig {
 	return getServiceInstances("OPPORTUNITIES_SVC", "opportunities-svc", 8080, 30*time.Second)
@@ -155,30 +154,30 @@ func getOpportunitiesServiceInstances() []ServiceInstanceConfig {
 func getServiceInstances(envPrefix, defaultServiceName string, defaultPort int, defaultTimeout time.Duration) []ServiceInstanceConfig {
 	// Check for multiple instances configuration
 	instancesEnv := getEnv(envPrefix+"_INSTANCES", "")
-	
+
 	var instances []ServiceInstanceConfig
-	
+
 	if instancesEnv != "" {
 		// Parse multiple instances from environment variable
 		// Format: "instance1:host1:port1,instance2:host2:port2"
 		instancePairs := strings.Split(instancesEnv, ",")
-		
+
 		for i, pair := range instancePairs {
 			parts := strings.Split(strings.TrimSpace(pair), ":")
 			if len(parts) >= 2 {
 				id := parts[0]
 				host := parts[1]
 				port := defaultPort
-				
+
 				if len(parts) >= 3 {
 					if p, err := strconv.Atoi(parts[2]); err == nil {
 						port = p
 					}
 				}
-				
+
 				url := fmt.Sprintf("http://%s:%d", host, port)
 				healthURL := fmt.Sprintf("http://%s:%d/health/live", host, port)
-				
+
 				instances = append(instances, ServiceInstanceConfig{
 					ID:        id,
 					URL:       url,
@@ -202,7 +201,7 @@ func getServiceInstances(envPrefix, defaultServiceName string, defaultPort int, 
 		url := getEnv(envPrefix+"_URL", fmt.Sprintf("http://%s:%d", defaultServiceName, defaultPort))
 		healthURL := getEnv(envPrefix+"_HEALTH_URL", fmt.Sprintf("http://%s:%d/health/live", defaultServiceName, defaultPort))
 		timeout := time.Duration(getEnvAsInt(envPrefix+"_TIMEOUT", int(defaultTimeout/time.Second))) * time.Second
-		
+
 		instances = append(instances, ServiceInstanceConfig{
 			ID:        fmt.Sprintf("%s-1", defaultServiceName),
 			URL:       url,
@@ -211,29 +210,29 @@ func getServiceInstances(envPrefix, defaultServiceName string, defaultPort int, 
 			Timeout:   timeout,
 		})
 	}
-	
+
 	return instances
 }
 
 // getLoadBalancerConfig returns load balancer configuration for a service
 func getLoadBalancerConfig(serviceName string) LoadBalancerConfig {
 	envPrefix := strings.ToUpper(strings.ReplaceAll(serviceName, "-", "_"))
-	
+
 	// Default strategy is round robin
 	strategy := loadbalancer.RoundRobin
 	strategyStr := getEnv(envPrefix+"_LB_STRATEGY", "round-robin")
-	
+
 	switch strings.ToLower(strategyStr) {
 	case "random":
 		strategy = loadbalancer.Random
 	case "least-connections":
 		strategy = loadbalancer.LeastConnections
 	}
-	
+
 	maxFailures := int64(getEnvAsInt(envPrefix+"_LB_MAX_FAILURES", 5))
 	timeout := time.Duration(getEnvAsInt(envPrefix+"_LB_TIMEOUT", 30)) * time.Second
 	recoveryTimeout := time.Duration(getEnvAsInt(envPrefix+"_LB_RECOVERY_TIMEOUT", 60)) * time.Second
-	
+
 	return LoadBalancerConfig{
 		Strategy:        strategy,
 		MaxFailures:     maxFailures,
@@ -245,15 +244,15 @@ func getLoadBalancerConfig(serviceName string) LoadBalancerConfig {
 // getRetryConfig returns retry configuration for a service
 func getRetryConfig(serviceName string) *retry.RetryConfig {
 	envPrefix := strings.ToUpper(strings.ReplaceAll(serviceName, "-", "_"))
-	
+
 	maxRetries := getEnvAsInt(envPrefix+"_RETRY_MAX", 3)
 	baseDelayMs := getEnvAsInt(envPrefix+"_RETRY_BASE_DELAY", 100)
 	maxDelayMs := getEnvAsInt(envPrefix+"_RETRY_MAX_DELAY", 5000)
 	jitter := getEnv(envPrefix+"_RETRY_JITTER", "true") == "true"
-	
+
 	// Use default retryable errors, but allow customization
 	profileStr := getEnv(envPrefix+"_RETRY_PROFILE", "default")
-	
+
 	var config *retry.RetryConfig
 	switch strings.ToLower(profileStr) {
 	case "aggressive":
@@ -263,20 +262,20 @@ func getRetryConfig(serviceName string) *retry.RetryConfig {
 	default:
 		config = retry.DefaultRetryConfig()
 	}
-	
+
 	// Override with specific values if provided
 	config.MaxRetries = maxRetries
 	config.BaseDelay = time.Duration(baseDelayMs) * time.Millisecond
 	config.MaxDelay = time.Duration(maxDelayMs) * time.Millisecond
 	config.Jitter = jitter
-	
+
 	return config
 }
 
 // RouteToServiceLoadBalancer determines which service load balancer should handle a request
 func RouteToServiceLoadBalancer(path string) (*ServiceLoadBalancer, error) {
 	config := GetEnhancedServiceConfig()
-	
+
 	serviceName := ""
 	switch {
 	case matchesPath(path, "/auth/", "/users/"):
@@ -296,55 +295,55 @@ func RouteToServiceLoadBalancer(path string) (*ServiceLoadBalancer, error) {
 	default:
 		return nil, fmt.Errorf("no service found for path: %s", path)
 	}
-	
+
 	service, exists := config.Services[serviceName]
 	if !exists {
 		return nil, fmt.Errorf("service %s not configured", serviceName)
 	}
-	
+
 	return service, nil
 }
 
 // GetServiceLoadBalancer returns a specific service load balancer
 func GetServiceLoadBalancer(serviceName string) (*ServiceLoadBalancer, error) {
 	config := GetEnhancedServiceConfig()
-	
+
 	service, exists := config.Services[serviceName]
 	if !exists {
 		return nil, fmt.Errorf("service %s not found", serviceName)
 	}
-	
+
 	return service, nil
 }
 
 // GetAllServiceLoadBalancers returns all service load balancers
 func GetAllServiceLoadBalancers() map[string]*ServiceLoadBalancer {
 	config := GetEnhancedServiceConfig()
-	
+
 	// Return a copy to prevent external modification
 	services := make(map[string]*ServiceLoadBalancer)
 	for name, service := range config.Services {
 		services[name] = service
 	}
-	
+
 	return services
 }
 
 // GetLoadBalancerStats returns statistics for all load balancers
 func GetLoadBalancerStats() map[string]interface{} {
 	config := GetEnhancedServiceConfig()
-	
+
 	stats := make(map[string]interface{})
 	for serviceName, service := range config.Services {
 		lbStats := service.LoadBalancer.GetStats()
 		retryStats := service.Retrier.GetStats()
-		
+
 		stats[serviceName] = map[string]interface{}{
 			"load_balancer": lbStats,
 			"retry":         retryStats,
 		}
 	}
-	
+
 	return stats
 }
 

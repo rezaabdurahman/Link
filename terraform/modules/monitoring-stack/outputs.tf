@@ -25,19 +25,19 @@ output "authentication" {
   description = "Authentication credentials and configuration"
   value = {
     grafana_admin_password_file = local_sensitive_file.grafana_admin_password.filename
-    redis_password_file        = local_sensitive_file.redis_password.filename
-    postgres_dsn_file          = local_sensitive_file.postgres_monitoring_dsn.filename
-    htpasswd_file              = local_file.nginx_htpasswd.filename
-    monitoring_username        = var.monitoring_username
+    redis_password_file         = local_sensitive_file.redis_password.filename
+    postgres_dsn_file           = local_sensitive_file.postgres_monitoring_dsn.filename
+    htpasswd_file               = local_file.nginx_htpasswd.filename
+    monitoring_username         = var.monitoring_username
   }
 }
 
 output "credentials" {
   description = "Generated credentials (sensitive)"
   value = {
-    grafana_admin_password = random_password.grafana_admin.result
-    redis_password         = random_password.redis_auth.result
-    nginx_basic_auth       = random_password.nginx_auth.result
+    grafana_admin_password       = random_password.grafana_admin.result
+    redis_password               = random_password.redis_auth.result
+    nginx_basic_auth             = random_password.nginx_auth.result
     postgres_monitoring_password = random_password.postgres_monitoring.result
   }
   sensitive = true
@@ -47,8 +47,8 @@ output "credentials" {
 output "configuration_files" {
   description = "Paths to generated configuration files"
   value = {
-    nginx_config              = local_file.nginx_ssl_config.filename
-    docker_compose_secure     = local_file.docker_compose_monitoring_secure.filename
+    nginx_config          = local_file.nginx_ssl_config.filename
+    docker_compose_secure = local_file.docker_compose_monitoring_secure.filename
   }
 }
 
@@ -66,11 +66,11 @@ output "kubernetes_secrets" {
 output "access_urls" {
   description = "URLs for accessing monitoring services"
   value = {
-    base_url        = "https://${var.monitoring_domain}"
-    grafana         = "https://${var.monitoring_domain}/grafana/"
-    prometheus      = "https://${var.monitoring_domain}/prometheus/"
-    jaeger          = var.enable_jaeger ? "https://${var.monitoring_domain}/jaeger/" : null
-    alertmanager    = var.enable_alertmanager ? "https://${var.monitoring_domain}/alertmanager/" : null
+    base_url     = "https://${var.monitoring_domain}"
+    grafana      = "https://${var.monitoring_domain}/grafana/"
+    prometheus   = "https://${var.monitoring_domain}/prometheus/"
+    jaeger       = var.enable_jaeger ? "https://${var.monitoring_domain}/jaeger/" : null
+    alertmanager = var.enable_alertmanager ? "https://${var.monitoring_domain}/alertmanager/" : null
   }
 }
 
@@ -94,16 +94,16 @@ output "usage_instructions" {
   description = "Instructions for using the monitoring stack"
   value = {
     docker_compose_command = "docker-compose -f ${local_file.docker_compose_monitoring_secure.filename} up -d"
-    
+
     curl_test_command = join(" ", [
       "curl",
       "--cacert ${local_file.monitoring_ca_cert.filename}",
       "--user ${var.monitoring_username}:${random_password.nginx_auth.result}",
       "https://${var.monitoring_domain}/grafana/api/health"
     ])
-    
+
     hosts_file_entry = "127.0.0.1 ${var.monitoring_domain}"
-    
+
     grafana_login = {
       url      = "https://${var.monitoring_domain}/grafana/"
       username = "admin"
@@ -134,17 +134,17 @@ output "generated_files" {
       server_cert = local_file.monitoring_ssl_cert.filename
       server_key  = local_file.monitoring_ssl_key.filename
     }
-    
+
     secret_files = {
       grafana_admin = local_sensitive_file.grafana_admin_password.filename
       redis_auth    = local_sensitive_file.redis_password.filename
       postgres_dsn  = local_sensitive_file.postgres_monitoring_dsn.filename
     }
-    
+
     config_files = {
-      nginx_conf         = local_file.nginx_ssl_config.filename
-      htpasswd          = local_file.nginx_htpasswd.filename
-      docker_compose    = local_file.docker_compose_monitoring_secure.filename
+      nginx_conf     = local_file.nginx_ssl_config.filename
+      htpasswd       = local_file.nginx_htpasswd.filename
+      docker_compose = local_file.docker_compose_monitoring_secure.filename
     }
   }
 }
@@ -156,7 +156,7 @@ output "migration_from_script" {
     replaced_script = "monitoring/setup-secure-monitoring.sh"
     equivalent_features = [
       "SSL certificate generation",
-      "Secure password generation", 
+      "Secure password generation",
       "HTTP Basic Auth setup",
       "Docker Compose configuration",
       "Kubernetes secrets (optional)"

@@ -88,7 +88,7 @@ output "usage_instructions" {
   description = "Instructions for using the generated certificates"
   value = {
     curl_examples = {
-      for service in var.service_names : service => 
+      for service in var.service_names : service =>
       "curl --cacert ${var.output_path}/ca-bundle.crt --cert ${var.output_path}/${service}.crt --key ${var.output_path}/${service}.key https://localhost:8443"
     }
     docker_volume_mounts = {

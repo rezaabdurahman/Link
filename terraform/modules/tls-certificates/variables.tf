@@ -10,7 +10,7 @@ variable "service_dns_names" {
   description = "Additional DNS names for each service certificate"
   type        = map(list(string))
   default     = {}
-  
+
   # Example:
   # {
   #   "gateway" = ["api.linkapp.local", "linkapp.com"]

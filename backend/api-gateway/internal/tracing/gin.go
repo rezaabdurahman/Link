@@ -16,17 +16,17 @@ import (
 // GinMiddleware returns a Gin middleware for OpenTelemetry tracing
 func GinMiddleware(serviceName string) gin.HandlerFunc {
 	tracer := otel.Tracer(serviceName)
-	
+
 	return func(c *gin.Context) {
 		// Extract trace context from incoming request headers
 		ctx := otel.GetTextMapPropagator().Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))
-		
+
 		// Start a new span
 		spanName := c.Request.Method + " " + c.FullPath()
-		if spanName == c.Request.Method + " " { // Handle empty FullPath
+		if spanName == c.Request.Method+" " { // Handle empty FullPath
 			spanName = c.Request.Method + " " + c.Request.URL.Path
 		}
-		
+
 		ctx, span := tracer.Start(ctx, spanName, oteltrace.WithAttributes(
 			httpconv.ServerRequest(serviceName, c.Request)...,
 		))

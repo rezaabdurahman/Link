@@ -33,7 +33,7 @@ func InitSentry() error {
 		Environment:      environment,
 		Release:          release,
 		TracesSampleRate: getTracesSampleRate(environment),
-		
+
 		// Set default tags
 		Tags: map[string]string{
 			"component": "api-gateway",
@@ -46,12 +46,12 @@ func InitSentry() error {
 			if event.Request != nil && event.Request.URL == "/health" {
 				return nil
 			}
-			
+
 			// Log the event in development
 			if environment == "development" {
 				fmt.Printf("Sentry event: %+v\n", event)
 			}
-			
+
 			return event
 		},
 	})
@@ -87,7 +87,7 @@ func CaptureError(err error, context map[string]interface{}) {
 		for key, value := range context {
 			scope.SetExtra(key, value)
 		}
-		
+
 		// Capture the error
 		sentry.CaptureException(err)
 	})
@@ -97,12 +97,12 @@ func CaptureError(err error, context map[string]interface{}) {
 func CaptureMessage(message string, level sentry.Level, context map[string]interface{}) {
 	sentry.WithScope(func(scope *sentry.Scope) {
 		scope.SetLevel(level)
-		
+
 		// Add context data
 		for key, value := range context {
 			scope.SetExtra(key, value)
 		}
-		
+
 		sentry.CaptureMessage(message)
 	})
 }
@@ -121,9 +121,9 @@ func SetUserContext(userID, email, username string) {
 // AddBreadcrumb adds a breadcrumb for debugging
 func AddBreadcrumb(message, category string, level sentry.Level) {
 	sentry.AddBreadcrumb(&sentry.Breadcrumb{
-		Message:  message,
-		Category: category,
-		Level:    level,
+		Message:   message,
+		Category:  category,
+		Level:     level,
 		Timestamp: time.Now(),
 	})
 }
@@ -143,7 +143,7 @@ func GinSentryMiddleware() gin.HandlerFunc {
 			scope.SetTag("method", c.Request.Method)
 			scope.SetTag("path", c.Request.URL.Path)
 			scope.SetExtra("client_ip", c.ClientIP())
-			
+
 			// Set user context if available
 			if userID := c.GetString("user_id"); userID != "" {
 				scope.SetUser(sentry.User{
@@ -174,7 +174,7 @@ func GinSentryMiddleware() gin.HandlerFunc {
 				scope.SetLevel(getSentryLevelFromHTTPStatus(status))
 				scope.SetExtra("status_code", status)
 				scope.SetExtra("response_size", c.Writer.Size())
-				
+
 				message := fmt.Sprintf("HTTP %d - %s %s", status, c.Request.Method, c.Request.URL.Path)
 				hub.CaptureMessage(message)
 			})

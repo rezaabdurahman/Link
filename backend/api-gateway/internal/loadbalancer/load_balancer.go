@@ -25,15 +25,15 @@ type ServiceInstance struct {
 	IsHealthy bool
 	Weight    int
 	Timeout   time.Duration
-	
+
 	// Circuit breaker state
 	FailureCount    int64
 	LastFailureTime time.Time
-	State          CircuitBreakerState
-	
+	State           CircuitBreakerState
+
 	// Connection tracking
 	ActiveConnections int64
-	
+
 	// Mutex for thread-safe operations
 	mutex sync.RWMutex
 }
@@ -42,10 +42,10 @@ type ServiceInstance struct {
 type CircuitBreakerState int
 
 const (
-	StateClosed CircuitBreakerState = iota // Normal operation
-	StateOpen                              // Circuit breaker is open, requests fail fast
-	StateHalfOpen                          // Testing if service is back to normal
-	
+	StateClosed   CircuitBreakerState = iota // Normal operation
+	StateOpen                                // Circuit breaker is open, requests fail fast
+	StateHalfOpen                            // Testing if service is back to normal
+
 	// Aliases for backward compatibility
 	Closed   = StateClosed
 	Open     = StateOpen
@@ -54,16 +54,16 @@ const (
 
 // LoadBalancer manages multiple service instances with health checking and load balancing
 type LoadBalancer struct {
-	instances      []*ServiceInstance
-	strategy       LoadBalancingStrategy
-	roundRobinIdx  int64
-	healthChecker  *HealthChecker
-	
+	instances     []*ServiceInstance
+	strategy      LoadBalancingStrategy
+	roundRobinIdx int64
+	healthChecker *HealthChecker
+
 	// Circuit breaker configuration
-	maxFailures      int64
-	timeout          time.Duration
-	recoveryTimeout  time.Duration
-	
+	maxFailures     int64
+	timeout         time.Duration
+	recoveryTimeout time.Duration
+
 	mutex sync.RWMutex
 }
 
@@ -77,10 +77,10 @@ func NewLoadBalancer(strategy LoadBalancingStrategy, maxFailures int64, timeout,
 		recoveryTimeout: recoveryTimeout,
 		roundRobinIdx:   0,
 	}
-	
+
 	// Initialize health checker
 	lb.healthChecker = NewHealthChecker(lb)
-	
+
 	return lb
 }
 
@@ -88,7 +88,7 @@ func NewLoadBalancer(strategy LoadBalancingStrategy, maxFailures int64, timeout,
 func (lb *LoadBalancer) AddInstance(id, url, healthURL string, weight int, timeout time.Duration) {
 	lb.mutex.Lock()
 	defer lb.mutex.Unlock()
-	
+
 	instance := &ServiceInstance{
 		ID:        id,
 		URL:       url,
@@ -98,7 +98,7 @@ func (lb *LoadBalancer) AddInstance(id, url, healthURL string, weight int, timeo
 		Timeout:   timeout,
 		State:     Closed,
 	}
-	
+
 	lb.instances = append(lb.instances, instance)
 }
 
@@ -106,7 +106,7 @@ func (lb *LoadBalancer) AddInstance(id, url, healthURL string, weight int, timeo
 func (lb *LoadBalancer) RemoveInstance(id string) {
 	lb.mutex.Lock()
 	defer lb.mutex.Unlock()
-	
+
 	for i, instance := range lb.instances {
 		if instance.ID == id {
 			lb.instances = append(lb.instances[:i], lb.instances[i+1:]...)
@@ -119,12 +119,12 @@ func (lb *LoadBalancer) RemoveInstance(id string) {
 func (lb *LoadBalancer) GetHealthyInstance() (*ServiceInstance, error) {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
-	
+
 	healthyInstances := lb.getHealthyInstances()
 	if len(healthyInstances) == 0 {
 		return nil, fmt.Errorf("no healthy instances available")
 	}
-	
+
 	switch lb.strategy {
 	case RoundRobin:
 		return lb.roundRobinSelect(healthyInstances), nil
@@ -140,14 +140,14 @@ func (lb *LoadBalancer) GetHealthyInstance() (*ServiceInstance, error) {
 // getHealthyInstances returns all healthy and available instances
 func (lb *LoadBalancer) getHealthyInstances() []*ServiceInstance {
 	var healthy []*ServiceInstance
-	
+
 	for _, instance := range lb.instances {
 		instance.mutex.RLock()
 		isHealthy := instance.IsHealthy
 		state := instance.State
 		lastFailure := instance.LastFailureTime
 		instance.mutex.RUnlock()
-		
+
 		// Check circuit breaker state
 		if state == Open {
 			// Check if recovery timeout has passed
@@ -160,12 +160,12 @@ func (lb *LoadBalancer) getHealthyInstances() []*ServiceInstance {
 				continue // Skip this instance
 			}
 		}
-		
+
 		if isHealthy {
 			healthy = append(healthy, instance)
 		}
 	}
-	
+
 	return healthy
 }
 
@@ -174,7 +174,7 @@ func (lb *LoadBalancer) roundRobinSelect(instances []*ServiceInstance) *ServiceI
 	if len(instances) == 0 {
 		return nil
 	}
-	
+
 	idx := atomic.AddInt64(&lb.roundRobinIdx, 1) % int64(len(instances))
 	return instances[idx]
 }
@@ -184,7 +184,7 @@ func (lb *LoadBalancer) randomSelect(instances []*ServiceInstance) *ServiceInsta
 	if len(instances) == 0 {
 		return nil
 	}
-	
+
 	idx := rand.Intn(len(instances))
 	return instances[idx]
 }
@@ -194,10 +194,10 @@ func (lb *LoadBalancer) leastConnectionsSelect(instances []*ServiceInstance) *Se
 	if len(instances) == 0 {
 		return nil
 	}
-	
+
 	var selected *ServiceInstance
 	minConnections := int64(^uint64(0) >> 1) // Max int64
-	
+
 	for _, instance := range instances {
 		connections := atomic.LoadInt64(&instance.ActiveConnections)
 		if connections < minConnections {
@@ -205,7 +205,7 @@ func (lb *LoadBalancer) leastConnectionsSelect(instances []*ServiceInstance) *Se
 			selected = instance
 		}
 	}
-	
+
 	return selected
 }
 
@@ -213,11 +213,11 @@ func (lb *LoadBalancer) leastConnectionsSelect(instances []*ServiceInstance) *Se
 func (lb *LoadBalancer) RecordSuccess(instance *ServiceInstance) {
 	instance.mutex.Lock()
 	defer instance.mutex.Unlock()
-	
+
 	// Reset failure count and close circuit breaker
 	instance.FailureCount = 0
 	instance.State = Closed
-	
+
 	// Decrement active connections
 	atomic.AddInt64(&instance.ActiveConnections, -1)
 }
@@ -226,11 +226,11 @@ func (lb *LoadBalancer) RecordSuccess(instance *ServiceInstance) {
 func (lb *LoadBalancer) RecordFailure(instance *ServiceInstance) {
 	instance.mutex.Lock()
 	defer instance.mutex.Unlock()
-	
+
 	// Increment failure count
 	atomic.AddInt64(&instance.FailureCount, 1)
 	instance.LastFailureTime = time.Now()
-	
+
 	// Check if we should open the circuit breaker
 	if instance.FailureCount >= lb.maxFailures {
 		instance.State = Open
@@ -241,7 +241,7 @@ func (lb *LoadBalancer) RecordFailure(instance *ServiceInstance) {
 		instance.State = Open
 		instance.IsHealthy = false
 	}
-	
+
 	// Decrement active connections
 	atomic.AddInt64(&instance.ActiveConnections, -1)
 }
@@ -255,7 +255,7 @@ func (lb *LoadBalancer) IncrementConnections(instance *ServiceInstance) {
 func (lb *LoadBalancer) GetAllInstances() []*ServiceInstance {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
-	
+
 	// Return a copy to avoid race conditions
 	instances := make([]*ServiceInstance, len(lb.instances))
 	copy(instances, lb.instances)
@@ -276,7 +276,7 @@ func (lb *LoadBalancer) StopHealthChecking() {
 func (lb *LoadBalancer) GetAvailableInstanceCount() int {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
-	
+
 	return len(lb.getHealthyInstances())
 }
 
@@ -289,7 +289,7 @@ func (lb *LoadBalancer) SelectInstance() (*ServiceInstance, error) {
 func (lb *LoadBalancer) RecordResult(instanceID string, success bool, duration time.Duration) {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
-	
+
 	// Find the instance
 	for _, instance := range lb.instances {
 		if instance.ID == instanceID {
@@ -307,7 +307,7 @@ func (lb *LoadBalancer) RecordResult(instanceID string, success bool, duration t
 func (lb *LoadBalancer) GetCircuitBreakerState(instanceID string) CircuitBreakerState {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
-	
+
 	for _, instance := range lb.instances {
 		if instance.ID == instanceID {
 			instance.mutex.RLock()
@@ -316,7 +316,7 @@ func (lb *LoadBalancer) GetCircuitBreakerState(instanceID string) CircuitBreaker
 			return state
 		}
 	}
-	
+
 	// Return closed state if instance not found
 	return Closed
 }
@@ -325,31 +325,31 @@ func (lb *LoadBalancer) GetCircuitBreakerState(instanceID string) CircuitBreaker
 func (lb *LoadBalancer) GetStats() map[string]interface{} {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
-	
+
 	totalInstances := len(lb.instances)
 	healthyInstances := len(lb.getHealthyInstances())
-	
+
 	instanceStats := make([]map[string]interface{}, len(lb.instances))
 	for i, instance := range lb.instances {
 		instance.mutex.RLock()
 		instanceStats[i] = map[string]interface{}{
-			"id":                  instance.ID,
-			"url":                 instance.URL,
-			"is_healthy":          instance.IsHealthy,
-			"failure_count":       instance.FailureCount,
+			"id":                    instance.ID,
+			"url":                   instance.URL,
+			"is_healthy":            instance.IsHealthy,
+			"failure_count":         instance.FailureCount,
 			"circuit_breaker_state": instance.State.String(),
-			"active_connections":  atomic.LoadInt64(&instance.ActiveConnections),
-			"last_failure_time":   instance.LastFailureTime,
+			"active_connections":    atomic.LoadInt64(&instance.ActiveConnections),
+			"last_failure_time":     instance.LastFailureTime,
 		}
 		instance.mutex.RUnlock()
 	}
-	
+
 	return map[string]interface{}{
-		"strategy":           lb.strategy.String(),
-		"total_instances":    totalInstances,
-		"healthy_instances":  healthyInstances,
-		"round_robin_index":  atomic.LoadInt64(&lb.roundRobinIdx),
-		"instances":          instanceStats,
+		"strategy":          lb.strategy.String(),
+		"total_instances":   totalInstances,
+		"healthy_instances": healthyInstances,
+		"round_robin_index": atomic.LoadInt64(&lb.roundRobinIdx),
+		"instances":         instanceStats,
 	}
 }
 

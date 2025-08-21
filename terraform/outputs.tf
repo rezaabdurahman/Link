@@ -23,7 +23,7 @@ output "pgbouncer_connection_strings" {
       # Connection through PgBouncer service
       docker_compose = "postgresql://${service_info.username}:${nonsensitive(service_info.password)}@pgbouncer:5432/${service_name}_service?sslmode=disable"
       kubernetes     = "postgresql://${service_info.username}:${nonsensitive(service_info.password)}@pgbouncer-service.link-internal.svc.cluster.local:5432/${service_name}_service?sslmode=disable"
-      
+
       # Legacy connection for migration period
       legacy_docker_compose = "postgresql://${var.postgres_username}:${var.postgres_password}@pgbouncer:5432/linkdb?sslmode=disable"
       legacy_kubernetes     = "postgresql://${var.postgres_username}:${var.postgres_password}@pgbouncer-service.link-internal.svc.cluster.local:5432/linkdb?sslmode=disable"
@@ -35,13 +35,13 @@ output "pgbouncer_connection_strings" {
 # Kubernetes resources created
 output "kubernetes_secrets_created" {
   description = "List of Kubernetes secrets created for service database credentials"
-  value = [for secret in kubernetes_secret.service_db_credentials : secret.metadata[0].name]
+  value       = [for secret in kubernetes_secret.service_db_credentials : secret.metadata[0].name]
 }
 
 # Generated files and scripts
 output "environment_files_created" {
   description = "List of environment files created for local development"
-  value = [for env_file in local_file.service_env_files : env_file.filename]
+  value       = [for env_file in local_file.service_env_files : env_file.filename]
 }
 
 output "scripts_created" {
@@ -60,12 +60,12 @@ output "scripts_created" {
 output "infrastructure_summary" {
   description = "Summary of infrastructure components created"
   value = {
-    environment           = local.environment
-    total_services       = length(module.service_databases.service_databases)
-    services             = keys(module.service_databases.service_databases)
-    monitoring_enabled   = var.create_monitoring_user
-    pgbouncer_enabled   = var.enable_pgbouncer
-    ssl_enabled         = var.enable_ssl
-    backup_retention    = var.backup_retention_days
+    environment        = local.environment
+    total_services     = length(module.service_databases.service_databases)
+    services           = keys(module.service_databases.service_databases)
+    monitoring_enabled = var.create_monitoring_user
+    pgbouncer_enabled  = var.enable_pgbouncer
+    ssl_enabled        = var.enable_ssl
+    backup_retention   = var.backup_retention_days
   }
 }

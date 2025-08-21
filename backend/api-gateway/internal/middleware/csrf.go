@@ -41,7 +41,7 @@ func CSRFMiddleware() gin.HandlerFunc {
 
 			// Set CSRF token in cookie
 			c.SetSameSite(http.SameSiteStrictMode)
-			c.SetCookie(CSRFTokenCookie, csrfToken, 3600, "/", "", 
+			c.SetCookie(CSRFTokenCookie, csrfToken, 3600, "/", "",
 				c.GetString("ENVIRONMENT") == "production", true)
 		}
 
@@ -79,12 +79,12 @@ func generateCSRFToken() (string, error) {
 func isSafeMethod(method string) bool {
 	safeMethods := []string{"GET", "HEAD", "OPTIONS", "TRACE"}
 	method = strings.ToUpper(method)
-	
+
 	for _, safe := range safeMethods {
 		if method == safe {
 			return true
 		}
 	}
-	
+
 	return false
 }

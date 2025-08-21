@@ -35,9 +35,9 @@ variable "postgres_sslmode" {
   description = "PostgreSQL SSL mode"
   type        = string
   default     = "require"
-  
+
   validation {
-    condition = contains(["disable", "require", "verify-ca", "verify-full"], var.postgres_sslmode)
+    condition     = contains(["disable", "require", "verify-ca", "verify-full"], var.postgres_sslmode)
     error_message = "SSL mode must be one of: disable, require, verify-ca, verify-full."
   }
 }
@@ -117,7 +117,7 @@ variable "pgbouncer_pool_mode" {
   default     = "session"
 
   validation {
-    condition = contains(["session", "transaction", "statement"], var.pgbouncer_pool_mode)
+    condition     = contains(["session", "transaction", "statement"], var.pgbouncer_pool_mode)
     error_message = "PgBouncer pool mode must be one of: session, transaction, statement."
   }
 }
@@ -158,9 +158,9 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default = {
-    Project     = "Link"
-    Component   = "Database"
-    ManagedBy   = "Terraform"
-    Purpose     = "Multi-Instance Database Isolation"
+    Project   = "Link"
+    Component = "Database"
+    ManagedBy = "Terraform"
+    Purpose   = "Multi-Instance Database Isolation"
   }
 }

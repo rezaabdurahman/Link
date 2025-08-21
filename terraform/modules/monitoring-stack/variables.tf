@@ -103,10 +103,10 @@ variable "kubernetes_namespace" {
 variable "grafana_config" {
   description = "Grafana-specific configuration"
   type = object({
-    enable_ssl      = optional(bool, true)
-    admin_user      = optional(string, "admin")
-    allow_sign_up   = optional(bool, false)
-    anonymous_auth  = optional(bool, false)
+    enable_ssl     = optional(bool, true)
+    admin_user     = optional(string, "admin")
+    allow_sign_up  = optional(bool, false)
+    anonymous_auth = optional(bool, false)
   })
   default = {}
 }
@@ -114,9 +114,9 @@ variable "grafana_config" {
 variable "prometheus_config" {
   description = "Prometheus-specific configuration"
   type = object({
-    retention_time     = optional(string, "15d")
-    storage_retention  = optional(string, "15GB")
-    scrape_interval    = optional(string, "15s")
+    retention_time      = optional(string, "15d")
+    storage_retention   = optional(string, "15GB")
+    scrape_interval     = optional(string, "15s")
     evaluation_interval = optional(string, "15s")
   })
   default = {}
@@ -125,8 +125,8 @@ variable "prometheus_config" {
 variable "redis_config" {
   description = "Redis-specific configuration"
   type = object({
-    enable_auth     = optional(bool, true)
-    max_memory      = optional(string, "128mb")
+    enable_auth       = optional(bool, true)
+    max_memory        = optional(string, "128mb")
     max_memory_policy = optional(string, "allkeys-lru")
   })
   default = {}
@@ -156,9 +156,9 @@ variable "tags" {
   description = "Additional tags to apply to resources"
   type        = map(string)
   default = {
-    Project     = "Link"
-    Component   = "Monitoring"
-    ManagedBy   = "Terraform"
+    Project   = "Link"
+    Component = "Monitoring"
+    ManagedBy = "Terraform"
   }
 }
 

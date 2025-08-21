@@ -77,7 +77,7 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		
+
 		// In development, allow all origins. In production, specify allowed origins
 		allowedOrigins := []string{
 			"http://localhost:3000",
@@ -163,9 +163,9 @@ func RateLimitingMiddleware() gin.HandlerFunc {
 		currentRequests := len(clients[clientIP])
 		if currentRequests >= maxRequests {
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":      "RATE_LIMIT_ERROR",
-				"message":    "Too many requests",
-				"code":       "TOO_MANY_REQUESTS",
+				"error":       "RATE_LIMIT_ERROR",
+				"message":     "Too many requests",
+				"code":        "TOO_MANY_REQUESTS",
 				"retry_after": 60,
 			})
 			c.Abort()
@@ -208,4 +208,3 @@ func GetUserEmail(c *gin.Context) (string, bool) {
 
 	return emailStr, true
 }
-

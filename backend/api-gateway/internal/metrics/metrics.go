@@ -127,13 +127,13 @@ func JWTMetricsMiddleware() gin.HandlerFunc {
 		// Check if JWT is present
 		authHeader := c.GetHeader("Authorization")
 		cookieValue, _ := c.Cookie("link_auth")
-		
+
 		if authHeader == "" && cookieValue == "" {
 			jwtValidationTotal.WithLabelValues("missing").Inc()
 		} else {
 			// Process request to see if JWT validation succeeds
 			c.Next()
-			
+
 			// Check if user context was set (indicates successful JWT validation)
 			if userID := c.GetString("user_id"); userID != "" {
 				jwtValidationTotal.WithLabelValues("success").Inc()
@@ -142,7 +142,7 @@ func JWTMetricsMiddleware() gin.HandlerFunc {
 			}
 			return
 		}
-		
+
 		c.Next()
 	}
 }
@@ -166,7 +166,7 @@ func UpdateServiceHealth(serviceName string, healthy bool) {
 func normalizePath(path string) string {
 	// Simple normalization - replace common ID patterns
 	// In production, you might want more sophisticated path normalization
-	
+
 	// For now, return the path as-is but limit to known endpoints
 	// You can extend this based on your actual API structure
 	switch {
