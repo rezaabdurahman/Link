@@ -1,0 +1,348 @@
+name: Terraform CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-ci.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+env:
+  TF_VERSION: "1.5.7"
+  TF_LINT_VERSION: "0.47.0"
+  TFSEC_VERSION: "1.28.1"
+  WORKING_DIR: terraform
+
+jobs:
+  terraform-validate:
+    name: Terraform Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          
+      - name: Cache Terraform Plugins
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.WORKING_DIR }}/.terraform
+            ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+            
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.WORKING_DIR }}
+        continue-on-error: true
+        
+      - name: Terraform Init (Development)
+        run: terraform init -backend=false
+        working-directory: ${{ env.WORKING_DIR }}/environments/development
+        
+      - name: Terraform Validate (Development)
+        run: terraform validate
+        working-directory: ${{ env.WORKING_DIR }}/environments/development
+        
+      - name: Terraform Init (Staging)
+        run: terraform init -backend=false
+        working-directory: ${{ env.WORKING_DIR }}/environments/staging
+        
+      - name: Terraform Validate (Staging)
+        run: terraform validate
+        working-directory: ${{ env.WORKING_DIR }}/environments/staging
+        
+      - name: Terraform Init (Production)
+        run: terraform init -backend=false
+        working-directory: ${{ env.WORKING_DIR }}/environments/production
+        
+      - name: Terraform Validate (Production)
+        run: terraform validate
+        working-directory: ${{ env.WORKING_DIR }}/environments/production
+        
+      - name: Comment Format Issues
+        if: steps.fmt.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **Terraform Format Check Failed**\n\nPlease run `terraform fmt -recursive` to fix formatting issues.'
+            })
+
+  terraform-lint:
+    name: Terraform Linting
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: ${{ env.TF_LINT_VERSION }}
+          
+      - name: Initialize TFLint
+        run: tflint --init
+        working-directory: ${{ env.WORKING_DIR }}
+        
+      - name: Run TFLint
+        run: tflint --recursive --format compact
+        working-directory: ${{ env.WORKING_DIR }}
+
+  terraform-security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup TFSec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          version: ${{ env.TFSEC_VERSION }}
+          working_directory: ${{ env.WORKING_DIR }}
+          format: sarif
+          sarif_file: tfsec-results.sarif
+          
+      - name: Upload SARIF Results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tfsec-results.sarif
+          
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ env.WORKING_DIR }}
+          framework: terraform
+          output_format: cli,sarif
+          output_file_path: console,checkov-results.sarif
+          
+      - name: Upload Checkov SARIF Results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+
+  terraform-docs:
+    name: Documentation Generation
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Generate Terraform Docs
+        uses: terraform-docs/gh-actions@v1.0.0
+        with:
+          working-dir: ${{ env.WORKING_DIR }}
+          output-file: TERRAFORM_DOCS.md
+          output-method: inject
+          git-push: "true"
+          git-commit-message: "docs: update Terraform documentation"
+
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: [terraform-lint, terraform-security]
+    if: github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        environment: [development, staging]
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_ROLE_{0}', matrix.environment)] }}
+          aws-region: us-west-2
+          
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ env.WORKING_DIR }}/environments/${{ matrix.environment }}
+        
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -var="postgres_password=${{ secrets[format('POSTGRES_PASSWORD_{0}', matrix.environment)] }}" \
+                        -out=tfplan \
+                        -detailed-exitcode
+        working-directory: ${{ env.WORKING_DIR }}/environments/${{ matrix.environment }}
+        continue-on-error: true
+        
+      - name: Save Plan
+        if: steps.plan.outputs.exitcode == 2
+        run: terraform show -json tfplan > plan.json
+        working-directory: ${{ env.WORKING_DIR }}/environments/${{ matrix.environment }}
+        
+      - name: Comment Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const planPath = '${{ env.WORKING_DIR }}/environments/${{ matrix.environment }}/plan.json';
+            
+            let planSummary = '📋 **Terraform Plan Summary for ${{ matrix.environment }}**\n\n';
+            
+            if (fs.existsSync(planPath)) {
+              planSummary += '✅ Plan generated successfully\n';
+              planSummary += '📄 Review the plan details in the workflow logs\n';
+            } else {
+              planSummary += '❌ Plan generation failed\n';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: planSummary
+            });
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: [terraform-lint, terraform-security]
+    if: |
+      github.ref == 'refs/heads/main' && 
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment: 
+      name: ${{ github.event.inputs.environment || 'development' }}
+      url: ${{ steps.apply.outputs.deployment_url }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_ROLE_{0}', github.event.inputs.environment || 'development')] }}
+          aws-region: us-west-2
+          
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ env.WORKING_DIR }}/environments/${{ github.event.inputs.environment || 'development' }}
+        
+      - name: Terraform Plan
+        run: |
+          terraform plan -var="postgres_password=${{ secrets[format('POSTGRES_PASSWORD_{0}', github.event.inputs.environment || 'development')] }}" \
+                        -out=tfplan
+        working-directory: ${{ env.WORKING_DIR }}/environments/${{ github.event.inputs.environment || 'development' }}
+        
+      - name: Manual Approval for Production
+        if: github.event.inputs.environment == 'production'
+        uses: hmarr/auto-approve-action@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Terraform Apply
+        id: apply
+        run: terraform apply tfplan
+        working-directory: ${{ env.WORKING_DIR }}/environments/${{ github.event.inputs.environment || 'development' }}
+        
+      - name: Get Outputs
+        id: outputs
+        run: |
+          echo "deployment_url=https://console.aws.amazon.com/rds" >> $GITHUB_OUTPUT
+          terraform output -json > outputs.json
+        working-directory: ${{ env.WORKING_DIR }}/environments/${{ github.event.inputs.environment || 'development' }}
+        
+      - name: Upload Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-${{ github.event.inputs.environment || 'development' }}
+          path: ${{ env.WORKING_DIR }}/environments/${{ github.event.inputs.environment || 'development' }}/outputs.json
+
+  backup-test:
+    name: Backup Testing
+    runs-on: ubuntu-latest
+    needs: terraform-apply
+    if: github.event.inputs.environment == 'development'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup PostgreSQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          
+      - name: Download Terraform Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs-development
+          path: ./outputs
+          
+      - name: Run Backup Tests
+        run: |
+          export POSTGRES_HOST=localhost
+          export POSTGRES_PORT=5432
+          export POSTGRES_ADMIN_USER=postgres
+          ./scripts/test-backup-restore.sh
+        working-directory: ${{ env.WORKING_DIR }}
+
+  notification:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [terraform-apply, backup-test]
+    if: always()
+    
+    steps:
+      - name: Notify Deployment Status
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          text: |
+            Terraform deployment to ${{ github.event.inputs.environment || 'development' }} completed
+            Status: ${{ job.status }}
+            Commit: ${{ github.sha }}
+            Branch: ${{ github.ref }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

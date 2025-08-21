@@ -9,7 +9,6 @@ require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/mux v1.8.1
 	github.com/lib/pq v1.10.9
 	github.com/link-app/shared-libs v0.0.0
 	github.com/prometheus/client_golang v1.20.5
@@ -20,7 +19,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	gorm.io/driver/postgres v1.6.0
-	gorm.io/gorm v1.30.1
+	gorm.io/gorm v1.25.12
 )
 
 replace github.com/link-app/shared-libs => ../shared-libs

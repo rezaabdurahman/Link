@@ -8,6 +8,100 @@ import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
 const mockUserProfiles: Map<string, any> = new Map();
 
 export const handlers = [
+  // POST /search - Unified search endpoint
+  http.post(buildApiUrl(API_ENDPOINTS.SEARCH.unified), async ({ request }) => {
+    console.log('🔍 MSW: Search request received at:', buildApiUrl(API_ENDPOINTS.SEARCH.unified));
+    
+    try {
+      const userId = extractUserId(request);
+      console.log('🔍 MSW: Extracted user ID:', userId);
+      
+      if (!userId) {
+        console.warn('🔍 MSW: No user ID found, returning auth error');
+        return createAuthError();
+      }
+
+      const body = await request.json() as any;
+      console.log('🔍 MSW: Search request body:', JSON.stringify(body, null, 2));
+      
+      // Filter out current user from results
+      let results = nearbyUsers.filter(user => user.id !== userId);
+      
+      // Apply search query if provided
+      if (body.query && body.query.trim()) {
+        const searchTerm = body.query.toLowerCase().trim();
+        results = results.filter(user => 
+          user.name?.toLowerCase().includes(searchTerm) ||
+          user.bio?.toLowerCase().includes(searchTerm) ||
+          user.interests?.some(interest => 
+            interest.toLowerCase().includes(searchTerm)
+          )
+        );
+      }
+      
+      // Apply scope-specific filtering
+      if (body.scope === 'discovery') {
+        results = results.filter(user => user.isAvailable === true);
+      }
+      
+      // Handle pagination
+      const limit = body.pagination?.limit || body.limit || 20;
+      const offset = body.pagination?.offset || 0;
+      const totalResults = results.length;
+      
+      // Apply pagination
+      results = results.slice(offset, offset + limit);
+      const hasMore = (offset + results.length) < totalResults;
+      
+      console.log('🔍 MSW: Search pagination - limit:', limit, 'offset:', offset, 'total:', totalResults, 'returned:', results.length, 'hasMore:', hasMore);
+      console.log('🔍 MSW: Search returning', results.length, 'results for scope:', body.scope, '- Users:', results.map(u => `${u.name} (${u.id})`));
+      
+      // Ensure Date objects are properly serialized
+      const serializedResults = results.map(user => ({
+        ...user,
+        lastSeen: user.lastSeen instanceof Date ? user.lastSeen.toISOString() : user.lastSeen
+      }));
+      
+      // Return response format that matches UnifiedSearchResponse interface
+      return createSuccessResponse({
+        users: serializedResults,
+        total: totalResults,
+        hasMore,
+        scope: body.scope,
+        query: body.query,
+        filters: {
+          maxDistance: 50,
+          availableInterests: ['technology', 'music', 'sports', 'travel', 'food'],
+          appliedFilters: body.filters || {},
+        },
+        metadata: {
+          searchTime: Math.floor(Math.random() * 100) + 50, // Mock search time
+          source: 'database' as const,
+          relevanceScores: results.reduce((acc, user, index) => {
+            acc[user.id] = 1.0 - (index * 0.1); // Mock relevance scores
+            return acc;
+          }, {} as Record<string, number>),
+        },
+      });
+      
+    } catch (error) {
+      console.error('❌ MSW: Search error:', error);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: 'SEARCH_ERROR',
+            message: 'Internal search error',
+          },
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+  }),
+
   // GET /users/profile/me - Get current user's profile
   http.get(buildApiUrl(API_ENDPOINTS.USERS.me), ({ request }) => {
     const userId = extractUserId(request);

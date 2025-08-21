@@ -122,8 +122,20 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
   }
 
   try {
-    return await response.json();
-  } catch {
+    const data = await response.json();
+    console.log('🔍 UnifiedSearchClient: Received', data.users?.length || 0, 'users');
+    
+    // Transform date strings back to Date objects for User type compatibility
+    if (data.users && Array.isArray(data.users)) {
+      data.users = data.users.map((user: any) => ({
+        ...user,
+        lastSeen: user.lastSeen ? new Date(user.lastSeen) : new Date()
+      }));
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('🔍 UnifiedSearchClient: Failed to parse response:', error);
     throw new UnifiedSearchError('Failed to parse response', 500);
   }
 };
@@ -148,13 +160,18 @@ export const unifiedSearch = async (
     throw new UnifiedSearchError('Invalid scope. Must be "friends", "discovery", or "all"', 400);
   }
 
-  const url = `${API_CONFIG.BASE_URL}/api/v1/search`;
+  const url = `${API_CONFIG.BASE_URL}/search`;
+  
+  console.log('🔍 UnifiedSearchClient: Making search request to:', url);
+  console.log('🔍 UnifiedSearchClient: Request payload:', JSON.stringify(request, null, 2));
 
   const response = await fetch(url, {
     method: 'POST',
     headers: createAuthHeaders(token),
     body: JSON.stringify(request),
   });
+  
+  console.log('🔍 UnifiedSearchClient: Response status:', response.status);
 
   return handleResponse<UnifiedSearchResponse>(response);
 };

@@ -68,8 +68,6 @@ func initializeEnhancedServiceConfig() *EnhancedServiceConfig {
 	config.Services["chat-svc"] = createServiceLoadBalancer("chat-svc", getChatServiceInstances())
 	config.Services["ai-svc"] = createServiceLoadBalancer("ai-svc", getAIServiceInstances())
 	config.Services["discovery-svc"] = createServiceLoadBalancer("discovery-svc", getDiscoveryServiceInstances())
-	config.Services["search-svc"] = createServiceLoadBalancer("search-svc", getSearchServiceInstances())
-	config.Services["opportunities-svc"] = createServiceLoadBalancer("opportunities-svc", getOpportunitiesServiceInstances())
 
 	// Start health checking for all services
 	for _, service := range config.Services {
@@ -140,15 +138,6 @@ func getDiscoveryServiceInstances() []ServiceInstanceConfig {
 	return getServiceInstances("DISCOVERY_SVC", "discovery-svc", 8083, 30*time.Second)
 }
 
-// getSearchServiceInstances returns search service instance configurations
-func getSearchServiceInstances() []ServiceInstanceConfig {
-	return getServiceInstances("SEARCH_SVC", "search-svc", 8085, 30*time.Second)
-}
-
-// getOpportunitiesServiceInstances returns opportunities service instance configurations
-func getOpportunitiesServiceInstances() []ServiceInstanceConfig {
-	return getServiceInstances("OPPORTUNITIES_SVC", "opportunities-svc", 8080, 30*time.Second)
-}
 
 // getServiceInstances creates service instance configurations from environment variables
 func getServiceInstances(envPrefix, defaultServiceName string, defaultPort int, defaultTimeout time.Duration) []ServiceInstanceConfig {

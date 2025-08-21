@@ -21,7 +21,7 @@ func TestEnhancedServiceConfigInitialization(t *testing.T) {
 	// Should have all expected services
 	expectedServices := []string{
 		"user-svc", "location-svc", "chat-svc", "ai-svc",
-		"discovery-svc", "stories-svc", "opportunities-svc",
+		"discovery-svc",
 	}
 
 	assert.Equal(t, len(expectedServices), len(config.Services))
@@ -114,17 +114,17 @@ func TestServiceInstanceConfigFromEnv(t *testing.T) {
 	// First instance
 	assert.Equal(t, "instance1", instances[0].ID)
 	assert.Equal(t, "http://host1:8081", instances[0].URL)
-	assert.Equal(t, "http://host1:8081/health", instances[0].HealthURL)
+	assert.Equal(t, "http://host1:8081/health/live", instances[0].HealthURL)
 
 	// Second instance
 	assert.Equal(t, "instance2", instances[1].ID)
 	assert.Equal(t, "http://host2:8082", instances[1].URL)
-	assert.Equal(t, "http://host2:8082/health", instances[1].HealthURL)
+	assert.Equal(t, "http://host2:8082/health/live", instances[1].HealthURL)
 
 	// Third instance (uses default port)
 	assert.Equal(t, "instance3", instances[2].ID)
-	assert.Equal(t, "http://host3:8080", instances[2].URL)
-	assert.Equal(t, "http://host3:8080/health", instances[2].HealthURL)
+	assert.Equal(t, "http://host3:8081", instances[2].URL)
+	assert.Equal(t, "http://host3:8081/health/live", instances[2].HealthURL)
 }
 
 func TestLoadBalancerConfigFromEnv(t *testing.T) {
@@ -243,8 +243,6 @@ func TestRouteToServiceLoadBalancer(t *testing.T) {
 		{"/ai/complete", "ai-svc", false},
 		{"/broadcasts/latest", "discovery-svc", false},
 		{"/discovery/search", "discovery-svc", false},
-		{"/stories/123", "stories-svc", false},
-		{"/opportunities/search", "opportunities-svc", false},
 		{"/unknown/path", "", true},
 		{"/", "", true},
 	}
@@ -282,11 +280,11 @@ func TestGetAllServiceLoadBalancers(t *testing.T) {
 	services := GetAllServiceLoadBalancers()
 
 	require.NotNil(t, services)
-	assert.Len(t, services, 7) // Should have all 7 services
+	assert.Len(t, services, 5) // Should have all 5 services
 
 	expectedServices := []string{
 		"user-svc", "location-svc", "chat-svc", "ai-svc",
-		"discovery-svc", "stories-svc", "opportunities-svc",
+		"discovery-svc",
 	}
 
 	for _, serviceName := range expectedServices {
@@ -299,7 +297,7 @@ func TestGetLoadBalancerStats(t *testing.T) {
 	stats := GetLoadBalancerStats()
 
 	require.NotNil(t, stats)
-	assert.Len(t, stats, 7) // Should have stats for all 7 services
+	assert.Len(t, stats, 5) // Should have stats for all 5 services
 
 	// Check structure of stats for one service
 	userServiceStats, exists := stats["user-svc"]

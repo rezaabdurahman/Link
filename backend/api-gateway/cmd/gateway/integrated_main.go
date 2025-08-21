@@ -233,17 +233,6 @@ func main() {
 		discoveryGroup.Any("/*path", integratedHandler.ProxyWithLoadBalancing("discovery-svc"))
 	}
 
-	// Stories routes (proxied to stories-service)
-	storiesGroup := authGroup.Group("/stories")
-	{
-		storiesGroup.Any("/*path", integratedHandler.ProxyWithLoadBalancing("stories-svc"))
-	}
-
-	// Opportunities routes (proxied to opportunities-service)
-	opportunitiesGroup := authGroup.Group("/opportunities")
-	{
-		opportunitiesGroup.Any("/*path", integratedHandler.ProxyWithLoadBalancing("opportunities-svc"))
-	}
 
 	// Timeline aggregation endpoint (future implementation)
 	authGroup.GET("/timeline", func(c *gin.Context) {
