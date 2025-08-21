@@ -39,16 +39,16 @@ func ServiceAuthMiddleware(config *ServiceAuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Add service authentication headers for downstream services
 		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-		
+
 		// Create signature: HMAC-SHA256(service_id + timestamp + request_path, service_secret)
 		message := fmt.Sprintf("%s%s%s", config.ServiceID, timestamp, c.Request.URL.Path)
 		signature := createHMACSignature(message, config.ServiceSecret)
-		
+
 		// Set headers for downstream services
 		c.Header(ServiceIDHeader, config.ServiceID)
 		c.Header(ServiceTimestampHeader, timestamp)
 		c.Header(ServiceSignatureHeader, signature)
-		
+
 		c.Next()
 	}
 }
@@ -91,7 +91,7 @@ func ValidateServiceAuthMiddleware(config *ServiceAuthConfig) gin.HandlerFunc {
 		// Validate signature
 		expectedMessage := fmt.Sprintf("%s%s%s", serviceID, timestamp, c.Request.URL.Path)
 		expectedSignature := createHMACSignature(expectedMessage, config.ServiceSecret)
-		
+
 		if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "SERVICE_AUTH_ERROR",
@@ -145,4 +145,3 @@ func isPublicServiceEndpoint(path string) bool {
 
 	return false
 }
-

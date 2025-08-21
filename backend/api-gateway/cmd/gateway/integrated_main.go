@@ -11,18 +11,18 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
-	_ "github.com/lib/pq"
 
 	"github.com/link-app/api-gateway/internal/config"
 	"github.com/link-app/api-gateway/internal/handlers"
-	"github.com/link-app/shared-libs/lifecycle"
 	"github.com/link-app/api-gateway/internal/logger"
 	"github.com/link-app/api-gateway/internal/metrics"
 	"github.com/link-app/api-gateway/internal/middleware"
 	"github.com/link-app/api-gateway/internal/sentry"
 	"github.com/link-app/api-gateway/internal/tracing"
+	"github.com/link-app/shared-libs/lifecycle"
 )
 
 func main() {
@@ -80,7 +80,7 @@ func main() {
 		loggerInstance.Info("Database health checker added")
 	}
 
-	// Setup Redis connection for health checks  
+	// Setup Redis connection for health checks
 	redisAddr := getEnvOrDefault("REDIS_HOST", "localhost") + ":" + getEnvOrDefault("REDIS_PORT", "6379")
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     redisAddr,
@@ -98,11 +98,11 @@ func main() {
 			if healthURL == "" {
 				healthURL = serviceConfig.Instances[0].URL + "/health"
 			}
-			
+
 			serviceChecker := lifecycle.NewHTTPServiceHealthChecker(serviceName, healthURL)
 			serviceChecker.SetTimeout(5 * time.Second).SetRetries(2)
 			lifecycleManager.AddHealthChecker(serviceName, serviceChecker)
-			
+
 			// Add load balancer health checker
 			lbChecker := lifecycle.NewLoadBalancerHealthChecker(serviceName, func() map[string]interface{} {
 				lb, err := enhancedServiceConfig.GetLoadBalancer(serviceName)
@@ -143,19 +143,19 @@ func main() {
 	router.SetTrustedProxies(nil)
 
 	// Global middleware (preserving legacy functionality)
-	router.Use(sentry.GinSentryMiddleware()) // Add Sentry middleware early
+	router.Use(sentry.GinSentryMiddleware())         // Add Sentry middleware early
 	router.Use(tracing.GinMiddleware("api-gateway")) // Add distributed tracing middleware
-	router.Use(logger.CorrelationIDMiddleware()) // Add correlation ID tracking
-	router.Use(metrics.PrometheusMiddleware()) // Add Prometheus metrics collection
+	router.Use(logger.CorrelationIDMiddleware())     // Add correlation ID tracking
+	router.Use(metrics.PrometheusMiddleware())       // Add Prometheus metrics collection
 	router.Use(logger.StructuredLoggingMiddleware()) // Replace basic logging with structured logging
 	router.Use(middleware.CORSMiddleware())
 
 	// Initialize Redis rate limiter for stateless design
 	redisRateLimiterConfig := &middleware.RedisRateLimiterConfig{
 		RedisClient:     redisClient,
-		DefaultLimit:    100,                // 100 requests per minute default
+		DefaultLimit:    100, // 100 requests per minute default
 		DefaultWindow:   time.Minute,
-		BurstLimit:      20,                 // Allow 20 burst requests
+		BurstLimit:      20, // Allow 20 burst requests
 		CleanupInterval: 5 * time.Minute,
 	}
 	redisRateLimiter := middleware.NewRedisRateLimiter(redisRateLimiterConfig)
@@ -281,12 +281,12 @@ func main() {
 
 	// Log service URLs and load balancer info
 	loggerInstance.WithFields(map[string]interface{}{
-		"services_configured": len(enhancedServiceConfig.Services),
-		"load_balancing":      "enabled",
-		"health_checks":       "enabled",
-		"circuit_breakers":    "enabled",
+		"services_configured":  len(enhancedServiceConfig.Services),
+		"load_balancing":       "enabled",
+		"health_checks":        "enabled",
+		"circuit_breakers":     "enabled",
 		"lifecycle_management": "enabled",
-		"jwt_auth":           len(jwtConfig.Secret) > 0,
+		"jwt_auth":             len(jwtConfig.Secret) > 0,
 	}).Info("Integrated API Gateway started successfully")
 
 	// Wait for interrupt signal to gracefully shutdown

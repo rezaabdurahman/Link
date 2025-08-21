@@ -257,7 +257,7 @@ func (h *IntegratedProxyHandler) ProxyWithLoadBalancing(serviceName string) gin.
 				// Return a dummy successful response since we handle response in executeRequest
 				return &http.Response{StatusCode: 200}, nil
 			}
-			
+
 			result := retrier.Do(ctx, retryableFunc)
 			finalErr = result.Error
 			attempts = result.Attempts
@@ -312,13 +312,13 @@ func (h *IntegratedProxyHandler) ProxyWithLoadBalancing(serviceName string) gin.
 func (h *IntegratedProxyHandler) buildTargetPath(requestPath, serviceName string) string {
 	// Remove service name from the beginning of the path
 	targetPath := requestPath
-	
+
 	// Handle different service path patterns
 	patterns := []string{
 		"/" + serviceName,
 		"/" + strings.TrimSuffix(serviceName, "-svc"), // Remove -svc suffix
 	}
-	
+
 	for _, pattern := range patterns {
 		if strings.HasPrefix(requestPath, pattern) {
 			targetPath = strings.TrimPrefix(requestPath, pattern)
@@ -399,11 +399,11 @@ func (h *IntegratedProxyHandler) recordMetrics(service, method, status, instance
 // EnhancedHealthHandler provides enhanced health check with load balancer status
 func (h *IntegratedProxyHandler) EnhancedHealthHandler(c *gin.Context) {
 	healthStatus := gin.H{
-		"status":      "healthy",
-		"gateway":     "integrated",
-		"timestamp":   time.Now(),
+		"status":         "healthy",
+		"gateway":        "integrated",
+		"timestamp":      time.Now(),
 		"load_balancing": "enabled",
-		"services":    gin.H{},
+		"services":       gin.H{},
 	}
 
 	services := make(gin.H)
@@ -439,7 +439,7 @@ func (h *IntegratedProxyHandler) EnhancedHealthHandler(c *gin.Context) {
 	}
 
 	healthStatus["services"] = services
-	
+
 	if !overallHealthy {
 		healthStatus["status"] = "degraded"
 		c.JSON(http.StatusServiceUnavailable, healthStatus)
@@ -451,7 +451,7 @@ func (h *IntegratedProxyHandler) EnhancedHealthHandler(c *gin.Context) {
 // RootHandler provides service discovery information
 func (h *IntegratedProxyHandler) RootHandler(c *gin.Context) {
 	serviceEndpoints := make(gin.H)
-	
+
 	for serviceName := range h.enhancedConfig.Services {
 		// Map service names to endpoint paths
 		endpoint := "/" + strings.TrimSuffix(serviceName, "-svc") + "/*"
@@ -459,15 +459,15 @@ func (h *IntegratedProxyHandler) RootHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"service":        "Link API Gateway",
-		"version":        "2.0.0",
-		"status":         "healthy",
-		"type":           "integrated",
-		"features":       []string{"load_balancing", "circuit_breakers", "jwt_auth", "rate_limiting", "tracing"},
-		"docs":           "https://api.linkapp.com/docs",
-		"health":         "/health",
-		"metrics":        "/metrics",
-		"endpoints":      serviceEndpoints,
+		"service":   "Link API Gateway",
+		"version":   "2.0.0",
+		"status":    "healthy",
+		"type":      "integrated",
+		"features":  []string{"load_balancing", "circuit_breakers", "jwt_auth", "rate_limiting", "tracing"},
+		"docs":      "https://api.linkapp.com/docs",
+		"health":    "/health",
+		"metrics":   "/metrics",
+		"endpoints": serviceEndpoints,
 		"load_balancing": gin.H{
 			"enabled":         true,
 			"services":        len(h.enhancedConfig.Services),
@@ -488,13 +488,13 @@ func (h *IntegratedProxyHandler) getTotalInstances() int {
 // NotFoundHandler handles undefined routes
 func (h *IntegratedProxyHandler) NotFoundHandler(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{
-		"error":       "NOT_FOUND",
-		"message":     "Endpoint not found",
-		"code":        "ENDPOINT_NOT_FOUND",
-		"path":        c.Request.URL.Path,
-		"method":      c.Request.Method,
+		"error":              "NOT_FOUND",
+		"message":            "Endpoint not found",
+		"code":               "ENDPOINT_NOT_FOUND",
+		"path":               c.Request.URL.Path,
+		"method":             c.Request.Method,
 		"available_services": h.getAvailableServices(),
-		"timestamp":   time.Now(),
+		"timestamp":          time.Now(),
 	})
 }
 

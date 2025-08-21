@@ -41,16 +41,16 @@ output "kubernetes_secrets" {
     for service_key, service_config in local.services : service_key => {
       name = "${service_key}-db-credentials"
       data = {
-        DB_HOST                 = var.environment == "production" ? "postgres.default.svc.cluster.local" : "postgres"
-        DB_PORT                 = "5432"
-        DB_NAME                 = postgresql_database.service_databases[service_key].name
-        DB_USER                 = postgresql_role.service_users[service_key].name
-        DB_PASSWORD            = random_password.service_passwords[service_key].result
-        DB_SSLMODE             = var.enable_ssl ? "require" : "disable"
+        DB_HOST     = var.environment == "production" ? "postgres.default.svc.cluster.local" : "postgres"
+        DB_PORT     = "5432"
+        DB_NAME     = postgresql_database.service_databases[service_key].name
+        DB_USER     = postgresql_role.service_users[service_key].name
+        DB_PASSWORD = random_password.service_passwords[service_key].result
+        DB_SSLMODE  = var.enable_ssl ? "require" : "disable"
         # Connection pool settings for multi-instance deployment
-        DB_MAX_OPEN_CONNS      = tostring(local.connection_pool_settings.max_open_connections)
-        DB_MAX_IDLE_CONNS      = tostring(local.connection_pool_settings.max_idle_connections)  
-        DB_CONN_MAX_LIFETIME   = local.connection_pool_settings.connection_max_lifetime
+        DB_MAX_OPEN_CONNS    = tostring(local.connection_pool_settings.max_open_connections)
+        DB_MAX_IDLE_CONNS    = tostring(local.connection_pool_settings.max_idle_connections)
+        DB_CONN_MAX_LIFETIME = local.connection_pool_settings.connection_max_lifetime
       }
     }
   }
@@ -74,7 +74,7 @@ output "env_files" {
         "DB_PASSWORD=${random_password.service_passwords[service_key].result}",
         "DB_SSLMODE=${var.enable_ssl ? "require" : "disable"}",
         "",
-        "# Connection pool settings for multi-instance deployment", 
+        "# Connection pool settings for multi-instance deployment",
         "DB_MAX_OPEN_CONNS=${local.connection_pool_settings.max_open_connections}",
         "DB_MAX_IDLE_CONNS=${local.connection_pool_settings.max_idle_connections}",
         "DB_CONN_MAX_LIFETIME=${local.connection_pool_settings.connection_max_lifetime}",
@@ -105,8 +105,8 @@ output "docker_compose_env" {
 output "monitoring_user" {
   description = "Monitoring user information for database observability"
   value = var.create_monitoring_user ? {
-    username = postgresql_role.monitoring_user[0].name
-    password = random_password.monitoring_password[0].result
+    username  = postgresql_role.monitoring_user[0].name
+    password  = random_password.monitoring_password[0].result
     databases = [for db in postgresql_database.service_databases : db.name]
   } : null
   sensitive = true
@@ -115,23 +115,23 @@ output "monitoring_user" {
 # Connection pool settings
 output "connection_pool_settings" {
   description = "Recommended connection pool settings for multi-instance deployment"
-  value = local.connection_pool_settings
+  value       = local.connection_pool_settings
 }
 
 # Expected connection usage summary
 output "connection_usage_summary" {
   description = "Expected database connection usage with multi-instance deployment"
   value = {
-    before_isolation = "500+ connections with shared database"
-    after_isolation = "~90 connections (10 per service × ~9 instances)"
+    before_isolation            = "500+ connections with shared database"
+    after_isolation             = "~90 connections (10 per service × ~9 instances)"
     max_connections_per_service = local.connection_pool_settings.max_open_connections
-    total_services = length(local.services)
+    total_services              = length(local.services)
     estimated_instances = {
-      "api-gateway" = 3
-      "user-svc" = 2
-      "chat-svc" = 2  
-      "ai-svc" = 1
-      "search-svc" = 1
+      "api-gateway"   = 3
+      "user-svc"      = 2
+      "chat-svc"      = 2
+      "ai-svc"        = 1
+      "search-svc"    = 1
       "discovery-svc" = 1
     }
   }
@@ -142,9 +142,9 @@ output "backup_recommendations" {
   description = "Backup configuration recommendations for service databases"
   value = {
     databases_to_backup = [for db in postgresql_database.service_databases : db.name]
-    retention_days = var.backup_retention_days
-    backup_schedule = "0 2 * * *"  # Daily at 2 AM
-    backup_strategy = "Individual database backups + cluster-wide backup"
-    restore_testing = "Monthly restore tests recommended"
+    retention_days      = var.backup_retention_days
+    backup_schedule     = "0 2 * * *" # Daily at 2 AM
+    backup_strategy     = "Individual database backups + cluster-wide backup"
+    restore_testing     = "Monthly restore tests recommended"
   }
 }

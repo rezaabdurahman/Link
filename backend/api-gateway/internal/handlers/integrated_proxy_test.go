@@ -253,23 +253,23 @@ func TestIntegratedProxyHandler_CircuitBreaker(t *testing.T) {
 
 		// Circuit breaker can result in either 502 (Bad Gateway) or 503 (Service Unavailable)
 		// depending on the load balancer state and timing
-		assert.True(t, w.Code == http.StatusBadGateway || w.Code == http.StatusServiceUnavailable, 
+		assert.True(t, w.Code == http.StatusBadGateway || w.Code == http.StatusServiceUnavailable,
 			"Expected status 502 or 503, got %d", w.Code)
 	}
 
 	// Verify circuit breaker is now open
 	lb, err := enhancedConfig.GetLoadBalancer("test-svc")
 	require.NoError(t, err)
-	
+
 	state := lb.GetCircuitBreakerState("mock-1")
 	assert.Equal(t, loadbalancer.Open, state)
 
 	// Now make server healthy and verify requests start working after recovery
 	mockServer.shouldFail = false
-	
+
 	// Wait for circuit breaker recovery (simulate time passing)
 	time.Sleep(10 * time.Millisecond)
-	
+
 	// Force the instance back to healthy for testing
 	instances := lb.GetAllInstances()
 	if len(instances) > 0 {
@@ -341,7 +341,7 @@ func TestIntegratedProxyHandler_POSTWithBody(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	// Verify request body was correctly forwarded
 	var receivedData map[string]interface{}
 	err = json.Unmarshal([]byte(mockServer.receivedBody), &receivedData)
@@ -422,7 +422,7 @@ func TestIntegratedProxyHandler_HealthEndpoint(t *testing.T) {
 	assert.Equal(t, "healthy", health["status"])
 	assert.Equal(t, "integrated", health["gateway"])
 	assert.Equal(t, "enabled", health["load_balancing"])
-	
+
 	services := health["services"].(map[string]interface{})
 	testService := services["test-svc"].(map[string]interface{})
 	assert.Equal(t, "ok", testService["status"])
@@ -457,7 +457,7 @@ func TestIntegratedProxyHandler_RootEndpoint(t *testing.T) {
 	assert.Equal(t, "Link API Gateway", root["service"])
 	assert.Equal(t, "2.0.0", root["version"])
 	assert.Equal(t, "integrated", root["type"])
-	
+
 	features := root["features"].([]interface{})
 	assert.Contains(t, features, "load_balancing")
 	assert.Contains(t, features, "circuit_breakers")
@@ -496,7 +496,7 @@ func TestIntegratedProxyHandler_NotFoundHandler(t *testing.T) {
 	assert.Equal(t, "ENDPOINT_NOT_FOUND", response["code"])
 	assert.Equal(t, "/nonexistent/path", response["path"])
 	assert.Equal(t, "GET", response["method"])
-	
+
 	availableServices := response["available_services"].([]interface{})
 	assert.Contains(t, availableServices, "test-svc")
 }
@@ -510,10 +510,10 @@ func TestIntegratedProxyHandler_RequestTimeout(t *testing.T) {
 	// Setup enhanced config and handler
 	enhancedConfig := setupTestEnhancedConfig([]*MockServiceServer{mockServer})
 	handler := NewIntegratedProxyHandlerWithMetrics(enhancedConfig, nil, nil, "test_request_timeout")
-	
+
 	// Set a very short timeout for testing
 	handler.httpClient.Timeout = 50 * time.Millisecond
-	
+
 	router := setupTestRouter(handler)
 
 	// Make request that should timeout

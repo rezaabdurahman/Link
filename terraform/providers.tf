@@ -10,7 +10,7 @@ provider "postgresql" {
   password        = var.postgres_password
   sslmode         = var.postgres_sslmode
   connect_timeout = 15
-  superuser       = false  # Follow principle of least privilege
+  superuser       = false # Follow principle of least privilege
 }
 
 # Configure Kubernetes provider for secret management

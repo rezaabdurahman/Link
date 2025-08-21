@@ -60,7 +60,7 @@ func NewObservabilityDataSanitizer(config SanitizationConfig) *ObservabilityData
 		ipAddressPattern: regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`),
 		tokenPattern:     regexp.MustCompile(`(?i)(bearer\s+)?[a-zA-Z0-9_-]{20,}`),
 		apiKeyPattern:    regexp.MustCompile(`(?i)(api[_-]?key|apikey)[\s:=]+[a-zA-Z0-9_-]+`),
-		config:          config,
+		config:           config,
 	}
 }
 
@@ -125,19 +125,19 @@ func (s *ObservabilityDataSanitizer) hashValue(prefix, value string) string {
 
 // SanitizeLogEntry sanitizes a complete log entry (for Promtail/Loki)
 type LogEntry struct {
-	Message     string                 `json:"msg"`
-	Level       string                 `json:"level"`
-	Time        string                 `json:"time"`
-	Service     string                 `json:"service"`
-	UserID      string                 `json:"user_id,omitempty"`
-	UserEmail   string                 `json:"user_email,omitempty"`
-	RequestID   string                 `json:"request_id,omitempty"`
-	Method      string                 `json:"method,omitempty"`
-	URL         string                 `json:"url,omitempty"`
-	Status      interface{}            `json:"status,omitempty"`
-	Duration    string                 `json:"duration,omitempty"`
-	RemoteAddr  string                 `json:"remote_addr,omitempty"`
-	Extra       map[string]interface{} `json:"-"`
+	Message    string                 `json:"msg"`
+	Level      string                 `json:"level"`
+	Time       string                 `json:"time"`
+	Service    string                 `json:"service"`
+	UserID     string                 `json:"user_id,omitempty"`
+	UserEmail  string                 `json:"user_email,omitempty"`
+	RequestID  string                 `json:"request_id,omitempty"`
+	Method     string                 `json:"method,omitempty"`
+	URL        string                 `json:"url,omitempty"`
+	Status     interface{}            `json:"status,omitempty"`
+	Duration   string                 `json:"duration,omitempty"`
+	RemoteAddr string                 `json:"remote_addr,omitempty"`
+	Extra      map[string]interface{} `json:"-"`
 }
 
 // SanitizeLogEntry sanitizes a log entry for safe storage
@@ -268,7 +268,7 @@ func (s *ObservabilityDataSanitizer) SecureSpanEvent(span oteltrace.Span, name s
 // SanitizeMetricLabels sanitizes labels for metrics
 func (s *ObservabilityDataSanitizer) SanitizeMetricLabels(labels map[string]string) map[string]string {
 	sanitized := make(map[string]string)
-	
+
 	for key, value := range labels {
 		if s.isSensitiveKey(key) {
 			sanitized[key+"_hash"] = s.hashValue("METRIC", value)
@@ -276,7 +276,7 @@ func (s *ObservabilityDataSanitizer) SanitizeMetricLabels(labels map[string]stri
 			sanitized[key] = s.SanitizeString(value)
 		}
 	}
-	
+
 	return sanitized
 }
 

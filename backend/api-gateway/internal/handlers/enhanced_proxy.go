@@ -103,7 +103,7 @@ func NewEnhancedProxyHandler(serviceConfig *config.EnhancedServiceConfig) *Enhan
 // ServeHTTP handles incoming requests with load balancing and resilience
 func (h *EnhancedProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	
+
 	// Extract service name from path
 	serviceName := h.extractServiceName(r.URL.Path)
 	if serviceName == "" {
@@ -159,7 +159,7 @@ func (h *EnhancedProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	executeRequest := func(ctx context.Context) error {
 		attempts++
-		
+
 		// Select instance using load balancer
 		instance, err := lb.SelectInstance()
 		if err != nil {
@@ -226,11 +226,11 @@ func (h *EnhancedProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			// Return the actual response if successful
 			return resp, nil
 		}
-		
+
 		result := retrier.Do(ctx, retryableFunc)
 		finalErr = result.Error
 		attempts = result.Attempts
-		
+
 		// Record retry attempts
 		if attempts > 1 {
 			for i := 1; i <= attempts; i++ {
@@ -246,7 +246,7 @@ func (h *EnhancedProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	// Handle final result
 	duration := time.Since(start)
-	
+
 	if finalErr != nil {
 		log.Printf("Failed to proxy request to %s after %d attempts: %v", serviceName, attempts, finalErr)
 		h.recordMetrics(serviceName, r.Method, "error", "", duration)
@@ -300,14 +300,14 @@ func (h *EnhancedProxyHandler) extractServiceName(path string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	
+
 	serviceName := parts[0]
-	
+
 	// Validate service exists in configuration
 	if _, err := h.serviceConfig.GetLoadBalancer(serviceName); err != nil {
 		return ""
 	}
-	
+
 	return serviceName
 }
 
@@ -370,7 +370,7 @@ func (h *EnhancedProxyHandler) isHopByHopHeader(header string) bool {
 		"Connection", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization",
 		"Te", "Trailers", "Transfer-Encoding", "Upgrade",
 	}
-	
+
 	header = strings.ToLower(header)
 	for _, hopHeader := range hopByHopHeaders {
 		if strings.ToLower(hopHeader) == header {
@@ -387,12 +387,12 @@ func (h *EnhancedProxyHandler) getClientIP(r *http.Request) string {
 		parts := strings.Split(xff, ",")
 		return strings.TrimSpace(parts[0])
 	}
-	
+
 	// Check X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return xri
 	}
-	
+
 	// Fall back to RemoteAddr
 	if ip := r.RemoteAddr; ip != "" {
 		// Remove port if present
@@ -401,7 +401,7 @@ func (h *EnhancedProxyHandler) getClientIP(r *http.Request) string {
 		}
 		return ip
 	}
-	
+
 	return "unknown"
 }
 
@@ -410,11 +410,11 @@ func (h *EnhancedProxyHandler) getScheme(r *http.Request) string {
 	if r.TLS != nil {
 		return "https"
 	}
-	
+
 	if scheme := r.Header.Get("X-Forwarded-Proto"); scheme != "" {
 		return scheme
 	}
-	
+
 	return "http"
 }
 
@@ -434,7 +434,7 @@ func (h *EnhancedProxyHandler) writeErrorResponse(w http.ResponseWriter, statusC
 // HealthCheck returns the health status of all services
 func (h *EnhancedProxyHandler) HealthCheck() map[string]interface{} {
 	serviceStats := make(map[string]interface{})
-	
+
 	for serviceName, service := range h.serviceConfig.Services {
 		lb, err := h.serviceConfig.GetLoadBalancer(serviceName)
 		if err != nil {
@@ -444,18 +444,18 @@ func (h *EnhancedProxyHandler) HealthCheck() map[string]interface{} {
 			}
 			continue
 		}
-		
+
 		stats := lb.GetStats()
 		healthyInstances := stats["healthy_instances"].(int)
 		serviceStats[serviceName] = map[string]interface{}{
-			"status":            "ok",
-			"total_instances":   len(service.Instances),
-			"healthy_instances": healthyInstances,
+			"status":              "ok",
+			"total_instances":     len(service.Instances),
+			"healthy_instances":   healthyInstances,
 			"load_balancer_stats": stats,
-			"strategy":          stats["strategy"].(string),
+			"strategy":            stats["strategy"].(string),
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"status":   "ok",
 		"services": serviceStats,

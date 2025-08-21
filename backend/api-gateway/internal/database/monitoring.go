@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/getsentry/sentry-go"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -19,33 +19,33 @@ import (
 // DatabaseMonitor provides comprehensive database monitoring
 type DatabaseMonitor struct {
 	serviceName string
-	
+
 	// Metrics
-	queryDuration    *prometheus.HistogramVec
-	queryCounter     *prometheus.CounterVec
+	queryDuration     *prometheus.HistogramVec
+	queryCounter      *prometheus.CounterVec
 	activeConnections *prometheus.GaugeVec
-	slowQueryCounter *prometheus.CounterVec
-	errorCounter     *prometheus.CounterVec
-	
+	slowQueryCounter  *prometheus.CounterVec
+	errorCounter      *prometheus.CounterVec
+
 	// Configuration
-	slowQueryThreshold time.Duration
+	slowQueryThreshold  time.Duration
 	errorQueryThreshold time.Duration
-	
+
 	// Query analysis
 	queryAnalyzer *QueryAnalyzer
-	mu           sync.RWMutex
+	mu            sync.RWMutex
 }
 
 // QueryMetrics holds metrics for a specific query
 type QueryMetrics struct {
-	Query       string
-	Count       int64
-	TotalTime   time.Duration
-	MinTime     time.Duration
-	MaxTime     time.Duration
-	AvgTime     time.Duration
-	LastSeen    time.Time
-	ErrorCount  int64
+	Query      string
+	Count      int64
+	TotalTime  time.Duration
+	MinTime    time.Duration
+	MaxTime    time.Duration
+	AvgTime    time.Duration
+	LastSeen   time.Time
+	ErrorCount int64
 }
 
 // QueryAnalyzer analyzes query patterns and performance
@@ -58,16 +58,16 @@ type QueryAnalyzer struct {
 func NewDatabaseMonitor(serviceName string) *DatabaseMonitor {
 	return &DatabaseMonitor{
 		serviceName: serviceName,
-		
+
 		queryDuration: promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name: "database_query_duration_seconds",
-				Help: "Database query duration in seconds",
+				Name:    "database_query_duration_seconds",
+				Help:    "Database query duration in seconds",
 				Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0},
 			},
 			[]string{"service", "operation", "table", "query_type"},
 		),
-		
+
 		queryCounter: promauto.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "database_queries_total",
@@ -75,7 +75,7 @@ func NewDatabaseMonitor(serviceName string) *DatabaseMonitor {
 			},
 			[]string{"service", "operation", "table", "query_type", "status"},
 		),
-		
+
 		activeConnections: promauto.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "database_connections_active",
@@ -83,7 +83,7 @@ func NewDatabaseMonitor(serviceName string) *DatabaseMonitor {
 			},
 			[]string{"service", "database"},
 		),
-		
+
 		slowQueryCounter: promauto.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "database_slow_queries_total",
@@ -91,7 +91,7 @@ func NewDatabaseMonitor(serviceName string) *DatabaseMonitor {
 			},
 			[]string{"service", "operation", "table"},
 		),
-		
+
 		errorCounter: promauto.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "database_errors_total",
@@ -99,8 +99,8 @@ func NewDatabaseMonitor(serviceName string) *DatabaseMonitor {
 			},
 			[]string{"service", "error_type"},
 		),
-		
-		slowQueryThreshold: 100 * time.Millisecond,
+
+		slowQueryThreshold:  100 * time.Millisecond,
 		errorQueryThreshold: 1 * time.Second,
 		queryAnalyzer: &QueryAnalyzer{
 			queries: make(map[string]*QueryMetrics),
@@ -115,20 +115,20 @@ func (dm *DatabaseMonitor) TrackQuery(ctx context.Context, operation, table, que
 		status = "error"
 		dm.trackError(ctx, operation, query, err)
 	}
-	
+
 	// Record basic metrics
 	dm.queryDuration.WithLabelValues(dm.serviceName, operation, table, queryType).Observe(duration.Seconds())
 	dm.queryCounter.WithLabelValues(dm.serviceName, operation, table, queryType, status).Inc()
-	
+
 	// Track slow queries
 	if duration > dm.slowQueryThreshold {
 		dm.slowQueryCounter.WithLabelValues(dm.serviceName, operation, table).Inc()
 		dm.reportSlowQuery(ctx, operation, table, query, duration)
 	}
-	
+
 	// Update query analyzer
 	dm.queryAnalyzer.recordQuery(query, duration, err)
-	
+
 	// Track extremely slow queries in Sentry
 	if duration > dm.errorQueryThreshold {
 		sentry.WithScope(func(scope *sentry.Scope) {
@@ -139,7 +139,7 @@ func (dm *DatabaseMonitor) TrackQuery(ctx context.Context, operation, table, que
 			scope.SetExtra("query", dm.sanitizeQuery(query))
 			scope.SetExtra("duration_ms", duration.Milliseconds())
 			scope.SetLevel(sentry.LevelWarning)
-			
+
 			sentry.CaptureMessage(fmt.Sprintf("Extremely slow database query detected: %dms", duration.Milliseconds()))
 		})
 	}
@@ -149,7 +149,7 @@ func (dm *DatabaseMonitor) TrackQuery(ctx context.Context, operation, table, que
 func (dm *DatabaseMonitor) trackError(ctx context.Context, operation, query string, err error) {
 	errorType := dm.categorizeError(err)
 	dm.errorCounter.WithLabelValues(dm.serviceName, errorType).Inc()
-	
+
 	// Send critical errors to Sentry
 	if dm.isCriticalError(err) {
 		sentry.WithScope(func(scope *sentry.Scope) {
@@ -158,7 +158,7 @@ func (dm *DatabaseMonitor) trackError(ctx context.Context, operation, query stri
 			scope.SetTag("error_type", errorType)
 			scope.SetExtra("query", dm.sanitizeQuery(query))
 			scope.SetLevel(sentry.LevelError)
-			
+
 			sentry.CaptureException(err)
 		})
 	}
@@ -169,9 +169,9 @@ func (dm *DatabaseMonitor) categorizeError(err error) string {
 	if err == nil {
 		return "none"
 	}
-	
+
 	errStr := strings.ToLower(err.Error())
-	
+
 	switch {
 	case strings.Contains(errStr, "connection"):
 		return "connection_error"
@@ -197,21 +197,21 @@ func (dm *DatabaseMonitor) isCriticalError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	errorType := dm.categorizeError(err)
 	criticalErrors := []string{
 		"connection_error",
-		"timeout", 
+		"timeout",
 		"permission_error",
 		"syntax_error",
 	}
-	
+
 	for _, critical := range criticalErrors {
 		if errorType == critical {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -219,28 +219,28 @@ func (dm *DatabaseMonitor) isCriticalError(err error) bool {
 func (dm *DatabaseMonitor) sanitizeQuery(query string) string {
 	// Remove potential sensitive data patterns
 	sensitivePatterns := []string{
-		`'[^']*'`,     // String literals
-		`"[^"]*"`,     // Double-quoted strings
-		`\$\d+`,       // Parameterized query placeholders
+		`'[^']*'`, // String literals
+		`"[^"]*"`, // Double-quoted strings
+		`\$\d+`,   // Parameterized query placeholders
 	}
-	
+
 	sanitized := query
 	for _, pattern := range sensitivePatterns {
 		sanitized = strings.ReplaceAll(sanitized, pattern, "?")
 	}
-	
+
 	// Limit query length for logging
 	if len(sanitized) > 500 {
 		sanitized = sanitized[:500] + "..."
 	}
-	
+
 	return sanitized
 }
 
 // reportSlowQuery reports slow queries with analysis
 func (dm *DatabaseMonitor) reportSlowQuery(ctx context.Context, operation, table, query string, duration time.Duration) {
 	analysis := dm.analyzeQuery(query)
-	
+
 	sentry.WithScope(func(scope *sentry.Scope) {
 		scope.SetTag("service", dm.serviceName)
 		scope.SetTag("operation", operation)
@@ -250,7 +250,7 @@ func (dm *DatabaseMonitor) reportSlowQuery(ctx context.Context, operation, table
 		scope.SetExtra("duration_ms", duration.Milliseconds())
 		scope.SetExtra("analysis", analysis)
 		scope.SetLevel(sentry.LevelInfo)
-		
+
 		sentry.CaptureMessage(fmt.Sprintf("Slow query detected: %s (%dms)", analysis.Type, duration.Milliseconds()))
 	})
 }
@@ -268,11 +268,11 @@ type QueryAnalysis struct {
 // analyzeQuery performs basic query analysis
 func (dm *DatabaseMonitor) analyzeQuery(query string) QueryAnalysis {
 	queryUpper := strings.ToUpper(query)
-	
+
 	analysis := QueryAnalysis{
 		Tables: dm.extractTables(query),
 	}
-	
+
 	// Determine query type
 	switch {
 	case strings.HasPrefix(queryUpper, "SELECT"):
@@ -286,18 +286,24 @@ func (dm *DatabaseMonitor) analyzeQuery(query string) QueryAnalysis {
 	default:
 		analysis.Type = "OTHER"
 	}
-	
+
 	// Check for joins and subqueries
 	analysis.HasJoin = strings.Contains(queryUpper, "JOIN")
 	analysis.HasSubquery = strings.Contains(queryUpper, "SELECT") && strings.Count(queryUpper, "SELECT") > 1
 	analysis.HasIndex = strings.Contains(queryUpper, "USE INDEX") || strings.Contains(queryUpper, "FORCE INDEX")
-	
+
 	// Determine complexity
 	complexity := 0
-	if analysis.HasJoin { complexity += 2 }
-	if analysis.HasSubquery { complexity += 3 }
-	if len(analysis.Tables) > 1 { complexity += 1 }
-	
+	if analysis.HasJoin {
+		complexity += 2
+	}
+	if analysis.HasSubquery {
+		complexity += 3
+	}
+	if len(analysis.Tables) > 1 {
+		complexity += 1
+	}
+
 	switch {
 	case complexity >= 5:
 		analysis.Complexity = "high"
@@ -306,7 +312,7 @@ func (dm *DatabaseMonitor) analyzeQuery(query string) QueryAnalysis {
 	default:
 		analysis.Complexity = "low"
 	}
-	
+
 	return analysis
 }
 
@@ -315,7 +321,7 @@ func (dm *DatabaseMonitor) extractTables(query string) []string {
 	// This is a simplified implementation - could be enhanced with proper SQL parsing
 	tables := []string{}
 	queryUpper := strings.ToUpper(query)
-	
+
 	// Extract FROM clauses
 	if idx := strings.Index(queryUpper, " FROM "); idx != -1 {
 		remaining := query[idx+6:]
@@ -324,7 +330,7 @@ func (dm *DatabaseMonitor) extractTables(query string) []string {
 			tables = append(tables, table)
 		}
 	}
-	
+
 	return tables
 }
 
@@ -337,7 +343,7 @@ func (dm *DatabaseMonitor) UpdateConnectionMetrics(database string, activeConnec
 func (dm *DatabaseMonitor) GetQueryStats() map[string]*QueryMetrics {
 	dm.queryAnalyzer.mu.RLock()
 	defer dm.queryAnalyzer.mu.RUnlock()
-	
+
 	// Return a copy to avoid concurrent access issues
 	stats := make(map[string]*QueryMetrics)
 	for key, value := range dm.queryAnalyzer.queries {
@@ -352,7 +358,7 @@ func (dm *DatabaseMonitor) GetQueryStats() map[string]*QueryMetrics {
 			ErrorCount: value.ErrorCount,
 		}
 	}
-	
+
 	return stats
 }
 
@@ -360,10 +366,10 @@ func (dm *DatabaseMonitor) GetQueryStats() map[string]*QueryMetrics {
 func (qa *QueryAnalyzer) recordQuery(query string, duration time.Duration, err error) {
 	qa.mu.Lock()
 	defer qa.mu.Unlock()
-	
+
 	// Normalize query for analysis (remove literals, etc.)
 	normalizedQuery := qa.normalizeQuery(query)
-	
+
 	metrics, exists := qa.queries[normalizedQuery]
 	if !exists {
 		metrics = &QueryMetrics{
@@ -374,20 +380,20 @@ func (qa *QueryAnalyzer) recordQuery(query string, duration time.Duration, err e
 		}
 		qa.queries[normalizedQuery] = metrics
 	}
-	
+
 	// Update metrics
 	metrics.Count++
 	metrics.TotalTime += duration
 	metrics.AvgTime = time.Duration(metrics.TotalTime.Nanoseconds() / metrics.Count)
 	metrics.LastSeen = time.Now()
-	
+
 	if duration < metrics.MinTime {
 		metrics.MinTime = duration
 	}
 	if duration > metrics.MaxTime {
 		metrics.MaxTime = duration
 	}
-	
+
 	if err != nil {
 		metrics.ErrorCount++
 	}
@@ -397,18 +403,18 @@ func (qa *QueryAnalyzer) recordQuery(query string, duration time.Duration, err e
 func (qa *QueryAnalyzer) normalizeQuery(query string) string {
 	// Remove literals and normalize for pattern matching
 	normalized := query
-	
+
 	// Replace string literals
 	normalized = strings.ReplaceAll(normalized, "'[^']*'", "?")
 	normalized = strings.ReplaceAll(normalized, "\"[^\"]*\"", "?")
-	
+
 	// Replace numbers
 	normalized = strings.ReplaceAll(normalized, "\\b\\d+\\b", "?")
-	
+
 	// Normalize whitespace
 	normalized = strings.ReplaceAll(normalized, "\\s+", " ")
 	normalized = strings.TrimSpace(normalized)
-	
+
 	return normalized
 }
 
@@ -421,7 +427,7 @@ type GormLogger struct {
 // NewGormLogger creates a new GORM logger with monitoring
 func NewGormLogger(monitor *DatabaseMonitor, baseLogger logger.Interface) *GormLogger {
 	return &GormLogger{
-		monitor: monitor,
+		monitor:   monitor,
 		Interface: baseLogger,
 	}
 }
@@ -430,15 +436,15 @@ func NewGormLogger(monitor *DatabaseMonitor, baseLogger logger.Interface) *GormL
 func (gl *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
 	sql, rows := fc()
-	
+
 	// Extract operation and table info from SQL
 	operation := gl.extractOperation(sql)
 	table := gl.extractTable(sql)
 	queryType := gl.extractQueryType(sql)
-	
+
 	// Track the query
 	gl.monitor.TrackQuery(ctx, operation, table, queryType, sql, elapsed, err)
-	
+
 	// Call the original logger
 	gl.Interface.Trace(ctx, begin, fc, err)
 }
@@ -446,7 +452,7 @@ func (gl *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (str
 // extractOperation extracts the SQL operation
 func (gl *GormLogger) extractOperation(sql string) string {
 	sqlUpper := strings.ToUpper(strings.TrimSpace(sql))
-	
+
 	switch {
 	case strings.HasPrefix(sqlUpper, "SELECT"):
 		return "SELECT"
@@ -471,14 +477,14 @@ func (gl *GormLogger) extractOperation(sql string) string {
 func (gl *GormLogger) extractTable(sql string) string {
 	// This is a simplified implementation
 	sqlUpper := strings.ToUpper(sql)
-	
+
 	patterns := []string{
 		" FROM ",
 		" INTO ",
 		" UPDATE ",
 		" TABLE ",
 	}
-	
+
 	for _, pattern := range patterns {
 		if idx := strings.Index(sqlUpper, pattern); idx != -1 {
 			remaining := sql[idx+len(pattern):]
@@ -488,14 +494,14 @@ func (gl *GormLogger) extractTable(sql string) string {
 			return strings.TrimSpace(remaining)
 		}
 	}
-	
+
 	return "unknown"
 }
 
 // extractQueryType determines the query type for categorization
 func (gl *GormLogger) extractQueryType(sql string) string {
 	sqlUpper := strings.ToUpper(strings.TrimSpace(sql))
-	
+
 	switch {
 	case strings.Contains(sqlUpper, "JOIN"):
 		return "join"

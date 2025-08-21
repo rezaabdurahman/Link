@@ -29,7 +29,7 @@ terraform {
 
 # Local variables for configuration
 locals {
-  environment = var.environment
+  environment       = var.environment
   monitoring_domain = var.monitoring_domain
   common_labels = merge(var.tags, {
     Environment = local.environment
@@ -56,7 +56,7 @@ resource "random_password" "postgres_monitoring" {
 
 # 2. Generate HTTP Basic Auth credentials
 resource "random_password" "nginx_auth" {
-  length = 16
+  length  = 16
   special = false
 }
 
@@ -142,24 +142,24 @@ resource "tls_locally_signed_cert" "monitoring_cert" {
 
 # 4. Create local SSL certificate files
 resource "local_file" "monitoring_ssl_key" {
-  content  = tls_private_key.monitoring_cert.private_key_pem
-  filename = "${var.ssl_output_path}/monitoring.key"
+  content         = tls_private_key.monitoring_cert.private_key_pem
+  filename        = "${var.ssl_output_path}/monitoring.key"
   file_permission = "0600"
 
   depends_on = [local_file.ssl_directory]
 }
 
 resource "local_file" "monitoring_ssl_cert" {
-  content  = tls_locally_signed_cert.monitoring_cert.cert_pem
-  filename = "${var.ssl_output_path}/monitoring.crt"
+  content         = tls_locally_signed_cert.monitoring_cert.cert_pem
+  filename        = "${var.ssl_output_path}/monitoring.crt"
   file_permission = "0644"
 
   depends_on = [local_file.ssl_directory]
 }
 
 resource "local_file" "monitoring_ca_cert" {
-  content  = tls_self_signed_cert.monitoring_ca.cert_pem
-  filename = "${var.ssl_output_path}/ca.crt"
+  content         = tls_self_signed_cert.monitoring_ca.cert_pem
+  filename        = "${var.ssl_output_path}/ca.crt"
   file_permission = "0644"
 
   depends_on = [local_file.ssl_directory]
@@ -167,8 +167,8 @@ resource "local_file" "monitoring_ca_cert" {
 
 # 5. Create necessary directories
 resource "local_file" "ssl_directory" {
-  content  = ""
-  filename = "${var.ssl_output_path}/.keep"
+  content         = ""
+  filename        = "${var.ssl_output_path}/.keep"
   file_permission = "0644"
 
   provisioner "local-exec" {
@@ -178,8 +178,8 @@ resource "local_file" "ssl_directory" {
 
 # 6. Create HTTP Basic Auth file
 resource "local_file" "nginx_htpasswd" {
-  content = "${var.monitoring_username}:${htpasswd_password.nginx_basic_auth.bcrypt}\n"
-  filename = "${var.nginx_output_path}/htpasswd"
+  content         = "${var.monitoring_username}:${htpasswd_password.nginx_basic_auth.bcrypt}\n"
+  filename        = "${var.nginx_output_path}/htpasswd"
   file_permission = "0600"
 
   depends_on = [local_file.ssl_directory]
@@ -187,24 +187,24 @@ resource "local_file" "nginx_htpasswd" {
 
 # 7. Create secure secrets files
 resource "local_sensitive_file" "grafana_admin_password" {
-  content  = random_password.grafana_admin.result
-  filename = "${var.secrets_output_path}/grafana_admin_password.txt"
+  content         = random_password.grafana_admin.result
+  filename        = "${var.secrets_output_path}/grafana_admin_password.txt"
   file_permission = "0600"
 
   depends_on = [local_file.ssl_directory]
 }
 
 resource "local_sensitive_file" "redis_password" {
-  content  = random_password.redis_auth.result
-  filename = "${var.secrets_output_path}/redis_password.txt"
+  content         = random_password.redis_auth.result
+  filename        = "${var.secrets_output_path}/redis_password.txt"
   file_permission = "0600"
 
   depends_on = [local_file.ssl_directory]
 }
 
 resource "local_sensitive_file" "postgres_monitoring_dsn" {
-  content = "postgresql://monitoring_user:${random_password.postgres_monitoring.result}@postgres:5432/link_app?sslmode=disable"
-  filename = "${var.secrets_output_path}/postgres_exporter_dsn.txt"
+  content         = "postgresql://monitoring_user:${random_password.postgres_monitoring.result}@postgres:5432/link_app?sslmode=disable"
+  filename        = "${var.secrets_output_path}/postgres_exporter_dsn.txt"
   file_permission = "0600"
 
   depends_on = [local_file.ssl_directory]
@@ -218,7 +218,7 @@ resource "local_file" "nginx_ssl_config" {
     ssl_key_path      = "/etc/ssl/private/monitoring.key"
     htpasswd_path     = "/etc/nginx/htpasswd"
   })
-  filename = "${var.nginx_output_path}/monitoring.conf"
+  filename        = "${var.nginx_output_path}/monitoring.conf"
   file_permission = "0644"
 
   depends_on = [local_file.ssl_directory]
@@ -227,18 +227,18 @@ resource "local_file" "nginx_ssl_config" {
 # 9. Create Docker Compose override for secure monitoring
 resource "local_file" "docker_compose_monitoring_secure" {
   content = templatefile("${path.module}/templates/docker-compose-monitoring-secure.yml.tpl", {
-    ssl_cert_path      = abspath("${var.ssl_output_path}/monitoring.crt")
-    ssl_key_path       = abspath("${var.ssl_output_path}/monitoring.key")
-    ca_cert_path       = abspath("${var.ssl_output_path}/ca.crt")
-    htpasswd_path      = abspath("${var.nginx_output_path}/htpasswd")
-    nginx_config_path  = abspath("${var.nginx_output_path}/monitoring.conf")
+    ssl_cert_path          = abspath("${var.ssl_output_path}/monitoring.crt")
+    ssl_key_path           = abspath("${var.ssl_output_path}/monitoring.key")
+    ca_cert_path           = abspath("${var.ssl_output_path}/ca.crt")
+    htpasswd_path          = abspath("${var.nginx_output_path}/htpasswd")
+    nginx_config_path      = abspath("${var.nginx_output_path}/monitoring.conf")
     grafana_admin_password = random_password.grafana_admin.result
-    redis_password     = random_password.redis_auth.result
-    environment        = local.environment
-    monitoring_domain  = local.monitoring_domain
+    redis_password         = random_password.redis_auth.result
+    environment            = local.environment
+    monitoring_domain      = local.monitoring_domain
   })
-  filename = "${var.output_path}/docker-compose.monitoring.secure.yml"
-  file_permission = "0644"
+  filename          = "${var.output_path}/docker-compose.monitoring.secure.yml"
+  file_permission   = "0644"
   sensitive_content = true
 }
 
@@ -273,10 +273,10 @@ resource "kubernetes_secret" "monitoring_passwords" {
   type = "Opaque"
 
   data = {
-    "grafana-admin-password" = base64encode(random_password.grafana_admin.result)
-    "redis-password"         = base64encode(random_password.redis_auth.result)
+    "grafana-admin-password"  = base64encode(random_password.grafana_admin.result)
+    "redis-password"          = base64encode(random_password.redis_auth.result)
     "postgres-monitoring-dsn" = base64encode("postgresql://monitoring_user:${random_password.postgres_monitoring.result}@postgres:5432/link_app?sslmode=disable")
-    "nginx-basic-auth"       = base64encode("${var.monitoring_username}:${random_password.nginx_auth.result}")
+    "nginx-basic-auth"        = base64encode("${var.monitoring_username}:${random_password.nginx_auth.result}")
   }
 }
 

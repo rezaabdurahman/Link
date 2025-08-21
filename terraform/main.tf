@@ -16,8 +16,8 @@ module "service_databases" {
   user_connection_limit     = var.user_connection_limit
   create_monitoring_user    = var.create_monitoring_user
   backup_retention_days     = var.backup_retention_days
-  enable_ssl               = var.enable_ssl
-  tags                     = local.common_tags
+  enable_ssl                = var.enable_ssl
+  tags                      = local.common_tags
 }
 
 # Create Kubernetes secrets for each service
@@ -48,11 +48,11 @@ resource "local_file" "service_env_files" {
 resource "local_file" "backup_script" {
   filename = "${path.root}/scripts/backup-databases.sh"
   content = templatefile("${path.module}/templates/backup-script.tpl", {
-    databases           = [for db in module.service_databases.service_databases : db.database_name]
+    databases          = [for db in module.service_databases.service_databases : db.database_name]
     postgres_host      = var.postgres_host
     postgres_port      = var.postgres_port
     retention_days     = var.backup_retention_days
-    backup_schedule    = "0 2 * * *"  # Daily at 2 AM
+    backup_schedule    = "0 2 * * *" # Daily at 2 AM
     monitoring_enabled = var.create_monitoring_user
   })
   file_permission = "0755"
@@ -63,8 +63,8 @@ resource "local_file" "restore_script" {
   filename = "${path.root}/scripts/restore-database.sh"
   content = templatefile("${path.module}/templates/restore-script.tpl", {
     service_databases = module.service_databases.service_databases
-    postgres_host    = var.postgres_host
-    postgres_port    = var.postgres_port
+    postgres_host     = var.postgres_host
+    postgres_port     = var.postgres_port
   })
   file_permission = "0755"
 }
@@ -84,12 +84,12 @@ resource "local_file" "migration_scripts" {
 
   filename = "${path.root}/scripts/migrate-${each.key}-database.sh"
   content = templatefile("${path.module}/templates/migration-script.tpl", {
-    service_name     = each.key
-    database_name    = each.value.database_name
-    username         = each.value.username
-    postgres_host    = var.postgres_host
-    postgres_port    = var.postgres_port
-    old_database     = var.postgres_database
+    service_name  = each.key
+    database_name = each.value.database_name
+    username      = each.value.username
+    postgres_host = var.postgres_host
+    postgres_port = var.postgres_port
+    old_database  = var.postgres_database
   })
   file_permission = "0755"
 }
@@ -114,10 +114,10 @@ resource "local_file" "pgbouncer_config" {
 resource "local_file" "implementation_guide" {
   filename = "${path.root}/IMPLEMENTATION_GUIDE.md"
   content = templatefile("${path.module}/templates/implementation-guide.tpl", {
-    services           = module.service_databases.service_databases
-    connection_summary = module.service_databases.connection_usage_summary
+    services               = module.service_databases.service_databases
+    connection_summary     = module.service_databases.connection_usage_summary
     backup_recommendations = module.service_databases.backup_recommendations
-    environment        = local.environment
+    environment            = local.environment
   })
   file_permission = "0644"
 }

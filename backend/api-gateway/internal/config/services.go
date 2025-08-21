@@ -4,14 +4,13 @@ import (
 	"fmt"
 )
 
-
 // ServiceConfig holds configuration for backend services
 type ServiceConfig struct {
-	UserService      ServiceEndpoint
-	LocationService  ServiceEndpoint
-	ChatService      ServiceEndpoint
-	AIService        ServiceEndpoint
-	DiscoveryService ServiceEndpoint
+	UserService          ServiceEndpoint
+	LocationService      ServiceEndpoint
+	ChatService          ServiceEndpoint
+	AIService            ServiceEndpoint
+	DiscoveryService     ServiceEndpoint
 	OpportunitiesService ServiceEndpoint
 }
 
@@ -94,14 +93,13 @@ func matchesPath(path string, prefixes ...string) bool {
 func TransformPath(gatewayPath string) string {
 	// Most paths are direct pass-through, but we can transform them here if needed
 	// For example: /auth/login -> /api/v1/auth/login
-	
+
 	// Add /api/v1 prefix if not already present
 	if len(gatewayPath) > 0 && gatewayPath[0] == '/' && gatewayPath != "/health" {
 		if len(gatewayPath) < 7 || gatewayPath[:7] != "/api/v1" {
 			return "/api/v1" + gatewayPath
 		}
 	}
-	
+
 	return gatewayPath
 }
-

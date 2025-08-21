@@ -104,11 +104,11 @@ func (rhc *RedisHealthChecker) CheckHealth(ctx context.Context) error {
 
 // HTTPServiceHealthChecker checks external HTTP service health
 type HTTPServiceHealthChecker struct {
-	name      string
-	url       string
-	client    *http.Client
-	timeout   time.Duration
-	retries   int
+	name    string
+	url     string
+	client  *http.Client
+	timeout time.Duration
+	retries int
 }
 
 // NewHTTPServiceHealthChecker creates a new HTTP service health checker
@@ -140,7 +140,7 @@ func (hsc *HTTPServiceHealthChecker) SetRetries(retries int) *HTTPServiceHealthC
 // CheckHealth performs HTTP service health check
 func (hsc *HTTPServiceHealthChecker) CheckHealth(ctx context.Context) error {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= hsc.retries; attempt++ {
 		if attempt > 0 {
 			// Brief delay between retries
@@ -200,23 +200,23 @@ func (chc *CompositeHealthChecker) Add(name string, checker HealthChecker) *Comp
 // CheckHealth runs all composite health checks
 func (chc *CompositeHealthChecker) CheckHealth(ctx context.Context) error {
 	errors := make(map[string]error)
-	
+
 	for name, checker := range chc.checkers {
 		if err := checker.CheckHealth(ctx); err != nil {
 			errors[name] = err
 		}
 	}
-	
+
 	if len(errors) == 0 {
 		return nil
 	}
-	
+
 	// Create composite error message
 	errorMsg := fmt.Sprintf("composite health check failed (%d/%d checks failed):", len(errors), len(chc.checkers))
 	for name, err := range errors {
 		errorMsg += fmt.Sprintf(" %s: %v;", name, err)
 	}
-	
+
 	return fmt.Errorf(errorMsg)
 }
 
@@ -266,7 +266,7 @@ func (lhc *LoadBalancerHealthChecker) CheckHealth(ctx context.Context) error {
 
 	// Warn if less than 50% of instances are healthy
 	if float64(healthyInstances)/float64(totalInstances) < 0.5 {
-		return fmt.Errorf("service %s is degraded: only %d/%d instances are healthy", 
+		return fmt.Errorf("service %s is degraded: only %d/%d instances are healthy",
 			lhc.serviceName, healthyInstances, totalInstances)
 	}
 

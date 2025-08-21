@@ -26,7 +26,7 @@ resource "tls_self_signed_cert" "root_ca" {
 
   subject {
     country             = var.cert_country
-    state               = var.cert_state  
+    state               = var.cert_state
     locality            = var.cert_locality
     organization        = var.cert_organization
     organizational_unit = var.cert_organizational_unit
@@ -132,55 +132,55 @@ resource "tls_locally_signed_cert" "service_certs" {
 
 # 9. Write Certificate Files (for compatibility with existing scripts)
 resource "local_file" "root_ca_key" {
-  content  = tls_private_key.root_ca.private_key_pem
-  filename = "${var.output_path}/rootca.key"
+  content         = tls_private_key.root_ca.private_key_pem
+  filename        = "${var.output_path}/rootca.key"
   file_permission = "0600"
 }
 
 resource "local_file" "root_ca_cert" {
-  content  = tls_self_signed_cert.root_ca.cert_pem
-  filename = "${var.output_path}/rootca.crt"
+  content         = tls_self_signed_cert.root_ca.cert_pem
+  filename        = "${var.output_path}/rootca.crt"
   file_permission = "0644"
 }
 
 resource "local_file" "intermediate_ca_key" {
-  content  = tls_private_key.intermediate_ca.private_key_pem
-  filename = "${var.output_path}/intermediate.key"
+  content         = tls_private_key.intermediate_ca.private_key_pem
+  filename        = "${var.output_path}/intermediate.key"
   file_permission = "0600"
 }
 
 resource "local_file" "intermediate_ca_cert" {
-  content  = tls_locally_signed_cert.intermediate_ca.cert_pem
-  filename = "${var.output_path}/intermediate.crt"
+  content         = tls_locally_signed_cert.intermediate_ca.cert_pem
+  filename        = "${var.output_path}/intermediate.crt"
   file_permission = "0644"
 }
 
 resource "local_file" "service_keys" {
   for_each = var.service_names
-  
-  content  = tls_private_key.service_certs[each.key].private_key_pem
-  filename = "${var.output_path}/${each.key}.key"
+
+  content         = tls_private_key.service_certs[each.key].private_key_pem
+  filename        = "${var.output_path}/${each.key}.key"
   file_permission = "0600"
 }
 
 resource "local_file" "service_certs" {
   for_each = var.service_names
-  
-  content  = tls_locally_signed_cert.service_certs[each.key].cert_pem
-  filename = "${var.output_path}/${each.key}.crt"
+
+  content         = tls_locally_signed_cert.service_certs[each.key].cert_pem
+  filename        = "${var.output_path}/${each.key}.crt"
   file_permission = "0644"
 }
 
 # 10. Create Certificate Chains
 resource "local_file" "service_cert_chains" {
   for_each = var.service_names
-  
+
   content = join("", [
     tls_locally_signed_cert.service_certs[each.key].cert_pem,
     tls_locally_signed_cert.intermediate_ca.cert_pem,
     tls_self_signed_cert.root_ca.cert_pem,
   ])
-  filename = "${var.output_path}/${each.key}-chain.crt"
+  filename        = "${var.output_path}/${each.key}-chain.crt"
   file_permission = "0644"
 }
 
@@ -189,7 +189,7 @@ resource "local_file" "ca_bundle" {
     tls_locally_signed_cert.intermediate_ca.cert_pem,
     tls_self_signed_cert.root_ca.cert_pem,
   ])
-  filename = "${var.output_path}/ca-bundle.crt"
+  filename        = "${var.output_path}/ca-bundle.crt"
   file_permission = "0644"
 }
 
@@ -201,8 +201,8 @@ resource "kubernetes_secret" "tls_secrets" {
     name      = "${each.key}-tls"
     namespace = var.kubernetes_namespace
     labels = {
-      "app.kubernetes.io/name"     = each.key
-      "app.kubernetes.io/part-of"  = "link-app"
+      "app.kubernetes.io/name"      = each.key
+      "app.kubernetes.io/part-of"   = "link-app"
       "app.kubernetes.io/component" = "tls"
     }
   }

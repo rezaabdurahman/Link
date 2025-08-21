@@ -64,11 +64,11 @@ type ServiceManager struct {
 	server            *http.Server
 	shutdownTimeout   time.Duration
 	healthCheckPeriod time.Duration
-	
+
 	// Channels for lifecycle management
 	shutdown     chan struct{}
 	healthTicker *time.Ticker
-	
+
 	// Callbacks
 	onStateChange func(oldState, newState ServiceState)
 	onShutdown    func(ctx context.Context) error
@@ -142,7 +142,7 @@ func (sm *ServiceManager) GetHealthStatus(ctx context.Context) map[string]interf
 	defer sm.mu.RUnlock()
 
 	status := map[string]interface{}{
-		"state":              sm.state.String(),
+		"state":             sm.state.String(),
 		"uptime":            time.Since(sm.startTime).String(),
 		"last_health_check": sm.lastHealthCheck.Format(time.RFC3339),
 		"health_checks":     make(map[string]interface{}),
@@ -151,12 +151,12 @@ func (sm *ServiceManager) GetHealthStatus(ctx context.Context) map[string]interf
 	// Run health checks
 	healthChecks := make(map[string]interface{})
 	overallHealthy := true
-	
+
 	for name, checker := range sm.healthCheckers {
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		err := checker.CheckHealth(checkCtx)
 		cancel()
-		
+
 		if err != nil {
 			healthChecks[name] = map[string]interface{}{
 				"status": "unhealthy",
@@ -169,10 +169,10 @@ func (sm *ServiceManager) GetHealthStatus(ctx context.Context) map[string]interf
 			}
 		}
 	}
-	
+
 	status["health_checks"] = healthChecks
 	status["overall_healthy"] = overallHealthy
-	
+
 	return status
 }
 
@@ -183,7 +183,7 @@ func (sm *ServiceManager) setState(newState ServiceState) {
 	sm.state = newState
 	callback := sm.onStateChange
 	sm.mu.Unlock()
-	
+
 	if callback != nil && oldState != newState {
 		callback(oldState, newState)
 		log.Printf("Service state changed: %s -> %s", oldState.String(), newState.String())
@@ -194,16 +194,16 @@ func (sm *ServiceManager) setState(newState ServiceState) {
 func (sm *ServiceManager) Start(ctx context.Context) error {
 	// Start health check ticker
 	sm.healthTicker = time.NewTicker(sm.healthCheckPeriod)
-	
+
 	// Start health checking goroutine
 	go sm.healthCheckLoop(ctx)
-	
+
 	// Set up signal handling for graceful shutdown
 	go sm.handleShutdownSignals()
-	
+
 	// Mark as healthy after successful start
 	sm.setState(StateHealthy)
-	
+
 	log.Printf("Service lifecycle manager started - State: %s", sm.GetState().String())
 	return nil
 }
@@ -232,23 +232,23 @@ func (sm *ServiceManager) performHealthCheck(ctx context.Context) {
 	}
 	currentState := sm.state
 	sm.mu.Unlock()
-	
+
 	if currentState == StateShuttingDown || currentState == StateStopped {
 		return
 	}
-	
+
 	overallHealthy := true
 	for name, checker := range checkers {
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		err := checker.CheckHealth(checkCtx)
 		cancel()
-		
+
 		if err != nil {
 			log.Printf("Health check failed for %s: %v", name, err)
 			overallHealthy = false
 		}
 	}
-	
+
 	// Update state based on health checks
 	if currentState == StateHealthy && !overallHealthy {
 		sm.setState(StateDegraded)
@@ -261,10 +261,10 @@ func (sm *ServiceManager) performHealthCheck(ctx context.Context) {
 func (sm *ServiceManager) handleShutdownSignals() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	
+
 	<-sigChan
 	log.Println("Shutdown signal received, starting graceful shutdown...")
-	
+
 	if err := sm.Shutdown(context.Background()); err != nil {
 		log.Printf("Error during shutdown: %v", err)
 	}
@@ -273,24 +273,24 @@ func (sm *ServiceManager) handleShutdownSignals() {
 // Shutdown performs graceful service shutdown
 func (sm *ServiceManager) Shutdown(ctx context.Context) error {
 	sm.setState(StateShuttingDown)
-	
+
 	// Stop health checks
 	close(sm.shutdown)
 	if sm.healthTicker != nil {
 		sm.healthTicker.Stop()
 	}
-	
+
 	// Execute shutdown callback if provided
 	if sm.onShutdown != nil {
 		if err := sm.onShutdown(ctx); err != nil {
 			log.Printf("Shutdown callback error: %v", err)
 		}
 	}
-	
+
 	// Create shutdown context with timeout
 	shutdownCtx, cancel := context.WithTimeout(ctx, sm.shutdownTimeout)
 	defer cancel()
-	
+
 	// Shutdown HTTP server gracefully
 	if sm.server != nil {
 		log.Println("Shutting down HTTP server...")
@@ -299,7 +299,7 @@ func (sm *ServiceManager) Shutdown(ctx context.Context) error {
 			return err
 		}
 	}
-	
+
 	sm.setState(StateStopped)
 	log.Println("Graceful shutdown completed")
 	return nil
@@ -322,9 +322,9 @@ func (sm *ServiceManager) CreateHealthHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		
+
 		healthStatus := sm.GetHealthStatus(ctx)
-		
+
 		// Determine HTTP status based on service state
 		var httpStatus int
 		state := sm.GetState()
@@ -340,7 +340,7 @@ func (sm *ServiceManager) CreateHealthHandler() gin.HandlerFunc {
 		default:
 			httpStatus = http.StatusServiceUnavailable
 		}
-		
+
 		c.JSON(httpStatus, healthStatus)
 	}
 }

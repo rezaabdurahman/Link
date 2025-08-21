@@ -1,0 +1,119 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+scrape_configs:
+  # API Gateway Enhanced Metrics
+  - job_name: 'api-gateway-enhanced'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # PgBouncer Metrics
+  - job_name: 'pgbouncer'
+    static_configs:
+      - targets: ['pgbouncer:9127']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL Metrics (if postgres_exporter is deployed)
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Redis Metrics (if redis_exporter is deployed)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # User Service Instances
+  - job_name: 'user-service'
+    static_configs:
+      - targets: 
+        - 'user-svc-1:8080'
+        - 'user-svc-2:8080'
+        - 'user-svc-3:8080'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance_id
+        regex: 'user-svc-(\d+):.*'
+        replacement: 'user-${1}'
+
+  # Chat Service Instances
+  - job_name: 'chat-service'
+    static_configs:
+      - targets: 
+        - 'chat-svc-1:8080'
+        - 'chat-svc-2:8080'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance_id
+        regex: 'chat-svc-(\d+):.*'
+        replacement: 'chat-${1}'
+
+  # AI Service Instances
+  - job_name: 'ai-service'
+    static_configs:
+      - targets: 
+        - 'ai-svc-1:8000'
+        - 'ai-svc-2:8000'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance_id
+        regex: 'ai-svc-(\d+):.*'
+        replacement: 'ai-${1}'
+
+  # Discovery Service Instance
+  - job_name: 'discovery-service'
+    static_configs:
+      - targets: ['discovery-svc-1:8080']
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Location Service Instances
+  - job_name: 'location-service'
+    static_configs:
+      - targets: 
+        - 'location-svc-1:8080'
+        - 'location-svc-2:8080'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance_id
+        regex: 'location-svc-(\d+):.*'
+        replacement: 'location-${1}'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

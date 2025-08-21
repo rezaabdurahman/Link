@@ -46,7 +46,7 @@ func NewRedisRateLimiter(config *RedisRateLimiterConfig) *RedisRateLimiter {
 	// Add default rules
 	limiter.AddRule("auth", RateLimitRule{
 		Pattern:   "/auth/",
-		Limit:     5,  // 5 requests per minute for auth endpoints
+		Limit:     5, // 5 requests per minute for auth endpoints
 		Window:    time.Minute,
 		BurstSize: 2,
 	})
@@ -71,10 +71,10 @@ func RedisRateLimitMiddleware(limiter *RedisRateLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get client identifier (IP + User ID if available)
 		clientID := limiter.getClientID(c)
-		
+
 		// Find applicable rule
 		rule := limiter.findRule(c.Request.URL.Path)
-		
+
 		// Check rate limit using sliding window algorithm
 		allowed, remaining, resetTime, err := limiter.checkRateLimit(clientID, rule, c.Request.URL.Path)
 		if err != nil {
@@ -118,7 +118,7 @@ func (r *RedisRateLimiter) getClientID(c *gin.Context) string {
 	if userID, exists := c.Get("user_id"); exists {
 		return fmt.Sprintf("user:%v", userID)
 	}
-	
+
 	// Get real IP (considering proxies)
 	clientIP := c.ClientIP()
 	return fmt.Sprintf("ip:%s", clientIP)
@@ -146,34 +146,34 @@ func (r *RedisRateLimiter) checkRateLimit(clientID string, rule RateLimitRule, p
 	now := time.Now()
 	window := rule.Window
 	limit := rule.Limit
-	
+
 	// Redis key for this client and window
 	key := fmt.Sprintf("rate_limit:%s:%d", clientID, now.Truncate(window).Unix())
-	
+
 	pipe := r.config.RedisClient.Pipeline()
-	
+
 	// Increment counter for current window
 	incr := pipe.Incr(r.ctx, key)
 	// Set expiration for the key
 	pipe.Expire(r.ctx, key, window+time.Minute) // Extra minute for cleanup
-	
+
 	// Also check previous window for smoother rate limiting
 	prevWindow := now.Add(-window).Truncate(window).Unix()
 	prevKey := fmt.Sprintf("rate_limit:%s:%d", clientID, prevWindow)
 	prevCount := pipe.Get(r.ctx, prevKey)
-	
+
 	// Execute pipeline
 	_, err = pipe.Exec(r.ctx)
 	if err != nil {
 		return false, 0, 0, err
 	}
-	
+
 	// Get current window count
 	currentCount, err := incr.Result()
 	if err != nil {
 		return false, 0, 0, err
 	}
-	
+
 	// Get previous window count (ignore error if key doesn't exist)
 	var prevCountVal int64 = 0
 	if prevCountResult, err := prevCount.Result(); err == nil {
@@ -181,26 +181,26 @@ func (r *RedisRateLimiter) checkRateLimit(clientID string, rule RateLimitRule, p
 			prevCountVal = parsed
 		}
 	}
-	
+
 	// Sliding window calculation
 	// Weight the previous window based on how much time has passed
 	timeIntoWindow := float64(now.Sub(now.Truncate(window))) / float64(window)
 	weightedPrevCount := float64(prevCountVal) * (1.0 - timeIntoWindow)
-	
+
 	totalRequests := float64(currentCount) + weightedPrevCount
-	
+
 	// Check if limit is exceeded
 	if totalRequests > float64(limit) {
 		return false, 0, now.Truncate(window).Add(window).Unix(), nil
 	}
-	
+
 	remaining = limit - int(totalRequests)
 	if remaining < 0 {
 		remaining = 0
 	}
-	
+
 	resetTime = now.Truncate(window).Add(window).Unix()
-	
+
 	return true, remaining, resetTime, nil
 }
 
@@ -209,12 +209,12 @@ func matchesPattern(path, pattern string) bool {
 	if pattern == "*" {
 		return true
 	}
-	
+
 	// Simple prefix matching - could be enhanced with regex or glob patterns
 	if len(pattern) <= len(path) {
 		return path[:len(pattern)] == pattern
 	}
-	
+
 	return false
 }
 

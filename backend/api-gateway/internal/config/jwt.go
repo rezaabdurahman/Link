@@ -11,25 +11,25 @@ import (
 
 // JWTConfig holds JWT configuration for the API Gateway
 type JWTConfig struct {
-	Secret           string
-	AccessTokenTTL   time.Duration
-	Issuer           string
-	CookieName       string
-	CookieSecure     bool
-	CookieHTTPOnly   bool
-	CookieSameSite   string
+	Secret         string
+	AccessTokenTTL time.Duration
+	Issuer         string
+	CookieName     string
+	CookieSecure   bool
+	CookieHTTPOnly bool
+	CookieSameSite string
 }
 
 // GetJWTConfig returns JWT configuration from environment variables
 func GetJWTConfig() *JWTConfig {
 	return &JWTConfig{
-		Secret:           getEnv("JWT_SECRET", "your-secret-key-change-this-in-production"),
-		AccessTokenTTL:   time.Hour,                            // 1 hour for access tokens
-		Issuer:           getEnv("JWT_ISSUER", "user-svc"),
-		CookieName:       getEnv("JWT_COOKIE_NAME", "link_auth"),
-		CookieSecure:     getEnv("ENVIRONMENT", "development") == "production",
-		CookieHTTPOnly:   true,
-		CookieSameSite:   getEnv("JWT_COOKIE_SAMESITE", "strict"),
+		Secret:         getEnv("JWT_SECRET", "your-secret-key-change-this-in-production"),
+		AccessTokenTTL: time.Hour, // 1 hour for access tokens
+		Issuer:         getEnv("JWT_ISSUER", "user-svc"),
+		CookieName:     getEnv("JWT_COOKIE_NAME", "link_auth"),
+		CookieSecure:   getEnv("ENVIRONMENT", "development") == "production",
+		CookieHTTPOnly: true,
+		CookieSameSite: getEnv("JWT_COOKIE_SAMESITE", "strict"),
 	}
 }
 
@@ -97,7 +97,7 @@ func IsPublicEndpoint(method, path string) bool {
 		},
 		"GET": {
 			"/health",
-			"/metrics", // Prometheus metrics endpoint
+			"/metrics",        // Prometheus metrics endpoint
 			"/users/profile/", // Public user profiles (will check if path contains /users/profile/)
 		},
 		"OPTIONS": {"*"}, // Allow all OPTIONS requests for CORS
@@ -120,4 +120,3 @@ func IsPublicEndpoint(method, path string) bool {
 
 	return false
 }
-

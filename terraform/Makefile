@@ -113,11 +113,20 @@ dev-plan: ## Quick plan for development
 dev-apply: ## Quick apply for development
 	@make apply ENV=development
 
+# Staging shortcuts
+staging-plan: ## Quick plan for staging
+	@make plan ENV=staging
+
+staging-apply: ## Quick apply for staging
+	@make apply ENV=staging
+
 # Production safety checks
 prod-plan: ## Plan for production with extra validation
 	@echo "$(YELLOW)Planning for PRODUCTION environment...$(RESET)"
 	@make validate
 	@make format
+	@make lint
+	@make security
 	@make plan ENV=production
 
 prod-apply: ## Apply for production with confirmation
@@ -125,3 +134,71 @@ prod-apply: ## Apply for production with confirmation
 	@echo "$(YELLOW)Are you sure you want to deploy to production?$(RESET)"
 	@read -p "Type 'PRODUCTION' to confirm: " confirm && [ "$$confirm" = "PRODUCTION" ]
 	@make apply ENV=production
+
+# Quality assurance
+quality: ## Run all quality checks
+	@echo "$(BLUE)Running comprehensive quality checks...$(RESET)"
+	@make validate
+	@make format
+	@make lint  
+	@make security
+	@echo "$(GREEN)✓ All quality checks passed$(RESET)"
+
+# Remote state setup
+setup-remote-state: ## Setup AWS resources for remote state
+	@echo "$(BLUE)Setting up remote state infrastructure...$(RESET)"
+	@chmod +x scripts/setup-remote-state.sh
+	@./scripts/setup-remote-state.sh
+	@echo "$(GREEN)✓ Remote state infrastructure created$(RESET)"
+
+# Testing
+test-backup: ## Test backup and restore procedures
+	@echo "$(BLUE)Testing backup and restore procedures...$(RESET)"
+	@chmod +x scripts/test-backup-restore.sh
+	@./scripts/test-backup-restore.sh
+	@echo "$(GREEN)✓ Backup testing completed$(RESET)"
+
+quality-full: ## Run comprehensive quality checks with external script
+	@echo "$(BLUE)Running comprehensive quality checks...$(RESET)"
+	@chmod +x scripts/quality-check.sh
+	@./scripts/quality-check.sh
+	@echo "$(GREEN)✓ Comprehensive quality checks completed$(RESET)"
+
+# Documentation
+docs: ## Generate Terraform documentation
+	@echo "$(BLUE)Generating Terraform documentation...$(RESET)"
+	@if command -v terraform-docs >/dev/null 2>&1; then \
+		terraform-docs markdown . > TERRAFORM_DOCS.md; \
+		echo "$(GREEN)✓ Documentation generated$(RESET)"; \
+	else \
+		echo "$(YELLOW)Warning: terraform-docs not installed. Install with: brew install terraform-docs$(RESET)"; \
+	fi
+
+# Environment information
+show: ## Show current Terraform state
+	@echo "$(BLUE)Showing Terraform state for $(ENV) environment...$(RESET)"
+	terraform show
+
+output: ## Show Terraform outputs  
+	@echo "$(BLUE)Showing Terraform outputs for $(ENV) environment...$(RESET)"
+	terraform output
+
+output-json: ## Show Terraform outputs in JSON format
+	@echo "$(BLUE)Showing Terraform outputs in JSON for $(ENV) environment...$(RESET)"
+	terraform output -json
+
+# Utilities
+check-tools: ## Check if required tools are installed
+	@echo "$(BLUE)Checking required tools...$(RESET)"
+	@tools="terraform tflint tfsec terraform-docs"; \
+	for tool in $$tools; do \
+		if command -v $$tool >/dev/null 2>&1; then \
+			echo "$(GREEN)✓ $$tool installed$(RESET)"; \
+		else \
+			echo "$(YELLOW)✗ $$tool not installed$(RESET)"; \
+		fi; \
+	done
+
+version: ## Show Terraform version
+	@echo "$(BLUE)Terraform version:$(RESET)"
+	@terraform version

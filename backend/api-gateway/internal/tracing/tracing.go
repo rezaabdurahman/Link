@@ -12,15 +12,15 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	oteltrace "go.opentelemetry.io/otel/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // InitTracing initializes OpenTelemetry with OTLP exporter (compatible with Jaeger)
 func InitTracing(serviceName string) (func(), error) {
 	// Get OTLP endpoint from environment or use default (Jaeger OTLP receiver)
 	otlpEndpoint := getEnv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://localhost:4318/v1/traces")
-	
+
 	// Create OTLP HTTP exporter
 	exp, err := otlptracehttp.New(context.Background(),
 		otlptracehttp.WithEndpoint(otlpEndpoint),
@@ -77,7 +77,7 @@ func InitTracing(serviceName string) (func(), error) {
 func getSampler() trace.Sampler {
 	env := getEnv("ENVIRONMENT", "development")
 	samplingRateStr := getEnv("TRACING_SAMPLING_RATE", "")
-	
+
 	switch env {
 	case "production":
 		// In production, sample less to reduce overhead

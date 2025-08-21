@@ -1,0 +1,141 @@
+# Pre-commit hooks for Terraform quality gates
+# Run quality checks before each commit
+
+repos:
+  # Terraform-specific hooks
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.83.6
+    hooks:
+      - id: terraform_fmt
+        name: Format Terraform files
+        description: Rewrites all Terraform configuration files to a canonical format
+        
+      - id: terraform_validate
+        name: Validate Terraform
+        description: Validates all Terraform configuration files
+        args:
+          - --hook-config=--retry-once-with-cleanup=true
+        
+      - id: terraform_docs
+        name: Generate Terraform docs
+        description: Inserts input and output documentation into README.md
+        args:
+          - --hook-config=--path-to-file=README.md
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+        
+      - id: terraform_tflint
+        name: Lint Terraform with TFLint
+        description: Validates all Terraform configuration files with TFLint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+          
+      - id: terraform_tfsec
+        name: Security scan with TFSec
+        description: Static analysis of Terraform templates to spot potential security issues
+        args:
+          - --args=--config-file=__GIT_WORKING_DIR__/.tfsec.yml
+
+  # General code quality hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        description: Trims trailing whitespace
+        
+      - id: end-of-file-fixer
+        name: Fix end of files
+        description: Makes sure files end in a newline and only a newline
+        
+      - id: check-yaml
+        name: Check YAML
+        description: Attempts to load all yaml files to verify syntax
+        
+      - id: check-json
+        name: Check JSON
+        description: Attempts to load all json files to verify syntax
+        
+      - id: check-merge-conflict
+        name: Check merge conflicts
+        description: Check for files that contain merge conflict strings
+        
+      - id: check-added-large-files
+        name: Check for large files
+        description: Prevent giant files from being committed
+        args: ['--maxkb=500']
+        
+      - id: detect-private-key
+        name: Detect private keys
+        description: Checks for the existence of private keys
+        
+      - id: check-case-conflict
+        name: Check case conflicts
+        description: Check for files with names that would conflict on a case-insensitive filesystem
+
+  # Security scanning with Checkov
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.1.34
+    hooks:
+      - id: checkov
+        name: Security scan with Checkov
+        description: Runs Checkov static analysis on Terraform files
+        args:
+          - --framework=terraform
+          - --quiet
+          - --compact
+        exclude: |
+          (?x)^(
+              .*\.terraform/.*|
+              .*\.tfstate.*|
+              .*\.backup
+          )$
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.37.0
+    hooks:
+      - id: markdownlint
+        name: Lint Markdown
+        description: Lint Markdown files
+        args:
+          - --config=.markdownlint.json
+          - --ignore-path=.markdownlintignore
+        exclude: |
+          (?x)^(
+              TERRAFORM_DOCS\.md|
+              CHANGELOG\.md
+          )$
+
+  # Shell script linting (for our scripts)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        name: Lint shell scripts
+        description: Lint shell scripts with ShellCheck
+        args:
+          - --severity=warning
+        types: [shell]
+
+  # Git commit message validation
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        name: Validate commit message
+        description: Ensure commit messages follow conventional commits format
+        stages: [commit-msg]
+
+# Configuration for CI environments
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+    
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
