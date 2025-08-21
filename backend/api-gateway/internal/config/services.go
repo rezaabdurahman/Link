@@ -12,7 +12,6 @@ type ServiceConfig struct {
 	ChatService      ServiceEndpoint
 	AIService        ServiceEndpoint
 	DiscoveryService ServiceEndpoint
-	StoriesService   ServiceEndpoint
 	OpportunitiesService ServiceEndpoint
 }
 
@@ -51,11 +50,6 @@ func GetServiceConfig() *ServiceConfig {
 			HealthURL: getEnv("DISCOVERY_SVC_HEALTH_URL", "http://discovery-svc:8080/health"),
 			Timeout:   getEnvAsInt("DISCOVERY_SVC_TIMEOUT", 30),
 		},
-		StoriesService: ServiceEndpoint{
-			URL:       getEnv("STORIES_SVC_URL", "http://stories-svc:8080"),
-			HealthURL: getEnv("STORIES_SVC_HEALTH_URL", "http://stories-svc:8080/health"),
-			Timeout:   getEnvAsInt("STORIES_SVC_TIMEOUT", 30),
-		},
 		OpportunitiesService: ServiceEndpoint{
 			URL:       getEnv("OPPORTUNITIES_SVC_URL", "http://opportunities-svc:8080"),
 			HealthURL: getEnv("OPPORTUNITIES_SVC_HEALTH_URL", "http://opportunities-svc:8080/health"),
@@ -79,8 +73,6 @@ func RouteToService(path string) (ServiceEndpoint, error) {
 		return config.AIService, nil
 	case matchesPath(path, "/broadcasts/", "/discovery/"):
 		return config.DiscoveryService, nil
-	case matchesPath(path, "/stories/"):
-		return config.StoriesService, nil
 	case matchesPath(path, "/opportunities/"):
 		return config.OpportunitiesService, nil
 	default:
