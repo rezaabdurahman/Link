@@ -97,6 +97,11 @@ export const API_ENDPOINTS = {
   MONTAGE: {
     byUserId: (id: string) => `/users/${id}/montage`,
   },
+  
+  // Search endpoints
+  SEARCH: {
+    unified: '/search',
+  },
 } as const;
 
 /**

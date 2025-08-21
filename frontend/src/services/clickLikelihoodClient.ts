@@ -40,8 +40,17 @@ export const calculateClickLikelihood = (user: User): number => {
   score += priorityScore * 0.15;
   
   // Factor 5: Recent activity (0.15 weight)
-  const hoursAgo = (Date.now() - user.lastSeen.getTime()) / (1000 * 60 * 60);
-  const activityScore = Math.max(0, Math.min(1, (24 - hoursAgo) / 24)); // More recent = higher score
+  let activityScore = 0.5; // Default score if lastSeen is invalid
+  if (user.lastSeen) {
+    try {
+      const lastSeenTime = user.lastSeen instanceof Date ? user.lastSeen.getTime() : new Date(user.lastSeen).getTime();
+      const hoursAgo = (Date.now() - lastSeenTime) / (1000 * 60 * 60);
+      activityScore = Math.max(0, Math.min(1, (24 - hoursAgo) / 24)); // More recent = higher score
+    } catch (error) {
+      console.warn('Invalid lastSeen date for user:', user.id, user.lastSeen);
+      activityScore = 0.5; // Default to neutral score
+    }
+  }
   score += activityScore * 0.15;
   
   // Factor 6: Profile type engagement (0.15 weight)

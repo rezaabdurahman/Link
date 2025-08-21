@@ -485,15 +485,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                     </button>
                   )}
                   
-                  {/* Clear search */}
-                  {hasSearched && (
-                    <button
-                      onClick={clearSearch}
-                      className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-gray-200 transition-colors"
-                    >
-                      Clear search
-                    </button>
-                  )}
                 </div>
               )}
               

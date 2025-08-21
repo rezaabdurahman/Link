@@ -201,12 +201,11 @@ func (p *ProxyHandler) HealthHandler(c *gin.Context) {
 
 	// Check each service health
 	services := map[string]config.ServiceEndpoint{
-		"user-svc":          serviceConfig.UserService,
-		"location-svc":      serviceConfig.LocationService,
-		"chat-svc":          serviceConfig.ChatService,
-		"ai-svc":            serviceConfig.AIService,
-		"discovery-svc":     serviceConfig.DiscoveryService,
-		"opportunities-svc": serviceConfig.OpportunitiesService,
+		"user-svc":      serviceConfig.UserService,
+		"location-svc":  serviceConfig.LocationService,
+		"chat-svc":      serviceConfig.ChatService,
+		"ai-svc":        serviceConfig.AIService,
+		"discovery-svc": serviceConfig.DiscoveryService,
 	}
 
 	overallHealthy := true

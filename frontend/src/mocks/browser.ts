@@ -75,7 +75,8 @@ export const startMockWorker = async () => {
         'Onboarding': '/onboarding/status, /onboarding/start, /onboarding/step',
         'Availability': '/availability',
         'Broadcasts': '/broadcasts',
-        'Montage': '/users/:id/montage'
+        'Montage': '/users/:id/montage',
+        'Search': '/search'
       });
       console.log('🔒 MSW: All backend calls will be mocked - no real server needed');
     } catch (error) {

@@ -6,12 +6,11 @@ import (
 
 // ServiceConfig holds configuration for backend services
 type ServiceConfig struct {
-	UserService          ServiceEndpoint
-	LocationService      ServiceEndpoint
-	ChatService          ServiceEndpoint
-	AIService            ServiceEndpoint
-	DiscoveryService     ServiceEndpoint
-	OpportunitiesService ServiceEndpoint
+	UserService      ServiceEndpoint
+	LocationService  ServiceEndpoint
+	ChatService      ServiceEndpoint
+	AIService        ServiceEndpoint
+	DiscoveryService ServiceEndpoint
 }
 
 // ServiceEndpoint represents a backend service endpoint
@@ -49,11 +48,6 @@ func GetServiceConfig() *ServiceConfig {
 			HealthURL: getEnv("DISCOVERY_SVC_HEALTH_URL", "http://discovery-svc:8080/health"),
 			Timeout:   getEnvAsInt("DISCOVERY_SVC_TIMEOUT", 30),
 		},
-		OpportunitiesService: ServiceEndpoint{
-			URL:       getEnv("OPPORTUNITIES_SVC_URL", "http://opportunities-svc:8080"),
-			HealthURL: getEnv("OPPORTUNITIES_SVC_HEALTH_URL", "http://opportunities-svc:8080/health"),
-			Timeout:   getEnvAsInt("OPPORTUNITIES_SVC_TIMEOUT", 30),
-		},
 	}
 }
 
@@ -72,8 +66,6 @@ func RouteToService(path string) (ServiceEndpoint, error) {
 		return config.AIService, nil
 	case matchesPath(path, "/broadcasts/", "/discovery/"):
 		return config.DiscoveryService, nil
-	case matchesPath(path, "/opportunities/"):
-		return config.OpportunitiesService, nil
 	default:
 		return ServiceEndpoint{}, fmt.Errorf("no service found for path: %s", path)
 	}

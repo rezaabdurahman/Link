@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/react";
 
-const isDevelopment = process.env.NODE_ENV === "development";
-const isTest = process.env.NODE_ENV === "test";
+const isDevelopment = import.meta.env.NODE_ENV === "development";
+const isTest = import.meta.env.NODE_ENV === "test";
 
 // Initialize Sentry
 export const initSentry = () => {
@@ -9,8 +9,8 @@ export const initSentry = () => {
   if (isTest) return;
 
   Sentry.init({
-    dsn: process.env.VITE_SENTRY_DSN,
-    environment: process.env.NODE_ENV,
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.NODE_ENV,
     
     // Performance Monitoring - using the new v10+ API
     integrations: [
@@ -46,7 +46,7 @@ export const initSentry = () => {
 
     // Additional configuration
     debug: isDevelopment,
-    release: process.env.VITE_APP_VERSION || "unknown",
+    release: import.meta.env.VITE_APP_VERSION || "unknown",
     
     // Set user context automatically
     initialScope: {

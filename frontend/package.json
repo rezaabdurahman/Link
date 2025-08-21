@@ -4,8 +4,8 @@
   "private": true,
   "description": "Link - Connect with people around you who share your interests",
   "scripts": {
-    "start": "vite --open",
-    "dev": "vite --open",
+    "start": "vite",
+    "dev": "vite",
     "build": "tsc && vite build",
     "build:demo": "vite build --mode demo",
     "build:preview": "tsc && vite build --mode preview",
