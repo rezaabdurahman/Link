@@ -7,11 +7,13 @@ WORKDIR /app
 # Install dependencies for building
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy shared libs and go mod files
-COPY shared-libs ./shared-libs
+# Copy shared libs to parent directory structure
+COPY shared-libs ../shared-libs
+
+# Copy go mod files
 COPY api-gateway/go.mod api-gateway/go.sum ./
 
-# Copy source code
+# Copy source code  
 COPY api-gateway/ .
 
 # Tidy dependencies and download

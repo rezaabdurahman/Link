@@ -69,7 +69,6 @@ func initializeEnhancedServiceConfig() *EnhancedServiceConfig {
 	config.Services["ai-svc"] = createServiceLoadBalancer("ai-svc", getAIServiceInstances())
 	config.Services["discovery-svc"] = createServiceLoadBalancer("discovery-svc", getDiscoveryServiceInstances())
 	config.Services["search-svc"] = createServiceLoadBalancer("search-svc", getSearchServiceInstances())
-	config.Services["stories-svc"] = createServiceLoadBalancer("stories-svc", getStoriesServiceInstances())
 	config.Services["opportunities-svc"] = createServiceLoadBalancer("opportunities-svc", getOpportunitiesServiceInstances())
 
 	// Start health checking for all services
@@ -146,10 +145,6 @@ func getSearchServiceInstances() []ServiceInstanceConfig {
 	return getServiceInstances("SEARCH_SVC", "search-svc", 8085, 30*time.Second)
 }
 
-// getStoriesServiceInstances returns stories service instance configurations
-func getStoriesServiceInstances() []ServiceInstanceConfig {
-	return getServiceInstances("STORIES_SVC", "stories-svc", 8080, 30*time.Second)
-}
 
 // getOpportunitiesServiceInstances returns opportunities service instance configurations
 func getOpportunitiesServiceInstances() []ServiceInstanceConfig {
@@ -296,8 +291,6 @@ func RouteToServiceLoadBalancer(path string) (*ServiceLoadBalancer, error) {
 		serviceName = "discovery-svc"
 	case matchesPath(path, "/search/"):
 		serviceName = "search-svc"
-	case matchesPath(path, "/stories/"):
-		serviceName = "stories-svc"
 	case matchesPath(path, "/opportunities/"):
 		serviceName = "opportunities-svc"
 	default:

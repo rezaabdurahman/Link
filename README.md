@@ -74,7 +74,7 @@ The backend follows a microservices architecture with:
 ### Chat Page
 - **WhatsApp-like chat interface** with multiple sorting options
 - **AI-powered search suggestions** ("Who plays volleyball?")
-- **Stories integration** at the top of chats
+- **User activity integration** at the top of chats
 - **Conversation summaries** for quick context
 - **Priority-based chat ordering**
 

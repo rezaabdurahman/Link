@@ -1,0 +1,288 @@
+# =================================================================
+# Link Backend - Production Docker Compose Configuration
+# =================================================================
+# 
+# This file overrides development settings for production deployment
+# 
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.production.yml up -d
+#
+# Environment Variables Required:
+#   - POSTGRES_PASSWORD (no default in production)
+#   - JWT_SECRET (no default in production)
+#   - SENTRY_DSN (for error reporting)
+#   - OPENAI_API_KEY (for AI service)
+# =================================================================
+
+version: '3.8'
+
+services:
+  postgres:
+    # Production PostgreSQL configuration
+    environment:
+      # Security: No default passwords in production
+      POSTGRES_USER: ${POSTGRES_USER:-linkuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # REQUIRED - no default
+      POSTGRES_DB: ${DB_NAME:-linkdb}
+      
+      # Production optimizations
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8 --data-checksums"
+      
+      # Performance tuning environment variables
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-256MB}
+      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE:-1GB}
+      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}
+      POSTGRES_CHECKPOINT_COMPLETION_TARGET: ${POSTGRES_CHECKPOINT_COMPLETION_TARGET:-0.7}
+      POSTGRES_WAL_BUFFERS: ${POSTGRES_WAL_BUFFERS:-16MB}
+      POSTGRES_DEFAULT_STATISTICS_TARGET: ${POSTGRES_DEFAULT_STATISTICS_TARGET:-100}
+      
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+      - ./scripts/postgresql.production.conf:/etc/postgresql/postgresql.conf:ro
+      - ./logs/postgresql:/var/log/postgresql
+      
+    # Production-specific PostgreSQL configuration
+    command: >
+      postgres 
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c logging_collector=on
+      -c log_directory=/var/log/postgresql
+      -c log_filename=postgresql-%Y-%m-%d_%H%M%S.log
+      -c log_rotation_age=1d
+      -c log_rotation_size=100MB
+      
+    # Security: Remove port mapping in production (use internal network only)
+    ports: []
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-linkuser} -d ${DB_NAME:-linkdb}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+      
+    # Production restart policy
+    restart: always
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Redis configurations for production
+  redis-gateway:
+    # Security: Remove port mapping in production
+    ports: []
+    
+    # Production Redis configuration
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --requirepass ${REDIS_PASSWORD:-}
+      --appendonly yes
+      --appendfsync everysec
+      
+    volumes:
+      - redis_gateway_data:/data
+      - ./logs/redis-gateway:/var/log/redis
+      
+    restart: always
+    
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  redis-user:
+    ports: []
+    command: >
+      redis-server
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --requirepass ${REDIS_PASSWORD:-}
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_user_data:/data
+      - ./logs/redis-user:/var/log/redis
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  redis-chat:
+    ports: []
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --requirepass ${REDIS_PASSWORD:-}
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_chat_data:/data
+      - ./logs/redis-chat:/var/log/redis
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '0.5'
+
+  redis-discovery:
+    ports: []
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --requirepass ${REDIS_PASSWORD:-}
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_discovery_data:/data
+      - ./logs/redis-discovery:/var/log/redis
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  # API Gateway production configuration
+  api-gateway:
+    environment:
+      # Security: No defaults for sensitive values
+      JWT_SECRET: ${JWT_SECRET}  # REQUIRED - no default
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1h}  # Shorter in production
+      
+      # Production database configuration
+      DB_HOST: postgres  # Internal network name
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-linkuser}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${DB_NAME:-linkdb}
+      DB_SSL_MODE: ${DB_SSL_MODE:-require}  # Require SSL in production
+      
+      # Production Redis configuration  
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      
+      # Production application settings
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+      
+      # Security settings
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}  # REQUIRED - no wildcards
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-50}  # Lower in production
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-100}
+      
+      # Monitoring
+      SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_ENVIRONMENT: production
+      METRICS_ENABLED: true
+      TRACING_ENABLED: true
+      
+      # Disable debug features
+      ENABLE_DEBUG_ENDPOINTS: false
+      ENABLE_PPROF: false
+      ENABLE_REQUEST_LOGGING: false
+      
+    # Remove port mapping - use load balancer
+    ports: []
+    
+    volumes: []  # No source code mounting in production
+    
+    restart: always
+    
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Production logging and monitoring
+  log-aggregator:
+    image: fluent/fluent-bit:2.1
+    volumes:
+      - ./logs:/var/log/app:ro
+      - ./config/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+    environment:
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
+    restart: always
+    depends_on:
+      - api-gateway
+
+# Production volumes with backup labels
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_PATH:-/data/postgres}
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 2 * * *"  # Daily at 2 AM
+      
+  redis_gateway_data:
+    driver: local
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 3 * * *"
+      
+  redis_user_data:
+    driver: local
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 3 * * *"
+      
+  redis_chat_data:
+    driver: local
+    labels:
+      - "backup.enable=true" 
+      - "backup.schedule=0 3 * * *"
+      
+  redis_discovery_data:
+    driver: local
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 3 * * *"
+
+# Production networks
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          
+  # Separate network for monitoring
+  monitoring:
+    driver: bridge
+    internal: false

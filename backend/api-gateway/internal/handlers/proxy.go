@@ -49,7 +49,7 @@ func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 
 	// Transform the path for the target service
 	servicePath := config.TransformPath(c.Request.URL.Path)
-	
+
 	// Build target URL
 	targetURL, err := url.Parse(service.URL + servicePath)
 	if err != nil {
@@ -121,7 +121,7 @@ func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 
 	// Set timeout based on service configuration
 	client := &http.Client{
-		Timeout: time.Duration(service.Timeout) * time.Second,
+		Timeout:   time.Duration(service.Timeout) * time.Second,
 		Transport: p.httpClient.Transport,
 	}
 
@@ -191,7 +191,7 @@ func (p *ProxyHandler) copyHeaders(src, dst http.Header) {
 // HealthHandler aggregates health status from all services
 func (p *ProxyHandler) HealthHandler(c *gin.Context) {
 	serviceConfig := config.GetServiceConfig()
-	
+
 	healthStatus := gin.H{
 		"status":    "healthy",
 		"gateway":   "healthy",
@@ -201,12 +201,11 @@ func (p *ProxyHandler) HealthHandler(c *gin.Context) {
 
 	// Check each service health
 	services := map[string]config.ServiceEndpoint{
-		"user-svc":      serviceConfig.UserService,
-		"location-svc":  serviceConfig.LocationService,
-		"chat-svc":      serviceConfig.ChatService,
-		"ai-svc":        serviceConfig.AIService,
-		"discovery-svc": serviceConfig.DiscoveryService,
-		"stories-svc":   serviceConfig.StoriesService,
+		"user-svc":          serviceConfig.UserService,
+		"location-svc":      serviceConfig.LocationService,
+		"chat-svc":          serviceConfig.ChatService,
+		"ai-svc":            serviceConfig.AIService,
+		"discovery-svc":     serviceConfig.DiscoveryService,
 		"opportunities-svc": serviceConfig.OpportunitiesService,
 	}
 
@@ -216,7 +215,7 @@ func (p *ProxyHandler) HealthHandler(c *gin.Context) {
 	for serviceName, serviceEndpoint := range services {
 		status := p.checkServiceHealth(serviceEndpoint.HealthURL)
 		serviceStatuses[serviceName] = status
-		
+
 		if status != "healthy" {
 			overallHealthy = false
 		}

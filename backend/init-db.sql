@@ -1,8 +1,38 @@
--- Initialize database and user
-CREATE USER linkuser WITH SUPERUSER PASSWORD 'linkpass';
-CREATE DATABASE linkdb OWNER linkuser;
-GRANT ALL PRIVILEGES ON DATABASE linkdb TO linkuser;
+-- =================================================================
+-- DEPRECATED: This file is deprecated in favor of scripts/init-db.sh
+-- =================================================================
+--
+-- This SQL file contains hardcoded credentials and security issues.
+-- It has been replaced by scripts/init-db.sh which:
+--   - Uses environment variables for credentials
+--   - Removes SUPERUSER privileges for security
+--   - Provides environment-specific configuration
+--   - Includes proper error handling
+--
+-- This file is kept for backwards compatibility only.
+-- =================================================================
+
+-- Legacy initialization (DEPRECATED - DO NOT USE)
+-- CREATE USER linkuser WITH SUPERUSER PASSWORD 'linkpass';  -- SECURITY ISSUE: SUPERUSER + hardcoded password
+-- CREATE DATABASE linkdb OWNER linkuser;
+-- GRANT ALL PRIVILEGES ON DATABASE linkdb TO linkuser;
 
 -- Enable required extensions  
-\c linkdb;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- \c linkdb;
+-- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- =================================================================
+-- Migration Notice
+-- =================================================================
+-- 
+-- To migrate to the new secure initialization:
+-- 1. Use docker-compose with the updated configuration
+-- 2. Set environment variables: POSTGRES_PASSWORD, POSTGRES_USER, DB_NAME
+-- 3. The new scripts/init-db.sh will handle secure initialization
+-- 
+-- Example:
+--   export POSTGRES_PASSWORD=your-secure-password
+--   export POSTGRES_USER=linkuser  
+--   export DB_NAME=linkdb
+--   docker-compose up -d postgres
+-- =================================================================
