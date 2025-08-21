@@ -32,7 +32,6 @@ services:
       - AI_SVC_URL=http://link_ai_svc:8000
       - DISCOVERY_SVC_URL=http://link_discovery_svc:8080
       - LOCATION_SVC_URL=http://link_location_svc:8080
-      - STORIES_SVC_URL=http://link_stories_svc:8080
       - OPPORTUNITIES_SVC_URL=http://link_opportunities_svc:8080
       
       # Load Balancer Configuration
@@ -48,12 +47,12 @@ services:
       - DEFAULT_RETRY_JITTER=${DEFAULT_RETRY_JITTER:-true}
       
       # Database Configuration (use existing DB from main compose)
-      - DB_HOST=link_postgres
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-linkuser}
-      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
-      - DB_NAME=linkdb
-      - DB_SSL_MODE=disable
+      - DB_HOST=${DB_HOST:-link_postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${POSTGRES_USER:-linkuser}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-linkpass}
+      - DB_NAME=${DB_NAME:-linkdb}
+      - DB_SSL_MODE=${DB_SSL_MODE:-disable}
       
       # Redis Configuration (use existing Redis from main compose)
       - REDIS_HOST=link_redis
