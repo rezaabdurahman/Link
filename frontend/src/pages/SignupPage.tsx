@@ -51,7 +51,6 @@ const SignupPage: React.FC = (): JSX.Element => {
   const watchedFields = watch();
   const formIsFilled = watchedFields.firstName && 
     watchedFields.lastName && 
-    watchedFields.username &&
     watchedFields.email && 
     watchedFields.password && 
     watchedFields.confirmPassword;
@@ -149,20 +148,6 @@ const SignupPage: React.FC = (): JSX.Element => {
               />
             </div>
 
-            {/* Username Field */}
-            <AuthFormField
-              label="Username"
-              name="username"
-              type="text"
-              placeholder="Choose a username"
-              icon={UserPlus}
-              error={errors.username?.message}
-              disabled={isLoading}
-              autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect="off"
-              register={formRegister}
-            />
 
             {/* Email Field */}
             <AuthFormField

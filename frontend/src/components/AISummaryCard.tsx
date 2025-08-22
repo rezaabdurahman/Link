@@ -2,6 +2,7 @@ import React from 'react';
 import { Sparkles, Edit, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { generateAISummary, friends } from '../data/mockData';
+import { getDisplayName } from '../utils/nameHelpers';
 
 interface AISummaryCardProps {
   friendId: string;
@@ -35,7 +36,7 @@ const AISummaryCard: React.FC<AISummaryCardProps> = ({
           <div className="relative">
             <img
               src={profilePicture}
-              alt={friend.name}
+              alt={getDisplayName(friend)}
               className="w-10 h-10 rounded-full object-cover"
             />
             <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-aqua rounded-full flex items-center justify-center">
@@ -43,7 +44,7 @@ const AISummaryCard: React.FC<AISummaryCardProps> = ({
             </div>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{friend.name}</h3>
+            <h3 className="font-semibold text-gray-900">{getDisplayName(friend)}</h3>
             <p className="text-xs text-gray-500">AI Summary</p>
           </div>
         </div>

@@ -25,6 +25,7 @@ import {
   createGridChunks, 
   UserWithLikelihood 
 } from '../services/clickLikelihoodClient';
+import { getDisplayName, getFullName } from '../utils/nameHelpers';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
@@ -39,7 +40,14 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
   const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
-  const [hiddenUserIds] = useState<Set<string>>(new Set());
+  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('hiddenUserIds');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' }>({ 
     isVisible: false, 
     message: '', 
@@ -168,12 +176,21 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     }
   }, [isAvailable, hasSearched, searchResults.length, isSearching, performSearch]);
 
+  // Persist hiddenUserIds to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('hiddenUserIds', JSON.stringify([...hiddenUserIds]));
+    } catch (error) {
+      console.warn('Failed to persist hiddenUserIds to localStorage:', error);
+    }
+  }, [hiddenUserIds]);
+
   // Determine which users to display: search results only (we always use real client data)
   const baseDisplayUsers = searchResults
     .filter(user =>
       !hiddenUserIds.has(user.id) && // Exclude hidden users
       (searchQuery === '' || 
-       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+       getFullName(user).toLowerCase().includes(searchQuery.toLowerCase()) ||
        user.interests.some(interest => 
          interest.toLowerCase().includes(searchQuery.toLowerCase())
        ) ||
@@ -364,6 +381,15 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setToast({
       isVisible: true,
       message: 'Check-in has been removed',
+      type: 'success'
+    });
+  };
+
+  const handleHideUser = (userId: string): void => {
+    setHiddenUserIds(prev => new Set([...prev, userId]));
+    setToast({
+      isVisible: true,
+      message: 'User hidden from discovery',
       type: 'success'
     });
   };
@@ -609,7 +635,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                               >
                                 <img
                                   src={mediaSource}
-                                  alt={user.name}
+                                  alt={getDisplayName(user)}
                                   className="w-full h-full object-cover"
                                 />
                                 {hasVideo && (

@@ -15,6 +15,7 @@ import { useMontage } from '../hooks/useMontage';
 import MontageCarousel from './MontageCarousel';
 import { motion } from 'framer-motion';
 import { getUserBroadcast, PublicBroadcastResponse, getBroadcastErrorMessage, isBroadcastError } from '../services/broadcastClient';
+import { getDisplayName, getInitials } from '../utils/nameHelpers';
 
 interface ProfileDetailModalProps {
   userId: string;
@@ -26,27 +27,47 @@ interface ProfileDetailModalProps {
   isEditing?: boolean; // true when in editing mode
 }
 
+// Helper function to determine if content should be shown based on privacy settings
+const shouldShowContent = (
+  profile: UserProfileResponse, 
+  contentType: 'name' | 'age' | 'location' | 'social_media' | 'montages' | 'checkins' | 'mutual_friends',
+  mode: 'own' | 'other'
+): boolean => {
+  // Always show everything for own profile
+  if (mode === 'own') return true;
+  
+  // For public profiles, show everything
+  if (profile.profile_visibility === 'public') return true;
+  
+  // For private profiles, check granular settings only if not a friend
+  // Note: The backend already handles friend logic and returns appropriate data
+  // If data exists in the response, it means we're allowed to see it
+  return profile.privacy_settings?.[`show_${contentType}`] ?? true;
+};
+
 // Helper function to convert UserProfileResponse to User type
-const mapUserProfileToUser = (profile: UserProfileResponse): User => {
+const mapUserProfileToUser = (profile: UserProfileResponse, mode: 'own' | 'other' = 'other'): User => {
   return {
     id: profile.id,
-    name: `${profile.first_name} ${profile.last_name}`.trim(),
-    age: profile.age || (profile.date_of_birth ? 
+    first_name: shouldShowContent(profile, 'name', mode) ? profile.first_name : '',
+    last_name: shouldShowContent(profile, 'name', mode) ? profile.last_name : '',
+    age: shouldShowContent(profile, 'age', mode) ? (profile.age || (profile.date_of_birth ? 
       Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
-      25), // Use age from backend or calculate it, fallback to 25
-    profilePicture: profile.profile_picture || undefined,
-    bio: profile.bio || 'No bio available',
-    interests: profile.interests || [], // Use interests from backend
+      25)) : undefined, // Use age from backend or calculate it, fallback to 25 if allowed
+    profilePicture: profile.profile_picture || undefined, // Always show profile picture
+    bio: shouldShowContent(profile, 'montages', mode) ? (profile.bio || 'No bio available') : 'This user has chosen to keep their bio private.',
+    interests: shouldShowContent(profile, 'montages', mode) ? (profile.interests || []) : [], // Use interests from backend if allowed
     location: {
       lat: 0, // Will need to be added to backend
       lng: 0, // Will need to be added to backend
-      proximityMiles: Math.floor(Math.random() * 10) + 1 // fallback
+      proximityMiles: shouldShowContent(profile, 'location', mode) ? Math.floor(Math.random() * 10) + 1 : 0 // fallback
     },
     isAvailable: true, // fallback
-    mutualFriends: profile.mutual_friends ? Array(profile.mutual_friends).fill('').map(() => 'friend') : [], // Convert count to array
+    mutualFriends: shouldShowContent(profile, 'mutual_friends', mode) ? 
+      (profile.mutual_friends ? Array(profile.mutual_friends).fill('').map(() => 'friend') : []) : [], // Convert count to array if allowed
     connectionPriority: 'regular' as const,
-    lastSeen: new Date(profile.last_login_at || Date.now()),
-    profileType: 'public' as const // Will be determined by privacy settings
+    lastSeen: shouldShowContent(profile, 'checkins', mode) ? new Date(profile.last_login_at || Date.now()) : new Date(),
+    profileType: profile.profile_visibility === 'public' ? 'public' as const : 'private' as const
   };
 };
 
@@ -254,7 +275,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       
       try {
         const profileResponse = await getUserProfile(userId);
-        const mappedUser = mapUserProfileToUser(profileResponse);
+        const mappedUser = mapUserProfileToUser(profileResponse, mode);
         setUser(mappedUser);
         setProfileResponse(profileResponse); // Store the full response
       } catch (err: any) {
@@ -358,7 +379,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const chatData: Chat | null = user ? {
     id: `chat-${user.id}`,
     participantId: user.id,
-    participantName: user.profileType === 'public' ? user.name : 'Private Profile',
+    participantName: user.profileType === 'public' ? getDisplayName(user) : 'Private Profile',
     participantAvatar: user.profilePicture || '',
     lastMessage: {
       id: 'last-msg',
@@ -377,7 +398,9 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   // We'll need the original profile response to get social links and photos
   const [profileResponse, setProfileResponse] = useState<UserProfileResponse | undefined>(undefined);
   
-  // Map social links from backend with appropriate brand icons
+  // Map social links from backend with appropriate brand icons (only if allowed by privacy settings)
+  const shouldShowSocialLinks = profileResponse ? shouldShowContent(profileResponse, 'social_media', mode) : false;
+  
   const getSocialIcon = (platform: string) => {
     const platformLower = platform.toLowerCase();
     if (platformLower.includes('instagram')) return FaInstagram;
@@ -390,7 +413,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     return MessageCircle; // fallback icon
   };
 
-  const socialLinks = profileResponse?.social_links?.map(link => ({
+  const socialLinks = (shouldShowSocialLinks && profileResponse?.social_links) ? profileResponse.social_links.map(link => ({
     platform: link.platform,
     icon: getSocialIcon(link.platform),
     handle: link.username ? `@${link.username}` : link.url,
@@ -467,13 +490,13 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   {user.profilePicture ? (
                     <img
                       src={user.profilePicture}
-                      alt={user.name}
+                      alt={getDisplayName(user)}
                       className="w-24 h-24 rounded-full object-cover border-2 border-white/20 shadow-lg"
                     />
                   ) : (
                     <div className="w-24 h-24 rounded-full bg-surface-hover border-2 border-white/20 shadow-lg flex items-center justify-center">
                       <div className="text-text-muted text-xl font-bold">
-                        {user.name.charAt(0).toUpperCase()}
+                        {getInitials(user)}
                       </div>
                     </div>
                   )}
@@ -486,7 +509,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 <div className="flex-1 min-w-0">
                   {user.profileType === 'public' ? (
                     <h3 className="text-lg font-bold mb-1 text-gradient-primary">
-                      {user.name}, {user.age}
+                      {getDisplayName(user)}, {user.age}
                     </h3>
                   ) : (
                     <h3 className="text-lg font-bold mb-1 text-gradient-primary">
@@ -867,7 +890,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-semibold text-text-primary">
-                      {mode === 'own' ? 'Your Montage' : `${user.name}'s Montage`}
+                      {mode === 'own' ? 'Your Montage' : `${getDisplayName(user)}'s Montage`}
                     </h3>
                   </div>
                   {mode === 'own' && !isEmbedded && (
@@ -946,7 +969,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   isLoadingMore={isMontageLoadingMore}
                   className="min-h-[180px]"
                   mode={mode}
-                  userName={user.name}
+                  userName={getDisplayName(user)}
                 />
               </div>
 
@@ -971,7 +994,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         onClose={cancelBlockUser}
         onConfirm={confirmBlockUser}
         title="Block User"
-        message={user ? `Are you sure you want to block ${user.name}? This will prevent both of you from seeing each other's profiles and messaging each other.` : "Are you sure you want to block this user?"}
+        message={user ? `Are you sure you want to block ${getDisplayName(user)}? This will prevent both of you from seeing each other's profiles and messaging each other.` : "Are you sure you want to block this user?"}
         confirmText="Block"
         cancelText="Cancel"
         confirmButtonClass="bg-red-500 hover:bg-red-600 text-white"

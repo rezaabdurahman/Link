@@ -4,6 +4,7 @@ import { User } from '../types';
 import ScrollingText from './ScrollingText';
 import { currentUser } from '../data/mockData';
 import { FriendButtonMini } from './FriendButton';
+import { getDisplayName, getInitials } from '../utils/nameHelpers';
 
 interface UserCardProps {
   user: User;
@@ -131,14 +132,14 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
             ) : (
               <img
                 src={media.url}
-                alt={user.name}
+                alt={getDisplayName(user)}
                 className="w-full aspect-[4/5] object-cover transition-transform duration-300 group-hover:scale-105"
               />
             )
           ) : (
             <div className="w-full aspect-[4/5] bg-gray-200 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
               <div className="text-gray-500 text-6xl font-bold">
-                {user.name.charAt(0).toUpperCase()}
+                {getInitials(user)}
               </div>
             </div>
           )}
@@ -162,7 +163,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
             {/* Top section - Name and Age */}
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-2xl font-bold text-white drop-shadow-lg mb-1">{user.name}, {user.age}</h3>
+                <h3 className="text-2xl font-bold text-white drop-shadow-lg mb-1">{getDisplayName(user)}, {user.age}</h3>
                 <div className="flex items-center gap-3 text-white/90 text-sm">
                   <div className="flex items-center gap-1">
                     <MapPin size={16} className="drop-shadow-lg" />
@@ -226,13 +227,13 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
         {user.profilePicture ? (
           <img
             src={user.profilePicture}
-            alt={user.name}
+            alt={getDisplayName(user)}
             className="w-full aspect-[2/3] object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="w-full aspect-[2/3] bg-gray-200 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
             <div className="text-gray-500 text-2xl font-bold">
-              {user.name.charAt(0).toUpperCase()}
+              {getInitials(user)}
             </div>
           </div>
         )}

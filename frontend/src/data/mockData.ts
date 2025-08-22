@@ -1,8 +1,10 @@
 import { User, Chat, Opportunity, SocialNote, CloseFriend } from '../types';
+import { getDisplayName } from '../utils/nameHelpers';
 
 export const currentUser: User = {
   id: '1',
-  name: 'Alex Thompson',
+  first_name: 'Alex',
+  last_name: 'Thompson',
   age: 28,
   profilePicture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
   bio: 'Love indie films, hiking, and good coffee conversations',
@@ -22,7 +24,8 @@ export const currentUser: User = {
 export const nearbyUsers: User[] = [
   {
     id: '2',
-    name: 'Reza Abdurahman',
+    first_name: 'Reza',
+    last_name: 'Abdurahman',
     age: 30,
     profileMedia: {
       type: 'video',
@@ -46,7 +49,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '3',
-    name: 'Marcus Rodriguez',
+    first_name: 'Marcus',
+    last_name: 'Rodriguez',
     age: 30,
     profilePicture: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&h=150&fit=crop&crop=face',
     bio: 'Tech entrepreneur, rock climbing enthusiast',
@@ -64,7 +68,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '4',
-    name: 'Emma Johnson',
+    first_name: 'Emma',
+    last_name: 'Johnson',
     age: 24,
     profileMedia: {
       type: 'video',
@@ -88,7 +93,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '5',
-    name: '(anonymous)',
+    first_name: 'Anonymous',
+    last_name: 'User',
     age: 27,
     profilePicture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
     bio: 'Prefers to stay anonymous until we connect',
@@ -106,7 +112,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '6',
-    name: 'Sofia Martinez',
+    first_name: 'Sofia',
+    last_name: 'Martinez',
     age: 29,
     profilePicture: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=150&h=150&fit=crop&crop=face',
     bio: 'Interior designer, plant mom, weekend baker',
@@ -125,7 +132,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '7',
-    name: 'Ryan O\'Connor',
+    first_name: 'Ryan',
+    last_name: 'O\'Connor',
     age: 32,
     profilePicture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
     bio: 'Software developer, musician, craft beer enthusiast',
@@ -143,7 +151,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '8',
-    name: 'Zoe Kim',
+    first_name: 'Zoe',
+    last_name: 'Kim',
     age: 25,
     profileMedia: {
       type: 'video',
@@ -167,7 +176,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '9',
-    name: 'Alex Rivera',
+    first_name: 'Alex',
+    last_name: 'Rivera',
     age: 28,
     profilePicture: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&crop=face',
     bio: 'Marine biologist, surfer, ocean conservation advocate',
@@ -185,7 +195,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '10',
-    name: 'Maya Patel',
+    first_name: 'Maya',
+    last_name: 'Patel',
     age: 26,
     profilePicture: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
     bio: 'Data scientist, marathon runner, chess player',
@@ -203,7 +214,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '11',
-    name: 'Jordan Taylor',
+    first_name: 'Jordan',
+    last_name: 'Taylor',
     age: 30,
     profilePicture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
     bio: 'Chef, food blogger, wine connoisseur',
@@ -222,7 +234,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '12',
-    name: 'Casey Brown',
+    first_name: 'Casey',
+    last_name: 'Brown',
     age: 27,
     profilePicture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
     bio: 'Graphic designer, skateboard enthusiast, vinyl collector',
@@ -240,7 +253,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '13',
-    name: 'Aria Singh',
+    first_name: 'Aria',
+    last_name: 'Singh',
     age: 24,
     profilePicture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
     bio: 'Medical student, classical violinist, tea enthusiast',
@@ -258,7 +272,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '14',
-    name: 'Sam Cooper',
+    first_name: 'Sam',
+    last_name: 'Cooper',
     age: 31,
     profilePicture: 'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=150&h=150&fit=crop&crop=face',
     bio: 'Podcast host, comedy writer, dog walker',
@@ -277,7 +292,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '15',
-    name: 'Luna Zhang',
+    first_name: 'Luna',
+    last_name: 'Zhang',
     age: 28,
     profilePicture: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
     bio: 'Astronomer, sci-fi writer, stargazing guide',
@@ -295,7 +311,8 @@ export const nearbyUsers: User[] = [
   },
   {
     id: '16',
-    name: 'River Jackson',
+    first_name: 'River',
+    last_name: 'Jackson',
     age: 26,
     profilePicture: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150&h=150&fit=crop&crop=face',
     bio: 'Environmental lawyer, rock climber, zero-waste advocate',
@@ -687,7 +704,7 @@ export const generateAISummary = (friendId: string): string => {
   const friend = friends.find(f => f.id === friendId);
   
   if (!friend || friendNotes.length === 0) {
-    return `No notes available for ${friend?.name || 'this friend'} yet.`;
+    return `No notes available for ${friend ? getDisplayName(friend) : 'this friend'} yet.`;
   }
   
   // Mock AI-generated summaries based on the notes
@@ -701,5 +718,5 @@ export const generateAISummary = (friendId: string): string => {
     '13': 'Luna combines astronomical expertise with sci-fi writing. Excellent stargazing guide who knows the best observation spots in the city.'
   };
   
-  return summaries[friendId] || `${friend.name} is an interesting person with diverse interests and experiences.`;
+  return summaries[friendId] || `${getDisplayName(friend)} is an interesting person with diverse interests and experiences.`;
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Check } from 'lucide-react';
 import { friends as allFriends, closeFriends } from '../data/mockData';
+import { getDisplayName, getFullName } from '../utils/nameHelpers';
 
 interface CloseFriendsModalProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
 
   // Filter friends based on search query
   const filteredFriends = allFriends.filter(friend =>
-    friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    getFullName(friend).toLowerCase().includes(searchQuery.toLowerCase()) ||
     friend.bio.toLowerCase().includes(searchQuery.toLowerCase()) ||
     friend.interests.some(interest => 
       interest.toLowerCase().includes(searchQuery.toLowerCase())
@@ -122,7 +123,7 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
                     key={friend.id}
                     onClick={() => handleToggleFriend(friend.id)}
                     aria-pressed={isSelected}
-                    aria-label={`${isSelected ? 'Remove' : 'Add'} ${friend.name} as close friend`}
+                    aria-label={`${isSelected ? 'Remove' : 'Add'} ${getDisplayName(friend)} as close friend`}
                     className={`w-full flex items-center gap-3 p-3 rounded-ios hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-aqua focus:ring-offset-2 transition-colors motion-reduce:transition-none ${
                       isSelected ? 'bg-aqua/10 hover:bg-aqua/15' : ''
                     }`}
@@ -130,7 +131,7 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
                     <div className="relative">
                       <img
                         src={profilePicture}
-                        alt={friend.name}
+                        alt={getDisplayName(friend)}
                         className="w-12 h-12 rounded-full object-cover"
                       />
                       {isSelected && (
@@ -141,7 +142,7 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
                     </div>
                     
                     <div className="flex-1 text-left">
-                      <h3 className="font-medium text-gray-900">{friend.name}</h3>
+                      <h3 className="font-medium text-gray-900">{getDisplayName(friend)}</h3>
                       <p className="text-sm text-gray-500 line-clamp-1">{friend.bio}</p>
                     </div>
                     

@@ -7,7 +7,8 @@ export interface ProfileMedia {
 
 export interface User {
   id: string;
-  name: string;
+  first_name: string;
+  last_name?: string;
   age: number;
   profilePicture?: string; // Deprecated - use profileMedia instead
   profileMedia?: ProfileMedia; // New unified media field

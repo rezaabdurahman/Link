@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { generateUsernameFromEmail } from '../../utils/nameHelpers';
 
 // Zod validation schema for signup form
 export const signupSchema = z.object({
@@ -15,14 +16,6 @@ export const signupSchema = z.object({
     .min(2, 'Last name must be at least 2 characters')
     .max(50, 'Last name must be less than 50 characters')
     .regex(/^[a-zA-Z\s'-]+$/, 'Last name can only contain letters, spaces, hyphens, and apostrophes'),
-
-  username: z
-    .string()
-    .min(1, 'Username is required')
-    .min(3, 'Username must be at least 3 characters')
-    .max(30, 'Username must be less than 30 characters')
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores, and hyphens')
-    .regex(/^[a-zA-Z]/, 'Username must start with a letter'),
 
   email: z
     .string()
@@ -55,7 +48,7 @@ export type SignupFormData = z.infer<typeof signupSchema>;
 export const transformSignupData = (formData: SignupFormData) => ({
   first_name: formData.firstName,
   last_name: formData.lastName,
-  username: formData.username,
+  username: generateUsernameFromEmail(formData.email), // Auto-generate username from email
   email: formData.email,
   password: formData.password,
   confirmPassword: formData.confirmPassword,

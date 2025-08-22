@@ -3,6 +3,7 @@ import { ArrowLeft, Check, X, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { User } from '../types';
+import { getDisplayName, getInitials } from '../utils/nameHelpers';
 
 const FriendRequestsPage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
@@ -48,19 +49,19 @@ const FriendRequestsPage: React.FC = (): JSX.Element => {
           {user.profilePicture ? (
             <img
               src={user.profilePicture}
-              alt={user.name}
+              alt={getDisplayName(user)}
               className="w-12 h-12 rounded-full object-cover"
             />
           ) : (
             <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
               <span className="text-gray-500 font-semibold text-lg">
-                {user.name.charAt(0).toUpperCase()}
+                {getInitials(user)}
               </span>
             </div>
           )}
         </div>
         <div>
-          <h3 className="font-semibold text-gray-900">{user.name}</h3>
+          <h3 className="font-semibold text-gray-900">{getDisplayName(user)}</h3>
           <p className="text-sm text-gray-500">{user.location.proximityMiles}mi away</p>
           {user.mutualFriends.length > 0 && (
             <p className="text-xs text-aqua">

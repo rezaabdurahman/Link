@@ -3,6 +3,7 @@ import { nearbyUsers, currentUser } from '../../data/mockData';
 import { extractUserId, now } from '../utils/mockHelpers';
 import { createAuthError, createNotFoundError, createSuccessResponse } from '../utils/responseBuilders';
 import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
+import { getDisplayName, getFullName } from '../../utils/nameHelpers';
 
 // Mock database for user profiles
 const mockUserProfiles: Map<string, any> = new Map();
@@ -31,7 +32,7 @@ export const handlers = [
       if (body.query && body.query.trim()) {
         const searchTerm = body.query.toLowerCase().trim();
         results = results.filter(user => 
-          user.name?.toLowerCase().includes(searchTerm) ||
+          getFullName(user)?.toLowerCase().includes(searchTerm) ||
           user.bio?.toLowerCase().includes(searchTerm) ||
           user.interests?.some(interest => 
             interest.toLowerCase().includes(searchTerm)
@@ -198,10 +199,10 @@ export const handlers = [
     // Convert User type to UserProfileResponse format matching backend
     const profileResponse = {
       id: user.id,
-      email: `${user.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-      username: user.name.toLowerCase().replace(/\s+/g, '_'),
-      first_name: user.name.split(' ')[0],
-      last_name: user.name.split(' ').slice(1).join(' ') || 'User',
+      email: `${getFullName(user).toLowerCase().replace(/\s+/g, '.')}@example.com`,
+      username: getFullName(user).toLowerCase().replace(/\s+/g, '_'),
+      first_name: user.first_name,
+      last_name: user.last_name || 'User',
       bio: user.bio,
       profile_picture: user.profilePicture || null,
       location: user.location ? `${user.location.proximityMiles} miles away` : null,
@@ -215,8 +216,8 @@ export const handlers = [
       social_links: [ // Mock social links
         {
           platform: 'instagram',
-          url: 'https://instagram.com/' + user.name.toLowerCase().replace(/\s+/g, '_'),
-          username: user.name.toLowerCase().replace(/\s+/g, '_')
+          url: 'https://instagram.com/' + getFullName(user).toLowerCase().replace(/\s+/g, '_'),
+          username: getFullName(user).toLowerCase().replace(/\s+/g, '_')
         }
       ],
       additional_photos: [], // Empty for now
