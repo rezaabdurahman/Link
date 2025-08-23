@@ -5,6 +5,7 @@ import ScrollingText from './ScrollingText';
 import { currentUser } from '../data/mockData';
 import { FriendButtonMini } from './FriendButton';
 import { getDisplayName, getInitials } from '../utils/nameHelpers';
+import { useCue } from '../contexts/CueContext';
 
 interface UserCardProps {
   user: User;
@@ -19,11 +20,33 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [showPlayButton, setShowPlayButton] = useState(true);
+  const [hasCueMatch, setHasCueMatch] = useState(false);
+  
+  const { checkMatchWith, hasActiveCue } = useCue();
 
   // Calculate mutual interests with current user
   const mutualInterests = user.interests.filter(interest => 
     currentUser.interests.includes(interest)
   );
+
+  // Check for cue match with this user
+  useEffect(() => {
+    const checkCueMatch = async () => {
+      if (hasActiveCue && user.id !== currentUser.id) {
+        try {
+          const hasMatch = await checkMatchWith(user.id);
+          setHasCueMatch(hasMatch);
+        } catch (error) {
+          console.error('Error checking cue match:', error);
+          setHasCueMatch(false);
+        }
+      } else {
+        setHasCueMatch(false);
+      }
+    };
+
+    checkCueMatch();
+  }, [hasActiveCue, user.id, checkMatchWith]);
 
   // Get media source (prioritize new profileMedia, fallback to old profilePicture)
   const media = user.profileMedia || (user.profilePicture ? { type: 'image' as const, url: user.profilePicture } : null);
@@ -163,12 +186,22 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
             {/* Top section - Name and Age */}
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-2xl font-bold text-white drop-shadow-lg mb-1">{getDisplayName(user)}, {user.age}</h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-2xl font-bold text-white drop-shadow-lg">{getDisplayName(user)}, {user.age}</h3>
+                  {hasCueMatch && (
+                    <div className="flex items-center gap-1 bg-accent-copper/90 backdrop-blur-sm px-2 py-1 rounded-full">
+                      <span className="text-white text-xs font-medium drop-shadow">✨ Match</span>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 text-white/90 text-sm">
-                  <div className="flex items-center gap-1">
-                    <MapPin size={16} className="drop-shadow-lg" />
-                    <span className="drop-shadow-lg">{user.location.proximityMiles}mi away</span>
-                  </div>
+                  {/* Only show location if distance is greater than 0 (privacy logic applied in backend) */}
+                  {user.location.proximityMiles > 0 && (
+                    <div className="flex items-center gap-1">
+                      <MapPin size={16} className="drop-shadow-lg" />
+                      <span className="drop-shadow-lg">{user.location.proximityMiles}mi away</span>
+                    </div>
+                  )}
                   {user.mutualFriends.length > 0 && (
                     <div className="flex items-center gap-1">
                       <Users size={16} className="drop-shadow-lg" />
@@ -238,6 +271,15 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
           </div>
         )}
         
+        {/* Cue Match Badge */}
+        {hasCueMatch && (
+          <div className="absolute top-3 left-3 z-20">
+            <div className="bg-accent-copper/90 backdrop-blur-sm px-2 py-1 rounded-full">
+              <span className="text-white text-xs font-medium drop-shadow">✨</span>
+            </div>
+          </div>
+        )}
+
         {/* Friend Button Overlay */}
         {showFriendButton && (
           <div 
@@ -281,13 +323,15 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
           
           {/* Distance and Mutual Friends */}
           <div className="flex items-center gap-3">
-            {/* Distance */}
-            <div className="flex items-center gap-1">
-              <MapPin size={10} className="text-white drop-shadow-sm" />
-              <span className="text-white text-xs drop-shadow-sm">
-                {user.location.proximityMiles}mi
-              </span>
-            </div>
+            {/* Distance - only show if privacy allows */}
+            {user.location.proximityMiles > 0 && (
+              <div className="flex items-center gap-1">
+                <MapPin size={10} className="text-white drop-shadow-sm" />
+                <span className="text-white text-xs drop-shadow-sm">
+                  {user.location.proximityMiles}mi
+                </span>
+              </div>
+            )}
             
             {/* Mutual Friends */}
             {user.mutualFriends.length > 0 && (

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -40,10 +41,13 @@ func main() {
 		defer cleanupTracing()
 	}
 
-	// Initialize database with pgvector extension
-	db, err := config.ConnectDatabase()
+	// Initialize repository factory
+	repoFactory := config.NewRepositoryFactory()
+	
+	// Create search repository (PostgreSQL or Qdrant based on config)
+	searchRepo, err := repoFactory.CreateSearchRepository()
 	if err != nil {
-		log.Fatal("Failed to initialize database:", err)
+		log.Fatal("Failed to initialize search repository:", err)
 	}
 
 	// Initialize embedding provider (OpenAI by default, but switchable)
@@ -52,17 +56,55 @@ func main() {
 		log.Fatal("Failed to initialize embedding provider:", err)
 	}
 
-	// Initialize repository
-	searchRepo := repository.NewSearchRepository(db)
+	// Initialize reindex repository (always PostgreSQL for job tracking)
+	db, err := config.ConnectDatabase()
+	if err != nil {
+		log.Fatal("Failed to initialize database for reindex jobs:", err)
+	}
 	reindexRepo := repository.NewReindexRepository(db)
 
 	// Initialize service clients for indexing pipeline
-	discoveryURL := getEnvOrDefault("DISCOVERY_SVC_URL", "http://discovery-svc:8081")
-	userURL := getEnvOrDefault("USER_SVC_URL", "http://user-svc:8082")
-	serviceToken := os.Getenv("SERVICE_AUTH_TOKEN")
+	// Default to gRPC for service-to-service communication
+	useGRPC := getEnvOrDefault("USE_GRPC", "true") == "true"
 	
-	discoveryClient := client.NewDiscoveryClient(discoveryURL, serviceToken)
-	userClient := client.NewUserClient(userURL, serviceToken)
+	var discoveryClient client.DiscoveryClient
+	var userClient client.UserClient
+	
+	if useGRPC {
+		// Use gRPC clients
+		discoveryEndpoint := getEnvOrDefault("DISCOVERY_GRPC_ENDPOINT", "discovery-svc:50052")
+		userEndpoint := getEnvOrDefault("USER_GRPC_ENDPOINT", "user-svc:50051")
+		
+		var err error
+		discoveryClient, err = client.NewDiscoveryGRPCClient(discoveryEndpoint)
+		if err != nil {
+			log.Printf("Failed to create gRPC discovery client: %v, falling back to HTTP", err)
+			discoveryURL := getEnvOrDefault("DISCOVERY_SVC_URL", "http://discovery-svc:8081")
+			serviceToken := os.Getenv("SERVICE_AUTH_TOKEN")
+			discoveryClient = client.NewDiscoveryClient(discoveryURL, serviceToken)
+		} else {
+			log.Printf("Using gRPC discovery client")
+		}
+		
+		userClient, err = client.NewUserGRPCClient(userEndpoint)
+		if err != nil {
+			log.Printf("Failed to create gRPC user client: %v, falling back to HTTP", err)
+			userURL := getEnvOrDefault("USER_SVC_URL", "http://user-svc:8082")
+			serviceToken := os.Getenv("SERVICE_AUTH_TOKEN")
+			userClient = client.NewUserClient(userURL, serviceToken)
+		} else {
+			log.Printf("Using gRPC user client")
+		}
+	} else {
+		// Use HTTP clients
+		discoveryURL := getEnvOrDefault("DISCOVERY_SVC_URL", "http://discovery-svc:8081")
+		userURL := getEnvOrDefault("USER_SVC_URL", "http://user-svc:8082")
+		serviceToken := os.Getenv("SERVICE_AUTH_TOKEN")
+		
+		discoveryClient = client.NewDiscoveryClient(discoveryURL, serviceToken)
+		userClient = client.NewUserClient(userURL, serviceToken)
+		log.Printf("Using HTTP clients for service communication")
+	}
 
 	// Initialize indexing configuration
 	indexingConfig := &service.IndexingConfig{
@@ -74,7 +116,10 @@ func main() {
 	}
 
 	// Initialize services
-	searchService := service.NewSearchService(searchRepo, embeddingProvider)
+	searchService := service.NewSearchService(service.SearchServiceConfig{
+		Repository:        searchRepo,
+		EmbeddingProvider: embeddingProvider,
+	})
 	reindexService := service.NewReindexService(reindexRepo, searchRepo, embeddingProvider)
 	indexingService := service.NewIndexingService(searchRepo, discoveryClient, userClient, embeddingProvider, indexingConfig)
 
@@ -105,6 +150,18 @@ func main() {
 	if sqlDB, err := db.DB(); err == nil {
 		lifecycleManager.AddHealthChecker("database", lifecycle.NewDatabaseHealthChecker(sqlDB))
 	}
+	
+	// Add repository-specific health checker
+	repoHealthChecker, err := repoFactory.CreateHealthChecker()
+	if err != nil {
+		log.Printf("Warning: Failed to create repository health checker: %v", err)
+	} else {
+		lifecycleManager.AddHealthChecker(fmt.Sprintf("search_repository_%s", repoFactory.GetRepositoryType()), 
+			lifecycle.HealthCheckFunc(func(ctx context.Context) error {
+				return repoHealthChecker()
+			}))
+	}
+	
 	lifecycleManager.AddHealthChecker("embedding_provider", lifecycle.HealthCheckFunc(func(ctx context.Context) error {
 		return embeddingProvider.CheckHealth(ctx)
 	}))

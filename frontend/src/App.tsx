@@ -5,6 +5,7 @@ import ChatPage from './pages/ChatPage';
 import OpportunitiesPage from './pages/OpportunitiesPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
+import PrivacySettingsPage from './pages/PrivacySettingsPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import FriendRequestsPage from './pages/FriendRequestsPage';
@@ -15,6 +16,7 @@ import AuthExample from './examples/AuthExample';
 import UserCardDemo from './pages/UserCardDemo';
 import { AuthProvider } from './contexts/AuthContext';
 import { OnboardingProvider } from './contexts/OnboardingContext';
+import { CueProvider } from './contexts/CueContext';
 import OnboardingPage from './pages/OnboardingPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
@@ -27,6 +29,7 @@ const App: React.FC = (): JSX.Element => {
       <AuthProvider>
         <DemoInitializer>
           <OnboardingProvider>
+            <CueProvider>
             <Routes>
             {/* Development Routes (remove in production) */}
             <Route path="/dev" element={<AuthExample />} />
@@ -58,10 +61,13 @@ const App: React.FC = (): JSX.Element => {
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
+              {/* Settings sub-pages - separate layout */}
+              <Route path="settings/privacy" element={<PrivacySettingsPage />} />
               {/* Friend Requests - separate layout */}
               <Route path="friend-requests" element={<FriendRequestsPage />} />
             </Route>
             </Routes>
+            </CueProvider>
           </OnboardingProvider>
         </DemoInitializer>
       </AuthProvider>

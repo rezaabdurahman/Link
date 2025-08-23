@@ -1,0 +1,252 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/link-app/backend/proto/chat";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/types.proto";
+
+// Chat Service definition
+service ChatService {
+  // Get recent messages from a conversation
+  rpc GetRecentMessages(GetRecentMessagesRequest) returns (GetRecentMessagesResponse);
+  
+  // Get conversation details
+  rpc GetConversation(GetConversationRequest) returns (GetConversationResponse);
+  
+  // Get user's conversations
+  rpc GetUserConversations(GetUserConversationsRequest) returns (GetUserConversationsResponse);
+  
+  // Send a message
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  
+  // Mark messages as read
+  rpc MarkMessagesRead(MarkMessagesReadRequest) returns (MarkMessagesReadResponse);
+  
+  // Real-time message streaming
+  rpc StreamMessages(StreamMessagesRequest) returns (stream MessageUpdate);
+  
+  // Bidirectional chat stream
+  rpc ChatStream(stream ChatStreamRequest) returns (stream ChatStreamResponse);
+  
+  // Get message history with pagination
+  rpc GetMessageHistory(GetMessageHistoryRequest) returns (GetMessageHistoryResponse);
+  
+  // Delete a message
+  rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
+  
+  // Health check
+  rpc Health(common.HealthCheckRequest) returns (common.HealthCheckResponse);
+}
+
+// Message types
+enum MessageType {
+  TEXT = 0;
+  IMAGE = 1;
+  FILE = 2;
+  AUDIO = 3;
+  VIDEO = 4;
+  LOCATION = 5;
+  SYSTEM = 6;
+}
+
+// Message status
+enum MessageStatus {
+  SENT = 0;
+  DELIVERED = 1;
+  READ = 2;
+  FAILED = 3;
+}
+
+// Message content
+message Message {
+  common.UUID id = 1;
+  common.UUID conversation_id = 2;
+  common.UUID sender_id = 3;
+  MessageType type = 4;
+  string content = 5;
+  map<string, string> metadata = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  MessageStatus status = 9;
+  repeated MessageRead read_by = 10;
+  bool is_deleted = 11;
+  common.UUID reply_to_id = 12;
+}
+
+// Message read tracking
+message MessageRead {
+  common.UUID user_id = 1;
+  google.protobuf.Timestamp read_at = 2;
+}
+
+// Conversation details
+message Conversation {
+  common.UUID id = 1;
+  string title = 2;
+  ConversationType type = 3;
+  repeated common.UUID participant_ids = 4;
+  common.UUID created_by = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  Message last_message = 8;
+  int32 unread_count = 9;
+  bool is_active = 10;
+  map<string, string> metadata = 11;
+}
+
+// Conversation types
+enum ConversationType {
+  DIRECT = 0;
+  GROUP = 1;
+  CHANNEL = 2;
+}
+
+// Request messages
+message GetRecentMessagesRequest {
+  common.UUID conversation_id = 1;
+  int32 limit = 2;
+  common.UUID before_message_id = 3;
+}
+
+message GetRecentMessagesResponse {
+  repeated Message messages = 1;
+  bool has_more = 2;
+  common.UUID next_cursor = 3;
+}
+
+message GetConversationRequest {
+  common.UUID conversation_id = 1;
+  common.UUID user_id = 2;
+}
+
+message GetConversationResponse {
+  Conversation conversation = 1;
+}
+
+message GetUserConversationsRequest {
+  common.UUID user_id = 1;
+  common.PaginationRequest pagination = 2;
+  ConversationType type_filter = 3;
+}
+
+message GetUserConversationsResponse {
+  repeated Conversation conversations = 1;
+  common.PaginationResponse pagination = 2;
+}
+
+message SendMessageRequest {
+  common.UUID conversation_id = 1;
+  common.UUID sender_id = 2;
+  MessageType type = 3;
+  string content = 4;
+  map<string, string> metadata = 5;
+  common.UUID reply_to_id = 6;
+}
+
+message SendMessageResponse {
+  Message message = 1;
+  common.SuccessResponse result = 2;
+}
+
+message MarkMessagesReadRequest {
+  common.UUID conversation_id = 1;
+  common.UUID user_id = 2;
+  repeated common.UUID message_ids = 3;
+}
+
+message MarkMessagesReadResponse {
+  int32 marked_count = 1;
+  common.SuccessResponse result = 2;
+}
+
+message StreamMessagesRequest {
+  repeated common.UUID conversation_ids = 1;
+  common.UUID user_id = 2;
+}
+
+message MessageUpdate {
+  UpdateType update_type = 1;
+  Message message = 2;
+  common.UUID conversation_id = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+enum UpdateType {
+  MESSAGE_SENT = 0;
+  MESSAGE_DELIVERED = 1;
+  MESSAGE_READ = 2;
+  MESSAGE_DELETED = 3;
+  MESSAGE_UPDATED = 4;
+  TYPING_STARTED = 5;
+  TYPING_STOPPED = 6;
+}
+
+message ChatStreamRequest {
+  oneof request {
+    JoinRequest join = 1;
+    SendMessageRequest send_message = 2;
+    TypingRequest typing = 3;
+    LeaveRequest leave = 4;
+  }
+}
+
+message JoinRequest {
+  repeated common.UUID conversation_ids = 1;
+  common.UUID user_id = 2;
+}
+
+message TypingRequest {
+  common.UUID conversation_id = 1;
+  common.UUID user_id = 2;
+  bool is_typing = 3;
+}
+
+message LeaveRequest {
+  common.UUID conversation_id = 1;
+  common.UUID user_id = 2;
+}
+
+message ChatStreamResponse {
+  oneof response {
+    MessageUpdate message_update = 1;
+    TypingUpdate typing_update = 2;
+    ErrorResponse error = 3;
+  }
+}
+
+message TypingUpdate {
+  common.UUID conversation_id = 1;
+  common.UUID user_id = 2;
+  bool is_typing = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+message GetMessageHistoryRequest {
+  common.UUID conversation_id = 1;
+  common.PaginationRequest pagination = 2;
+  google.protobuf.Timestamp before = 3;
+  google.protobuf.Timestamp after = 4;
+}
+
+message GetMessageHistoryResponse {
+  repeated Message messages = 1;
+  common.PaginationResponse pagination = 2;
+}
+
+message DeleteMessageRequest {
+  common.UUID message_id = 1;
+  common.UUID user_id = 2;
+  bool delete_for_everyone = 3;
+}
+
+message DeleteMessageResponse {
+  common.SuccessResponse result = 1;
+}

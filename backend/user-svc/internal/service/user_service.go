@@ -350,7 +350,8 @@ func (s *userService) GetPublicUserProfile(userID, viewerID uuid.UUID) (*models.
 		if err != nil {
 			return nil, fmt.Errorf("failed to get mutual friends count: %w", err)
 		}
-		publicUser.MutualFriends = int(mutualCount)
+		mutualCountInt := int(mutualCount)
+		publicUser.MutualFriends = &mutualCountInt
 	}
 
 	return &publicUser, nil

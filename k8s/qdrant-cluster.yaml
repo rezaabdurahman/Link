@@ -1,0 +1,562 @@
+---
+# Qdrant ConfigMap for cluster configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qdrant-config
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+data:
+  production.yaml: |
+    service:
+      host: 0.0.0.0
+      http_port: 6333
+      grpc_port: 6334
+      enable_cors: true
+      max_request_size_mb: 32
+      max_workers: 0
+
+    cluster:
+      enabled: true
+      p2p:
+        port: 6335
+      consensus:
+        tick_period_ms: 100
+
+    storage:
+      storage_path: /qdrant/storage
+      memory:
+        shared_memory: true
+        mmap_threshold_kb: 2048000
+      performance:
+        max_search_threads: 0
+        max_optimization_threads: 2
+      wal:
+        wal_capacity_mb: 64
+        wal_segments_ahead: 2
+
+    collections:
+      default_vector_config:
+        size: 1536
+        distance: Cosine
+      replication:
+        replication_factor: 2
+        write_consistency_factor: 1
+      indexing:
+        hnsw_config:
+          m: 16
+          ef_construct: 200
+          full_scan_threshold: 10000
+        payload_index:
+          auto_indexing: true
+      optimization:
+        default_segment_number: 0
+        memmap_threshold_kb: 200000
+        indexing_threshold_kb: 20000
+        flush_interval_sec: 5
+        max_segment_size_kb: 2000000
+
+    log_level: INFO
+    telemetry_disabled: true
+
+    cluster_settings:
+      heartbeat_interval_ms: 1000
+      cluster_timeout_ms: 5000
+      enable_cluster_info: true
+
+---
+# Qdrant Node 1 (Bootstrap) StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant-node-1
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+    node: node-1
+    component: vector-database
+spec:
+  serviceName: qdrant-node-1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant-cluster
+      node: node-1
+  template:
+    metadata:
+      labels:
+        app: qdrant-cluster
+        node: node-1
+        component: vector-database
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - qdrant-cluster
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:v1.11.0
+        ports:
+        - containerPort: 6333
+          name: rest-api
+        - containerPort: 6334
+          name: grpc-api
+        - containerPort: 6335
+          name: p2p
+        env:
+        - name: QDRANT__CLUSTER__ENABLED
+          value: "true"
+        - name: QDRANT__CLUSTER__P2P__PORT
+          value: "6335"
+        - name: QDRANT__CLUSTER__NODE_ID
+          value: "1"
+        - name: QDRANT__SERVICE__HTTP_PORT
+          value: "6333"
+        - name: QDRANT__SERVICE__GRPC_PORT
+          value: "6334"
+        - name: QDRANT__LOG_LEVEL
+          value: "INFO"
+        - name: QDRANT__STORAGE__MEMORY__SHARED_MEMORY
+          value: "true"
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+        - name: qdrant-config
+          mountPath: /qdrant/config
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+      volumes:
+      - name: qdrant-config
+        configMap:
+          name: qdrant-config
+  volumeClaimTemplates:
+  - metadata:
+      name: qdrant-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# Qdrant Node 2 StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant-node-2
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+    node: node-2
+    component: vector-database
+spec:
+  serviceName: qdrant-node-2
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant-cluster
+      node: node-2
+  template:
+    metadata:
+      labels:
+        app: qdrant-cluster
+        node: node-2
+        component: vector-database
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - qdrant-cluster
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:v1.11.0
+        ports:
+        - containerPort: 6333
+          name: rest-api
+        - containerPort: 6334
+          name: grpc-api
+        - containerPort: 6335
+          name: p2p
+        env:
+        - name: QDRANT__CLUSTER__ENABLED
+          value: "true"
+        - name: QDRANT__CLUSTER__P2P__PORT
+          value: "6335"
+        - name: QDRANT__CLUSTER__NODE_ID
+          value: "2"
+        - name: QDRANT__CLUSTER__BOOTSTRAP__PEER
+          value: "qdrant-node-1.link-services.svc.cluster.local:6335"
+        - name: QDRANT__SERVICE__HTTP_PORT
+          value: "6333"
+        - name: QDRANT__SERVICE__GRPC_PORT
+          value: "6334"
+        - name: QDRANT__LOG_LEVEL
+          value: "INFO"
+        - name: QDRANT__STORAGE__MEMORY__SHARED_MEMORY
+          value: "true"
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+        - name: qdrant-config
+          mountPath: /qdrant/config
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+      volumes:
+      - name: qdrant-config
+        configMap:
+          name: qdrant-config
+  volumeClaimTemplates:
+  - metadata:
+      name: qdrant-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# Qdrant Node 3 StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant-node-3
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+    node: node-3
+    component: vector-database
+spec:
+  serviceName: qdrant-node-3
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant-cluster
+      node: node-3
+  template:
+    metadata:
+      labels:
+        app: qdrant-cluster
+        node: node-3
+        component: vector-database
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - qdrant-cluster
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:v1.11.0
+        ports:
+        - containerPort: 6333
+          name: rest-api
+        - containerPort: 6334
+          name: grpc-api
+        - containerPort: 6335
+          name: p2p
+        env:
+        - name: QDRANT__CLUSTER__ENABLED
+          value: "true"
+        - name: QDRANT__CLUSTER__P2P__PORT
+          value: "6335"
+        - name: QDRANT__CLUSTER__NODE_ID
+          value: "3"
+        - name: QDRANT__CLUSTER__BOOTSTRAP__PEER
+          value: "qdrant-node-1.link-services.svc.cluster.local:6335"
+        - name: QDRANT__SERVICE__HTTP_PORT
+          value: "6333"
+        - name: QDRANT__SERVICE__GRPC_PORT
+          value: "6334"
+        - name: QDRANT__LOG_LEVEL
+          value: "INFO"
+        - name: QDRANT__STORAGE__MEMORY__SHARED_MEMORY
+          value: "true"
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+        - name: qdrant-config
+          mountPath: /qdrant/config
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+      volumes:
+      - name: qdrant-config
+        configMap:
+          name: qdrant-config
+  volumeClaimTemplates:
+  - metadata:
+      name: qdrant-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# Qdrant Node 1 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-node-1
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+    node: node-1
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: qdrant-cluster
+    node: node-1
+  ports:
+  - name: rest-api
+    port: 6333
+    targetPort: 6333
+  - name: grpc-api
+    port: 6334
+    targetPort: 6334
+  - name: p2p
+    port: 6335
+    targetPort: 6335
+  type: ClusterIP
+
+---
+# Qdrant Node 2 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-node-2
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+    node: node-2
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: qdrant-cluster
+    node: node-2
+  ports:
+  - name: rest-api
+    port: 6333
+    targetPort: 6333
+  - name: grpc-api
+    port: 6334
+    targetPort: 6334
+  - name: p2p
+    port: 6335
+    targetPort: 6335
+  type: ClusterIP
+
+---
+# Qdrant Node 3 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-node-3
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+    node: node-3
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+spec:
+  selector:
+    app: qdrant-cluster
+    node: node-3
+  ports:
+  - name: rest-api
+    port: 6333
+    targetPort: 6333
+  - name: grpc-api
+    port: 6334
+    targetPort: 6334
+  - name: p2p
+    port: 6335
+    targetPort: 6335
+  type: ClusterIP
+
+---
+# Qdrant Load Balancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-cluster
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+    component: load-balancer
+  annotations:
+    viz.linkerd.io/tap-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+spec:
+  selector:
+    app: qdrant-cluster
+  ports:
+  - name: rest-api
+    port: 6333
+    targetPort: 6333
+    protocol: TCP
+  - name: grpc-api
+    port: 6334
+    targetPort: 6334
+    protocol: TCP
+  type: LoadBalancer
+  sessionAffinity: None
+
+---
+# Pod Disruption Budget for Qdrant Cluster
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: qdrant-cluster-pdb
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: qdrant-cluster
+
+---
+# Horizontal Pod Autoscaler for read replicas (if needed)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: qdrant-cluster-hpa
+  namespace: link-services
+  labels:
+    app: qdrant-cluster
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: qdrant-node-2  # Scale read replicas
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60

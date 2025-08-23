@@ -1,11 +1,14 @@
-import { User } from '../types';
+import { User, AuthUser } from '../types';
+
+// Type for objects that have first_name and last_name properties
+type UserLike = Pick<User | AuthUser, 'first_name' | 'last_name'>;
 
 /**
  * Gets the display name for a user (first name only)
  * @param user - The user object
  * @returns The first name for display
  */
-export const getDisplayName = (user: User): string => {
+export const getDisplayName = (user: UserLike): string => {
   return user.first_name;
 };
 
@@ -14,7 +17,7 @@ export const getDisplayName = (user: User): string => {
  * @param user - The user object
  * @returns The full name as a string
  */
-export const getFullName = (user: User): string => {
+export const getFullName = (user: UserLike): string => {
   return `${user.first_name} ${user.last_name || ''}`.trim();
 };
 
@@ -23,7 +26,7 @@ export const getFullName = (user: User): string => {
  * @param user - The user object
  * @returns The first initial in uppercase
  */
-export const getInitials = (user: User): string => {
+export const getInitials = (user: UserLike): string => {
   return user.first_name.charAt(0).toUpperCase();
 };
 

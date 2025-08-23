@@ -1,0 +1,73 @@
+# =================================================================
+# Link API Gateway - Development Environment Configuration
+# =================================================================
+
+# Application Configuration
+APP_ENV=development
+APP_PORT=8080
+LOG_LEVEL=debug
+LOG_FORMAT=text
+
+# JWT Configuration
+JWT_SECRET=${JWT_SECRET:-development-secret-key-change-in-production}
+JWT_EXPIRATION=24h
+JWT_ISSUER=link-api-gateway-dev
+
+# Service URLs (Mock services for development)
+USER_SVC_URL=http://mock-user-svc:1080
+CHAT_SVC_URL=http://mock-chat-svc:1080
+AI_SVC_URL=http://mock-ai-svc:1080
+DISCOVERY_SVC_URL=http://mock-discovery-svc:1080
+LOCATION_SVC_URL=http://mock-location-svc:1080
+STORIES_SVC_URL=http://mock-stories-svc:1080
+OPPORTUNITIES_SVC_URL=http://mock-opportunities-svc:1080
+
+# Load Balancer Configuration
+DEFAULT_LB_STRATEGY=round-robin
+DEFAULT_LB_MAX_FAILURES=3
+DEFAULT_LB_TIMEOUT=10
+DEFAULT_LB_RECOVERY_TIMEOUT=30
+
+# Retry Configuration
+DEFAULT_RETRY_MAX=2
+DEFAULT_RETRY_BASE_DELAY=50
+DEFAULT_RETRY_MAX_DELAY=2000
+DEFAULT_RETRY_JITTER=true
+
+# Database Configuration
+DB_HOST=postgres
+DB_PORT=5432
+DB_USER=link_user
+DB_PASSWORD=link_pass
+DB_NAME=link_app
+DB_SSL_MODE=disable
+
+# Redis Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# Monitoring & Observability
+METRICS_ENABLED=true
+METRICS_PATH=/metrics
+TRACING_ENABLED=true
+JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+JAEGER_SAMPLER_RATE=1.0
+
+# Security Configuration
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:8080
+CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS,PATCH
+CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-User-ID,X-Request-ID
+RATE_LIMIT_RPS=1000
+RATE_LIMIT_BURST=2000
+
+# Health Check Configuration
+HEALTH_CHECK_ENABLED=true
+HEALTH_CHECK_INTERVAL=10s
+READINESS_CHECK_SERVICES=postgres,redis
+
+# Development Features
+ENABLE_DEBUG_ENDPOINTS=true
+ENABLE_PPROF=true
+ENABLE_REQUEST_LOGGING=true

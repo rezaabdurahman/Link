@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package common;
+
+option go_package = "github.com/link-app/backend/proto/common";
+
+import "google/protobuf/timestamp.proto";
+
+// UUID wrapper for consistent UUID handling across services
+message UUID {
+  string value = 1;
+}
+
+// Pagination request parameters
+message PaginationRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+// Pagination response metadata
+message PaginationResponse {
+  int32 page = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  int32 total = 4;
+  bool has_next = 5;
+  bool has_previous = 6;
+}
+
+// Standard error response
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// Health check request
+message HealthCheckRequest {
+  string service = 1;
+}
+
+// Health check response
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+    SERVICE_UNKNOWN = 3;
+  }
+  ServingStatus status = 1;
+  string message = 2;
+  map<string, string> metadata = 3;
+}
+
+// Generic success response
+message SuccessResponse {
+  string message = 1;
+  map<string, string> metadata = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// User context metadata passed between services
+message UserContext {
+  UUID user_id = 1;
+  string email = 2;
+  string username = 3;
+  repeated string roles = 4;
+  map<string, string> claims = 5;
+}

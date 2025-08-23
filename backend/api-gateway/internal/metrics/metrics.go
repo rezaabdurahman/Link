@@ -188,6 +188,8 @@ func normalizePath(path string) string {
 		return "/ai/*"
 	case path[:11] == "/broadcasts":
 		return "/broadcasts/*"
+	case path[:5] == "/cues":
+		return "/cues/*"
 	case path[:10] == "/discovery":
 		return "/discovery/*"
 	case path[:8] == "/stories":

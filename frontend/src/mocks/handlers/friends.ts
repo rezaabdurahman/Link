@@ -1,86 +1,135 @@
 import { http } from 'msw';
 import { extractUserId, now, parsePaginationParams } from '../utils/mockHelpers';
 import { createAuthError, createValidationError, createNotFoundError, createConflictError, createSuccessResponse } from '../utils/responseBuilders';
-import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
+import { buildApiUrl } from '../utils/config';
 
-// Mock database for friendship requests and statuses
-const mockFriendships: Map<string, {
-  status: 'none' | 'pending_sent' | 'pending_received' | 'friends' | 'blocked';
-  request_id?: string;
-  created_at?: string;
-  updated_at?: string;
-}> = new Map();
+// Mock user data for responses
+const mockUsers = new Map([
+  ['demo-user-1', {
+    id: 'demo-user-1',
+    username: 'alice_demo',
+    first_name: 'Alice',
+    last_name: 'Johnson',
+    profile_picture: 'https://images.unsplash.com/photo-1494790108755-2616b612b524?w=150&h=150&fit=crop&crop=face',
+    bio: 'Software engineer who loves hiking',
+    location: { proximityMiles: 2.5 },
+    interests: ['hiking', 'photography', 'coding'],
+    mutualFriends: [],
+    email: 'alice@example.com',
+    created_at: '2024-01-01T00:00:00Z',
+  }],
+  ['demo-user-2', {
+    id: 'demo-user-2', 
+    username: 'bob_demo',
+    first_name: 'Bob',
+    last_name: 'Smith',
+    profile_picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+    bio: 'Designer and coffee enthusiast',
+    location: { proximityMiles: 1.2 },
+    interests: ['design', 'coffee', 'travel'],
+    mutualFriends: [],
+    email: 'bob@example.com',
+    created_at: '2024-01-01T00:00:00Z',
+  }],
+  ['demo-user-3', {
+    id: 'demo-user-3',
+    username: 'charlie_demo', 
+    first_name: 'Charlie',
+    last_name: 'Brown',
+    profile_picture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    bio: 'Marketing professional and foodie',
+    location: { proximityMiles: 3.1 },
+    interests: ['marketing', 'food', 'music'],
+    mutualFriends: [],
+    email: 'charlie@example.com',
+    created_at: '2024-01-01T00:00:00Z',
+  }],
+]);
 
+// Mock database for friend requests
 const mockFriendRequests: Map<string, {
   id: string;
-  from_user_id: string;
-  to_user_id: string;
+  requester_id: string;
+  requestee_id: string;
   message?: string;
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'declined';
   created_at: string;
   updated_at: string;
 }> = new Map();
 
-// Initialize some demo friendship data
-mockFriendships.set('demo-user-1:demo-user-2', {
-  status: 'pending_sent',
-  request_id: 'req-demo-1-to-2',
-  created_at: now(),
-  updated_at: now(),
+// Mock database for friendships
+const mockFriendships: Map<string, {
+  user1_id: string;
+  user2_id: string;
+  created_at: string;
+}> = new Map();
+
+// Initialize some demo data
+const demoRequest1 = {
+  id: 'req-demo-1',
+  requester_id: 'demo-user-2',
+  requestee_id: 'current-user-id', // This will be the logged-in user
+  message: 'Hey! Would love to connect!',
+  status: 'pending' as const,
+  created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+  updated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+};
+
+const demoRequest2 = {
+  id: 'req-demo-2',
+  requester_id: 'current-user-id',
+  requestee_id: 'demo-user-3',
+  message: 'Hi there!',
+  status: 'pending' as const,
+  created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+  updated_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+};
+
+mockFriendRequests.set(demoRequest1.id, demoRequest1);
+mockFriendRequests.set(demoRequest2.id, demoRequest2);
+
+// Demo friendship - current user is friends with demo-user-1
+mockFriendships.set('friendship-demo-1', {
+  user1_id: 'current-user-id',
+  user2_id: 'demo-user-1',
+  created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
 });
 
-mockFriendships.set('demo-user-1:demo-user-3', {
-  status: 'friends',
-  created_at: now(),
-  updated_at: now(),
-});
+// Helper functions
+const getUserFromId = (userId: string) => {
+  return mockUsers.get(userId) || {
+    id: userId,
+    username: `user_${userId.slice(0, 8)}`,
+    first_name: 'User',
+    last_name: userId.slice(0, 8),
+    profile_picture: null,
+    bio: null,
+    location: { proximityMiles: 0 },
+    interests: [],
+    mutualFriends: [],
+    email: `${userId}@example.com`,
+    created_at: now(),
+  };
+};
+
+const areFriends = (userId1: string, userId2: string): boolean => {
+  return Array.from(mockFriendships.values()).some(friendship => 
+    (friendship.user1_id === userId1 && friendship.user2_id === userId2) ||
+    (friendship.user1_id === userId2 && friendship.user2_id === userId1)
+  );
+};
+
+const hasPendingRequest = (requesterId: string, requesteeId: string): boolean => {
+  return Array.from(mockFriendRequests.values()).some(request =>
+    request.requester_id === requesterId && 
+    request.requestee_id === requesteeId && 
+    request.status === 'pending'
+  );
+};
 
 export const handlers = [
-  // GET /friends/status/:userId - Get friendship status
-  http.get(buildApiUrl('/friends/status/:userId'), ({ request, params }) => {
-    const { userId } = params;
-    const currentUserId = extractUserId(request);
-    
-    if (!currentUserId) {
-      return createAuthError();
-    }
-
-    const friendshipKey = `${currentUserId}:${userId}`;
-    const reverseFriendshipKey = `${userId}:${currentUserId}`;
-    
-    // Check both directions
-    const friendship = mockFriendships.get(friendshipKey) || 
-                     mockFriendships.get(reverseFriendshipKey);
-    
-    if (!friendship) {
-      return createSuccessResponse({
-        user_id: userId as string,
-        status: 'none',
-      });
-    }
-
-    // Adjust status based on perspective
-    let status = friendship.status;
-    if (mockFriendships.get(reverseFriendshipKey)) {
-      // This is the reverse friendship, adjust status
-      if (status === 'pending_sent') {
-        status = 'pending_received';
-      } else if (status === 'pending_received') {
-        status = 'pending_sent';
-      }
-    }
-
-    return createSuccessResponse({
-      user_id: userId as string,
-      status,
-      request_id: friendship.request_id,
-      created_at: friendship.created_at,
-      updated_at: friendship.updated_at,
-    });
-  }),
-
-  // POST /friends/requests - Send friend request
-  http.post(buildApiUrl(API_ENDPOINTS.FRIENDS.requests), async ({ request }) => {
+  // POST /users/friends/requests - Send friend request
+  http.post(buildApiUrl('/users/friends/requests'), async ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -88,25 +137,32 @@ export const handlers = [
     }
 
     try {
-      const body = await request.json() as { user_id: string; message?: string };
-      const toUserId = body.user_id;
+      const body = await request.json() as { requestee_id: string; message?: string };
+      const requesteeId = body.requestee_id;
       
-      if (!toUserId) {
-        return createValidationError('User ID is required');
+      if (!requesteeId) {
+        return createValidationError('Requestee ID is required');
       }
 
-      const friendshipKey = `${userId}:${toUserId}`;
-      const existingFriendship = mockFriendships.get(friendshipKey);
-      
-      if (existingFriendship) {
-        return createConflictError('Friend request already exists or users are already friends');
+      if (userId === requesteeId) {
+        return createValidationError('Cannot send friend request to yourself');
       }
 
-      const requestId = `req-${userId}-to-${toUserId}`;
+      // Check if already friends
+      if (areFriends(userId, requesteeId)) {
+        return createConflictError('Users are already friends');
+      }
+
+      // Check if pending request already exists
+      if (hasPendingRequest(userId, requesteeId) || hasPendingRequest(requesteeId, userId)) {
+        return createConflictError('Friend request already pending');
+      }
+
+      const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const friendRequest = {
         id: requestId,
-        from_user_id: userId,
-        to_user_id: toUserId,
+        requester_id: userId,
+        requestee_id: requesteeId,
         message: body.message,
         status: 'pending' as const,
         created_at: now(),
@@ -114,140 +170,23 @@ export const handlers = [
       };
 
       mockFriendRequests.set(requestId, friendRequest);
-      mockFriendships.set(friendshipKey, {
-        status: 'pending_sent',
-        request_id: requestId,
-        created_at: now(),
-        updated_at: now(),
-      });
-
-      // Set reverse friendship for the receiver
-      mockFriendships.set(`${toUserId}:${userId}`, {
-        status: 'pending_received',
-        request_id: requestId,
-        created_at: now(),
-        updated_at: now(),
-      });
-
-      return createSuccessResponse(friendRequest, 201);
-    } catch (error) {
-      return createValidationError('Invalid request body');
-    }
-  }),
-
-  // POST /friends/requests/:requestId/respond - Respond to friend request
-  http.post(buildApiUrl('/friends/requests/:requestId/respond'), async ({ request, params }) => {
-    const { requestId } = params;
-    const userId = extractUserId(request);
-    
-    if (!userId) {
-      return createAuthError();
-    }
-
-    try {
-      const body = await request.json() as { accept: boolean };
-      const friendRequest = mockFriendRequests.get(requestId as string);
-      
-      if (!friendRequest || friendRequest.to_user_id !== userId) {
-        return createNotFoundError('Friend request not found');
-      }
-
-      const newStatus = body.accept ? 'accepted' : 'rejected';
-      const updatedRequest = {
-        ...friendRequest,
-        status: newStatus as 'accepted' | 'rejected',
-        updated_at: now(),
-      };
-      
-      mockFriendRequests.set(requestId as string, updatedRequest);
-
-      // Update friendship statuses
-      const friendshipKey = `${friendRequest.from_user_id}:${friendRequest.to_user_id}`;
-      const reverseFriendshipKey = `${friendRequest.to_user_id}:${friendRequest.from_user_id}`;
-      
-      if (body.accept) {
-        // They are now friends
-        mockFriendships.set(friendshipKey, {
-          status: 'friends',
-          created_at: now(),
-          updated_at: now(),
-        });
-        mockFriendships.set(reverseFriendshipKey, {
-          status: 'friends',
-          created_at: now(),
-          updated_at: now(),
-        });
-      } else {
-        // Request rejected, remove friendships
-        mockFriendships.delete(friendshipKey);
-        mockFriendships.delete(reverseFriendshipKey);
-      }
 
       return createSuccessResponse({
-        id: requestId as string,
-        status: newStatus,
-        updated_at: now(),
-      });
+        message: 'Friend request sent successfully',
+        data: {
+          id: requestId,
+          requestee_id: requesteeId,
+          status: 'pending',
+          created_at: friendRequest.created_at,
+        }
+      }, 201);
     } catch (error) {
       return createValidationError('Invalid request body');
     }
   }),
 
-  // DELETE /friends/requests/:userId/cancel - Cancel friend request
-  http.delete(buildApiUrl('/friends/requests/:userId/cancel'), ({ request, params }) => {
-    const { userId: toUserId } = params;
-    const fromUserId = extractUserId(request);
-    
-    if (!fromUserId) {
-      return createAuthError();
-    }
-
-    const friendshipKey = `${fromUserId}:${toUserId}`;
-    const reverseFriendshipKey = `${toUserId}:${fromUserId}`;
-    
-    const friendship = mockFriendships.get(friendshipKey);
-    if (!friendship || friendship.status !== 'pending_sent') {
-      return createNotFoundError('Friend request not found');
-    }
-
-    // Remove friend request and friendships
-    if (friendship.request_id) {
-      mockFriendRequests.delete(friendship.request_id);
-    }
-    mockFriendships.delete(friendshipKey);
-    mockFriendships.delete(reverseFriendshipKey);
-
-    return createSuccessResponse({}, 204);
-  }),
-
-  // DELETE /friends/:friendId - Remove friend
-  http.delete('*/friends/:friendId', ({ request, params }) => {
-    const { friendId } = params;
-    const userId = extractUserId(request);
-    
-    if (!userId) {
-      return createAuthError();
-    }
-
-    const friendshipKey = `${userId}:${friendId}`;
-    const reverseFriendshipKey = `${friendId}:${userId}`;
-    
-    const friendship = mockFriendships.get(friendshipKey) || 
-                     mockFriendships.get(reverseFriendshipKey);
-    
-    if (!friendship || friendship.status !== 'friends') {
-      return createNotFoundError('Friendship not found');
-    }
-
-    // Remove friendship
-    mockFriendships.delete(friendshipKey);
-    mockFriendships.delete(reverseFriendshipKey);
-
-    return createSuccessResponse({}, 204);
-  }),
-
-  // GET /friends/requests - Get friend requests
-  http.get('*/friends/requests', ({ request }) => {
+  // GET /users/friends/requests/received - Get received friend requests
+  http.get(buildApiUrl('/users/friends/requests/received'), ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -255,35 +194,305 @@ export const handlers = [
     }
 
     const url = new URL(request.url);
-    const type = url.searchParams.get('type') || 'all';
-    const status = url.searchParams.get('status') || 'all';
+    const status = url.searchParams.get('status') || 'pending';
     const { limit, offset } = parsePaginationParams(url);
 
-    let filteredRequests = Array.from(mockFriendRequests.values());
-
-    // Filter by type
-    if (type === 'sent') {
-      filteredRequests = filteredRequests.filter(req => req.from_user_id === userId);
-    } else if (type === 'received') {
-      filteredRequests = filteredRequests.filter(req => req.to_user_id === userId);
-    } else {
-      filteredRequests = filteredRequests.filter(req => 
-        req.from_user_id === userId || req.to_user_id === userId
-      );
-    }
+    let filteredRequests = Array.from(mockFriendRequests.values()).filter(req => 
+      req.requestee_id === userId
+    );
 
     // Filter by status
     if (status !== 'all') {
       filteredRequests = filteredRequests.filter(req => req.status === status);
     }
 
-    const total = filteredRequests.length;
     const paginatedRequests = filteredRequests.slice(offset, offset + limit);
 
+    // Transform to expected format with user data
+    const responseData = paginatedRequests.map(req => ({
+      id: req.id,
+      user: getUserFromId(req.requester_id),
+      message: req.message,
+      status: req.status,
+      created_at: req.created_at,
+    }));
+
     return createSuccessResponse({
-      requests: paginatedRequests,
-      total,
-      has_more: offset + limit < total,
+      data: responseData,
+      count: responseData.length,
+      limit,
+      offset,
+    });
+  }),
+
+  // GET /users/friends/requests/sent - Get sent friend requests
+  http.get(buildApiUrl('/users/friends/requests/sent'), ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status') || 'pending';
+    const { limit, offset } = parsePaginationParams(url);
+
+    let filteredRequests = Array.from(mockFriendRequests.values()).filter(req => 
+      req.requester_id === userId
+    );
+
+    // Filter by status
+    if (status !== 'all') {
+      filteredRequests = filteredRequests.filter(req => req.status === status);
+    }
+
+    const paginatedRequests = filteredRequests.slice(offset, offset + limit);
+
+    // Transform to expected format with user data
+    const responseData = paginatedRequests.map(req => ({
+      id: req.id,
+      user: getUserFromId(req.requestee_id),
+      message: req.message,
+      status: req.status,
+      created_at: req.created_at,
+    }));
+
+    return createSuccessResponse({
+      data: responseData,
+      count: responseData.length,
+      limit,
+      offset,
+    });
+  }),
+
+  // PUT /users/friends/requests/:id/accept - Accept friend request
+  http.put(buildApiUrl('/users/friends/requests/:id/accept'), ({ request, params }) => {
+    const { id: requestId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const friendRequest = mockFriendRequests.get(requestId as string);
+    
+    if (!friendRequest) {
+      return createNotFoundError('Friend request not found');
+    }
+
+    if (friendRequest.requestee_id !== userId) {
+      return createConflictError('Unauthorized to accept this friend request');
+    }
+
+    if (friendRequest.status !== 'pending') {
+      return createConflictError('Friend request is no longer pending');
+    }
+
+    // Update request status
+    const updatedRequest = {
+      ...friendRequest,
+      status: 'accepted' as const,
+      updated_at: now(),
+    };
+    mockFriendRequests.set(requestId as string, updatedRequest);
+
+    // Create friendship
+    const friendshipId = `friendship-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    mockFriendships.set(friendshipId, {
+      user1_id: friendRequest.requester_id,
+      user2_id: friendRequest.requestee_id,
+      created_at: now(),
+    });
+
+    return createSuccessResponse({
+      message: 'Friend request accepted successfully',
+    });
+  }),
+
+  // PUT /users/friends/requests/:id/decline - Decline friend request
+  http.put(buildApiUrl('/users/friends/requests/:id/decline'), ({ request, params }) => {
+    const { id: requestId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const friendRequest = mockFriendRequests.get(requestId as string);
+    
+    if (!friendRequest) {
+      return createNotFoundError('Friend request not found');
+    }
+
+    if (friendRequest.requestee_id !== userId) {
+      return createConflictError('Unauthorized to decline this friend request');
+    }
+
+    if (friendRequest.status !== 'pending') {
+      return createConflictError('Friend request is no longer pending');
+    }
+
+    // Update request status
+    const updatedRequest = {
+      ...friendRequest,
+      status: 'declined' as const,
+      updated_at: now(),
+    };
+    mockFriendRequests.set(requestId as string, updatedRequest);
+
+    return createSuccessResponse({
+      message: 'Friend request declined successfully',
+    });
+  }),
+
+  // DELETE /users/friends/requests/:id - Cancel sent friend request
+  http.delete(buildApiUrl('/users/friends/requests/:id'), ({ request, params }) => {
+    const { id: requestId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const friendRequest = mockFriendRequests.get(requestId as string);
+    
+    if (!friendRequest) {
+      return createNotFoundError('Friend request not found');
+    }
+
+    if (friendRequest.requester_id !== userId) {
+      return createConflictError('Unauthorized to cancel this friend request');
+    }
+
+    if (friendRequest.status !== 'pending') {
+      return createConflictError('Friend request is no longer pending');
+    }
+
+    // Update request status to declined (cancelled)
+    const updatedRequest = {
+      ...friendRequest,
+      status: 'declined' as const,
+      updated_at: now(),
+    };
+    mockFriendRequests.set(requestId as string, updatedRequest);
+
+    return createSuccessResponse({
+      message: 'Friend request cancelled successfully',
+    });
+  }),
+
+  // GET /users/friends - Get friends list
+  http.get(buildApiUrl('/users/friends'), ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const url = new URL(request.url);
+    const { limit, offset } = parsePaginationParams(url);
+
+    // Get all friendships for this user
+    let friends = Array.from(mockFriendships.values())
+      .filter(friendship => 
+        friendship.user1_id === userId || friendship.user2_id === userId
+      )
+      .map(friendship => {
+        const friendId = friendship.user1_id === userId ? friendship.user2_id : friendship.user1_id;
+        return getUserFromId(friendId);
+      });
+
+    const paginatedFriends = friends.slice(offset, offset + limit);
+
+    return createSuccessResponse({
+      data: paginatedFriends,
+      count: paginatedFriends.length,
+      limit,
+      offset,
+    });
+  }),
+
+  // DELETE /users/friends/:userId - Remove friend
+  http.delete(buildApiUrl('/users/friends/:userId'), ({ request, params }) => {
+    const { userId: friendId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    // Find the friendship
+    const friendshipEntry = Array.from(mockFriendships.entries()).find(([, friendship]) => 
+      (friendship.user1_id === userId && friendship.user2_id === friendId) ||
+      (friendship.user1_id === friendId && friendship.user2_id === userId)
+    );
+    
+    if (!friendshipEntry) {
+      return createConflictError('Users are not friends');
+    }
+
+    // Remove the friendship
+    mockFriendships.delete(friendshipEntry[0]);
+
+    return createSuccessResponse({
+      message: 'Friend removed successfully',
+    });
+  }),
+
+  // GET /users/friends/status/:userId - Get friendship status
+  http.get(buildApiUrl('/users/friends/status/:userId'), ({ request, params }) => {
+    const { userId: otherUserId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    if (userId === otherUserId) {
+      return createSuccessResponse({
+        data: {
+          status: 'self',
+          can_send_request: false,
+        }
+      });
+    }
+
+    // Check if already friends
+    if (areFriends(userId, otherUserId as string)) {
+      return createSuccessResponse({
+        data: {
+          status: 'friends',
+          can_send_request: false,
+        }
+      });
+    }
+
+    // Check for pending sent request
+    if (hasPendingRequest(userId, otherUserId as string)) {
+      return createSuccessResponse({
+        data: {
+          status: 'pending_sent',
+          can_send_request: false,
+        }
+      });
+    }
+
+    // Check for pending received request
+    if (hasPendingRequest(otherUserId as string, userId)) {
+      return createSuccessResponse({
+        data: {
+          status: 'pending_received',
+          can_send_request: false,
+        }
+      });
+    }
+
+    // No relationship - can send request
+    return createSuccessResponse({
+      data: {
+        status: 'none',
+        can_send_request: true,
+      }
     });
   }),
 ];

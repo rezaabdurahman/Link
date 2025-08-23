@@ -1,0 +1,96 @@
+# =================================================================
+# Link API Gateway - Docker Compose Override
+# Use this with the main project's docker-compose.yml to replace
+# the api-gateway service with our enhanced version
+# 
+# Usage: docker-compose -f ../../../docker-compose.yml -f docker-compose.override.yml up
+# =================================================================
+
+version: '3.8'
+
+services:
+  # Override the existing api-gateway service with our enhanced version
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: link_api_gateway_enhanced
+    environment:
+      # Enhanced API Gateway Configuration
+      - APP_ENV=${APP_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - LOG_FORMAT=${LOG_FORMAT:-text}
+      
+      # JWT Configuration (inherit from main)
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+      
+      # Service Discovery & Load Balancing
+      - USER_SVC_URL=http://user-svc:8080
+      - CHAT_SVC_URL=http://chat-svc:8080
+      - AI_SVC_URL=http://ai-svc:8000
+      - DISCOVERY_SVC_URL=http://discovery-svc:8080
+      - LOCATION_SVC_URL=http://location-svc:8080
+      - STORIES_SVC_URL=http://stories-svc:8080
+      - OPPORTUNITIES_SVC_URL=http://opportunities-svc:8080
+      
+      # Multiple instance support for production load balancing
+      - USER_SVC_INSTANCES=${USER_SVC_INSTANCES:-}
+      - CHAT_SVC_INSTANCES=${CHAT_SVC_INSTANCES:-}
+      - AI_SVC_INSTANCES=${AI_SVC_INSTANCES:-}
+      - DISCOVERY_SVC_INSTANCES=${DISCOVERY_SVC_INSTANCES:-}
+      - LOCATION_SVC_INSTANCES=${LOCATION_SVC_INSTANCES:-}
+      - STORIES_SVC_INSTANCES=${STORIES_SVC_INSTANCES:-}
+      - OPPORTUNITIES_SVC_INSTANCES=${OPPORTUNITIES_SVC_INSTANCES:-}
+      
+      # Load Balancer Configuration
+      - DEFAULT_LB_STRATEGY=${DEFAULT_LB_STRATEGY:-round-robin}
+      - DEFAULT_LB_MAX_FAILURES=${DEFAULT_LB_MAX_FAILURES:-5}
+      - DEFAULT_LB_TIMEOUT=${DEFAULT_LB_TIMEOUT:-30}
+      - DEFAULT_LB_RECOVERY_TIMEOUT=${DEFAULT_LB_RECOVERY_TIMEOUT:-60}
+      
+      # Retry Configuration
+      - DEFAULT_RETRY_MAX=${DEFAULT_RETRY_MAX:-3}
+      - DEFAULT_RETRY_BASE_DELAY=${DEFAULT_RETRY_BASE_DELAY:-100}
+      - DEFAULT_RETRY_MAX_DELAY=${DEFAULT_RETRY_MAX_DELAY:-5000}
+      - DEFAULT_RETRY_JITTER=${DEFAULT_RETRY_JITTER:-true}
+      
+      # Database Configuration (inherit from main)
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-linkdb}
+      - DB_USER=${DB_USER:-linkuser}
+      - DB_PASSWORD=${DB_PASSWORD:-linkpass}
+      
+      # Redis Configuration (inherit from main)
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      
+      # Enhanced Monitoring & Observability
+      - METRICS_ENABLED=true
+      - METRICS_PATH=/metrics
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
+      - JAEGER_ENDPOINT=${JAEGER_ENDPOINT:-http://jaeger:14268/api/traces}
+      - JAEGER_SAMPLER_RATE=${JAEGER_SAMPLER_RATE:-1.0}
+      
+      # Enhanced Security Configuration
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - RATE_LIMIT_RPS=${RATE_LIMIT_RPS:-1000}
+      - RATE_LIMIT_BURST=${RATE_LIMIT_BURST:-2000}
+      
+      # Development Features
+      - ENABLE_DEBUG_ENDPOINTS=${ENABLE_DEBUG_ENDPOINTS:-true}
+      - ENABLE_PPROF=${ENABLE_PPROF:-true}
+      - ENABLE_REQUEST_LOGGING=${ENABLE_REQUEST_LOGGING:-true}
+      
+    volumes:
+      # Mount source for development
+      - .:/app:cached
+      - /app/tmp
+      - ./logs:/app/logs  # Local log directory
+    
+    labels:
+      - "com.link.service=api-gateway-enhanced"
+      - "com.link.version=2.0.0"
+      - "prometheus.scrape=true"
+      - "prometheus.port=8080"
+      - "prometheus.path=/metrics"

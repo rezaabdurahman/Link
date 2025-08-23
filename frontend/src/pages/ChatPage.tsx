@@ -98,7 +98,11 @@ const ChatPage: React.FC = (): JSX.Element => {
           privacy_settings: {
             show_age: true,
             show_location: true,
-            show_mutual_friends: true
+            show_mutual_friends: true,
+            show_name: true,
+            show_social_media: true,
+            show_montages: true,
+            show_checkins: true
           },
           is_friend: true,
           mutual_friends_count: user.mutualFriends?.length || 0,

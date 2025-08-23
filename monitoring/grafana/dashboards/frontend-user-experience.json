@@ -1,0 +1,377 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Link Frontend - User Experience & Business Metrics",
+    "tags": ["frontend", "ux", "business-metrics", "user-journey"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "1m",
+    "time": {
+      "from": "now-3h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(frontend_page_load_total, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "User Experience Score (UXS)",
+        "type": "stat",
+        "description": "Composite score based on Core Web Vitals and user interactions",
+        "targets": [
+          {
+            "expr": "(avg(frontend_web_vitals_lcp{environment=~\"$environment\"} <= 2500) * 0.3 + avg(frontend_web_vitals_fid{environment=~\"$environment\"} <= 100) * 0.3 + avg(frontend_web_vitals_cls{environment=~\"$environment\"} <= 0.1) * 0.4) * 100",
+            "legendFormat": "UX Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 75}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Page Bounce Rate",
+        "type": "stat",
+        "description": "Percentage of single-page sessions",
+        "targets": [
+          {
+            "expr": "(sum(frontend_page_bounce_total{environment=~\"$environment\"}) / sum(frontend_page_load_total{environment=~\"$environment\"})) * 100",
+            "legendFormat": "Bounce Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 40},
+                {"color": "red", "value": 70}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Average Session Duration",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(frontend_session_duration_seconds{environment=~\"$environment\"})",
+            "legendFormat": "Avg Session Duration",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 60},
+                {"color": "green", "value": 300}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "User Journey Completion Funnel",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "sum by (step) (frontend_user_journey_step_total{environment=~\"$environment\", journey=\"onboarding\"})",
+            "legendFormat": "{{step}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Feature Adoption Rate",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (feature) (rate(frontend_feature_usage_total{environment=~\"$environment\"}[1h]))",
+            "legendFormat": "{{feature}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "Form Completion Rates",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(frontend_form_completion_total{environment=~\"$environment\", status=\"success\"}[5m]) / rate(frontend_form_start_total{environment=~\"$environment\"}[5m]) * 100",
+            "legendFormat": "{{form}} Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Form Abandonment Points",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum by (field) (rate(frontend_form_abandonment_total{environment=~\"$environment\"}[5m]))",
+            "legendFormat": "{{field}} abandonments/min",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 8,
+        "title": "Error Impact on User Experience",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(frontend_javascript_errors_total{environment=~\"$environment\"}[5m])",
+            "legendFormat": "JS Errors/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(frontend_api_request_total{environment=~\"$environment\", status=~\"5..\"}[5m])",
+            "legendFormat": "API 5xx/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(frontend_network_timeout_total{environment=~\"$environment\"}[5m])",
+            "legendFormat": "Network Timeouts/sec",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Device & Browser Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (device_type) (rate(frontend_page_load_total{environment=~\"$environment\"}[1h]))",
+            "legendFormat": "{{device_type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 10,
+        "title": "Connection Type Performance Impact",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_web_vitals_lcp_bucket{environment=~\"$environment\"}[5m])) by (connection_type)",
+            "legendFormat": "{{connection_type}} LCP P95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      },
+      {
+        "id": 11,
+        "title": "Geographic Performance Distribution",
+        "type": "geomap",
+        "targets": [
+          {
+            "expr": "avg by (country) (frontend_web_vitals_lcp{environment=~\"$environment\"})",
+            "legendFormat": "{{country}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {
+              "mode": "continuous-GrYlRd"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      },
+      {
+        "id": 12,
+        "title": "Real-Time Active Users",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(frontend_active_users{environment=~\"$environment\"})",
+            "legendFormat": "Active Users",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 10},
+                {"color": "green", "value": 50}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 40}
+      },
+      {
+        "id": 13,
+        "title": "User Engagement Score",
+        "type": "stat",
+        "description": "Based on page views, time spent, and interactions",
+        "targets": [
+          {
+            "expr": "(avg(frontend_session_duration_seconds{environment=~\"$environment\"}) / 60) * (avg(rate(frontend_user_interaction_total{environment=~\"$environment\"}[5m])) * 300) / 100",
+            "legendFormat": "Engagement Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "decimals": 2,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 5},
+                {"color": "green", "value": 10}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 40}
+      },
+      {
+        "id": 14,
+        "title": "Conversion Rate",
+        "type": "stat",
+        "description": "Primary goal completion rate",
+        "targets": [
+          {
+            "expr": "(sum(frontend_conversion_total{environment=~\"$environment\"}) / sum(frontend_page_load_total{environment=~\"$environment\"})) * 100",
+            "legendFormat": "Conversion Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 2},
+                {"color": "green", "value": 5}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 40}
+      },
+      {
+        "id": 15,
+        "title": "Page Load Satisfaction Score",
+        "type": "stat",
+        "description": "Percentage of loads meeting performance thresholds",
+        "targets": [
+          {
+            "expr": "(sum(frontend_web_vitals_lcp{environment=~\"$environment\"} <= 2500) + sum(frontend_web_vitals_fid{environment=~\"$environment\"} <= 100) + sum(frontend_web_vitals_cls{environment=~\"$environment\"} <= 0.1)) / (3 * sum(frontend_page_load_total{environment=~\"$environment\"})) * 100",
+            "legendFormat": "Satisfaction Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 75},
+                {"color": "green", "value": 90}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 40}
+      }
+    ]
+  }
+}

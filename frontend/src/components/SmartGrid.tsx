@@ -108,7 +108,7 @@ const GridUserCard: React.FC<GridUserCardProps> = ({
         ) : (
           <img
             src={mediaSource}
-            alt={user.name}
+            alt={getDisplayName(user)}
             className="w-full h-full object-cover"
           />
         )}

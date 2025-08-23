@@ -197,9 +197,20 @@ jobs:
       - name: Configure Terraform backend
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          # Uncomment S3 backend for production
-          # sed -i 's/# backend "s3"/backend "s3"/' main.tf
-          echo "Using local backend for now"
+          # Configure S3 backend for production
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            cat > backend-config.tf << EOF
+          terraform {
+            backend "s3" {
+              bucket = "${{ secrets.TF_STATE_BUCKET }}"
+              key    = "production/terraform.tfstate"
+              region = "us-west-2"
+            }
+          }
+          EOF
+          else
+            echo "Using local backend for PR validation"
+          fi
       
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}

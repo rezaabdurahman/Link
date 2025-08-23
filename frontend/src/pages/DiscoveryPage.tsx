@@ -6,6 +6,7 @@ import UserCard from '../components/UserCard';
 import ProfileDetailModal from '../components/ProfileDetailModal';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import AddCuesModal from '../components/AddCuesModal';
+import { useCue } from '../contexts/CueContext';
 import AddBroadcastModal from '../components/AddBroadcastModal';
 import CheckInModal from '../components/CheckInModal';
 import CheckInSnackbar from '../components/CheckInSnackbar';
@@ -14,8 +15,7 @@ import ExpandableFAB from '../components/ExpandableFAB';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
 import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, UnifiedSearchRequest } from '../services/unifiedSearchClient';
-// Legacy import - this will show deprecation warnings in console
-import { isSearchError, getSearchErrorMessage } from '../services/searchClient';
+import { getHiddenUsers } from '../services/hiddenUsersClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import { usePendingReceivedRequestsCount } from '../hooks/useFriendRequests';
 import ViewTransition from '../components/ViewTransition';
@@ -40,14 +40,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
   const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
-  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem('hiddenUserIds');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
+  const [isLoadingHiddenUsers, setIsLoadingHiddenUsers] = useState<boolean>(false);
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' }>({ 
     isVisible: false, 
     message: '', 
@@ -81,7 +75,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [lastCheckInText, setLastCheckInText] = useState<string>('');
 
   // Search functionality - NEW unified search implementation  
-  const performSearch = useCallback(async (): Promise<void> => {
+  const performSearch = useCallback(async (isUserInitiated: boolean = true): Promise<void> => {
     if (isSearching) return; // Prevent multiple concurrent searches
 
     setIsSearching(true);
@@ -112,11 +106,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
       // Show success message if query was provided
       if (searchQuery.trim()) {
-        setToast({
-          isVisible: true,
-          message: `Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`,
-          type: 'success'
-        });
+        showToast(`Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`, 'success');
       }
       
       // Log metadata for debugging
@@ -130,21 +120,17 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       let errorMessage = 'Search failed. Please try again.';
       if (isUnifiedSearchError(error)) {
         errorMessage = getUnifiedSearchErrorMessage(error);
-      } else if (isSearchError(error)) {
-        // Fallback to legacy error handling
-        errorMessage = getSearchErrorMessage(error);
       }
       
       setSearchError(errorMessage);
-      setToast({
-        isVisible: true,
-        message: errorMessage,
-        type: 'error'
-      });
+      // Only show error toast for user-initiated searches
+      if (isUserInitiated) {
+        showToast(errorMessage, 'error');
+      }
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery, activeFilters.distance, activeFilters.interests, hiddenUserIds, isSearching]);
+  }, [searchQuery, activeFilters.distance, activeFilters.interests, isSearching]);
 
   // Handle initial animation state if user is already available
   useEffect(() => {
@@ -161,7 +147,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     if (hasSearched && (activeFilters.distance || activeFilters.interests.length > 0)) {
       // Debounce the search to avoid too many API calls
       const timeoutId = setTimeout(() => {
-        performSearch();
+        performSearch(false); // Filter changes are automatic, not user-initiated
       }, 500);
 
       return () => clearTimeout(timeoutId);
@@ -172,18 +158,30 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   useEffect(() => {
     if (isAvailable && !hasSearched && searchResults.length === 0 && !isSearching) {
       // Auto-perform initial search when becoming available to populate discovery feed
-      performSearch();
+      performSearch(false); // Pass false to indicate this is not user-initiated
     }
   }, [isAvailable, hasSearched, searchResults.length, isSearching, performSearch]);
 
-  // Persist hiddenUserIds to localStorage
+  // Load hidden users from API when component mounts
   useEffect(() => {
-    try {
-      localStorage.setItem('hiddenUserIds', JSON.stringify([...hiddenUserIds]));
-    } catch (error) {
-      console.warn('Failed to persist hiddenUserIds to localStorage:', error);
-    }
-  }, [hiddenUserIds]);
+    const loadHiddenUsers = async () => {
+      if (isLoadingHiddenUsers) return;
+      
+      setIsLoadingHiddenUsers(true);
+      try {
+        const hiddenUsers = await getHiddenUsers();
+        setHiddenUserIds(new Set(hiddenUsers));
+      } catch (error) {
+        console.warn('Failed to load hidden users:', error);
+        // Remove the toast notification for hidden users API failure
+        // This feature is optional and shouldn't show error toasts
+      } finally {
+        setIsLoadingHiddenUsers(false);
+      }
+    };
+
+    loadHiddenUsers();
+  }, []); // Only run once on mount
 
   // Determine which users to display: search results only (we always use real client data)
   const baseDisplayUsers = searchResults
@@ -224,6 +222,21 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setToast(prev => ({ ...prev, isVisible: false }));
   };
 
+  // Helper function to show toast with proper state management
+  const showToast = (message: string, type: 'success' | 'error'): void => {
+    // First hide any existing toast to prevent animation conflicts
+    setToast(prev => ({ ...prev, isVisible: false }));
+    
+    // Small delay to ensure the previous toast animation completes
+    setTimeout(() => {
+      setToast({
+        isVisible: true,
+        message,
+        type
+      });
+    }, 50);
+  };
+
   const handleUserClick = (user: User): void => {
     setSelectedUserId(user.id);
   };
@@ -240,10 +253,18 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setIsAddCuesModalOpen(false);
   };
 
-  const handleSubmitCue = (cue: string): void => {
-    // Here you would typically save the cue to your backend/state
-    console.log('New social cue:', cue);
-    // For now, just close the modal
+  const { createCue, hasActiveCue } = useCue();
+
+  const handleSubmitCue = async (cue: string): Promise<void> => {
+    try {
+      await createCue({ message: cue });
+      setIsAddCuesModalOpen(false);
+      // Show success toast
+      showToast('Social cue created successfully!', 'success');
+    } catch (error) {
+      console.error('Error creating cue:', error);
+      showToast('Failed to create social cue. Please try again.', 'error');
+    }
   };
 
   const handleOpenAddBroadcast = (): void => {
@@ -269,11 +290,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     }));
     
     // Show optimistic success toast
-    setToast({
-      isVisible: true,
-      message: 'Broadcast updated successfully!',
-      type: 'success'
-    });
+    showToast('Broadcast updated successfully!', 'success');
     
     // Close modal immediately for better UX
     setIsAddBroadcastModalOpen(false);
@@ -300,12 +317,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       
       // Show error toast
       const errorMessage = 'Failed to update broadcast. Please try again.';
-      
-      setToast({
-        isVisible: true,
-        message: errorMessage,
-        type: 'error'
-      });
+      showToast(errorMessage, 'error');
     } finally {
       setIsBroadcastSubmitting(false);
     }
@@ -378,21 +390,43 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     // Here you would typically delete the check-in from your backend
     console.log('Undoing check-in:', lastCheckInText);
     
-    setToast({
-      isVisible: true,
-      message: 'Check-in has been removed',
-      type: 'success'
-    });
+    showToast('Check-in has been removed', 'success');
   };
 
-  const handleHideUser = (userId: string): void => {
-    setHiddenUserIds(prev => new Set([...prev, userId]));
-    setToast({
-      isVisible: true,
-      message: 'User hidden from discovery',
-      type: 'success'
-    });
-  };
+  // TODO: Implement user hiding functionality
+  // const handleHideUser = async (userId: string): Promise<void> => {
+  //   // Optimistic update
+  //   setHiddenUserIds(prev => new Set([...prev, userId]));
+  //   
+  //   try {
+  //     await hideUser(userId);
+  //     setToast({
+  //       isVisible: true,
+  //       message: 'User hidden from discovery',
+  //       type: 'success'
+  //     });
+  //   } catch (error) {
+  //     // Revert optimistic update on failure
+  //     setHiddenUserIds(prev => {
+  //       const newSet = new Set([...prev]);
+  //       newSet.delete(userId);
+  //       return newSet;
+  //     });
+  //     
+  //     console.error('Failed to hide user:', error);
+  //     let errorMessage = 'Failed to hide user. Please try again.';
+  //     
+  //     if (isHiddenUsersError(error)) {
+  //       errorMessage = getHiddenUsersErrorMessage(error);
+  //     }
+  //     
+  //     setToast({
+  //       isVisible: true,
+  //       message: errorMessage,
+  //       type: 'error'
+  //     });
+  //   }
+  // };
 
   return (
     <div className="min-h-screen relative">
@@ -745,7 +779,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         onOpenAddCues={handleOpenAddCues}
         onOpenAddBroadcast={handleOpenAddBroadcast}
         onOpenCheckIn={handleOpenCheckIn}
-        isCuesActive={false} // TODO: Add cues tracking state when implemented
+        isCuesActive={hasActiveCue}
         isBroadcastActive={!!currentUser.broadcast && currentUser.broadcast.trim().length > 0}
       />
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Megaphone } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Megaphone, Shield } from 'lucide-react';
 import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
 import { CheckIn } from '../types/checkin';
@@ -51,9 +51,9 @@ const mapUserProfileToUser = (profile: UserProfileResponse, mode: 'own' | 'other
     id: profile.id,
     first_name: shouldShowContent(profile, 'name', mode) ? profile.first_name : '',
     last_name: shouldShowContent(profile, 'name', mode) ? profile.last_name : '',
-    age: shouldShowContent(profile, 'age', mode) ? (profile.age || (profile.date_of_birth ? 
+    age: shouldShowContent(profile, 'age', mode) ? (profile.age ?? (profile.date_of_birth ? 
       Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
-      25)) : undefined, // Use age from backend or calculate it, fallback to 25 if allowed
+      25)) : 25, // Use age from backend or calculate it, fallback to 25
     profilePicture: profile.profile_picture || undefined, // Always show profile picture
     bio: shouldShowContent(profile, 'montages', mode) ? (profile.bio || 'No bio available') : 'This user has chosen to keep their bio private.',
     interests: shouldShowContent(profile, 'montages', mode) ? (profile.interests || []) : [], // Use interests from backend if allowed
@@ -418,7 +418,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     icon: getSocialIcon(link.platform),
     handle: link.username ? `@${link.username}` : link.url,
     url: link.url
-  })) || [];
+  })) : [];
 
   // Loading skeleton component
   const ProfileSkeleton = () => (
@@ -507,25 +507,37 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 
                 {/* Name, Age, Meta Info and Action Buttons - Right Side */}
                 <div className="flex-1 min-w-0">
-                  {user.profileType === 'public' ? (
-                    <h3 className="text-lg font-bold mb-1 text-gradient-primary">
-                      {getDisplayName(user)}, {user.age}
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-bold text-gradient-primary">
+                      {user.first_name || user.last_name ? (
+                        <>
+                          {getDisplayName(user)}
+                          {user.age && `, ${user.age}`}
+                        </>
+                      ) : (
+                        'Private Profile'
+                      )}
                     </h3>
-                  ) : (
-                    <h3 className="text-lg font-bold mb-1 text-gradient-primary">
-                      Private Profile
-                    </h3>
-                  )}
+                    {/* Privacy Badge */}
+                    {user.profileType === 'private' && mode !== 'own' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                        <Shield size={12} />
+                        Private
+                      </span>
+                    )}
+                  </div>
                   
                   {/* Distance, Mutual Friends & Social Links */}
                   <div className="flex items-center gap-3 flex-wrap mb-1">
-                    {/* Distance */}
-                    <div className="flex items-center gap-1">
-                      <MapPin size={14} className="text-text-secondary" />
-                      <span className="text-text-secondary text-xs">
-                        {user.location.proximityMiles} mi
-                      </span>
-                    </div>
+                    {/* Distance - only show if location is allowed */}
+                    {user.location.proximityMiles > 0 && (
+                      <div className="flex items-center gap-1">
+                        <MapPin size={14} className="text-text-secondary" />
+                        <span className="text-text-secondary text-xs">
+                          {user.location.proximityMiles} mi
+                        </span>
+                      </div>
+                    )}
                     
                     {/* Mutual Friends */}
                     {user.mutualFriends.length > 0 && (
@@ -538,7 +550,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                     )}
                     
                     {/* Social Media Links - same row */}
-                    {user.profileType === 'public' && socialLinks.length > 0 && (
+                    {shouldShowSocialLinks && socialLinks.length > 0 && (
                       <div className="flex gap-1">
                         {socialLinks.map((social, index) => {
                           const IconComponent = social.icon;

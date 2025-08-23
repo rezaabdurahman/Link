@@ -38,7 +38,12 @@ spec:
           value: "production"
         - name: PORT
           value: "8080"
-        # Service URLs - Linkerd handles mTLS automatically
+        # Kubernetes service discovery configuration
+        - name: K8S_NAMESPACE
+          value: "link-services"
+        - name: K8S_CLUSTER_DOMAIN
+          value: "svc.cluster.local"
+        # Legacy env vars for compatibility (not used by new K8s implementation)
         - name: USER_SVC_URL
           value: "http://user-svc.link-services.svc.cluster.local:8080"
         - name: CHAT_SVC_URL
@@ -499,7 +504,23 @@ spec:
           value: "8080"
         - name: ENVIRONMENT
           value: "production"
-        # Database credentials from Terraform-generated secrets
+        # Repository Configuration
+        - name: SEARCH_REPOSITORY_TYPE
+          value: "qdrant"
+        # Qdrant Configuration
+        - name: QDRANT_HOST
+          value: "qdrant-cluster.link-services.svc.cluster.local"
+        - name: QDRANT_PORT
+          value: "6334"
+        - name: QDRANT_USE_TLS
+          value: "false"
+        - name: QDRANT_CLOUD
+          value: "false"
+        - name: QDRANT_COLLECTION
+          value: "user_profiles"
+        - name: QDRANT_TIMEOUT
+          value: "30s"
+        # PostgreSQL (for reindex job tracking only)
         - name: DB_HOST
           value: "postgres.link-internal.svc.cluster.local"
         - name: DB_PORT
@@ -515,6 +536,37 @@ spec:
               key: password
         - name: DB_SSLMODE
           value: "require"
+        # OpenAI Configuration
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: search-service-secret
+              key: openai-api-key
+        - name: EMBEDDING_PROVIDER
+          value: "openai"
+        - name: EMBEDDING_MODEL
+          value: "text-embedding-3-small"
+        # Service Discovery
+        - name: DISCOVERY_SVC_URL
+          value: "http://discovery-svc.link-services.svc.cluster.local:8080"
+        - name: USER_SVC_URL
+          value: "http://user-svc.link-services.svc.cluster.local:8080"
+        - name: SERVICE_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: search-service-secret
+              key: service-auth-token
+        # Indexing Pipeline
+        - name: INDEXING_CRON_INTERVAL_MINUTES
+          value: "120"
+        - name: INDEXING_WORKER_POOL_SIZE
+          value: "10"
+        - name: INDEXING_RATE_LIMIT_PER_SECOND
+          value: "50"
+        - name: INDEXING_BATCH_SIZE
+          value: "100"
+        - name: INDEXING_EMBEDDING_TTL_HOURS
+          value: "2"
         resources:
           requests:
             memory: "64Mi"

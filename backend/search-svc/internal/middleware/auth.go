@@ -183,10 +183,3 @@ func RateLimit(store *RateLimiterStore) gin.HandlerFunc {
 	}
 }
 
-// PrometheusMiddleware returns a middleware for Prometheus metrics collection
-func PrometheusMiddleware() gin.HandlerFunc {
-	return gin.HandlerFunc(func(c *gin.Context) {
-		// Stub implementation - in a real app this would collect metrics
-		c.Next()
-	})
-}

@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package discovery;
+
+option go_package = "github.com/link-app/backend/proto/discovery";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/types.proto";
+
+// Discovery Service definition
+service DiscoveryService {
+  // Get available users for discovery
+  rpc GetAvailableUsers(GetAvailableUsersRequest) returns (GetAvailableUsersResponse);
+  
+  // Update user availability status
+  rpc UpdateAvailability(UpdateAvailabilityRequest) returns (UpdateAvailabilityResponse);
+  
+  // Get user availability status
+  rpc GetUserAvailability(GetUserAvailabilityRequest) returns (GetUserAvailabilityResponse);
+  
+  // Subscribe to availability updates (streaming)
+  rpc SubscribeToAvailabilityUpdates(SubscribeAvailabilityRequest) returns (stream AvailabilityUpdate);
+  
+  // Get nearby users
+  rpc GetNearbyUsers(GetNearbyUsersRequest) returns (GetNearbyUsersResponse);
+  
+  // Update user location
+  rpc UpdateLocation(UpdateLocationRequest) returns (UpdateLocationResponse);
+  
+  // Get discovery preferences
+  rpc GetDiscoveryPreferences(GetDiscoveryPreferencesRequest) returns (GetDiscoveryPreferencesResponse);
+  
+  // Health check
+  rpc Health(common.HealthCheckRequest) returns (common.HealthCheckResponse);
+}
+
+// Availability status enum
+enum AvailabilityStatus {
+  UNAVAILABLE = 0;
+  AVAILABLE = 1;
+  BUSY = 2;
+  AWAY = 3;
+  INVISIBLE = 4;
+}
+
+// User availability information
+message UserAvailability {
+  common.UUID user_id = 1;
+  AvailabilityStatus status = 2;
+  string custom_message = 3;
+  google.protobuf.Timestamp last_seen = 4;
+  google.protobuf.Timestamp available_until = 5;
+  Location location = 6;
+  bool is_online = 7;
+}
+
+// Location information
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  string address = 3;
+  string city = 4;
+  string country = 5;
+  double accuracy = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// Discovery preferences
+message DiscoveryPreferences {
+  bool discoverable = 1;
+  double max_distance_km = 2;
+  repeated string preferred_age_ranges = 3;
+  repeated string preferred_interests = 4;
+  bool show_location = 5;
+  bool notify_nearby_users = 6;
+}
+
+// Request messages
+message GetAvailableUsersRequest {
+  common.PaginationRequest pagination = 1;
+  AvailabilityStatus status_filter = 2;
+  Location near_location = 3;
+  double max_distance_km = 4;
+  repeated common.UUID exclude_user_ids = 5;
+}
+
+message GetAvailableUsersResponse {
+  repeated UserAvailability users = 1;
+  common.PaginationResponse pagination = 2;
+}
+
+message UpdateAvailabilityRequest {
+  common.UUID user_id = 1;
+  AvailabilityStatus status = 2;
+  string custom_message = 3;
+  google.protobuf.Timestamp available_until = 4;
+  Location location = 5;
+}
+
+message UpdateAvailabilityResponse {
+  UserAvailability availability = 1;
+  common.SuccessResponse result = 2;
+}
+
+message GetUserAvailabilityRequest {
+  common.UUID user_id = 1;
+}
+
+message GetUserAvailabilityResponse {
+  UserAvailability availability = 1;
+}
+
+message SubscribeAvailabilityRequest {
+  repeated common.UUID user_ids = 1;
+  Location near_location = 2;
+  double max_distance_km = 3;
+}
+
+message AvailabilityUpdate {
+  common.UUID user_id = 1;
+  AvailabilityStatus old_status = 2;
+  AvailabilityStatus new_status = 3;
+  string custom_message = 4;
+  Location location = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  UpdateType update_type = 7;
+}
+
+enum UpdateType {
+  STATUS_CHANGED = 0;
+  LOCATION_CHANGED = 1;
+  WENT_ONLINE = 2;
+  WENT_OFFLINE = 3;
+  MESSAGE_CHANGED = 4;
+}
+
+message GetNearbyUsersRequest {
+  Location center_location = 1;
+  double radius_km = 2;
+  common.PaginationRequest pagination = 3;
+  AvailabilityStatus status_filter = 4;
+}
+
+message GetNearbyUsersResponse {
+  repeated UserAvailability users = 1;
+  common.PaginationResponse pagination = 2;
+}
+
+message UpdateLocationRequest {
+  common.UUID user_id = 1;
+  Location location = 2;
+  bool update_availability = 3;
+}
+
+message UpdateLocationResponse {
+  Location location = 1;
+  common.SuccessResponse result = 2;
+}
+
+message GetDiscoveryPreferencesRequest {
+  common.UUID user_id = 1;
+}
+
+message GetDiscoveryPreferencesResponse {
+  DiscoveryPreferences preferences = 1;
+}

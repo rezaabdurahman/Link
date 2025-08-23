@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, User, Mail, Lock, UserPlus, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Lock, ArrowRight } from 'lucide-react';
 // Using existing Toast component
 import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';

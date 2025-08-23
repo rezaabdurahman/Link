@@ -12,16 +12,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/link-app/user-svc/internal/auth"
 	"github.com/link-app/user-svc/internal/cache"
 	"github.com/link-app/user-svc/internal/config"
 	"github.com/link-app/user-svc/internal/events"
+	"github.com/link-app/user-svc/internal/friends"
 	"github.com/link-app/user-svc/internal/middleware"
 	"github.com/link-app/user-svc/internal/onboarding"
 	"github.com/link-app/user-svc/internal/profile"
 	"github.com/link-app/user-svc/internal/repository"
+	"github.com/link-app/user-svc/internal/security"
+	"github.com/link-app/shared-libs/metrics"
 )
 
 func main() {
@@ -42,6 +44,28 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
+
+	// Initialize encryption services
+	if err := security.InitGlobalKMSManager(); err != nil {
+		log.Fatal("Failed to initialize KMS manager:", err)
+	}
+	defer security.CleanupGlobalKMSManager()
+
+	if err := security.InitGlobalEncryptors(); err != nil {
+		log.Fatal("Failed to initialize encryptors:", err)
+	}
+
+	if err := security.InitGlobalSessionTokenEncryptor(); err != nil {
+		log.Fatal("Failed to initialize session token encryptor:", err)
+	}
+
+	// Register encryption hooks with GORM
+	encryptionHooks := &security.EncryptionHooks{}
+	if err := encryptionHooks.RegisterHooks(db); err != nil {
+		log.Fatal("Failed to register encryption hooks:", err)
+	}
+	
+	log.Println("Encryption services initialized successfully")
 
 
 	// Initialize JWT service (for token generation only)
@@ -86,26 +110,45 @@ func main() {
 		log.Println("Profile service initialized without caching")
 	}
 
+	// Initialize friend service
+	friendService := friends.NewFriendService(userRepo)
+
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
 	profileHandler := profile.NewProfileHandler(profileService)
 	onboardingHandler := onboarding.NewHandler(onboardingService)
+	friendHandler := friends.NewFriendHandler(friendService)
+
+	// Initialize metrics
+	serviceMetrics := metrics.NewServiceMetrics("user-svc")
+	serviceMetrics.SetHealthy(true) // Set initial health status
 
 	// Initialize Gin router with all existing middleware
 	router := gin.Default()
 
 	// Global middleware
 	router.Use(corsMiddleware())                       // CORS handling
+	router.Use(serviceMetrics.GinMiddleware())         // Prometheus metrics middleware
 	router.Use(jwtAuthMiddleware(jwtService))          // JWT authentication for testing
 	router.Use(middleware.ExtractUserContext())        // User context extraction
 
 	// Metrics endpoint for Prometheus scraping
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	metrics.SetupMetricsEndpoint(router)
 
 	// Simple health check endpoints
-	router.GET("/health/live", func(c *gin.Context) { c.JSON(200, gin.H{"status": "alive"}) })
-	router.GET("/health/ready", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ready"}) })
-	router.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
+	router.GET("/health/live", func(c *gin.Context) { 
+		serviceMetrics.SetHealthy(true)
+		c.JSON(200, gin.H{"status": "alive"}) 
+	})
+	router.GET("/health/ready", func(c *gin.Context) { 
+		// TODO: Add more sophisticated readiness checks
+		serviceMetrics.SetHealthy(true)
+		c.JSON(200, gin.H{"status": "ready"}) 
+	})
+	router.GET("/health", func(c *gin.Context) { 
+		serviceMetrics.SetHealthy(true)
+		c.JSON(200, gin.H{"status": "healthy"}) 
+	})
 
 	// API routes - using modular routers (preserved from original)
 	v1 := router.Group("/api/v1")
@@ -114,6 +157,7 @@ func main() {
 		auth.RegisterRoutes(v1, authHandler)
 		profile.RegisterRoutes(v1, profileHandler)
 		onboarding.RegisterRoutes(v1, onboardingHandler)
+		friends.RegisterRoutes(v1, friendHandler)
 
 		// Admin endpoints
 		admin := v1.Group("/admin")

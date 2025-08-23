@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User } from '../types';
+import { User, AuthUser } from '../types';
+import * as userClient from '../services/userClient';
 
 // Types for friend request data
 export interface FriendRequest {
   id: string;
-  user: User;
+  user: AuthUser;
   createdAt: string;
   status: 'pending' | 'accepted' | 'declined';
 }
@@ -42,23 +43,53 @@ export const useFriendRequests = (): UseFriendRequestsReturn => {
   const [friends, setFriends] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Mock API calls - replace with actual API calls
-  const mockApiCall = (delay = 500) => new Promise(resolve => setTimeout(resolve, delay));
   
   const refreshRequests = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await mockApiCall();
+      // Fetch received requests (pending only)
+      const receivedResponse = await userClient.getReceivedFriendRequests({ status: 'pending', limit: 50 });
+      const receivedRequests = receivedResponse.data.map(req => ({
+        id: req.id,
+        user: req.user,
+        createdAt: req.created_at,
+        status: req.status as 'pending' | 'accepted' | 'declined'
+      }));
       
-      // Mock data - replace with actual API calls
-      const mockReceivedRequests: FriendRequest[] = [];
-      const mockSentRequests: FriendRequest[] = [];
-      const mockFriends: User[] = [];
+      // Fetch sent requests (pending only)
+      const sentResponse = await userClient.getSentFriendRequests({ status: 'pending', limit: 50 });
+      const sentRequestsData = sentResponse.data.map(req => ({
+        id: req.id,
+        user: req.user,
+        createdAt: req.created_at,
+        status: req.status as 'pending' | 'accepted' | 'declined'
+      }));
       
-      setPendingReceivedRequests(mockReceivedRequests);
-      setSentRequests(mockSentRequests);
-      setFriends(mockFriends);
+      // Fetch friends list
+      const friendsResponse = await userClient.getFriends({ limit: 50 });
+      const friendsData = friendsResponse.data.map(friend => ({
+        id: friend.id,
+        first_name: friend.first_name,
+        last_name: friend.last_name,
+        age: 0, // Age calculation would need to be done from date_of_birth
+        profilePicture: friend.profile_picture || undefined,
+        bio: friend.bio || '',
+        interests: friend.interests,
+        location: {
+          lat: 0, // These would come from location service
+          lng: 0,
+          proximityMiles: friend.mutual_friends_count || 0
+        },
+        isAvailable: true, // Default availability
+        mutualFriends: [], // Will be populated by backend later
+        connectionPriority: 'regular' as const,
+        lastSeen: new Date(friend.last_active || friend.created_at),
+        profileType: friend.profile_visibility === 'private' ? 'private' : 'public'
+      } as User));
+      
+      setPendingReceivedRequests(receivedRequests);
+      setSentRequests(sentRequestsData);
+      setFriends(friendsData);
     } catch (error) {
       console.error('Failed to refresh friend requests:', error);
     } finally {
@@ -69,9 +100,7 @@ export const useFriendRequests = (): UseFriendRequestsReturn => {
   const sendFriendRequest = async (userId: string): Promise<void> => {
     setIsLoading(true);
     try {
-      await mockApiCall();
-      // Mock API call to send friend request
-      console.log(`Sending friend request to user ${userId}`);
+      await userClient.sendFriendRequest({ requestee_id: userId });
       
       // Refresh data after action
       await refreshRequests();
@@ -86,9 +115,7 @@ export const useFriendRequests = (): UseFriendRequestsReturn => {
   const acceptFriendRequest = async (requestId: string): Promise<void> => {
     setIsLoading(true);
     try {
-      await mockApiCall();
-      // Mock API call to accept friend request
-      console.log(`Accepting friend request ${requestId}`);
+      await userClient.acceptFriendRequest(requestId);
       
       // Remove from pending requests locally
       setPendingReceivedRequests(prev => prev.filter(req => req.id !== requestId));
@@ -106,9 +133,7 @@ export const useFriendRequests = (): UseFriendRequestsReturn => {
   const declineFriendRequest = async (requestId: string): Promise<void> => {
     setIsLoading(true);
     try {
-      await mockApiCall();
-      // Mock API call to decline friend request
-      console.log(`Declining friend request ${requestId}`);
+      await userClient.declineFriendRequest(requestId);
       
       // Remove from pending requests locally
       setPendingReceivedRequests(prev => prev.filter(req => req.id !== requestId));
@@ -123,9 +148,7 @@ export const useFriendRequests = (): UseFriendRequestsReturn => {
   const cancelSentRequest = async (requestId: string): Promise<void> => {
     setIsLoading(true);
     try {
-      await mockApiCall();
-      // Mock API call to cancel sent request
-      console.log(`Canceling sent request ${requestId}`);
+      await userClient.cancelFriendRequest(requestId);
       
       // Remove from sent requests locally
       setSentRequests(prev => prev.filter(req => req.id !== requestId));
@@ -140,9 +163,7 @@ export const useFriendRequests = (): UseFriendRequestsReturn => {
   const removeFriend = async (userId: string): Promise<void> => {
     setIsLoading(true);
     try {
-      await mockApiCall();
-      // Mock API call to remove friend
-      console.log(`Removing friend ${userId}`);
+      await userClient.removeFriend(userId);
       
       // Remove from friends list locally
       setFriends(prev => prev.filter(friend => friend.id !== userId));

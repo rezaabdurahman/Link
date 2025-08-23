@@ -13,7 +13,7 @@ alerting:
 
 # Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
 rule_files:
-  - "rules/database_alerts.yml"  - "/etc/prometheus/rules/*.yml"
+  - "/etc/prometheus/rules/*.yml"
 
 scrape_configs:
   # Prometheus itself
@@ -55,6 +55,12 @@ scrape_configs:
     metrics_path: '/metrics'
     scrape_interval: 15s
 
+  - job_name: 'search-service'
+    static_configs:
+      - targets: ['search-svc:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
   # Infrastructure Services
   - job_name: 'postgres'
     static_configs:
@@ -88,6 +94,7 @@ scrape_configs:
         - http://user-svc:8080/health
         - http://chat-svc:8080/health
         - http://discovery-svc:8080/health
+        - http://search-svc:8080/health
         - http://frontend:3000
     relabel_configs:
       - source_labels: [__address__]

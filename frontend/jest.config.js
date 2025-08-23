@@ -42,8 +42,7 @@ module.exports = {
   // Module resolution
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '\\.(css|less|scss)$': 'identity-obj-proxy',
-    '^msw/node$': require.resolve('msw/node')
+    '\\.(css|less|scss)$': 'identity-obj-proxy'
   },
   
   // CRITICAL: Force ts-jest to handle TypeScript, not Babel
@@ -76,7 +75,7 @@ module.exports = {
   
   // Transform patterns
   transformIgnorePatterns: [
-    'node_modules/(?!(msw|@mswjs|.*\\.mjs$))'
+    'node_modules/(?!(msw|@mswjs/.*|.*\\.mjs$))'
   ],
   
   // File extensions Jest should handle

@@ -3,7 +3,7 @@ import { nearbyUsers, currentUser } from '../../data/mockData';
 import { extractUserId, now } from '../utils/mockHelpers';
 import { createAuthError, createNotFoundError, createSuccessResponse } from '../utils/responseBuilders';
 import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
-import { getDisplayName, getFullName } from '../../utils/nameHelpers';
+import { getFullName } from '../../utils/nameHelpers';
 
 // Mock database for user profiles
 const mockUserProfiles: Map<string, any> = new Map();
@@ -55,7 +55,7 @@ export const handlers = [
       const hasMore = (offset + results.length) < totalResults;
       
       console.log('🔍 MSW: Search pagination - limit:', limit, 'offset:', offset, 'total:', totalResults, 'returned:', results.length, 'hasMore:', hasMore);
-      console.log('🔍 MSW: Search returning', results.length, 'results for scope:', body.scope, '- Users:', results.map(u => `${u.name} (${u.id})`));
+      console.log('🔍 MSW: Search returning', results.length, 'results for scope:', body.scope, '- Users:', results.map(u => `${getFullName(u)} (${u.id})`));
       
       // Ensure Date objects are properly serialized
       const serializedResults = results.map(user => ({

@@ -58,17 +58,19 @@ func main() {
 	broadcastRepo := repository.NewBroadcastRepository(db)
 	availabilityRepo := repository.NewAvailabilityRepository(db)
 	rankingConfigRepo := repository.NewRankingConfigRepository(db)
-
+	cueRepo := repository.NewCueRepository(db)
 
 	// Initialize services
 	broadcastService := service.NewBroadcastService(broadcastRepo)
 	rankingService := service.NewRankingService(rankingConfigRepo)
 	availabilityService := service.NewAvailabilityService(availabilityRepo)
+	cueService := service.NewCueService(cueRepo)
 
 	// Initialize handlers
 	broadcastHandler := handlers.NewBroadcastHandler(broadcastService)
 	availabilityHandler := handlers.NewAvailabilityHandler(availabilityService)
 	rankingHandler := handlers.NewRankingHandler(rankingService)
+	cueHandler := handlers.NewCueHandler(cueService)
 
 	// Initialize Gin router
 	router := gin.Default()
@@ -158,6 +160,7 @@ func main() {
 		v1.POST("/availability/heartbeat", availabilityHandler.HandleHeartbeat)     // Send heartbeat to stay available
 		v1.GET("/availability/:userId", availabilityHandler.GetUserAvailability)    // Check another user's availability
 		v1.GET("/available-users", availabilityHandler.GetAvailableUsers)           // Browse available users for discovery
+		v1.GET("/browse", availabilityHandler.BrowseAvailableUsers)                  // Browse available users with full profiles
 
 		// Ranking configuration routes (A/B testing ready)
 		v1.GET("/ranking/info", rankingHandler.GetRankingWeightsInfo)               // Get ranking algorithm information
@@ -166,10 +169,19 @@ func main() {
 		v1.POST("/ranking/weights/reset", rankingHandler.ResetRankingWeights)       // Reset to default weights
 		v1.GET("/ranking/weights/validate", rankingHandler.ValidateRankingWeights)  // Validate current weights
 		v1.GET("/ranking/config", rankingHandler.GetRankingConfig)                  // Get all config (admin/debug)
+
+		// Cue routes
+		v1.GET("/cues", cueHandler.GetCurrentUserCue)                               // Get my cue
+		v1.POST("/cues", cueHandler.CreateCue)                                      // Create my cue
+		v1.PUT("/cues", cueHandler.UpdateCue)                                       // Update my cue
+		v1.DELETE("/cues", cueHandler.DeleteCue)                                    // Delete my cue
+		v1.GET("/cues/matches", cueHandler.GetCueMatches)                           // Get my cue matches
+		v1.POST("/cues/matches/:matchId/viewed", cueHandler.MarkMatchAsViewed)      // Mark match as viewed
+		v1.GET("/cues/matches/check/:userId", cueHandler.HasCueMatchWith)           // Check if I have a match with user
 	}
 
-	// Start cleanup goroutine
-	go startCleanupRoutine(broadcastService)
+	// Start cleanup routines
+	go startCleanupRoutine(broadcastService, cueService)
 
 	// Setup graceful shutdown
 	lifecycleManager.OnShutdown(func(ctx context.Context) error {
@@ -255,7 +267,7 @@ func initDB() (*gorm.DB, error) {
 	return db, nil
 }
 
-func startCleanupRoutine(broadcastService *service.BroadcastService) {
+func startCleanupRoutine(broadcastService *service.BroadcastService, cueService *service.CueService) {
 	ticker := time.NewTicker(1 * time.Hour) // Run cleanup every hour
 	defer ticker.Stop()
 
@@ -268,6 +280,22 @@ func startCleanupRoutine(broadcastService *service.BroadcastService) {
 				log.Printf("Error during broadcast cleanup: %v", err)
 			} else {
 				log.Println("Broadcast cleanup completed successfully")
+			}
+
+			log.Println("Running cue cleanup...")
+			err = cueService.DeactivateExpiredCues()
+			if err != nil {
+				log.Printf("Error during cue expiration cleanup: %v", err)
+			} else {
+				log.Println("Cue expiration cleanup completed successfully")
+			}
+
+			// Clean up old cues (older than 7 days)
+			err = cueService.CleanupOldCues(7 * 24 * time.Hour)
+			if err != nil {
+				log.Printf("Error during old cue cleanup: %v", err)
+			} else {
+				log.Println("Old cue cleanup completed successfully")
 			}
 		}
 	}

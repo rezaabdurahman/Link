@@ -5,7 +5,31 @@ import './index.css';
 
 // Initialize Sentry as early as possible
 import { initSentry } from './utils/sentry';
+import { initWebVitals } from './utils/webVitals';
+import { setupMetricsEndpoint, metricsExporter } from './utils/metricsExporter';
+
 initSentry();
+
+// Initialize Web Vitals tracking
+initWebVitals();
+
+// Set up metrics collection and export
+setupMetricsEndpoint();
+
+// Send metrics to service worker periodically
+if ('serviceWorker' in navigator) {
+  setInterval(() => {
+    const metricsData = metricsExporter.exportPrometheusFormat();
+    navigator.serviceWorker.ready.then((registration) => {
+      if (registration.active) {
+        registration.active.postMessage({
+          type: 'METRICS_UPDATE',
+          metrics: metricsData,
+        });
+      }
+    });
+  }, 10000); // Update every 10 seconds
+}
 
 // Conditionally start MSW for API mocking in development/demo
 // Always enable in DEV mode unless explicitly disabled

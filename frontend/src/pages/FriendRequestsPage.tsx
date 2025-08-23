@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Check, X, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useFriendRequests } from '../hooks/useFriendRequests';
-import { User } from '../types';
+import { AuthUser } from '../types';
 import { getDisplayName, getInitials } from '../utils/nameHelpers';
 
 const FriendRequestsPage: React.FC = (): JSX.Element => {
@@ -42,13 +42,13 @@ const FriendRequestsPage: React.FC = (): JSX.Element => {
     }
   };
 
-  const renderUserRequest = (user: User, requestId: string, type: 'received' | 'sent') => (
+  const renderUserRequest = (user: AuthUser, requestId: string, type: 'received' | 'sent') => (
     <div key={requestId} className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-100">
       <div className="flex items-center space-x-3">
         <div className="relative">
-          {user.profilePicture ? (
+          {user.profile_picture ? (
             <img
-              src={user.profilePicture}
+              src={user.profile_picture}
               alt={getDisplayName(user)}
               className="w-12 h-12 rounded-full object-cover"
             />
@@ -62,12 +62,8 @@ const FriendRequestsPage: React.FC = (): JSX.Element => {
         </div>
         <div>
           <h3 className="font-semibold text-gray-900">{getDisplayName(user)}</h3>
-          <p className="text-sm text-gray-500">{user.location.proximityMiles}mi away</p>
-          {user.mutualFriends.length > 0 && (
-            <p className="text-xs text-aqua">
-              {user.mutualFriends.length} mutual friend{user.mutualFriends.length !== 1 ? 's' : ''}
-            </p>
-          )}
+          <p className="text-sm text-gray-500">{user.location || 'Location not set'}</p>
+          {/* Note: mutual friends count would need to be added to AuthUser or fetched separately */}
         </div>
       </div>
       

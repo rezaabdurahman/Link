@@ -114,6 +114,10 @@ export interface PrivacySettings {
   readonly show_age: boolean;
   readonly show_location: boolean;
   readonly show_mutual_friends: boolean;
+  readonly show_name: boolean;
+  readonly show_social_media: boolean;
+  readonly show_montages: boolean;
+  readonly show_checkins: boolean;
 }
 
 /**

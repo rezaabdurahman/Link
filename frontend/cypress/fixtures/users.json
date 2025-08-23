@@ -1,0 +1,155 @@
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": "1",
+        "first_name": "Alice",
+        "last_name": "Smith",
+        "age": 28,
+        "profilePicture": "https://images.unsplash.com/photo-1494790108755-2616b612b77c?w=150&h=150&fit=crop&crop=face",
+        "bio": "Love hiking and coffee ☕️ Always looking for new trails to explore!",
+        "interests": ["hiking", "coffee", "reading", "photography"],
+        "location": {
+          "lat": 40.7128,
+          "lng": -74.0060,
+          "proximityMiles": 1.2
+        },
+        "isAvailable": true,
+        "mutualFriends": ["Bob Wilson"],
+        "connectionPriority": "want-closer",
+        "lastSeen": "2023-12-01T10:00:00Z",
+        "profileType": "public",
+        "profileMedia": {
+          "type": "image",
+          "url": "https://images.unsplash.com/photo-1494790108755-2616b612b77c?w=400&h=400&fit=crop&crop=face",
+          "thumbnail": "https://images.unsplash.com/photo-1494790108755-2616b612b77c?w=150&h=150&fit=crop&crop=face"
+        },
+        "broadcast": "Looking for hiking buddies this weekend! 🥾"
+      },
+      {
+        "id": "2",
+        "first_name": "Charlie",
+        "last_name": "Brown",
+        "age": 25,
+        "profilePicture": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+        "bio": "Tech enthusiast and gamer 🎮 Building the future one line of code at a time",
+        "interests": ["technology", "gaming", "music", "coding"],
+        "location": {
+          "lat": 40.7128,
+          "lng": -74.0060,
+          "proximityMiles": 0.8
+        },
+        "isAvailable": true,
+        "mutualFriends": [],
+        "connectionPriority": "regular",
+        "lastSeen": "2023-12-01T09:30:00Z",
+        "profileType": "public",
+        "profileMedia": {
+          "type": "video",
+          "url": "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4",
+          "thumbnail": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face"
+        }
+      },
+      {
+        "id": "3",
+        "first_name": "Diana",
+        "last_name": "Prince",
+        "age": 30,
+        "profilePicture": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
+        "bio": "Artist and designer creating beautiful things ✨ Life is art!",
+        "interests": ["art", "design", "travel", "yoga"],
+        "location": {
+          "lat": 40.7128,
+          "lng": -74.0060,
+          "proximityMiles": 2.1
+        },
+        "isAvailable": false,
+        "mutualFriends": ["Alice Smith", "Emma Johnson"],
+        "connectionPriority": "want-closer",
+        "lastSeen": "2023-12-01T08:00:00Z",
+        "profileType": "public",
+        "broadcast": "Currently in artist mode 🎨 Working on something amazing!"
+      },
+      {
+        "id": "4",
+        "first_name": "Ethan",
+        "last_name": "Hunt",
+        "age": 32,
+        "profilePicture": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
+        "bio": "Adventure seeker and fitness enthusiast 💪 Your mission, should you choose to accept it...",
+        "interests": ["fitness", "adventure", "movies", "travel"],
+        "location": {
+          "lat": 40.7128,
+          "lng": -74.0060,
+          "proximityMiles": 1.7
+        },
+        "isAvailable": true,
+        "mutualFriends": ["Diana Prince"],
+        "connectionPriority": "regular",
+        "lastSeen": "2023-12-01T11:15:00Z",
+        "profileType": "public"
+      },
+      {
+        "id": "5",
+        "first_name": "Fiona",
+        "last_name": "Green",
+        "age": 26,
+        "profilePicture": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
+        "bio": "Plant mom and sustainability advocate 🌱 Making the world a greener place",
+        "interests": ["sustainability", "gardening", "cooking", "books"],
+        "location": {
+          "lat": 40.7128,
+          "lng": -74.0060,
+          "proximityMiles": 0.5
+        },
+        "isAvailable": true,
+        "mutualFriends": [],
+        "connectionPriority": "want-closer",
+        "lastSeen": "2023-12-01T10:45:00Z",
+        "profileType": "public",
+        "broadcast": "Hosting a plant swap this Saturday! 🪴"
+      },
+      {
+        "id": "6",
+        "first_name": "Gabriel",
+        "last_name": "Stone",
+        "age": 29,
+        "profilePicture": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face",
+        "bio": "Musician and coffee connoisseur ♪ Life's too short for bad music or bad coffee",
+        "interests": ["music", "coffee", "vinyl", "concerts"],
+        "location": {
+          "lat": 40.7128,
+          "lng": -74.0060,
+          "proximityMiles": 1.9
+        },
+        "isAvailable": false,
+        "mutualFriends": ["Alice Smith", "Charlie Brown"],
+        "connectionPriority": "regular",
+        "lastSeen": "2023-12-01T07:30:00Z",
+        "profileType": "public"
+      }
+    ],
+    "total": 6,
+    "hasMore": false,
+    "scope": "discovery",
+    "query": "",
+    "filters": {
+      "maxDistance": 50,
+      "availableInterests": ["hiking", "coffee", "technology", "art", "fitness", "music"],
+      "appliedFilters": {}
+    },
+    "metadata": {
+      "searchTime": 124,
+      "source": "database",
+      "relevanceScores": {
+        "1": 0.85,
+        "2": 0.72,
+        "3": 0.91,
+        "4": 0.68,
+        "5": 0.79,
+        "6": 0.64
+      }
+    }
+  }
+}

@@ -59,6 +59,24 @@ services:
       - redis_discovery_data:/data
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
+  # LocalStack for local AWS services (KMS for PII encryption)
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=kms
+      - DEBUG=1
+      - DEFAULT_REGION=us-west-2
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   api-gateway:
     build:
       context: .
@@ -73,59 +91,58 @@ services:
       - search-svc
       - redis-gateway
     environment:
-      # Service URLs (for backward compatibility)
+      # K8s-native configuration (for local Docker, we simulate K8s service names)
+      K8S_NAMESPACE: "default"
+      K8S_CLUSTER_DOMAIN: "docker.internal"
+      
+      # Local Docker service discovery (override K8s defaults)
       USER_SVC_URL: http://user-svc:8081
       CHAT_SVC_URL: http://chat-svc:8082
       DISCOVERY_SVC_URL: http://discovery-svc:8083
       AI_SVC_URL: http://ai-svc:8084
       SEARCH_SVC_URL: http://search-svc:8085
       
-      # Load balancer configuration
-      USER_SVC_LB_STRATEGY: round-robin
-      USER_SVC_LB_MAX_FAILURES: 5
-      USER_SVC_LB_TIMEOUT: 30
-      USER_SVC_LB_RECOVERY_TIMEOUT: 60
-      
-      CHAT_SVC_LB_STRATEGY: round-robin
-      CHAT_SVC_LB_MAX_FAILURES: 5
-      CHAT_SVC_LB_TIMEOUT: 30
-      CHAT_SVC_LB_RECOVERY_TIMEOUT: 60
-      
-      DISCOVERY_SVC_LB_STRATEGY: round-robin
-      AI_SVC_LB_STRATEGY: round-robin
-      SEARCH_SVC_LB_STRATEGY: round-robin
-      
-      # Retry configuration
-      USER_SVC_RETRY_MAX: 3
-      USER_SVC_RETRY_BASE_DELAY: 100
-      USER_SVC_RETRY_MAX_DELAY: 5000
-      USER_SVC_RETRY_JITTER: "true"
-      
-      CHAT_SVC_RETRY_MAX: 3
-      AI_SVC_RETRY_MAX: 2
-      AI_SVC_RETRY_BASE_DELAY: 200
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      JWT_ISSUER: "link-app"
+      JWT_AUDIENCE: "link-api"
+      JWT_EXPIRY_HOURS: 24
       
       # Database and Gateway Redis
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: linkuser
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-linkpass}
       DB_NAME: linkdb
+      DB_SSL_MODE: disable
       REDIS_HOST: redis-gateway
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      
+      # Environment
+      ENVIRONMENT: "development"
+      PORT: "8080"
 
   user-svc:
     build:
       context: .
       dockerfile: user-svc/Dockerfile
     ports:
-      - "8081:8081"
+      - "8081:8081"   # HTTP
+      - "50051:50051" # gRPC
+      - "9090:9090"   # Metrics
     depends_on:
       - postgres
       - redis-user
+      - localstack
+    env_file:
+      - .env  # Shared infrastructure
+      - user-svc/.env.local  # Service-specific local config
     environment:
       DB_HOST: postgres
       PORT: 8081
+      GRPC_PORT: 50051
+      METRICS_PORT: 9090
       REDIS_HOST: redis-user
       REDIS_PORT: 6379
     healthcheck:
@@ -139,13 +156,19 @@ services:
       context: .
       dockerfile: chat-svc/Dockerfile
     ports:
-      - "8082:8082"
+      - "8082:8082"   # HTTP
+      - "50053:50053" # gRPC
+      - "9092:9092"   # Metrics
     depends_on:
       - postgres
       - redis-chat
     environment:
       DB_HOST: postgres
+      PORT: 8082
+      GRPC_PORT: 50053
+      METRICS_PORT: 9092
       REDIS_HOST: redis-chat
+      REDIS_PORT: 6379
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/health/live"]
       interval: 10s
@@ -157,12 +180,17 @@ services:
       context: .
       dockerfile: discovery-svc/Dockerfile
     ports:
-      - "8083:8083"
+      - "8083:8083"   # HTTP
+      - "50052:50052" # gRPC
+      - "9091:9091"   # Metrics
     depends_on:
       - postgres
       - redis-discovery
     environment:
       DB_HOST: postgres
+      PORT: 8083
+      GRPC_PORT: 50052
+      METRICS_PORT: 9091
       REDIS_HOST: redis-discovery
       REDIS_PORT: 6379
     healthcheck:
@@ -176,7 +204,13 @@ services:
       context: .
       dockerfile: ai-svc/Dockerfile
     ports:
-      - "8084:8084"
+      - "8084:8084"   # HTTP
+      - "50054:50054" # gRPC
+      - "9093:9093"   # Metrics
+    environment:
+      PORT: 8084
+      GRPC_PORT: 50054
+      METRICS_PORT: 9093
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8084/health/live"]
       interval: 10s
@@ -188,11 +222,21 @@ services:
       context: .
       dockerfile: search-svc/Dockerfile
     ports:
-      - "8085:8085"
+      - "8085:8085"   # HTTP
+      - "50055:50055" # gRPC
+      - "9094:9094"   # Metrics
     depends_on:
       - postgres
     environment:
       DB_HOST: postgres
+      PORT: 8085
+      GRPC_PORT: 50055
+      METRICS_PORT: 9094
+      # gRPC endpoints for service-to-service communication
+      USE_GRPC: "true"
+      DISCOVERY_GRPC_ENDPOINT: discovery-svc:50052
+      USER_GRPC_ENDPOINT: user-svc:50051
+      # HTTP fallback endpoints
       DISCOVERY_SVC_URL: http://discovery-svc:8083
       USER_SVC_URL: http://user-svc:8081
     healthcheck:
@@ -207,4 +251,5 @@ volumes:
   redis_user_data:
   redis_chat_data:
   redis_discovery_data:
+  localstack_data:
 

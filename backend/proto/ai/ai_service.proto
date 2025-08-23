@@ -1,0 +1,220 @@
+syntax = "proto3";
+
+package ai;
+
+option go_package = "github.com/link-app/backend/proto/ai";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/types.proto";
+
+// AI Service definition
+service AIService {
+  // Summarize conversation messages
+  rpc SummarizeConversation(SummarizeConversationRequest) returns (SummarizeConversationResponse);
+  
+  // Generate response suggestions
+  rpc GenerateResponseSuggestions(GenerateResponseSuggestionsRequest) returns (GenerateResponseSuggestionsResponse);
+  
+  // Analyze message sentiment
+  rpc AnalyzeSentiment(AnalyzeSentimentRequest) returns (AnalyzeSentimentResponse);
+  
+  // Stream conversation summarization (for large conversations)
+  rpc StreamSummarization(StreamSummarizationRequest) returns (stream SummarizationChunk);
+  
+  // Check user consent for AI processing
+  rpc CheckUserConsent(CheckUserConsentRequest) returns (CheckUserConsentResponse);
+  
+  // Update user consent preferences
+  rpc UpdateUserConsent(UpdateUserConsentRequest) returns (UpdateUserConsentResponse);
+  
+  // Generate conversation insights
+  rpc GenerateInsights(GenerateInsightsRequest) returns (GenerateInsightsResponse);
+  
+  // Health check
+  rpc Health(common.HealthCheckRequest) returns (common.HealthCheckResponse);
+}
+
+// AI processing consent levels
+enum ConsentLevel {
+  NONE = 0;
+  BASIC = 1;
+  FULL = 2;
+}
+
+// Sentiment analysis result
+enum Sentiment {
+  NEUTRAL = 0;
+  POSITIVE = 1;
+  NEGATIVE = 2;
+  MIXED = 3;
+}
+
+// Message for AI processing
+message AIMessage {
+  common.UUID id = 1;
+  common.UUID sender_id = 2;
+  string content = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  map<string, string> metadata = 5;
+}
+
+// User consent preferences
+message UserConsent {
+  common.UUID user_id = 1;
+  ConsentLevel conversation_summarization = 2;
+  ConsentLevel sentiment_analysis = 3;
+  ConsentLevel response_suggestions = 4;
+  ConsentLevel insights_generation = 5;
+  bool data_retention_allowed = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  google.protobuf.Timestamp expires_at = 8;
+}
+
+// Summarization request
+message SummarizeConversationRequest {
+  common.UUID conversation_id = 1;
+  repeated AIMessage messages = 2;
+  common.UUID requesting_user_id = 3;
+  int32 max_summary_length = 4;
+  string summary_style = 5; // "brief", "detailed", "bullet_points"
+  repeated string focus_topics = 6;
+}
+
+message SummarizeConversationResponse {
+  string summary = 1;
+  repeated string key_topics = 2;
+  repeated Participant participants = 3;
+  int32 message_count = 4;
+  google.protobuf.Timestamp conversation_period_start = 5;
+  google.protobuf.Timestamp conversation_period_end = 6;
+  float confidence_score = 7;
+  common.SuccessResponse result = 8;
+}
+
+message Participant {
+  common.UUID user_id = 1;
+  string role = 2; // "active", "observer", "moderator"
+  int32 message_count = 3;
+  Sentiment dominant_sentiment = 4;
+}
+
+// Response suggestions
+message GenerateResponseSuggestionsRequest {
+  common.UUID conversation_id = 1;
+  repeated AIMessage recent_messages = 2;
+  common.UUID requesting_user_id = 3;
+  int32 suggestion_count = 4;
+  string tone = 5; // "casual", "formal", "friendly", "professional"
+}
+
+message GenerateResponseSuggestionsResponse {
+  repeated ResponseSuggestion suggestions = 1;
+  common.SuccessResponse result = 2;
+}
+
+message ResponseSuggestion {
+  string text = 1;
+  string category = 2; // "question", "agreement", "clarification", "emoji"
+  float confidence_score = 3;
+  string reasoning = 4;
+}
+
+// Sentiment analysis
+message AnalyzeSentimentRequest {
+  repeated AIMessage messages = 1;
+  common.UUID requesting_user_id = 2;
+  bool include_individual_analysis = 3;
+}
+
+message AnalyzeSentimentResponse {
+  Sentiment overall_sentiment = 1;
+  float confidence_score = 2;
+  repeated MessageSentiment individual_sentiments = 3;
+  SentimentTrends trends = 4;
+  common.SuccessResponse result = 5;
+}
+
+message MessageSentiment {
+  common.UUID message_id = 1;
+  Sentiment sentiment = 2;
+  float confidence_score = 3;
+  repeated string emotion_tags = 4;
+}
+
+message SentimentTrends {
+  repeated SentimentDataPoint trend_points = 1;
+  string trend_direction = 2; // "improving", "declining", "stable"
+}
+
+message SentimentDataPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  Sentiment sentiment = 2;
+  float confidence_score = 3;
+}
+
+// Streaming summarization
+message StreamSummarizationRequest {
+  common.UUID conversation_id = 1;
+  common.UUID requesting_user_id = 2;
+  int32 chunk_size = 3;
+  string summary_style = 4;
+}
+
+message SummarizationChunk {
+  string partial_summary = 1;
+  int32 messages_processed = 2;
+  int32 total_messages = 3;
+  bool is_final = 4;
+  repeated string interim_topics = 5;
+}
+
+// User consent operations
+message CheckUserConsentRequest {
+  common.UUID user_id = 1;
+  repeated string operation_types = 2; // Types of AI operations to check
+}
+
+message CheckUserConsentResponse {
+  UserConsent consent = 1;
+  map<string, bool> operation_permissions = 2;
+  bool consent_required = 3;
+}
+
+message UpdateUserConsentRequest {
+  common.UUID user_id = 1;
+  ConsentLevel conversation_summarization = 2;
+  ConsentLevel sentiment_analysis = 3;
+  ConsentLevel response_suggestions = 4;
+  ConsentLevel insights_generation = 5;
+  bool data_retention_allowed = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+message UpdateUserConsentResponse {
+  UserConsent consent = 1;
+  common.SuccessResponse result = 2;
+}
+
+// Insights generation
+message GenerateInsightsRequest {
+  common.UUID user_id = 1;
+  repeated common.UUID conversation_ids = 2;
+  google.protobuf.Timestamp period_start = 3;
+  google.protobuf.Timestamp period_end = 4;
+  repeated string insight_types = 5; // "communication_patterns", "topic_preferences", "sentiment_trends"
+}
+
+message GenerateInsightsResponse {
+  repeated Insight insights = 1;
+  common.SuccessResponse result = 2;
+}
+
+message Insight {
+  string type = 1;
+  string title = 2;
+  string description = 3;
+  map<string, string> data = 4;
+  float confidence_score = 5;
+  repeated string supporting_evidence = 6;
+  google.protobuf.Timestamp generated_at = 7;
+}

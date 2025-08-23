@@ -1,0 +1,36 @@
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": "1",
+        "first_name": "User1",
+        "last_name": "Test",
+        "age": 25,
+        "profilePicture": "https://images.unsplash.com/photo-1494790108755-2616b612b77c?w=150&h=150&fit=crop&crop=face",
+        "bio": "Test user 1",
+        "interests": ["technology"],
+        "location": { "lat": 40.7128, "lng": -74.0060, "proximityMiles": 1.0 },
+        "isAvailable": true,
+        "mutualFriends": [],
+        "connectionPriority": "regular",
+        "lastSeen": "2023-12-01T10:00:00Z",
+        "profileType": "public"
+      }
+    ],
+    "total": 1000,
+    "hasMore": true,
+    "scope": "discovery",
+    "query": "",
+    "filters": {
+      "maxDistance": 50,
+      "availableInterests": [],
+      "appliedFilters": {}
+    },
+    "metadata": {
+      "searchTime": 250,
+      "source": "database",
+      "relevanceScores": {}
+    }
+  }
+}

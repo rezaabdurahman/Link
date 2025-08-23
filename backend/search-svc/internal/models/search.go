@@ -19,6 +19,9 @@ type UserEmbedding struct {
 	ExpiresAt     *time.Time      `json:"expires_at" gorm:"type:timestamptz;index"`     // TTL for automatic cleanup
 	CreatedAt     time.Time       `json:"created_at" gorm:"type:timestamptz;not null;default:now()"`
 	UpdatedAt     time.Time       `json:"updated_at" gorm:"type:timestamptz;not null;default:now()"`
+	
+	// Full-text search vector for hybrid search
+	SearchVector  string          `json:"-" gorm:"type:tsvector;index:gin"`  // GIN index for full-text search
 }
 
 // SearchQuery represents a search query log for analytics

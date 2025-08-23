@@ -1,0 +1,232 @@
+# =================================================================
+# Production Monitoring Stack Overrides
+# =================================================================
+# Usage: docker-compose -f docker-compose.monitoring.yml -f docker-compose.production.yml up -d
+# 
+# Production overrides:
+# - No exposed ports (use internal networking/load balancer)
+# - Strict resource limits
+# - Long retention periods
+# - Enhanced security
+# - Persistent storage with backup labels
+# =================================================================
+
+version: '3.8'
+
+services:
+  prometheus:
+    ports: [] # No external ports in production
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=90d' # Long retention for production
+      - '--storage.tsdb.retention.size=50GB'
+      - '--web.external-url=https://prometheus.yourdomain.com'
+    environment:
+      - PROMETHEUS_RETENTION=90d
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    restart: always
+
+  grafana:
+    ports: [] # Use load balancer/ingress
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD} # Required in prod
+      - GF_USERS_ALLOW_SIGN_UP=false # Disable signup in prod
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_AUTH_ANONYMOUS_ENABLED=false # Disable anonymous access
+      - GF_SERVER_ROOT_URL=https://grafana.yourdomain.com
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${SMTP_HOST}
+      - GF_SMTP_USER=${SMTP_USER}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD}
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_SECURITY_COOKIE_SAMESITE=strict
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    restart: always
+
+  loki:
+    ports: []
+    command: -config.file=/etc/loki/production-config.yaml
+    environment:
+      - LOKI_RETENTION=30d
+    volumes:
+      - loki_data:/loki
+      - ./monitoring/loki/production-config.yaml:/etc/loki/production-config.yaml:ro
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    restart: always
+
+  promtail:
+    ports: []
+    volumes:
+      - ./monitoring/promtail-production.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log:/var/log:ro
+      - /var/log/containers:/var/log/containers:ro # Kubernetes logs
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    restart: always
+
+  jaeger:
+    ports: []
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=info # Less verbose in production
+      - SPAN_STORAGE_TYPE=elasticsearch # Use external storage in prod
+      - ES_SERVER_URLS=${ELASTICSEARCH_URL}
+      - ES_USERNAME=${ELASTICSEARCH_USER}
+      - ES_PASSWORD=${ELASTICSEARCH_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    restart: always
+
+  alertmanager:
+    ports: []
+    environment:
+      - AM_EXTERNAL_URL=https://alertmanager.yourdomain.com
+    volumes:
+      - ./monitoring/alertmanager/production-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    restart: always
+
+  node-exporter:
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: always
+
+  cadvisor:
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    restart: always
+
+  blackbox-exporter:
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: always
+
+  redis-exporter:
+    ports: []
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: always
+
+  postgres-exporter:
+    ports: []
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=require
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: always
+
+# Production volumes with backup configuration
+volumes:
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PROMETHEUS_DATA_PATH:-/data/prometheus}
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 2 * * *" # Daily at 2 AM
+      - "backup.retention=30d"
+      
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${GRAFANA_DATA_PATH:-/data/grafana}
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 3 * * *"
+      - "backup.retention=30d"
+      
+  alertmanager_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ALERTMANAGER_DATA_PATH:-/data/alertmanager}
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 4 * * *"
+      
+  loki_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${LOKI_DATA_PATH:-/data/loki}
+    labels:
+      - "backup.enable=true"
+      - "backup.schedule=0 1 * * *"
+      - "backup.retention=90d"
+
+networks:
+  default:
+    external: true
+    name: link_production_network

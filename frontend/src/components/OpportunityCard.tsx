@@ -2,6 +2,7 @@ import React from 'react';
 import { Clock, MapPin, Users, Sparkles, Calendar, X, Check } from 'lucide-react';
 import { Opportunity, User } from '../types';
 import { nearbyUsers } from '../data/mockData';
+import { getDisplayName } from '../utils/nameHelpers';
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -137,7 +138,7 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({ opportunity, onAccept
               <div key={friend?.id} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <img
                   src={friend?.profilePicture}
-                  alt={friend?.name}
+                  alt={friend ? getDisplayName(friend) : 'Friend'}
                   style={{
                     width: '24px',
                     height: '24px',
@@ -146,7 +147,7 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({ opportunity, onAccept
                   }}
                 />
                 <span style={{ fontSize: '12px', color: 'rgba(235, 235, 245, 0.8)' }}>
-                  {friend?.name.split(' ')[0]}
+                  {friend ? getDisplayName(friend) : 'Friend'}
                 </span>
               </div>
             ))}

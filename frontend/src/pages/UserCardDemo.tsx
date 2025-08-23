@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UserCard from '../components/UserCard';
 import { nearbyUsers } from '../data/mockData';
+import { getDisplayName } from '../utils/nameHelpers';
 
 const UserCardDemo: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
@@ -80,7 +81,7 @@ const UserCardDemo: React.FC = (): JSX.Element => {
                 user={user}
                 isVerticalLayout={true}
                 showFriendButton={showFriendButtons}
-                onClick={() => console.log('Clicked user:', user.name)}
+                onClick={() => console.log('Clicked user:', getDisplayName(user))}
               />
             ))}
           </div>
@@ -93,7 +94,7 @@ const UserCardDemo: React.FC = (): JSX.Element => {
                 user={user}
                 isVerticalLayout={false}
                 showFriendButton={showFriendButtons}
-                onClick={() => console.log('Clicked user:', user.name)}
+                onClick={() => console.log('Clicked user:', getDisplayName(user))}
               />
             ))}
           </div>

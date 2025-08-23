@@ -28,6 +28,10 @@ type SearchRepository interface {
 	SearchSimilarUsers(ctx context.Context, queryEmbedding []float32, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) ([]models.UserEmbedding, []float64, error)
 	GetTotalUserCount(ctx context.Context, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) (int, error)
 	
+	// Hybrid search operations
+	FullTextSearch(ctx context.Context, query string, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) ([]models.UserEmbedding, []float64, error)
+	HybridSearch(ctx context.Context, query string, queryEmbedding []float32, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID, bm25Weight, vectorWeight float64) ([]models.UserEmbedding, []float64, error)
+	
 	// TTL operations
 	CleanupExpiredEmbeddings(ctx context.Context) (int, error)
 	DeleteExpiredEmbeddings(ctx context.Context) (int, error)
@@ -79,8 +83,15 @@ func (r *searchRepository) StoreUserEmbedding(ctx context.Context, userID uuid.U
 		Model:         model,
 	}
 
+	// Generate search vector for full-text search using triggers in database
 	result := r.db.WithContext(ctx).Create(&userEmbedding)
-	return result.Error
+	if result.Error != nil {
+		return result.Error
+	}
+	
+	// Update search_vector using PostgreSQL's to_tsvector
+	return r.db.WithContext(ctx).Model(&userEmbedding).
+		Update("search_vector", gorm.Expr("to_tsvector('english', profile_text)")).Error
 }
 
 // GetUserEmbedding retrieves a user's embedding
@@ -293,6 +304,147 @@ func (r *searchRepository) GetUserIDsPage(ctx context.Context, offset, limit int
 		Limit(limit).
 		Pluck("user_id", &userIDs).Error
 	return userIDs, err
+}
+
+// FullTextSearch performs BM25-style search using PostgreSQL's full-text search
+func (r *searchRepository) FullTextSearch(ctx context.Context, query string, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) ([]models.UserEmbedding, []float64, error) {
+	baseQuery := r.db.WithContext(ctx).Model(&models.UserEmbedding{}).
+		Where("expires_at IS NULL OR expires_at > ?", time.Now())
+	
+	// Apply user ID filter if provided
+	if len(userIDFilter) > 0 {
+		baseQuery = baseQuery.Where("user_id IN ?", userIDFilter)
+	}
+	
+	// Exclude specific user if provided
+	if excludeUserID != nil {
+		baseQuery = baseQuery.Where("user_id != ?", *excludeUserID)
+	}
+	
+	var results []struct {
+		models.UserEmbedding
+		Rank float64 `gorm:"column:rank"`
+	}
+	
+	// Use ts_rank_cd for BM25-like ranking
+	err := baseQuery.
+		Select("*, ts_rank_cd(search_vector, plainto_tsquery('english', ?)) as rank", query).
+		Where("search_vector @@ plainto_tsquery('english', ?)", query).
+		Order("rank DESC").
+		Limit(limit).
+		Scan(&results).Error
+		
+	if err != nil {
+		return nil, nil, err
+	}
+	
+	embeddings := make([]models.UserEmbedding, len(results))
+	scores := make([]float64, len(results))
+	
+	for i, result := range results {
+		embeddings[i] = result.UserEmbedding
+		scores[i] = result.Rank
+	}
+	
+	return embeddings, scores, nil
+}
+
+// HybridSearch combines vector and full-text search using Reciprocal Rank Fusion (RRF)
+func (r *searchRepository) HybridSearch(ctx context.Context, query string, queryEmbedding []float32, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID, bm25Weight, vectorWeight float64) ([]models.UserEmbedding, []float64, error) {
+	// Get results from both search methods
+	vectorResults, vectorScores, err := r.SearchSimilarUsers(ctx, queryEmbedding, limit*2, userIDFilter, excludeUserID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("vector search failed: %w", err)
+	}
+	
+	fullTextResults, fullTextScores, err := r.FullTextSearch(ctx, query, limit*2, userIDFilter, excludeUserID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("full-text search failed: %w", err)
+	}
+	
+	// Create maps for quick lookup
+	vectorScoreMap := make(map[uuid.UUID]float64)
+	fullTextScoreMap := make(map[uuid.UUID]float64)
+	vectorRankMap := make(map[uuid.UUID]int)
+	fullTextRankMap := make(map[uuid.UUID]int)
+	
+	for i, result := range vectorResults {
+		vectorScoreMap[result.UserID] = vectorScores[i]
+		vectorRankMap[result.UserID] = i + 1
+	}
+	
+	for i, result := range fullTextResults {
+		fullTextScoreMap[result.UserID] = fullTextScores[i]
+		fullTextRankMap[result.UserID] = i + 1
+	}
+	
+	// Combine all unique user IDs
+	userSet := make(map[uuid.UUID]bool)
+	allResults := make(map[uuid.UUID]models.UserEmbedding)
+	
+	for _, result := range vectorResults {
+		userSet[result.UserID] = true
+		allResults[result.UserID] = result
+	}
+	
+	for _, result := range fullTextResults {
+		userSet[result.UserID] = true
+		allResults[result.UserID] = result
+	}
+	
+	// Calculate RRF scores for each user
+	type RRFResult struct {
+		UserID uuid.UUID
+		Score  float64
+		Embedding models.UserEmbedding
+	}
+	
+	rrfResults := make([]RRFResult, 0, len(userSet))
+	
+	for userID := range userSet {
+		rrfScore := 0.0
+		
+		// RRF formula: 1 / (k + rank) where k = 60 (standard constant)
+		k := 60.0
+		
+		if rank, exists := vectorRankMap[userID]; exists {
+			rrfScore += vectorWeight / (k + float64(rank))
+		}
+		
+		if rank, exists := fullTextRankMap[userID]; exists {
+			rrfScore += bm25Weight / (k + float64(rank))
+		}
+		
+		rrfResults = append(rrfResults, RRFResult{
+			UserID:    userID,
+			Score:     rrfScore,
+			Embedding: allResults[userID],
+		})
+	}
+	
+	// Sort by RRF score descending
+	for i := 0; i < len(rrfResults)-1; i++ {
+		for j := i + 1; j < len(rrfResults); j++ {
+			if rrfResults[i].Score < rrfResults[j].Score {
+				rrfResults[i], rrfResults[j] = rrfResults[j], rrfResults[i]
+			}
+		}
+	}
+	
+	// Return top results
+	if limit > len(rrfResults) {
+		limit = len(rrfResults)
+	}
+	
+	finalEmbeddings := make([]models.UserEmbedding, limit)
+	finalScores := make([]float64, limit)
+	
+	for i := 0; i < limit; i++ {
+		finalEmbeddings[i] = rrfResults[i].Embedding
+		finalScores[i] = rrfResults[i].Score
+	}
+	
+	return finalEmbeddings, finalScores, nil
 }
 
 // generateTextHash creates a SHA-256 hash of the profile text

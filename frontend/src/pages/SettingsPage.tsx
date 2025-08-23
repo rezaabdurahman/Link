@@ -16,8 +16,15 @@ const SettingsPage: React.FC = (): JSX.Element => {
   ];
 
   const handleSettingClick = (label: string): void => {
-    console.log('Navigate to:', label);
-    // Here you would navigate to the specific settings page
+    switch (label) {
+      case 'Privacy & Location':
+        navigate('/settings/privacy');
+        break;
+      default:
+        console.log('Navigate to:', label);
+        // Other settings pages to be implemented
+        break;
+    }
   };
 
   const handleLogout = async (): Promise<void> => {

@@ -1,0 +1,278 @@
+name: Test Results Summary
+
+on:
+  workflow_run:
+    workflows: ["Frontend CI/CD with Comprehensive Testing"]
+    types:
+      - completed
+
+jobs:
+  test-summary:
+    name: 📊 Test Results Summary
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+    
+    steps:
+      - name: 📥 Download workflow artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }},
+            });
+            
+            const fs = require('fs');
+            for (const artifact of artifacts.data.artifacts) {
+              const download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+                archive_format: 'zip',
+              });
+              
+              fs.writeFileSync(`${artifact.name}.zip`, Buffer.from(download.data));
+            }
+            
+      - name: 📊 Process test results
+        run: |
+          # Extract all artifacts
+          for file in *.zip; do
+            if [ -f "$file" ]; then
+              unzip -q "$file" -d "${file%.zip}/"
+            fi
+          done
+          
+          # Initialize counters
+          TOTAL_TESTS=0
+          PASSED_TESTS=0
+          FAILED_TESTS=0
+          SKIPPED_TESTS=0
+          
+          # Process Jest results
+          if [ -f "test-results-unit/jest-results.xml" ]; then
+            JEST_TOTAL=$(grep -o 'tests="[0-9]*"' test-results-unit/jest-results.xml | cut -d'"' -f2 || echo "0")
+            JEST_FAILURES=$(grep -o 'failures="[0-9]*"' test-results-unit/jest-results.xml | cut -d'"' -f2 || echo "0")
+            JEST_SKIPPED=$(grep -o 'skipped="[0-9]*"' test-results-unit/jest-results.xml | cut -d'"' -f2 || echo "0")
+            
+            TOTAL_TESTS=$((TOTAL_TESTS + JEST_TOTAL))
+            FAILED_TESTS=$((FAILED_TESTS + JEST_FAILURES))
+            SKIPPED_TESTS=$((SKIPPED_TESTS + JEST_SKIPPED))
+            PASSED_TESTS=$((PASSED_TESTS + JEST_TOTAL - JEST_FAILURES - JEST_SKIPPED))
+          fi
+          
+          # Process Cypress results
+          for cypress_file in e2e-results-*/results-*.xml; do
+            if [ -f "$cypress_file" ]; then
+              CY_TOTAL=$(grep -o 'tests="[0-9]*"' "$cypress_file" | cut -d'"' -f2 || echo "0")
+              CY_FAILURES=$(grep -o 'failures="[0-9]*"' "$cypress_file" | cut -d'"' -f2 || echo "0")
+              CY_SKIPPED=$(grep -o 'skipped="[0-9]*"' "$cypress_file" | cut -d'"' -f2 || echo "0")
+              
+              TOTAL_TESTS=$((TOTAL_TESTS + CY_TOTAL))
+              FAILED_TESTS=$((FAILED_TESTS + CY_FAILURES))
+              SKIPPED_TESTS=$((SKIPPED_TESTS + CY_SKIPPED))
+              PASSED_TESTS=$((PASSED_TESTS + CY_TOTAL - CY_FAILURES - CY_SKIPPED))
+            fi
+          done
+          
+          # Calculate success rate
+          if [ $TOTAL_TESTS -gt 0 ]; then
+            SUCCESS_RATE=$((PASSED_TESTS * 100 / TOTAL_TESTS))
+          else
+            SUCCESS_RATE=0
+          fi
+          
+          # Generate summary
+          echo "TOTAL_TESTS=$TOTAL_TESTS" >> $GITHUB_ENV
+          echo "PASSED_TESTS=$PASSED_TESTS" >> $GITHUB_ENV
+          echo "FAILED_TESTS=$FAILED_TESTS" >> $GITHUB_ENV
+          echo "SKIPPED_TESTS=$SKIPPED_TESTS" >> $GITHUB_ENV
+          echo "SUCCESS_RATE=$SUCCESS_RATE" >> $GITHUB_ENV
+          
+          # Coverage information
+          if [ -f "test-results-unit/coverage/coverage-summary.json" ]; then
+            COVERAGE=$(node -e "
+              try {
+                const fs = require('fs');
+                const coverage = JSON.parse(fs.readFileSync('test-results-unit/coverage/coverage-summary.json'));
+                console.log(Math.round(coverage.total.lines.pct));
+              } catch (e) {
+                console.log('N/A');
+              }
+            ")
+            echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          else
+            echo "COVERAGE=N/A" >> $GITHUB_ENV
+          fi
+          
+      - name: 📋 Create detailed summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Get workflow run info
+            const workflowRun = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }},
+            });
+            
+            const conclusion = workflowRun.data.conclusion;
+            const branch = workflowRun.data.head_branch;
+            const commit = workflowRun.data.head_sha.substring(0, 7);
+            const actor = workflowRun.data.actor.login;
+            const runUrl = workflowRun.data.html_url;
+            
+            // Get test stats from environment
+            const totalTests = process.env.TOTAL_TESTS || '0';
+            const passedTests = process.env.PASSED_TESTS || '0';
+            const failedTests = process.env.FAILED_TESTS || '0';
+            const skippedTests = process.env.SKIPPED_TESTS || '0';
+            const successRate = process.env.SUCCESS_RATE || '0';
+            const coverage = process.env.COVERAGE || 'N/A';
+            
+            // Create summary
+            const summary = `
+            # 📋 Frontend Test Results Summary
+            
+            **Workflow:** ${workflowRun.data.name}  
+            **Status:** ${conclusion === 'success' ? '✅ Success' : conclusion === 'failure' ? '❌ Failed' : '⚠️ ' + conclusion}  
+            **Branch:** \`${branch}\`  
+            **Commit:** \`${commit}\`  
+            **Actor:** @${actor}  
+            **Run:** [View Details](${runUrl})
+            
+            ## 📊 Test Statistics
+            
+            | Metric | Value |
+            |--------|-------|
+            | **Total Tests** | ${totalTests} |
+            | **✅ Passed** | ${passedTests} |
+            | **❌ Failed** | ${failedTests} |
+            | **⏭️ Skipped** | ${skippedTests} |
+            | **Success Rate** | ${successRate}% |
+            | **Coverage** | ${coverage}% |
+            
+            ## 🎯 Test Categories
+            
+            - **Unit Tests**: Component and utility testing
+            - **Integration Tests**: Multi-component workflows  
+            - **E2E Tests**: Full user journey testing
+            - **Visual Tests**: UI regression testing
+            - **Accessibility**: A11y compliance testing
+            - **Performance**: Lighthouse audits
+            - **Security**: Vulnerability scanning
+            
+            ${conclusion === 'failure' ? '## ⚠️ Action Required\n\nSome tests failed. Please review the [workflow run](' + runUrl + ') for details.' : ''}
+            
+            ---
+            *Generated at ${new Date().toISOString()}*
+            `;
+            
+            // Create or update issue for test tracking
+            if (conclusion === 'failure' && branch === 'main') {
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'ci-failure,frontend',
+                per_page: 1
+              });
+              
+              if (issues.data.length === 0) {
+                // Create new issue
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `🚨 Frontend Tests Failing on Main Branch`,
+                  body: summary + '\n\n**Note**: This issue will be automatically closed when tests pass.',
+                  labels: ['ci-failure', 'frontend', 'priority-high']
+                });
+              } else {
+                // Update existing issue
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issues.data[0].number,
+                  body: summary
+                });
+              }
+            } else if (conclusion === 'success' && branch === 'main') {
+              // Close any open CI failure issues
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'ci-failure,frontend'
+              });
+              
+              for (const issue of issues.data) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'completed'
+                });
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: '✅ Tests are now passing. Closing this issue automatically.'
+                });
+              }
+            }
+            
+            console.log(summary);
+            
+      - name: 💬 Notify team on persistent failures
+        if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch == 'main'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              "channel": "#dev-alerts",
+              "username": "CI Bot",
+              "icon_emoji": ":rotating_light:",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "title": "🚨 Frontend Tests Failing on Main",
+                  "fields": [
+                    {
+                      "title": "Total Tests",
+                      "value": "${{ env.TOTAL_TESTS }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Failed Tests", 
+                      "value": "${{ env.FAILED_TESTS }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Success Rate",
+                      "value": "${{ env.SUCCESS_RATE }}%",
+                      "short": true
+                    },
+                    {
+                      "title": "Coverage",
+                      "value": "${{ env.COVERAGE }}%", 
+                      "short": true
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "type": "button",
+                      "text": "View Failed Run",
+                      "url": "${{ github.event.workflow_run.html_url }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

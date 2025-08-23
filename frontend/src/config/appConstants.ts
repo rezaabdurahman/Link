@@ -25,6 +25,8 @@ export const APP_CONFIG = {
 // API Configuration
 export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080',
+  // Note: API versioning is handled by the gateway, not the client
+  // Gateway routes unversioned requests to appropriate service versions
 } as const;
 
 // Type exports for better TypeScript support

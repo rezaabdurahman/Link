@@ -211,3 +211,82 @@ func (h *AvailabilityHandler) HandleHeartbeat(c *gin.Context) {
 		"availability": availability.ToResponse(),
 	})
 }
+
+// BrowseAvailableUsers gets a list of available users with full profile data for discovery
+func (h *AvailabilityHandler) BrowseAvailableUsers(c *gin.Context) {
+	// Verify the requesting user is authenticated
+	currentUserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "Authentication required",
+			"message": "You must be logged in to browse available users",
+			"code":    "AUTH_REQUIRED",
+		})
+		return
+	}
+
+	// Parse query parameters
+	limitStr := c.DefaultQuery("limit", "50")
+	offsetStr := c.DefaultQuery("offset", "0")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid limit parameter",
+			"message": "Limit must be a positive number",
+			"code":    "INVALID_LIMIT",
+		})
+		return
+	}
+
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid offset parameter",
+			"message": "Offset must be a positive number",
+			"code":    "INVALID_OFFSET",
+		})
+		return
+	}
+
+	// Get available users (just IDs and availability status)
+	availabilities, totalCount, err := h.availabilityService.GetAvailableUsers(limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get available users",
+			"message": "Unable to retrieve available users at this time",
+			"code":    "SERVICE_ERROR",
+		})
+		return
+	}
+
+	// Extract user IDs
+	userIDs := make([]string, len(availabilities))
+	for i, availability := range availabilities {
+		userIDs[i] = availability.UserID.String()
+	}
+
+	// For now, return the same response as GetAvailableUsers
+	// TODO: Implement user client to fetch full profile data from user-svc
+	// This would call user-svc to get full profile data for each user ID
+	// and filter out users hidden by the current user
+	
+	// Convert to public responses
+	publicResponses := make([]models.PublicAvailabilityResponse, len(availabilities))
+	for i, availability := range availabilities {
+		publicResponses[i] = availability.ToPublicResponse()
+	}
+
+	// Return paginated response with note about future enhancement
+	c.JSON(http.StatusOK, gin.H{
+		"data": publicResponses,
+		"pagination": gin.H{
+			"total":       totalCount,
+			"limit":       limit,
+			"offset":      offset,
+			"has_more":    int64(offset+limit) < totalCount,
+			"total_pages": (totalCount + int64(limit) - 1) / int64(limit),
+		},
+		"note": "This endpoint will be enhanced to return full user profile data and filter hidden users",
+	})
+}

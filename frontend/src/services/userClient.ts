@@ -7,11 +7,25 @@ import { AuthUser } from '../types/index';
 // API endpoints
 const USER_ENDPOINTS = {
   myProfile: '/users/profile/me',
+  updateProfile: '/users/profile',
   profile: (userId: string) => `/users/profile/${userId}`,
   searchFriends: '/users/friends/search',
   block: '/users/block',
   unblock: (userId: string) => `/users/block/${userId}`,
   blockedUsers: '/users/blocked',
+} as const;
+
+// Friend request endpoints
+const FRIEND_ENDPOINTS = {
+  sendRequest: '/users/friends/requests',
+  receivedRequests: '/users/friends/requests/received',
+  sentRequests: '/users/friends/requests/sent',
+  acceptRequest: (requestId: string) => `/users/friends/requests/${requestId}/accept`,
+  declineRequest: (requestId: string) => `/users/friends/requests/${requestId}/decline`,
+  cancelRequest: (requestId: string) => `/users/friends/requests/${requestId}`,
+  friends: '/users/friends',
+  removeFriend: (userId: string) => `/users/friends/${userId}`,
+  friendshipStatus: (userId: string) => `/users/friends/status/${userId}`,
 } as const;
 
 // Social Link Interface
@@ -26,7 +40,14 @@ export interface PrivacySettings {
   readonly show_age: boolean;
   readonly show_location: boolean;
   readonly show_mutual_friends: boolean;
+  readonly show_name: boolean;
+  readonly show_social_media: boolean;
+  readonly show_montages: boolean;
+  readonly show_checkins: boolean;
 }
+
+// Profile Visibility Type
+export type ProfileVisibility = 'public' | 'private';
 
 // User Profile Response Interface
 // Extends the existing AuthUser type with additional user profile fields
@@ -37,6 +58,7 @@ export interface UserProfileResponse extends AuthUser {
   readonly social_links: SocialLink[];
   readonly additional_photos: string[];
   readonly privacy_settings: PrivacySettings;
+  readonly profile_visibility: ProfileVisibility;
   readonly is_friend?: boolean;
   readonly mutual_friends?: number; // Changed from mutual_friends_count to match backend
   readonly last_login_at?: string; // ISO string format, changed from last_active
@@ -44,6 +66,8 @@ export interface UserProfileResponse extends AuthUser {
 
 // Public User Interface for search results
 export interface PublicUser extends AuthUser {
+  readonly privacy_settings: PrivacySettings;
+  readonly profile_visibility?: ProfileVisibility;
   readonly is_friend?: boolean;
   readonly mutual_friends_count?: number;
   readonly last_active?: string; // ISO string format
@@ -278,5 +302,294 @@ export function getBlockingErrorMessage(error: ApiError): string {
       return 'This action is not available due to blocking restrictions';
     default:
       return getProfileErrorMessage(error);
+  }
+}
+
+// Friend Request Types
+export interface FriendRequest {
+  readonly id: string;
+  readonly user: AuthUser;
+  readonly message?: string;
+  readonly status: 'pending' | 'accepted' | 'declined';
+  readonly created_at: string;
+}
+
+export interface FriendshipStatus {
+  readonly status: 'none' | 'pending_sent' | 'pending_received' | 'friends' | 'self';
+  readonly can_send_request: boolean;
+}
+
+export interface SendFriendRequestData {
+  readonly requestee_id: string;
+  readonly message?: string;
+}
+
+// Friend Request Functions
+
+/**
+ * Send a friend request to another user
+ */
+export async function sendFriendRequest(data: SendFriendRequestData): Promise<{ message: string; data: { id: string; requestee_id: string; status: string; created_at: string } }> {
+  try {
+    const response = await apiClient.post<{ message: string; data: { id: string; requestee_id: string; status: string; created_at: string } }>(
+      FRIEND_ENDPOINTS.sendRequest,
+      data
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to send friend request',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get received friend requests
+ */
+export async function getReceivedFriendRequests(options?: { status?: string; limit?: number; offset?: number }): Promise<{ data: FriendRequest[]; count: number; limit: number; offset: number }> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.status) params.append('status', options.status);
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    
+    const queryString = params.toString();
+    const endpoint = queryString ? `${FRIEND_ENDPOINTS.receivedRequests}?${queryString}` : FRIEND_ENDPOINTS.receivedRequests;
+    
+    const response = await apiClient.get<{ data: FriendRequest[]; count: number; limit: number; offset: number }>(endpoint);
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get received friend requests',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get sent friend requests
+ */
+export async function getSentFriendRequests(options?: { status?: string; limit?: number; offset?: number }): Promise<{ data: FriendRequest[]; count: number; limit: number; offset: number }> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.status) params.append('status', options.status);
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    
+    const queryString = params.toString();
+    const endpoint = queryString ? `${FRIEND_ENDPOINTS.sentRequests}?${queryString}` : FRIEND_ENDPOINTS.sentRequests;
+    
+    const response = await apiClient.get<{ data: FriendRequest[]; count: number; limit: number; offset: number }>(endpoint);
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get sent friend requests',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Accept a friend request
+ */
+export async function acceptFriendRequest(requestId: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.put<{ message: string }>(
+      FRIEND_ENDPOINTS.acceptRequest(requestId)
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to accept friend request',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Decline a friend request
+ */
+export async function declineFriendRequest(requestId: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.put<{ message: string }>(
+      FRIEND_ENDPOINTS.declineRequest(requestId)
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to decline friend request',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Cancel a sent friend request
+ */
+export async function cancelFriendRequest(requestId: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.delete<{ message: string }>(
+      FRIEND_ENDPOINTS.cancelRequest(requestId)
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to cancel friend request',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get user's friends list
+ */
+export async function getFriends(options?: { limit?: number; offset?: number }): Promise<{ data: PublicUser[]; count: number; limit: number; offset: number }> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    
+    const queryString = params.toString();
+    const endpoint = queryString ? `${FRIEND_ENDPOINTS.friends}?${queryString}` : FRIEND_ENDPOINTS.friends;
+    
+    const response = await apiClient.get<{ data: PublicUser[]; count: number; limit: number; offset: number }>(endpoint);
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get friends list',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Remove a friend
+ */
+export async function removeFriend(userId: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.delete<{ message: string }>(
+      FRIEND_ENDPOINTS.removeFriend(userId)
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to remove friend',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get friendship status with another user
+ */
+export async function getFriendshipStatus(userId: string): Promise<{ data: FriendshipStatus }> {
+  try {
+    const response = await apiClient.get<{ data: FriendshipStatus }>(
+      FRIEND_ENDPOINTS.friendshipStatus(userId)
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get friendship status',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+// Update Profile Request Interface
+export interface UpdateProfileRequest {
+  readonly first_name?: string;
+  readonly last_name?: string;
+  readonly bio?: string;
+  readonly location?: string;
+  readonly profile_picture?: string;
+  readonly date_of_birth?: string; // ISO string format
+  readonly interests?: string[];
+  readonly social_links?: SocialLink[];
+  readonly additional_photos?: string[];
+  readonly privacy_settings?: PrivacySettings;
+  readonly profile_visibility?: ProfileVisibility;
+}
+
+/**
+ * Update the authenticated user's profile
+ * @param updateData - The profile data to update
+ * @returns Promise resolving to the updated user profile
+ * @throws AuthServiceError with detailed error information
+ */
+export async function updateProfile(updateData: UpdateProfileRequest): Promise<UserProfileResponse> {
+  try {
+    // Validate required fields if present
+    if (updateData.first_name !== undefined && updateData.first_name.trim() === '') {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'First name cannot be empty',
+        field: 'first_name',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    if (updateData.last_name !== undefined && updateData.last_name.trim() === '') {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'Last name cannot be empty',
+        field: 'last_name',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    const response = await apiClient.put<UserProfileResponse>(
+      USER_ENDPOINTS.updateProfile,
+      updateData
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to update profile due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
   }
 }
