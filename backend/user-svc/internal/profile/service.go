@@ -1,11 +1,13 @@
 package profile
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/link-app/user-svc/internal/cache"
 	"github.com/link-app/user-svc/internal/models"
 	"github.com/link-app/user-svc/internal/repository"
 	"gorm.io/gorm"
@@ -31,16 +33,17 @@ var (
 
 // DTO types for profile service
 type UpdateProfileRequest struct {
-	FirstName        *string                   `json:"first_name,omitempty" validate:"omitempty,min=1,max=50"`
-	LastName         *string                   `json:"last_name,omitempty" validate:"omitempty,min=1,max=50"`
-	Bio              *string                   `json:"bio,omitempty" validate:"omitempty,max=500"`
-	Location         *string                   `json:"location,omitempty" validate:"omitempty,max=100"`
-	ProfilePicture   *string                   `json:"profile_picture,omitempty"`
-	DateOfBirth      *time.Time                `json:"date_of_birth,omitempty"`
-	Interests        []string                  `json:"interests,omitempty"`
-	SocialLinks      []models.SocialLink       `json:"social_links,omitempty"`
-	AdditionalPhotos []string                  `json:"additional_photos,omitempty"`
-	PrivacySettings  *models.PrivacySettings   `json:"privacy_settings,omitempty"`
+	FirstName         *string                   `json:"first_name,omitempty" validate:"omitempty,min=1,max=50"`
+	LastName          *string                   `json:"last_name,omitempty" validate:"omitempty,min=1,max=50"`
+	Bio               *string                   `json:"bio,omitempty" validate:"omitempty,max=500"`
+	Location          *string                   `json:"location,omitempty" validate:"omitempty,max=100"`
+	ProfilePicture    *string                   `json:"profile_picture,omitempty"`
+	DateOfBirth       *time.Time                `json:"date_of_birth,omitempty"`
+	Interests         []string                  `json:"interests,omitempty"`
+	SocialLinks       []models.SocialLink       `json:"social_links,omitempty"`
+	AdditionalPhotos  []string                  `json:"additional_photos,omitempty"`
+	PrivacySettings   *models.PrivacySettings   `json:"privacy_settings,omitempty"`
+	ProfileVisibility *models.ProfileVisibility `json:"profile_visibility,omitempty"`
 }
 
 type SendFriendRequestRequest struct {
@@ -69,6 +72,11 @@ type ProfileService interface {
 	UnblockUser(blockerID, blockedID uuid.UUID) error
 	IsBlocked(userA, userB uuid.UUID) (bool, error)
 	GetBlockedUsers(userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
+	
+	// Hidden users management
+	GetHiddenUsers(userID uuid.UUID) ([]uuid.UUID, error)
+	HideUser(userID, userToHide uuid.UUID) error
+	UnhideUser(userID, userToUnhide uuid.UUID) error
 }
 
 type profileService struct {
@@ -80,6 +88,75 @@ func NewProfileService(userRepo repository.UserRepository) ProfileService {
 	return &profileService{
 		userRepo: userRepo,
 	}
+}
+
+// cachedProfileService wraps the regular profile service with caching
+type cachedProfileService struct {
+	ProfileService
+	cache cache.SimpleCache
+}
+
+// NewCachedProfileService creates a new cached profile service
+func NewCachedProfileService(userRepo repository.UserRepository, cacheService cache.SimpleCache) ProfileService {
+	baseService := NewProfileService(userRepo)
+	return &cachedProfileService{
+		ProfileService: baseService,
+		cache:         cacheService,
+	}
+}
+
+// GetUserProfile gets a user's own profile with caching
+func (s *cachedProfileService) GetUserProfile(userID uuid.UUID) (*models.ProfileUser, error) {
+	cacheKey := fmt.Sprintf("profile:user:%s", userID.String())
+	
+	// Try to get from cache first
+	if cached, err := s.cache.Get(cacheKey); err == nil && cached != nil {
+		if profileData, ok := cached.([]byte); ok {
+			var profile models.ProfileUser
+			if err := json.Unmarshal(profileData, &profile); err == nil {
+				return &profile, nil
+			}
+		}
+	}
+	
+	// Get from underlying service
+	profile, err := s.ProfileService.GetUserProfile(userID)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Cache the result for 15 minutes
+	if profileData, err := json.Marshal(profile); err == nil {
+		// TODO: Handle cache errors gracefully - don't fail the request if cache fails
+		_ = s.cache.Set(cacheKey, profileData, 15*time.Minute)
+	}
+	
+	return profile, nil
+}
+
+// GetPublicUserProfile gets a public user profile with caching
+func (s *cachedProfileService) GetPublicUserProfile(userID, viewerID uuid.UUID) (*models.PublicUser, error) {
+	// For public profiles, we can cache more aggressively
+	// For now, just delegate to base service - caching public profiles is more complex 
+	// due to viewer-specific data (friend status, mutual friends)
+	// TODO: Implement smarter caching strategy for public profiles
+	return s.ProfileService.GetPublicUserProfile(userID, viewerID)
+}
+
+// UpdateUserProfile updates user profile and invalidates cache
+func (s *cachedProfileService) UpdateUserProfile(userID uuid.UUID, req UpdateProfileRequest) (*models.ProfileUser, error) {
+	// Update in underlying service
+	profile, err := s.ProfileService.UpdateUserProfile(userID, req)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Invalidate cache
+	cacheKey := fmt.Sprintf("profile:user:%s", userID.String())
+	// TODO: Handle cache errors gracefully
+	_ = s.cache.Delete(cacheKey)
+	
+	return profile, nil
 }
 
 // GetUserProfile gets a user's own profile
@@ -118,19 +195,39 @@ func (s *profileService) GetPublicUserProfile(userID, viewerID uuid.UUID) (*mode
 		}
 	}
 
-	// Use privacy-aware conversion
-	publicUser := user.ToPublicUserWithPrivacy()
-
-	// Add friend status and mutual friends count if viewer is different
+	// Check friend status if viewer is different from user
+	var isFriend bool
 	if viewerID != uuid.Nil && viewerID != userID {
-		isFriend, err := s.userRepo.AreFriends(viewerID, userID)
+		var err error
+		isFriend, err = s.userRepo.AreFriends(viewerID, userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check friendship: %w", err)
 		}
+	}
+
+	// Use the new privacy-aware conversion that considers friend status
+	publicUser := user.ToPublicUserForViewer(isFriend)
+
+	// Add friend status and mutual friends count if viewer is different
+	if viewerID != uuid.Nil && viewerID != userID {
 		publicUser.IsFriend = isFriend
 
-		// Only show mutual friends count if privacy settings allow
-		if user.PrivacySettings.ShowMutualFriends {
+		// Show mutual friends count based on profile visibility and privacy settings
+		showMutualFriends := false
+		if user.ProfileVisibility == models.ProfileVisibilityPublic {
+			// For public profiles, always show if privacy setting allows
+			showMutualFriends = user.PrivacySettings.ShowMutualFriends
+		} else if user.ProfileVisibility == models.ProfileVisibilityPrivate {
+			if isFriend {
+				// For private profiles viewed by friends, always show if privacy setting allows
+				showMutualFriends = user.PrivacySettings.ShowMutualFriends
+			} else {
+				// For private profiles viewed by non-friends, respect granular setting
+				showMutualFriends = user.PrivacySettings.ShowMutualFriends
+			}
+		}
+
+		if showMutualFriends {
 			mutualCount, err := s.userRepo.GetMutualFriendsCount(viewerID, userID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get mutual friends count: %w", err)
@@ -183,6 +280,9 @@ func (s *profileService) UpdateUserProfile(userID uuid.UUID, req UpdateProfileRe
 	}
 	if req.PrivacySettings != nil {
 		user.PrivacySettings = *req.PrivacySettings
+	}
+	if req.ProfileVisibility != nil {
+		user.ProfileVisibility = *req.ProfileVisibility
 	}
 
 	if err := s.userRepo.UpdateUser(user); err != nil {
@@ -525,6 +625,72 @@ func (s *profileService) RemoveFriend(userID, friendID uuid.UUID) error {
 	// Remove the friendship
 	if err := s.userRepo.DeleteFriendship(userID, friendID); err != nil {
 		return fmt.Errorf("failed to remove friendship: %w", err)
+	}
+
+	return nil
+}
+
+// GetHiddenUsers returns the list of users hidden by the specified user
+func (s *profileService) GetHiddenUsers(userID uuid.UUID) ([]uuid.UUID, error) {
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return user.HiddenUsers, nil
+}
+
+// HideUser adds a user to the current user's hidden list
+func (s *profileService) HideUser(userID, userToHide uuid.UUID) error {
+	// Get the current user
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Verify the user to hide exists
+	_, err = s.userRepo.GetUserByID(userToHide)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to verify user to hide exists: %w", err)
+	}
+
+	// Add to hidden users list
+	user.HideUser(userToHide)
+
+	// Update the user in database
+	if err := s.userRepo.UpdateUser(user); err != nil {
+		return fmt.Errorf("failed to update user hidden list: %w", err)
+	}
+
+	return nil
+}
+
+// UnhideUser removes a user from the current user's hidden list
+func (s *profileService) UnhideUser(userID, userToUnhide uuid.UUID) error {
+	// Get the current user
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Remove from hidden users list
+	user.UnhideUser(userToUnhide)
+
+	// Update the user in database
+	if err := s.userRepo.UpdateUser(user); err != nil {
+		return fmt.Errorf("failed to update user hidden list: %w", err)
 	}
 
 	return nil

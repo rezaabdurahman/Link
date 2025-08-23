@@ -176,79 +176,6 @@ export const unifiedSearch = async (
   return handleResponse<UnifiedSearchResponse>(response);
 };
 
-// Convenience functions for specific search types
-// These maintain backward compatibility while using the unified endpoint
-
-/**
- * Search for friends (replaces searchFriends from userClient)
- * @deprecated Use unifiedSearch with scope: 'friends' instead
- */
-export const searchFriendsUnified = async (
-  query: string,
-  options?: { page?: number; limit?: number }
-): Promise<{ friends: User[] }> => {
-  console.warn('DEPRECATION WARNING: searchFriendsUnified is deprecated. Use unifiedSearch with scope: "friends" instead.');
-  
-  const result = await unifiedSearch({
-    query: query.trim(),
-    scope: 'friends',
-    pagination: {
-      page: options?.page,
-      limit: options?.limit,
-    },
-  });
-
-  // Transform to maintain backward compatibility
-  return {
-    friends: result.users,
-  };
-};
-
-/**
- * Search for available users (replaces searchAvailableUsers from searchClient)
- * @deprecated Use unifiedSearch with scope: 'discovery' instead
- */
-export const searchAvailableUsersUnified = async (
-  request: {
-    query?: string;
-    distance?: number;
-    interests?: string[];
-    limit?: number;
-    offset?: number;
-  } = {}
-): Promise<{
-  users: User[];
-  total: number;
-  hasMore: boolean;
-  filters?: {
-    maxDistance: number;
-    availableInterests: string[];
-  };
-}> => {
-  console.warn('DEPRECATION WARNING: searchAvailableUsersUnified is deprecated. Use unifiedSearch with scope: "discovery" instead.');
-  
-  const result = await unifiedSearch({
-    query: request.query,
-    scope: 'discovery',
-    filters: {
-      distance: request.distance,
-      interests: request.interests,
-      available_only: true, // Always filter for available users in discovery
-    },
-    pagination: {
-      limit: request.limit,
-      offset: request.offset,
-    },
-  });
-
-  // Transform to maintain backward compatibility
-  return {
-    users: result.users,
-    total: result.total,
-    hasMore: result.hasMore,
-    filters: result.filters,
-  };
-};
 
 // Utility functions for error handling
 
@@ -343,6 +270,5 @@ export const validateUnifiedSearchRequest = (request: UnifiedSearchRequest): {
   return { isValid: true };
 };
 
-// Export legacy error handling for backward compatibility
-export { SearchError, isSearchError, getSearchErrorMessage } from './searchClient';
-export { AuthServiceError, getProfileErrorMessage } from './userClient';
+// Note: Legacy error handling exports removed
+// Use UnifiedSearchError, isUnifiedSearchError, and getUnifiedSearchErrorMessage instead

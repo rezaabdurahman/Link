@@ -14,6 +14,7 @@ import (
 	"github.com/link-app/search-svc/internal/config"
 	"github.com/link-app/search-svc/internal/repository"
 	"github.com/link-app/search-svc/internal/utils"
+	"github.com/link-app/search-svc/internal/vision"
 )
 
 // IndexingService handles the background indexing pipeline
@@ -29,6 +30,7 @@ type indexingService struct {
 	discoveryClient   client.DiscoveryClient
 	userClient        client.UserClient
 	embeddingProvider config.EmbeddingProvider
+	imageAnalyzer     *vision.ImageAnalyzer
 	config            *IndexingConfig
 	stats             *IndexingStats
 	mu                sync.RWMutex
@@ -46,18 +48,24 @@ type IndexingConfig struct {
 	BatchSize int
 	// TTL for embeddings (in hours)
 	EmbeddingTTLHours int
+	// Enable image analysis
+	EnableImageAnalysis bool
 	// Retry configuration
 	RetryConfig *utils.RetryConfig
 }
 
 // IndexingStats tracks statistics about the indexing process
 type IndexingStats struct {
-	LastRunTime       time.Time `json:"last_run_time"`
-	LastRunDuration   int64     `json:"last_run_duration_ms"`
-	TotalUsersIndexed int64     `json:"total_users_indexed"`
-	ErrorsCount       int64     `json:"errors_count"`
-	IsRunning         bool      `json:"is_running"`
-	NextRunTime       time.Time `json:"next_run_time"`
+	LastRunTime          time.Time `json:"last_run_time"`
+	LastRunDuration      int64     `json:"last_run_duration_ms"`
+	TotalUsersIndexed    int64     `json:"total_users_indexed"`
+	UsersWithImages      int64     `json:"users_with_images"`
+	ImagesAnalyzed       int64     `json:"images_analyzed"`
+	ImageAnalysisErrors  int64     `json:"image_analysis_errors"`
+	ImageAnalysisCost    float64   `json:"image_analysis_cost_usd"`
+	ErrorsCount          int64     `json:"errors_count"`
+	IsRunning            bool      `json:"is_running"`
+	NextRunTime          time.Time `json:"next_run_time"`
 }
 
 // IndexingJob represents a single user indexing job
@@ -77,12 +85,26 @@ func NewIndexingService(
 ) IndexingService {
 	if config == nil {
 		config = &IndexingConfig{
-			CronIntervalMinutes: 120, // 2 hours by default
-			WorkerPoolSize:      10,
-			RateLimitPerSecond:  50,
-			BatchSize:          100,
-			EmbeddingTTLHours:  2,
-			RetryConfig:        utils.DefaultRetryConfig(),
+			CronIntervalMinutes:  120, // 2 hours by default
+			WorkerPoolSize:       10,
+			RateLimitPerSecond:   50,
+			BatchSize:           100,
+			EmbeddingTTLHours:   2,
+			EnableImageAnalysis: true, // Enable by default
+			RetryConfig:         utils.DefaultRetryConfig(),
+		}
+	}
+
+	// Initialize image analyzer if enabled
+	var imageAnalyzer *vision.ImageAnalyzer
+	if config.EnableImageAnalysis {
+		analyzer, err := vision.NewImageAnalyzerFromEnv()
+		if err != nil {
+			// Log warning but don't fail - continue without image analysis
+			log.Printf("Warning: Failed to initialize image analyzer: %v", err)
+			config.EnableImageAnalysis = false
+		} else {
+			imageAnalyzer = analyzer
 		}
 	}
 
@@ -91,6 +113,7 @@ func NewIndexingService(
 		discoveryClient:   discoveryClient,
 		userClient:        userClient,
 		embeddingProvider: embeddingProvider,
+		imageAnalyzer:     imageAnalyzer,
 		config:            config,
 		stats: &IndexingStats{
 			NextRunTime: time.Now().Add(time.Duration(config.CronIntervalMinutes) * time.Minute),
@@ -296,8 +319,30 @@ func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UU
 		return fmt.Errorf("failed to fetch profile for user %s: %w", userID, err)
 	}
 
-	// Step 2: Convert profile to searchable text
-	profileText := profile.ProfileToText()
+	// Step 2: Process images if image analysis is enabled
+	var imageAnalysisResult *vision.BatchImageAnalysisResult
+	if s.config.EnableImageAnalysis && s.imageAnalyzer != nil {
+		// Check if user has images
+		hasImages := (profile.ProfilePicture != nil && *profile.ProfilePicture != "") || len(profile.AdditionalPhotos) > 0
+		if hasImages {
+			result, err := s.analyzeUserImages(ctx, userID, profile.ProfilePicture, profile.AdditionalPhotos)
+			if err != nil {
+				// Log error but continue with text-only indexing
+				s.logStructured("warn", "image_analysis_failed", map[string]interface{}{
+					"user_id": userID.String(),
+					"error":   err.Error(),
+				})
+				s.incrementImageAnalysisErrors()
+			} else {
+				imageAnalysisResult = result
+				s.incrementImagesAnalyzed(int64(result.ProcessedImages))
+				s.incrementImageAnalysisCost(s.imageAnalyzer.GetProvider().GetCostEstimate(result.TotalImages))
+			}
+		}
+	}
+
+	// Step 3: Convert profile to searchable text (including image descriptions)
+	profileText := s.buildSearchableText(profile, imageAnalysisResult)
 	if profileText == "" {
 		s.logStructured("warn", "empty_profile_text", map[string]interface{}{
 			"user_id": userID.String(),
@@ -305,7 +350,7 @@ func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UU
 		return nil // Skip empty profiles
 	}
 
-	// Step 3: Check if we need to update embedding (compare hash)
+	// Step 4: Check if we need to update embedding (compare hash)
 	existingEmbedding, err := s.searchRepo.GetUserEmbedding(ctx, userID)
 	if err == nil {
 		// Compare hash to see if profile changed
@@ -319,7 +364,7 @@ func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UU
 		}
 	}
 
-	// Step 4: Generate embedding
+	// Step 5: Generate embedding
 	var embedding []float32
 	err = utils.RetryWithBackoff(ctx, s.config.RetryConfig, func() error {
 		var err error
@@ -334,7 +379,7 @@ func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UU
 		return fmt.Errorf("failed to generate embedding for user %s: %w", userID, err)
 	}
 
-	// Step 5: Store/update embedding in database with TTL
+	// Step 6: Store/update embedding in database with TTL
 	provider := s.embeddingProvider.GetProviderName()
 	model := "text-embedding-3-small" // Default model
 
@@ -346,6 +391,18 @@ func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UU
 
 	if err != nil {
 		return fmt.Errorf("failed to store embedding for user %s: %w", userID, err)
+	}
+
+	// Step 7: Store image analysis results if available
+	if imageAnalysisResult != nil {
+		err = s.storeImageAnalysisResults(ctx, userID, imageAnalysisResult)
+		if err != nil {
+			// Log error but don't fail the entire indexing process
+			s.logStructured("warn", "failed_to_store_image_analysis", map[string]interface{}{
+				"user_id": userID.String(),
+				"error":   err.Error(),
+			})
+		}
 	}
 
 	return nil
@@ -411,6 +468,85 @@ func (s *indexingService) incrementErrorCount() {
 	s.mu.Lock()
 	s.stats.ErrorsCount++
 	s.mu.Unlock()
+}
+
+// incrementImagesAnalyzed safely increments the images analyzed count
+func (s *indexingService) incrementImagesAnalyzed(count int64) {
+	s.mu.Lock()
+	s.stats.ImagesAnalyzed += count
+	s.mu.Unlock()
+}
+
+// incrementImageAnalysisErrors safely increments the image analysis errors count
+func (s *indexingService) incrementImageAnalysisErrors() {
+	s.mu.Lock()
+	s.stats.ImageAnalysisErrors++
+	s.mu.Unlock()
+}
+
+// incrementImageAnalysisCost safely increments the image analysis cost
+func (s *indexingService) incrementImageAnalysisCost(cost float64) {
+	s.mu.Lock()
+	s.stats.ImageAnalysisCost += cost
+	s.mu.Unlock()
+}
+
+// analyzeUserImages analyzes all images for a user
+func (s *indexingService) analyzeUserImages(ctx context.Context, userID uuid.UUID, profilePicture *string, additionalPhotos []string) (*vision.BatchImageAnalysisResult, error) {
+	if s.imageAnalyzer == nil {
+		return nil, fmt.Errorf("image analyzer not initialized")
+	}
+
+	result, err := s.imageAnalyzer.AnalyzeUserImages(ctx, userID, profilePicture, additionalPhotos)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update statistics
+	s.mu.Lock()
+	s.stats.UsersWithImages++
+	s.mu.Unlock()
+
+	return result, nil
+}
+
+// buildSearchableText combines profile text with image analysis results
+func (s *indexingService) buildSearchableText(profile *client.UserProfile, imageResult *vision.BatchImageAnalysisResult) string {
+	// Start with base profile text
+	profileText := profile.ProfileToText()
+
+	// Add image analysis results if available
+	if imageResult != nil && imageResult.CombinedText != "" {
+		if profileText != "" {
+			profileText += " " + imageResult.CombinedText
+		} else {
+			profileText = imageResult.CombinedText
+		}
+	}
+
+	return profileText
+}
+
+// storeImageAnalysisResults stores the image analysis results in the database
+func (s *indexingService) storeImageAnalysisResults(ctx context.Context, userID uuid.UUID, result *vision.BatchImageAnalysisResult) error {
+	// For now, we'll store this as part of the embedding metadata
+	// In a full implementation, you might want to store these in separate tables
+	// or extend the repository interface to handle image analysis storage
+	
+	// This is a placeholder - in a real implementation you would:
+	// 1. Store individual ImageAnalysis records
+	// 2. Store/update UserImageSummary
+	// 3. Update ImageAnalysisStats
+	
+	s.logStructured("debug", "image_analysis_stored", map[string]interface{}{
+		"user_id":          userID.String(),
+		"total_images":     result.TotalImages,
+		"processed_images": result.ProcessedImages,
+		"failed_images":    result.FailedImages,
+		"processing_time":  result.ProcessingTime.Milliseconds(),
+	})
+
+	return nil
 }
 
 // logStructured logs in structured JSON format

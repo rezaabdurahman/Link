@@ -15,10 +15,10 @@ import (
 // ConnectDatabase initializes the PostgreSQL connection with pgvector extension
 func ConnectDatabase() (*gorm.DB, error) {
 	// Get database configuration from environment
-	host := getEnv("DB_HOST", "localhost")
+	host := getEnv("DB_HOST", "postgres")
 	port := getEnv("DB_PORT", "5432")
 	user := getEnv("DB_USER", "link_user")
-	password := getEnv("DB_PASSWORD", "link_pass")
+	password := getEnv("DB_PASSWORD", "")
 	dbname := getEnv("DB_NAME", "link_app")
 	sslmode := getEnv("DB_SSLMODE", "disable")
 

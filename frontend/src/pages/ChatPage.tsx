@@ -16,6 +16,7 @@ import { searchFriends, PublicUser } from '../services/userClient';
 import { useAuth } from '../contexts/AuthContext';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import FixedHeader from '../components/layout/FixedHeader';
+import { generateUsernameFromEmail } from '../utils/nameHelpers';
 
 type SortOption = 'priority' | 'time' | 'unread';
 
@@ -86,9 +87,9 @@ const ChatPage: React.FC = (): JSX.Element => {
         const friends: PublicUser[] = response.users.map(user => ({
           id: user.id,
           email: '', // Not available in unified search response
-          username: user.name.toLowerCase().replace(' ', '_'),
-          first_name: user.name.split(' ')[0],
-          last_name: user.name.split(' ')[1] || '',
+          username: generateUsernameFromEmail(user.id + '@example.com'), // Generate from user ID
+          first_name: user.first_name,
+          last_name: user.last_name || '',
           profile_picture: user.profilePicture,
           bio: user.bio,
           interests: user.interests,
@@ -97,7 +98,11 @@ const ChatPage: React.FC = (): JSX.Element => {
           privacy_settings: {
             show_age: true,
             show_location: true,
-            show_mutual_friends: true
+            show_mutual_friends: true,
+            show_name: true,
+            show_social_media: true,
+            show_montages: true,
+            show_checkins: true
           },
           is_friend: true,
           mutual_friends_count: user.mutualFriends?.length || 0,

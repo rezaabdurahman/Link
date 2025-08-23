@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, User, Mail, Lock, UserPlus, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Lock, ArrowRight } from 'lucide-react';
 // Using existing Toast component
 import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';
@@ -51,7 +51,6 @@ const SignupPage: React.FC = (): JSX.Element => {
   const watchedFields = watch();
   const formIsFilled = watchedFields.firstName && 
     watchedFields.lastName && 
-    watchedFields.username &&
     watchedFields.email && 
     watchedFields.password && 
     watchedFields.confirmPassword;
@@ -149,20 +148,6 @@ const SignupPage: React.FC = (): JSX.Element => {
               />
             </div>
 
-            {/* Username Field */}
-            <AuthFormField
-              label="Username"
-              name="username"
-              type="text"
-              placeholder="Choose a username"
-              icon={UserPlus}
-              error={errors.username?.message}
-              disabled={isLoading}
-              autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect="off"
-              register={formRegister}
-            />
 
             {/* Email Field */}
             <AuthFormField

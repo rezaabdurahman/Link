@@ -1,0 +1,240 @@
+---
+# Qdrant Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: qdrant-backup
+  namespace: link-services
+  labels:
+    app: qdrant-backup
+    component: backup
+spec:
+  # Run backup every 6 hours
+  schedule: "0 */6 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800  # 30 minutes timeout
+      template:
+        metadata:
+          labels:
+            app: qdrant-backup
+            component: backup
+          annotations:
+            linkerd.io/inject: enabled
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: qdrant-backup
+          containers:
+          - name: backup
+            image: curlimages/curl:8.4.0
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              
+              # Configuration
+              BACKUP_NAME="k8s-backup-$(date +%Y%m%d_%H%M%S)"
+              QDRANT_HOST="qdrant-cluster.link-services.svc.cluster.local"
+              QDRANT_PORT="6333"
+              COLLECTION="user_profiles"
+              BACKUP_BUCKET="${BACKUP_S3_BUCKET}"
+              
+              echo "Starting Qdrant backup: $BACKUP_NAME"
+              
+              # Create snapshot
+              echo "Creating collection snapshot..."
+              SNAPSHOT_RESPONSE=$(curl -s -X POST "http://$QDRANT_HOST:$QDRANT_PORT/collections/$COLLECTION/snapshots" \
+                  -H "Content-Type: application/json")
+              
+              if echo "$SNAPSHOT_RESPONSE" | grep -q "error"; then
+                  echo "Failed to create snapshot: $SNAPSHOT_RESPONSE"
+                  exit 1
+              fi
+              
+              # Extract snapshot name
+              SNAPSHOT_NAME=$(echo "$SNAPSHOT_RESPONSE" | grep -o '"name":"[^"]*"' | cut -d'"' -f4)
+              echo "Snapshot created: $SNAPSHOT_NAME"
+              
+              # Download snapshot to temporary storage
+              echo "Downloading snapshot..."
+              curl -o "/tmp/${BACKUP_NAME}_${COLLECTION}.snapshot" \
+                  "http://$QDRANT_HOST:$QDRANT_PORT/collections/$COLLECTION/snapshots/$SNAPSHOT_NAME"
+              
+              # Backup collection info
+              echo "Backing up collection configuration..."
+              curl -s "http://$QDRANT_HOST:$QDRANT_PORT/collections/$COLLECTION" \
+                  > "/tmp/${BACKUP_NAME}_${COLLECTION}_config.json"
+              
+              # Create backup metadata
+              cat > "/tmp/${BACKUP_NAME}_metadata.json" << EOF
+              {
+                "backup_name": "$BACKUP_NAME",
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                "collection": "$COLLECTION",
+                "snapshot_name": "$SNAPSHOT_NAME",
+                "qdrant_host": "$QDRANT_HOST",
+                "qdrant_port": "$QDRANT_PORT",
+                "kubernetes_namespace": "link-services",
+                "cluster_name": "${CLUSTER_NAME:-unknown}"
+              }
+              EOF
+              
+              # Create tar archive
+              echo "Creating backup archive..."
+              cd /tmp
+              tar -czf "${BACKUP_NAME}.tar.gz" \
+                  "${BACKUP_NAME}_${COLLECTION}.snapshot" \
+                  "${BACKUP_NAME}_${COLLECTION}_config.json" \
+                  "${BACKUP_NAME}_metadata.json"
+              
+              # Upload to S3
+              echo "Uploading backup to S3..."
+              aws s3 cp "${BACKUP_NAME}.tar.gz" "s3://$BACKUP_BUCKET/qdrant-backups/${BACKUP_NAME}.tar.gz" \
+                  --storage-class STANDARD_IA
+              
+              # Cleanup remote snapshot
+              echo "Cleaning up remote snapshot..."
+              curl -X DELETE "http://$QDRANT_HOST:$QDRANT_PORT/collections/$COLLECTION/snapshots/$SNAPSHOT_NAME"
+              
+              # Cleanup local files
+              rm -f /tmp/${BACKUP_NAME}*
+              
+              BACKUP_SIZE=$(aws s3 ls "s3://$BACKUP_BUCKET/qdrant-backups/${BACKUP_NAME}.tar.gz" --human-readable | awk '{print $3}')
+              echo "Backup completed successfully: ${BACKUP_NAME}.tar.gz ($BACKUP_SIZE)"
+              
+              # Cleanup old backups (keep last 30 days)
+              echo "Cleaning up old backups..."
+              aws s3 ls "s3://$BACKUP_BUCKET/qdrant-backups/" | \
+                awk '{print $4}' | \
+                grep -E '^k8s-backup-[0-9]{8}_[0-9]{6}\.tar\.gz$' | \
+                sort -r | \
+                tail -n +720 | \
+                while read backup_file; do
+                  echo "Deleting old backup: $backup_file"
+                  aws s3 rm "s3://$BACKUP_BUCKET/qdrant-backups/$backup_file"
+                done
+              
+            env:
+            - name: BACKUP_S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: qdrant-backup-secret
+                  key: s3-bucket
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: qdrant-backup-secret
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: qdrant-backup-secret
+                  key: aws-secret-access-key
+            - name: AWS_DEFAULT_REGION
+              value: "us-west-2"
+            - name: CLUSTER_NAME
+              value: "link-production"
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "200m"
+            volumeMounts:
+            - name: tmp-storage
+              mountPath: /tmp
+          volumes:
+          - name: tmp-storage
+            emptyDir:
+              sizeLimit: 1Gi
+
+---
+# Service Account for backup job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qdrant-backup
+  namespace: link-services
+  labels:
+    app: qdrant-backup
+
+---
+# Role for backup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: qdrant-backup
+  namespace: link-services
+  labels:
+    app: qdrant-backup
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+
+---
+# RoleBinding for backup service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qdrant-backup
+  namespace: link-services
+  labels:
+    app: qdrant-backup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: qdrant-backup
+subjects:
+- kind: ServiceAccount
+  name: qdrant-backup
+  namespace: link-services
+
+---
+# Network Policy for backup job
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qdrant-backup-netpol
+  namespace: link-services
+  labels:
+    app: qdrant-backup
+spec:
+  podSelector:
+    matchLabels:
+      app: qdrant-backup
+  policyTypes:
+  - Egress
+  egress:
+  # Allow access to Qdrant cluster
+  - to:
+    - podSelector:
+        matchLabels:
+          app: qdrant-cluster
+    ports:
+    - protocol: TCP
+      port: 6333
+  # Allow access to external APIs (S3, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53

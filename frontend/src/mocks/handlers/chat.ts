@@ -8,6 +8,7 @@ import {
   CreateConversationRequest
 } from '../../services/chatClient';
 import { chats, nearbyUsers } from '../../data/mockData';
+import { getDisplayName } from '../../utils/nameHelpers';
 import { extractUserId, generateId, now, parsePaginationParams, simulateDelay } from '../utils/mockHelpers';
 import { createAuthError, createValidationError, createSuccessResponse } from '../utils/responseBuilders';
 import { buildApiUrl, API_ENDPOINTS } from '../utils/config';
@@ -93,7 +94,7 @@ export const handlers = [
         created_by: userId,
         participants: [{
           id: participantId,
-          name: participant?.name || 'Unknown User',
+          name: participant ? getDisplayName(participant) : 'Unknown User',
           avatar: participant?.profilePicture,
         }],
         unread_count: 0,

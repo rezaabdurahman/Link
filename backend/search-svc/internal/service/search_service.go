@@ -30,33 +30,35 @@ type SearchService interface {
 	StartAvailabilityCleanup(ctx context.Context)
 }
 
+// SearchServiceConfig holds configuration for creating a SearchService
+type SearchServiceConfig struct {
+	Repository        repository.SearchRepository
+	EmbeddingProvider config.EmbeddingProvider
+	UserClient        client.UserClient      // optional
+	DiscoveryClient   client.DiscoveryClient // optional
+	DisableAnalytics  bool                   // for testing purposes
+}
+
 type searchService struct {
 	repo              repository.SearchRepository
 	embeddingProvider config.EmbeddingProvider
 	userClient        client.UserClient
 	discoveryClient   client.DiscoveryClient
-	disableAnalytics  bool // For testing purposes
+	disableAnalytics  bool
 }
 
-// NewSearchService creates a new search service
-func NewSearchService(repo repository.SearchRepository, embeddingProvider config.EmbeddingProvider) SearchService {
+// NewSearchService creates a new search service with flexible configuration
+func NewSearchService(config SearchServiceConfig) SearchService {
 	return &searchService{
-		repo:              repo,
-		embeddingProvider: embeddingProvider,
+		repo:              config.Repository,
+		embeddingProvider: config.EmbeddingProvider,
+		userClient:        config.UserClient,
+		discoveryClient:   config.DiscoveryClient,
+		disableAnalytics:  config.DisableAnalytics,
 	}
 }
 
-// NewSearchServiceWithClients creates a new search service with external service clients
-func NewSearchServiceWithClients(repo repository.SearchRepository, embeddingProvider config.EmbeddingProvider, userClient client.UserClient, discoveryClient client.DiscoveryClient) SearchService {
-	return &searchService{
-		repo:              repo,
-		embeddingProvider: embeddingProvider,
-		userClient:        userClient,
-		discoveryClient:   discoveryClient,
-	}
-}
-
-// Search performs semantic search on user profiles
+// Search performs semantic, hybrid, or full-text search on user profiles
 func (s *searchService) Search(ctx context.Context, userID uuid.UUID, req *dto.SearchRequest) (*dto.SearchResponse, error) {
 	start := time.Now()
 	
@@ -66,14 +68,28 @@ func (s *searchService) Search(ctx context.Context, userID uuid.UUID, req *dto.S
 		limit = *req.Limit
 	}
 	
+	// Set default search mode
+	searchMode := "hybrid"
+	if req.SearchMode != nil {
+		searchMode = *req.SearchMode
+	}
+	
+	// Set default hybrid weights
+	bm25Weight := 0.3
+	vectorWeight := 0.7
+	if req.HybridWeights != nil {
+		bm25Weight = req.HybridWeights.BM25Weight
+		vectorWeight = req.HybridWeights.VectorWeight
+	}
+	
+	// Check if visual context should be included
+	includeVisualContext := false
+	if req.IncludeVisualContext != nil {
+		includeVisualContext = *req.IncludeVisualContext
+	}
+	
 	// Process query text
 	processedQuery := s.preprocessQuery(req.Query)
-	
-	// Generate embedding for the search query
-	queryEmbedding, err := s.embeddingProvider.GenerateEmbedding(ctx, processedQuery)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
-	}
 	
 	// Handle scope-based filtering
 	userIDFilter, err := s.buildUserIDFilter(ctx, userID, req)
@@ -87,10 +103,25 @@ func (s *searchService) Search(ctx context.Context, userID uuid.UUID, req *dto.S
 		return nil, fmt.Errorf("failed to get total candidates count: %w", err)
 	}
 	
-	// Perform vector similarity search
-	embeddings, scores, err := s.repo.SearchSimilarUsers(ctx, queryEmbedding, limit, userIDFilter, req.ExcludeUserID)
+	var embeddings []models.UserEmbedding
+	var scores []float64
+	var hybridStats *dto.HybridSearchStats
+	var usersWithImages int
+	
+	// Perform search based on mode
+	switch searchMode {
+	case "fulltext":
+		embeddings, scores, err = s.performFullTextSearch(ctx, processedQuery, limit, userIDFilter, req.ExcludeUserID)
+	case "vector":
+		embeddings, scores, err = s.performVectorSearch(ctx, processedQuery, limit, userIDFilter, req.ExcludeUserID)
+	case "hybrid":
+		embeddings, scores, hybridStats, err = s.performHybridSearch(ctx, processedQuery, limit, userIDFilter, req.ExcludeUserID, bm25Weight, vectorWeight)
+	default:
+		return nil, fmt.Errorf("invalid search mode: %s", searchMode)
+	}
+	
 	if err != nil {
-		return nil, fmt.Errorf("failed to search similar users: %w", err)
+		return nil, fmt.Errorf("failed to perform %s search: %w", searchMode, err)
 	}
 	
 	// Convert to response format
@@ -100,10 +131,27 @@ func (s *searchService) Search(ctx context.Context, userID uuid.UUID, req *dto.S
 	for i, embedding := range embeddings {
 		matchReasons := s.generateMatchReasons(processedQuery, embedding.ProfileText, scores[i])
 		
+		// Check if this user has image analysis data
+		hasImages := s.checkUserHasImages(embedding.ProfileText)
+		if hasImages {
+			usersWithImages++
+		}
+		
+		// Extract image context if available
+		var imageContext *string
+		var visualMatch bool
+		if includeVisualContext && hasImages {
+			imageContext = s.extractImageContext(embedding.ProfileText)
+			visualMatch = s.detectVisualMatch(processedQuery, embedding.ProfileText)
+		}
+		
 		results[i] = dto.SearchResultItem{
 			UserID:       embedding.UserID,
 			Score:        scores[i],
 			MatchReasons: matchReasons,
+			HasImages:    hasImages,
+			ImageContext: imageContext,
+			VisualMatch:  visualMatch,
 		}
 		
 		// Prepare for analytics logging
@@ -119,16 +167,25 @@ func (s *searchService) Search(ctx context.Context, userID uuid.UUID, req *dto.S
 	searchTime := time.Since(start)
 	searchTimeMs := int(searchTime.Nanoseconds() / 1e6)
 	
-	// Log search query for analytics (asynchronous)
-	if !s.disableAnalytics {
+	// Log search query for analytics (asynchronous) - only for vector searches to maintain compatibility
+	if !s.disableAnalytics && searchMode == "vector" {
+		// Generate embedding for analytics (only needed for vector mode)
+		var queryEmbedding []float32
+		if searchMode == "vector" && processedQuery != "" {
+			queryEmbedding, _ = s.embeddingProvider.GenerateEmbedding(ctx, processedQuery)
+		}
 		go s.logSearchAnalytics(context.Background(), userID, processedQuery, queryEmbedding, len(results), searchTimeMs, totalCandidates, searchResults)
 	}
 	
 	return &dto.SearchResponse{
-		Results:         results,
-		QueryProcessed:  processedQuery,
-		TotalCandidates: totalCandidates,
-		SearchTimeMs:    searchTimeMs,
+		Results:           results,
+		QueryProcessed:    processedQuery,
+		TotalCandidates:   totalCandidates,
+		SearchTimeMs:      searchTimeMs,
+		SearchMode:        searchMode,
+		HybridStats:       hybridStats,
+		VisualContextUsed: includeVisualContext,
+		UsersWithImages:   usersWithImages,
 	}, nil
 }
 
@@ -370,4 +427,140 @@ func (s *searchService) buildUserIDFilter(ctx context.Context, userID uuid.UUID,
 	
 	// No scope specified - search all users (default behavior)
 	return nil, nil
+}
+
+// performVectorSearch executes pure vector similarity search
+func (s *searchService) performVectorSearch(ctx context.Context, query string, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) ([]models.UserEmbedding, []float64, error) {
+	if query == "" {
+		// For empty queries, use a generic discovery embedding
+		query = "discover people nearby available to connect"
+	}
+	
+	// Generate embedding for the search query
+	queryEmbedding, err := s.embeddingProvider.GenerateEmbedding(ctx, query)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate query embedding: %w", err)
+	}
+	
+	return s.repo.SearchSimilarUsers(ctx, queryEmbedding, limit, userIDFilter, excludeUserID)
+}
+
+// performFullTextSearch executes BM25-style full-text search
+func (s *searchService) performFullTextSearch(ctx context.Context, query string, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) ([]models.UserEmbedding, []float64, error) {
+	if query == "" {
+		return nil, nil, fmt.Errorf("query is required for full-text search")
+	}
+	
+	return s.repo.FullTextSearch(ctx, query, limit, userIDFilter, excludeUserID)
+}
+
+// performHybridSearch executes RRF-based hybrid search combining vector and full-text
+func (s *searchService) performHybridSearch(ctx context.Context, query string, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID, bm25Weight, vectorWeight float64) ([]models.UserEmbedding, []float64, *dto.HybridSearchStats, error) {
+	start := time.Now()
+	
+	if query == "" {
+		// For empty queries, fall back to vector search only
+		embeddings, scores, err := s.performVectorSearch(ctx, query, limit, userIDFilter, excludeUserID)
+		stats := &dto.HybridSearchStats{
+			BM25Results:   0,
+			VectorResults: len(embeddings),
+			FusedResults:  len(embeddings),
+			BM25TimeMs:    0,
+			VectorTimeMs:  int(time.Since(start).Nanoseconds() / 1e6),
+			FusionTimeMs:  0,
+		}
+		return embeddings, scores, stats, err
+	}
+	
+	// Generate embedding for vector search
+	queryEmbedding, err := s.embeddingProvider.GenerateEmbedding(ctx, query)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to generate query embedding: %w", err)
+	}
+	
+	// Execute hybrid search in repository
+	embeddings, scores, err := s.repo.HybridSearch(ctx, query, queryEmbedding, limit, userIDFilter, excludeUserID, bm25Weight, vectorWeight)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	
+	// Create hybrid stats (simplified since RRF is done in repository)
+	hybridStats := &dto.HybridSearchStats{
+		FusedResults:  len(embeddings),
+		VectorTimeMs:  int(time.Since(start).Nanoseconds() / 1e6),
+		FusionTimeMs:  int(time.Since(start).Nanoseconds() / 1e6),
+	}
+	
+	return embeddings, scores, hybridStats, nil
+}
+
+// checkUserHasImages checks if a user profile contains image analysis data
+func (s *searchService) checkUserHasImages(profileText string) bool {
+	// Simple heuristic: check for image analysis markers in profile text
+	// In a full implementation, this would query the database for image analysis records
+	return strings.Contains(profileText, "Visual Profile:") ||
+		   strings.Contains(profileText, "Visual profile summary:")
+}
+
+// extractImageContext extracts a brief image context from profile text
+func (s *searchService) extractImageContext(profileText string) *string {
+	// Extract the first sentence of visual analysis if present
+	if idx := strings.Index(profileText, "Visual Profile:"); idx != -1 {
+		start := idx + len("Visual Profile:")
+		if end := strings.Index(profileText[start:], "."); end != -1 {
+			context := strings.TrimSpace(profileText[start : start+end])
+			if len(context) > 100 {
+				context = context[:97] + "..."
+			}
+			return &context
+		}
+	}
+	return nil
+}
+
+// detectVisualMatch determines if the query likely matches visual content
+func (s *searchService) detectVisualMatch(query, profileText string) bool {
+	if query == "" {
+		return false
+	}
+
+	lowerQuery := strings.ToLower(query)
+	lowerProfile := strings.ToLower(profileText)
+
+	// Check for visual-related keywords in the query
+	visualKeywords := []string{
+		"outdoor", "hiking", "beach", "travel", "cooking", "art", "music",
+		"sports", "gym", "fitness", "photography", "dancing", "fashion",
+		"restaurant", "office", "home", "city", "mountains", "park",
+		"doctor", "engineer", "teacher", "chef", "artist", "musician",
+	}
+
+	// If query contains visual keywords and profile has visual content, it's a visual match
+	hasVisualKeyword := false
+	for _, keyword := range visualKeywords {
+		if strings.Contains(lowerQuery, keyword) {
+			hasVisualKeyword = true
+			break
+		}
+	}
+
+	// Check if the visual content in profile matches the query
+	if hasVisualKeyword && (strings.Contains(lowerProfile, "visual profile") || strings.Contains(lowerProfile, "visual")) {
+		return strings.Contains(lowerProfile, lowerQuery) ||
+			   s.hasSemanticMatch(lowerQuery, lowerProfile)
+	}
+
+	return false
+}
+
+// hasSemanticMatch performs simple semantic matching
+func (s *searchService) hasSemanticMatch(query, profileText string) bool {
+	// Simple word overlap check - in production, this could use embeddings
+	queryWords := strings.Fields(query)
+	for _, word := range queryWords {
+		if len(word) > 3 && strings.Contains(profileText, word) {
+			return true
+		}
+	}
+	return false
 }

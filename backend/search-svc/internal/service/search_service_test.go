@@ -259,7 +259,10 @@ func TestSearchService_UpdateUserEmbedding(t *testing.T) {
 			
 			tt.setupMocks(mockRepo, mockProvider)
 			
-			service := NewSearchService(mockRepo, mockProvider)
+			service := NewSearchService(SearchServiceConfig{
+				Repository:        mockRepo,
+				EmbeddingProvider: mockProvider,
+			})
 			
 			ctx := context.Background()
 			err := service.UpdateUserEmbedding(ctx, tt.userID, tt.profileText)
@@ -284,7 +287,10 @@ func TestSearchService_DeleteUserEmbedding(t *testing.T) {
 	
 	mockRepo.On("DeleteUserEmbedding", mock.Anything, userID).Return(nil)
 	
-	service := NewSearchService(mockRepo, mockProvider)
+	service := NewSearchService(SearchServiceConfig{
+		Repository:        mockRepo,
+		EmbeddingProvider: mockProvider,
+	})
 	
 	ctx := context.Background()
 	err := service.DeleteUserEmbedding(ctx, userID)
@@ -338,7 +344,10 @@ func TestSearchService_HasUserEmbedding(t *testing.T) {
 			
 			tt.setupMocks(mockRepo)
 			
-			service := NewSearchService(mockRepo, mockProvider)
+			service := NewSearchService(SearchServiceConfig{
+				Repository:        mockRepo,
+				EmbeddingProvider: mockProvider,
+			})
 			
 			ctx := context.Background()
 			result, err := service.HasUserEmbedding(ctx, tt.userID)

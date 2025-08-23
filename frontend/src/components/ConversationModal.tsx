@@ -112,7 +112,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
       const botSummary: BotSummary = {
         id: `bot-${Date.now()}`,
         type: 'summary',
-        content: generateBotSummary({ name: chat.participantName }),
+        content: generateBotSummary(chat.participantName),
         timestamp: new Date(Date.now() - 5 * 60 * 1000),
         activities: generateMockActivities()
       };
@@ -198,12 +198,12 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     chatWebSocket.connect(chat.id, token.token);
   };
 
-  const generateBotSummary = (user: { name: string }): string => {
+  const generateBotSummary = (name: string): string => {
     const summaries = [
-      `Here's what ${user.name} has been up to since your last chat:`,
-      `Catching you up on ${user.name}'s recent activities:`,
-      `${user.name}'s latest updates since you last spoke:`,
-      `Quick summary of ${user.name}'s recent stories and check-ins:`
+      `Here's what ${name} has been up to since your last chat:`,
+      `Catching you up on ${name}'s recent activities:`,
+      `${name}'s latest updates since you last spoke:`,
+      `Quick summary of ${name}'s recent stories and check-ins:`
     ];
     return summaries[Math.floor(Math.random() * summaries.length)];
   };

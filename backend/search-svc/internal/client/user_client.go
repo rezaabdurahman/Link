@@ -36,13 +36,16 @@ func NewUserClient(baseURL, authToken string) UserClient {
 
 // UserProfile represents the public user profile from user-svc
 type UserProfile struct {
-	ID         uuid.UUID `json:"id"`
-	Bio        string    `json:"bio"`
-	Interests  []string  `json:"interests"`
-	Profession string    `json:"profession"`
-	Skills     []string  `json:"skills,omitempty"`
-	Location   string    `json:"location,omitempty"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID               uuid.UUID `json:"id"`
+	Bio              string    `json:"bio"`
+	Interests        []string  `json:"interests"`
+	Profession       string    `json:"profession"`
+	Skills           []string  `json:"skills,omitempty"`
+	Location         string    `json:"location,omitempty"`
+	ProfilePicture   *string   `json:"profile_picture,omitempty"`
+	AdditionalPhotos []string  `json:"additional_photos,omitempty"`
+	ImageDescriptions *string  `json:"image_descriptions,omitempty"` // Cached image analysis results
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // GetUserProfile fetches a user's public profile from user-svc
@@ -179,4 +182,42 @@ func (p *UserProfile) ProfileToText() string {
 	}
 	
 	return text
+}
+
+// ProfileToTextWithImages converts user profile to searchable text including cached image descriptions
+func (p *UserProfile) ProfileToTextWithImages() string {
+	text := p.ProfileToText()
+	
+	// Add cached image descriptions if available
+	if p.ImageDescriptions != nil && *p.ImageDescriptions != "" {
+		if text != "" {
+			text += " " + *p.ImageDescriptions
+		} else {
+			text = *p.ImageDescriptions
+		}
+	}
+	
+	return text
+}
+
+// HasImages returns true if the profile has any images
+func (p *UserProfile) HasImages() bool {
+	return (p.ProfilePicture != nil && *p.ProfilePicture != "") || len(p.AdditionalPhotos) > 0
+}
+
+// GetImageURLs returns all image URLs for the profile
+func (p *UserProfile) GetImageURLs() []string {
+	var urls []string
+	
+	if p.ProfilePicture != nil && *p.ProfilePicture != "" {
+		urls = append(urls, *p.ProfilePicture)
+	}
+	
+	for _, photo := range p.AdditionalPhotos {
+		if photo != "" {
+			urls = append(urls, photo)
+		}
+	}
+	
+	return urls
 }

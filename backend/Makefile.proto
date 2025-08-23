@@ -1,0 +1,172 @@
+# Protocol Buffer code generation Makefile
+# This file handles code generation for all proto files across services
+
+# Directories
+PROTO_DIR := proto
+GENERATED_DIR := pkg/pb
+PROTOC := protoc
+PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
+PROTOC_GEN_GO_GRPC := $(GOPATH)/bin/protoc-gen-go-grpc
+
+# Proto source files
+COMMON_PROTOS := $(wildcard $(PROTO_DIR)/common/*.proto)
+USER_PROTOS := $(wildcard $(PROTO_DIR)/user/*.proto)
+DISCOVERY_PROTOS := $(wildcard $(PROTO_DIR)/discovery/*.proto)
+CHAT_PROTOS := $(wildcard $(PROTO_DIR)/chat/*.proto)
+AI_PROTOS := $(wildcard $(PROTO_DIR)/ai/*.proto)
+SEARCH_PROTOS := $(wildcard $(PROTO_DIR)/search/*.proto)
+
+ALL_PROTOS := $(COMMON_PROTOS) $(USER_PROTOS) $(DISCOVERY_PROTOS) $(CHAT_PROTOS) $(AI_PROTOS) $(SEARCH_PROTOS)
+
+# Generated output directories
+COMMON_OUT := $(GENERATED_DIR)/common
+USER_OUT := $(GENERATED_DIR)/user
+DISCOVERY_OUT := $(GENERATED_DIR)/discovery
+CHAT_OUT := $(GENERATED_DIR)/chat
+AI_OUT := $(GENERATED_DIR)/ai
+SEARCH_OUT := $(GENERATED_DIR)/search
+
+# Default target
+.PHONY: all
+all: install-tools generate
+
+# Install required tools
+.PHONY: install-tools
+install-tools:
+	@echo "Installing protoc tools..."
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+# Generate all proto files
+.PHONY: generate
+generate: clean-generated generate-common generate-user generate-discovery generate-chat generate-ai generate-search
+	@echo "All proto files generated successfully"
+
+# Clean generated files
+.PHONY: clean-generated
+clean-generated:
+	@echo "Cleaning generated proto files..."
+	rm -rf $(GENERATED_DIR)
+	mkdir -p $(COMMON_OUT) $(USER_OUT) $(DISCOVERY_OUT) $(CHAT_OUT) $(AI_OUT) $(SEARCH_OUT)
+
+# Generate common types
+.PHONY: generate-common
+generate-common:
+	@echo "Generating common proto files..."
+	$(PROTOC) --proto_path=. \
+		--go_out=$(GENERATED_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(GENERATED_DIR) --go-grpc_opt=paths=source_relative \
+		$(COMMON_PROTOS)
+
+# Generate user service protos
+.PHONY: generate-user
+generate-user: generate-common
+	@echo "Generating user service proto files..."
+	$(PROTOC) --proto_path=. \
+		--go_out=$(GENERATED_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(GENERATED_DIR) --go-grpc_opt=paths=source_relative \
+		$(USER_PROTOS)
+
+# Generate discovery service protos
+.PHONY: generate-discovery
+generate-discovery: generate-common
+	@echo "Generating discovery service proto files..."
+	$(PROTOC) --proto_path=. \
+		--go_out=$(GENERATED_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(GENERATED_DIR) --go-grpc_opt=paths=source_relative \
+		$(DISCOVERY_PROTOS)
+
+# Generate chat service protos
+.PHONY: generate-chat
+generate-chat: generate-common
+	@echo "Generating chat service proto files..."
+	$(PROTOC) --proto_path=. \
+		--go_out=$(GENERATED_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(GENERATED_DIR) --go-grpc_opt=paths=source_relative \
+		$(CHAT_PROTOS)
+
+# Generate AI service protos
+.PHONY: generate-ai
+generate-ai: generate-common
+	@echo "Generating AI service proto files..."
+	$(PROTOC) --proto_path=. \
+		--go_out=$(GENERATED_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(GENERATED_DIR) --go-grpc_opt=paths=source_relative \
+		$(AI_PROTOS)
+
+# Generate search service protos
+.PHONY: generate-search
+generate-search: generate-common
+	@echo "Generating search service proto files..."
+	$(PROTOC) --proto_path=. \
+		--go_out=$(GENERATED_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(GENERATED_DIR) --go-grpc_opt=paths=source_relative \
+		$(SEARCH_PROTOS)
+
+# Validate proto files
+.PHONY: validate
+validate:
+	@echo "Validating proto files..."
+	@for proto in $(ALL_PROTOS); do \
+		echo "Validating $$proto..."; \
+		$(PROTOC) --proto_path=. --descriptor_set_out=/dev/null $$proto; \
+	done
+	@echo "All proto files are valid"
+
+# Generate proto documentation
+.PHONY: docs
+docs:
+	@echo "Generating proto documentation..."
+	$(PROTOC) --proto_path=. --doc_out=docs --doc_opt=html,index.html $(ALL_PROTOS)
+
+# Copy protos to each service
+.PHONY: distribute
+distribute: generate
+	@echo "Distributing generated files to services..."
+	# User service
+	mkdir -p user-svc/pkg/pb
+	cp -r $(GENERATED_DIR)/proto/user/* user-svc/pkg/pb/ 2>/dev/null || true
+	cp -r $(GENERATED_DIR)/proto/common/* user-svc/pkg/pb/ 2>/dev/null || true
+	
+	# Discovery service  
+	mkdir -p discovery-svc/pkg/pb
+	cp -r $(GENERATED_DIR)/proto/discovery/* discovery-svc/pkg/pb/ 2>/dev/null || true
+	cp -r $(GENERATED_DIR)/proto/common/* discovery-svc/pkg/pb/ 2>/dev/null || true
+	
+	# Chat service
+	mkdir -p chat-svc/pkg/pb
+	cp -r $(GENERATED_DIR)/proto/chat/* chat-svc/pkg/pb/ 2>/dev/null || true
+	cp -r $(GENERATED_DIR)/proto/common/* chat-svc/pkg/pb/ 2>/dev/null || true
+	
+	# AI service
+	mkdir -p ai-svc/pkg/pb
+	cp -r $(GENERATED_DIR)/proto/ai/* ai-svc/pkg/pb/ 2>/dev/null || true
+	cp -r $(GENERATED_DIR)/proto/common/* ai-svc/pkg/pb/ 2>/dev/null || true
+	
+	# Search service
+	mkdir -p search-svc/pkg/pb
+	cp -r $(GENERATED_DIR)/proto/search/* search-svc/pkg/pb/ 2>/dev/null || true
+	cp -r $(GENERATED_DIR)/proto/common/* search-svc/pkg/pb/ 2>/dev/null || true
+	
+	@echo "Generated files distributed to all services"
+
+# Help target
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  all         - Install tools and generate all proto files"
+	@echo "  install-tools - Install protoc and Go plugins"
+	@echo "  generate    - Generate all proto files"
+	@echo "  clean-generated - Clean all generated files"
+	@echo "  validate    - Validate all proto files"
+	@echo "  docs        - Generate proto documentation"
+	@echo "  distribute  - Copy generated files to service directories"
+	@echo "  help        - Show this help message"
+	@echo ""
+	@echo "Individual service targets:"
+	@echo "  generate-common    - Generate common types"
+	@echo "  generate-user      - Generate user service protos" 
+	@echo "  generate-discovery - Generate discovery service protos"
+	@echo "  generate-chat      - Generate chat service protos"
+	@echo "  generate-ai        - Generate AI service protos"
+	@echo "  generate-search    - Generate search service protos"

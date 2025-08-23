@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/link-app/backend/proto/user";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/types.proto";
+
+// User Service definition
+service UserService {
+  // Get user profile by ID
+  rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+  
+  // Get user friends list
+  rpc GetUserFriends(GetUserFriendsRequest) returns (GetUserFriendsResponse);
+  
+  // Get multiple user profiles in batch
+  rpc GetUsersBatch(GetUsersBatchRequest) returns (GetUsersBatchResponse);
+  
+  // Update user profile
+  rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UpdateUserProfileResponse);
+  
+  // Check if users are friends
+  rpc CheckFriendship(CheckFriendshipRequest) returns (CheckFriendshipResponse);
+  
+  // Get user preferences
+  rpc GetUserPreferences(GetUserPreferencesRequest) returns (GetUserPreferencesResponse);
+  
+  // Health check
+  rpc Health(common.HealthCheckRequest) returns (common.HealthCheckResponse);
+}
+
+// User profile message
+message UserProfile {
+  common.UUID id = 1;
+  string username = 2;
+  string email = 3;
+  string first_name = 4;
+  string last_name = 5;
+  string bio = 6;
+  repeated string interests = 7;
+  string profession = 8;
+  repeated string skills = 9;
+  string location = 10;
+  string avatar_url = 11;
+  google.protobuf.Timestamp date_of_birth = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  bool is_verified = 15;
+  bool is_active = 16;
+  PrivacySettings privacy_settings = 17;
+}
+
+// Privacy settings
+message PrivacySettings {
+  bool profile_visible = 1;
+  bool show_location = 2;
+  bool show_age = 3;
+  bool allow_friend_requests = 4;
+  bool show_online_status = 5;
+}
+
+// Friend relationship
+message Friend {
+  common.UUID id = 1;
+  string username = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string bio = 5;
+  string avatar_url = 6;
+  FriendshipStatus status = 7;
+  google.protobuf.Timestamp friends_since = 8;
+}
+
+// Friendship status enum
+enum FriendshipStatus {
+  UNKNOWN = 0;
+  PENDING = 1;
+  ACCEPTED = 2;
+  BLOCKED = 3;
+}
+
+// Request messages
+message GetUserProfileRequest {
+  common.UUID user_id = 1;
+  bool include_private_fields = 2;
+}
+
+message GetUserProfileResponse {
+  UserProfile user = 1;
+}
+
+message GetUserFriendsRequest {
+  common.UUID user_id = 1;
+  common.PaginationRequest pagination = 2;
+  FriendshipStatus status_filter = 3;
+}
+
+message GetUserFriendsResponse {
+  repeated Friend friends = 1;
+  common.PaginationResponse pagination = 2;
+}
+
+message GetUsersBatchRequest {
+  repeated common.UUID user_ids = 1;
+  bool include_private_fields = 2;
+}
+
+message GetUsersBatchResponse {
+  repeated UserProfile users = 1;
+  repeated common.UUID not_found = 2;
+}
+
+message UpdateUserProfileRequest {
+  common.UUID user_id = 1;
+  string bio = 2;
+  repeated string interests = 3;
+  string profession = 4;
+  repeated string skills = 5;
+  string location = 6;
+  PrivacySettings privacy_settings = 7;
+}
+
+message UpdateUserProfileResponse {
+  UserProfile user = 1;
+  common.SuccessResponse result = 2;
+}
+
+message CheckFriendshipRequest {
+  common.UUID user_id = 1;
+  common.UUID target_user_id = 2;
+}
+
+message CheckFriendshipResponse {
+  FriendshipStatus status = 1;
+  google.protobuf.Timestamp friends_since = 2;
+}
+
+message GetUserPreferencesRequest {
+  common.UUID user_id = 1;
+}
+
+message GetUserPreferencesResponse {
+  map<string, string> preferences = 1;
+}

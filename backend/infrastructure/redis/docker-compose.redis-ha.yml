@@ -205,8 +205,8 @@ services:
     environment:
       - REDIS_HOSTS=master:redis-master:6379,slave1:redis-slave-1:6379,slave2:redis-slave-2:6379
       - REDIS_SENTINELS=sentinel1:redis-sentinel-1:26379,sentinel2:redis-sentinel-2:26379,sentinel3:redis-sentinel-3:26379
-      - HTTP_USER=admin
-      - HTTP_PASSWORD=admin
+      - HTTP_USER=${REDIS_COMMANDER_USER}
+      - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD}
     depends_on:
       - redis-master
       - redis-slave-1

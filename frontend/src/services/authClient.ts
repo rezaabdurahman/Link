@@ -279,6 +279,14 @@ class AuthApiClient {
       method: 'DELETE',
     });
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async put<T>(endpoint: string, data?: any): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
 }
 
 // Single instance of the API client

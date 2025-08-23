@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Save } from 'lucide-react';
 import { socialNotes, friends, generateAISummary } from '../data/mockData';
 import { SocialNote } from '../types';
+import { getDisplayName } from '../utils/nameHelpers';
 
 interface NoteEditModalProps {
   isOpen: boolean;
@@ -102,11 +103,11 @@ const NoteEditModal: React.FC<NoteEditModalProps> = ({
           <div className="flex items-center gap-3">
             <img
               src={profilePicture}
-              alt={friend.name}
+              alt={getDisplayName(friend)}
               className="w-10 h-10 rounded-full object-cover"
             />
             <div>
-              <h2 id="notes-modal-title" className="text-xl font-semibold text-gray-900">Notes about {friend.name}</h2>
+              <h2 id="notes-modal-title" className="text-xl font-semibold text-gray-900">Notes about {getDisplayName(friend)}</h2>
               <p id="notes-modal-description" className="text-sm text-gray-500">Edit your personal notes</p>
             </div>
           </div>
@@ -129,7 +130,7 @@ const NoteEditModal: React.FC<NoteEditModalProps> = ({
               id="notes"
               value={notes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              placeholder={`Write your personal notes about ${friend.name} here...\n\nSeparate different topics with double line breaks to create multiple note entries.`}
+              placeholder={`Write your personal notes about ${getDisplayName(friend)} here...\n\nSeparate different topics with double line breaks to create multiple note entries.`}
               aria-describedby="notes-helper"
               className="w-full h-64 px-4 py-3 text-sm border border-gray-200 rounded-ios focus:outline-none focus:ring-2 focus:ring-aqua focus:border-aqua focus:ring-offset-0 transition-colors resize-none"
             />

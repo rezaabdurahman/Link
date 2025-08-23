@@ -9,16 +9,18 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// CacheService provides Redis-based caching functionality
+// Legacy CacheService for backward compatibility
+// Deprecated: Use CacheInterface implementations instead
 type CacheService struct {
-	client         *redis.Client
-	defaultTTL     time.Duration
-	keyPrefix      string
-	ctx            context.Context
+	client     *redis.Client
+	defaultTTL time.Duration
+	keyPrefix  string
+	ctx        context.Context
 }
 
-// CacheConfig holds configuration for the cache service
-type CacheConfig struct {
+// Legacy CacheConfig for backward compatibility
+// Deprecated: Use CacheConfig from interface.go instead
+type LegacyCacheConfig struct {
 	RedisHost     string
 	RedisPort     string
 	RedisPassword string
@@ -27,8 +29,9 @@ type CacheConfig struct {
 	KeyPrefix     string
 }
 
-// NewCacheService creates a new Redis cache service
-func NewCacheService(config *CacheConfig) (*CacheService, error) {
+// NewCacheService creates a legacy cache service for backward compatibility
+// Deprecated: Use NewRedisCache instead
+func NewCacheService(config *LegacyCacheConfig) (*CacheService, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", config.RedisHost, config.RedisPort),
 		Password: config.RedisPassword,
@@ -52,7 +55,7 @@ func NewCacheService(config *CacheConfig) (*CacheService, error) {
 // Set stores a value in cache with optional TTL
 func (cs *CacheService) Set(key string, value interface{}, ttl ...time.Duration) error {
 	prefixedKey := cs.buildKey(key)
-	
+
 	// Use provided TTL or default
 	expiration := cs.defaultTTL
 	if len(ttl) > 0 {
@@ -71,11 +74,11 @@ func (cs *CacheService) Set(key string, value interface{}, ttl ...time.Duration)
 // Get retrieves a value from cache
 func (cs *CacheService) Get(key string, dest interface{}) error {
 	prefixedKey := cs.buildKey(key)
-	
+
 	data, err := cs.client.Get(cs.ctx, prefixedKey).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return ErrCacheMiss
+			return LegacyErrCacheMiss
 		}
 		return fmt.Errorf("failed to get from cache: %w", err)
 	}
@@ -93,7 +96,7 @@ func (cs *CacheService) GetOrSet(key string, dest interface{}, fetcher func() (i
 	// Try to get from cache first
 	if err := cs.Get(key, dest); err == nil {
 		return nil // Cache hit
-	} else if err != ErrCacheMiss {
+	} else if err != LegacyErrCacheMiss {
 		// Log error but continue to fetch from source
 		fmt.Printf("Cache error for key %s: %v\n", key, err)
 	}
@@ -140,7 +143,7 @@ func (cs *CacheService) Expire(key string, ttl time.Duration) error {
 // Invalidate removes all keys matching a pattern
 func (cs *CacheService) Invalidate(pattern string) error {
 	prefixedPattern := cs.buildKey(pattern)
-	
+
 	keys, err := cs.client.Keys(cs.ctx, prefixedPattern).Result()
 	if err != nil {
 		return fmt.Errorf("failed to find keys for pattern %s: %w", prefixedPattern, err)
@@ -162,10 +165,10 @@ func (cs *CacheService) GetStats() (map[string]interface{}, error) {
 
 	// Parse basic info (simplified)
 	stats := map[string]interface{}{
-		"connected":     true,
-		"info":          info,
-		"key_prefix":    cs.keyPrefix,
-		"default_ttl":   cs.defaultTTL.String(),
+		"connected":   true,
+		"info":        info,
+		"key_prefix":  cs.keyPrefix,
+		"default_ttl": cs.defaultTTL.String(),
 	}
 
 	return stats, nil
@@ -193,9 +196,9 @@ const (
 	DiscoveryKey   = "discovery:available:%s"
 )
 
-// Common cache errors
+// LegacyErrCacheMiss for backward compatibility
 var (
-	ErrCacheMiss = fmt.Errorf("cache miss")
+	LegacyErrCacheMiss = fmt.Errorf("cache miss")
 )
 
 // Helper functions for common cache operations

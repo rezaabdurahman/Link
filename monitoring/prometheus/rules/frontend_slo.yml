@@ -1,0 +1,326 @@
+# Frontend Service Level Objectives (SLOs) and Service Level Indicators (SLIs)
+# Matching backend SLO standards for consistent monitoring
+
+groups:
+  - name: frontend_sli_recording_rules
+    interval: 10s
+    rules:
+      # Page Load Success Rate SLI
+      - record: sli:frontend_page_load_success:rate5m
+        expr: |
+          (
+            sum(rate(frontend_page_load_total{status="success"}[5m])) or vector(0)
+          ) 
+          / 
+          (
+            sum(rate(frontend_page_load_total[5m])) or vector(1)
+          )
+
+      # Core Web Vitals Performance SLI (LCP < 2.5s)
+      - record: sli:frontend_lcp_performance:rate5m
+        expr: |
+          (
+            sum(rate(frontend_web_vitals_lcp_bucket{le="2500"}[5m])) or vector(0)
+          )
+          /
+          (
+            sum(rate(frontend_web_vitals_lcp_count[5m])) or vector(1)
+          )
+
+      # First Input Delay Performance SLI (FID < 100ms)
+      - record: sli:frontend_fid_performance:rate5m
+        expr: |
+          (
+            sum(rate(frontend_web_vitals_fid_bucket{le="100"}[5m])) or vector(0)
+          )
+          /
+          (
+            sum(rate(frontend_web_vitals_fid_count[5m])) or vector(1)
+          )
+
+      # Cumulative Layout Shift Performance SLI (CLS < 0.1)
+      - record: sli:frontend_cls_performance:rate5m
+        expr: |
+          (
+            sum(rate(frontend_web_vitals_cls_bucket{le="0.1"}[5m])) or vector(0)
+          )
+          /
+          (
+            sum(rate(frontend_web_vitals_cls_count[5m])) or vector(1)
+          )
+
+      # API Request Success Rate SLI (from frontend perspective)
+      - record: sli:frontend_api_success:rate5m
+        expr: |
+          (
+            sum(rate(frontend_api_request_total{status!~"5.."}[5m])) or vector(0)
+          )
+          /
+          (
+            sum(rate(frontend_api_request_total[5m])) or vector(1)
+          )
+
+      # API Request Latency SLI (P95 < 1000ms)
+      - record: sli:frontend_api_latency:rate5m
+        expr: |
+          (
+            sum(rate(frontend_api_request_duration_bucket{le="1"}[5m])) or vector(0)
+          )
+          /
+          (
+            sum(rate(frontend_api_request_duration_count[5m])) or vector(1)
+          )
+
+      # User Journey Completion SLI
+      - record: sli:frontend_journey_completion:rate5m
+        expr: |
+          (
+            sum(rate(frontend_user_journey_step_total{step=~".*complete.*"}[5m])) or vector(0)
+          )
+          /
+          (
+            sum(rate(frontend_user_journey_step_total{step=~".*start.*"}[5m])) or vector(1)
+          )
+
+      # Form Completion SLI
+      - record: sli:frontend_form_success:rate5m
+        expr: |
+          (
+            sum(rate(frontend_form_completion_total{status="success"}[5m])) or vector(0)
+          )
+          /
+          (
+            sum(rate(frontend_form_start_total[5m])) or vector(1)
+          )
+
+      # JavaScript Error Rate (inverted for success rate)
+      - record: sli:frontend_js_reliability:rate5m
+        expr: |
+          1 - (
+            (
+              sum(rate(frontend_javascript_errors_total[5m])) or vector(0)
+            )
+            /
+            (
+              sum(rate(frontend_page_load_total[5m])) or vector(1)
+            )
+          )
+
+  - name: frontend_slo_alerts
+    interval: 30s
+    rules:
+      # Frontend Availability SLO: 99.9% (Error Budget: 0.1%)
+      - record: slo:frontend_availability:error_budget_remaining
+        expr: |
+          1 - (
+            (1 - sli:frontend_page_load_success:rate5m) / 0.001
+          )
+
+      - alert: FrontendAvailabilitySLOBreach
+        expr: sli:frontend_page_load_success:rate5m < 0.999
+        for: 2m
+        labels:
+          severity: critical
+          component: frontend
+          category: slo
+          slo: availability
+          threshold: "99.9%"
+        annotations:
+          summary: "Frontend availability SLO breach"
+          description: "Page load success rate ({{ $value | humanizePercentage }}) is below 99.9% SLO"
+          dashboard_url: "{{ $externalURL }}/d/frontend-performance"
+          runbook_url: "https://runbooks.example.com/frontend/availability"
+
+      # Performance SLO: 75% of LCP measurements < 2.5s
+      - record: slo:frontend_lcp_performance:error_budget_remaining
+        expr: |
+          1 - (
+            (1 - sli:frontend_lcp_performance:rate5m) / 0.25
+          )
+
+      - alert: FrontendLCPPerformanceSLOBreach
+        expr: sli:frontend_lcp_performance:rate5m < 0.75
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+          category: slo
+          slo: lcp_performance
+          threshold: "75%"
+        annotations:
+          summary: "Frontend LCP performance SLO breach"
+          description: "LCP performance ({{ $value | humanizePercentage }}) is below 75% SLO threshold"
+
+      # User Experience SLO: Composite score > 80%
+      - record: sli:frontend_user_experience:composite
+        expr: |
+          (
+            sli:frontend_lcp_performance:rate5m * 0.25 +
+            sli:frontend_fid_performance:rate5m * 0.25 +
+            sli:frontend_cls_performance:rate5m * 0.25 +
+            sli:frontend_page_load_success:rate5m * 0.25
+          )
+
+      - record: slo:frontend_user_experience:error_budget_remaining
+        expr: |
+          1 - (
+            (1 - sli:frontend_user_experience:composite) / 0.2
+          )
+
+      - alert: FrontendUserExperienceSLOBreach
+        expr: sli:frontend_user_experience:composite < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: frontend
+          category: slo
+          slo: user_experience
+          threshold: "80%"
+        annotations:
+          summary: "Frontend user experience SLO breach"
+          description: "Composite UX score ({{ $value | humanizePercentage }}) is below 80% SLO"
+
+      # API Performance SLO: 95% of requests < 1s
+      - record: slo:frontend_api_performance:error_budget_remaining
+        expr: |
+          1 - (
+            (1 - sli:frontend_api_latency:rate5m) / 0.05
+          )
+
+      - alert: FrontendAPIPerformanceSLOBreach
+        expr: sli:frontend_api_latency:rate5m < 0.95
+        for: 3m
+        labels:
+          severity: warning
+          component: frontend
+          category: slo
+          slo: api_performance
+          threshold: "95%"
+        annotations:
+          summary: "Frontend API performance SLO breach"
+          description: "API P95 latency performance ({{ $value | humanizePercentage }}) is below 95% SLO"
+
+      # Business Critical Journey SLO: 90% completion rate
+      - record: slo:frontend_critical_journey:error_budget_remaining
+        expr: |
+          1 - (
+            (1 - sli:frontend_journey_completion:rate5m) / 0.1
+          )
+
+      - alert: FrontendCriticalJourneySLOBreach
+        expr: sli:frontend_journey_completion:rate5m < 0.9
+        for: 5m
+        labels:
+          severity: critical
+          component: frontend
+          category: slo
+          slo: critical_journey
+          threshold: "90%"
+        annotations:
+          summary: "Frontend critical journey SLO breach"
+          description: "User journey completion rate ({{ $value | humanizePercentage }}) is below 90% SLO"
+
+  - name: frontend_error_budget_burn_rate
+    interval: 30s
+    rules:
+      # Fast burn rate alerts (budget exhausted in < 1 hour)
+      - alert: FrontendSLOErrorBudgetBurnRateFast
+        expr: |
+          (
+            slo:frontend_availability:error_budget_remaining < 0.02
+            and
+            (1 - sli:frontend_page_load_success:rate5m) > (14.4 * 0.001)
+          )
+          or
+          (
+            slo:frontend_user_experience:error_budget_remaining < 0.02
+            and
+            (1 - sli:frontend_user_experience:composite) > (14.4 * 0.2)
+          )
+        for: 2m
+        labels:
+          severity: critical
+          component: frontend
+          category: slo
+          burn_rate: fast
+        annotations:
+          summary: "Frontend SLO error budget burning fast"
+          description: "Error budget will be exhausted in < 1 hour at current burn rate"
+          dashboard_url: "{{ $externalURL }}/d/frontend-performance"
+
+      # Moderate burn rate alerts (budget exhausted in < 6 hours)
+      - alert: FrontendSLOErrorBudgetBurnRateModerate
+        expr: |
+          (
+            slo:frontend_availability:error_budget_remaining < 0.05
+            and
+            (1 - sli:frontend_page_load_success:rate5m) > (6 * 0.001)
+          )
+          or
+          (
+            slo:frontend_user_experience:error_budget_remaining < 0.05
+            and
+            (1 - sli:frontend_user_experience:composite) > (6 * 0.2)
+          )
+        for: 15m
+        labels:
+          severity: warning
+          component: frontend
+          category: slo
+          burn_rate: moderate
+        annotations:
+          summary: "Frontend SLO error budget burning moderately"
+          description: "Error budget will be exhausted in < 6 hours at current burn rate"
+
+      # Slow burn rate alerts (budget exhausted in < 3 days)  
+      - alert: FrontendSLOErrorBudgetBurnRateSlow
+        expr: |
+          (
+            slo:frontend_availability:error_budget_remaining < 0.1
+            and
+            (1 - sli:frontend_page_load_success:rate5m) > (1 * 0.001)
+          )
+          or
+          (
+            slo:frontend_user_experience:error_budget_remaining < 0.1
+            and
+            (1 - sli:frontend_user_experience:composite) > (1 * 0.2)
+          )
+        for: 2h
+        labels:
+          severity: info
+          component: frontend
+          category: slo
+          burn_rate: slow
+        annotations:
+          summary: "Frontend SLO error budget burning slowly"
+          description: "Sustained error budget consumption detected - monitor for trends"
+
+  - name: frontend_slo_monthly_reports
+    interval: 1h
+    rules:
+      # Monthly SLO compliance tracking
+      - record: slo:frontend_availability:monthly_compliance
+        expr: |
+          avg_over_time(sli:frontend_page_load_success:rate5m[30d])
+
+      - record: slo:frontend_performance:monthly_compliance
+        expr: |
+          avg_over_time(sli:frontend_lcp_performance:rate5m[30d])
+
+      - record: slo:frontend_user_experience:monthly_compliance
+        expr: |
+          avg_over_time(sli:frontend_user_experience:composite[30d])
+
+      - record: slo:frontend_api_performance:monthly_compliance
+        expr: |
+          avg_over_time(sli:frontend_api_latency:rate5m[30d])
+
+      # Error budget consumption rates
+      - record: slo:frontend_availability:error_budget_consumption_rate
+        expr: |
+          (1 - sli:frontend_page_load_success:rate5m) / 0.001
+
+      - record: slo:frontend_user_experience:error_budget_consumption_rate
+        expr: |
+          (1 - sli:frontend_user_experience:composite) / 0.2

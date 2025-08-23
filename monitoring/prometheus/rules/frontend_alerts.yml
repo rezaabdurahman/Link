@@ -1,0 +1,306 @@
+# Frontend Performance and User Experience Alerts
+# Integrated with backend alerting system for comprehensive monitoring
+
+groups:
+  - name: frontend_performance
+    interval: 30s
+    rules:
+      # Core Web Vitals Alerts
+      - alert: FrontendPoorLCP
+        expr: histogram_quantile(0.75, rate(frontend_web_vitals_lcp_bucket[5m])) > 4000
+        for: 2m
+        labels:
+          severity: warning
+          component: frontend
+          category: web_vitals
+        annotations:
+          summary: "Poor Largest Contentful Paint performance detected"
+          description: "LCP P75 is {{ $value }}ms for {{ $labels.environment }}/{{ $labels.page }}, exceeding 4000ms threshold"
+          runbook_url: "https://web.dev/lcp/"
+          dashboard_url: "{{ $externalURL }}/d/frontend-performance"
+
+      - alert: FrontendCriticalLCP
+        expr: histogram_quantile(0.75, rate(frontend_web_vitals_lcp_bucket[5m])) > 6000
+        for: 1m
+        labels:
+          severity: critical
+          component: frontend
+          category: web_vitals
+        annotations:
+          summary: "Critical LCP performance degradation"
+          description: "LCP P75 is {{ $value }}ms for {{ $labels.environment }}/{{ $labels.page }}, severely impacting user experience"
+
+      - alert: FrontendPoorCLS
+        expr: histogram_quantile(0.75, rate(frontend_web_vitals_cls_bucket[5m])) > 0.25
+        for: 3m
+        labels:
+          severity: warning
+          component: frontend
+          category: web_vitals
+        annotations:
+          summary: "Poor Cumulative Layout Shift detected"
+          description: "CLS P75 is {{ $value }} for {{ $labels.environment }}/{{ $labels.page }}, exceeding 0.25 threshold"
+
+      - alert: FrontendPoorFID
+        expr: histogram_quantile(0.75, rate(frontend_web_vitals_fid_bucket[5m])) > 300
+        for: 2m
+        labels:
+          severity: warning
+          component: frontend
+          category: web_vitals
+        annotations:
+          summary: "Poor First Input Delay performance"
+          description: "FID P75 is {{ $value }}ms for {{ $labels.environment }}/{{ $labels.page }}, exceeding 300ms threshold"
+
+      # JavaScript Error Monitoring
+      - alert: FrontendHighJavaScriptErrorRate
+        expr: rate(frontend_javascript_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          component: frontend
+          category: errors
+        annotations:
+          summary: "High JavaScript error rate detected"
+          description: "JS error rate is {{ $value }} errors/sec in {{ $labels.environment }}"
+
+      - alert: FrontendJavaScriptErrorSpike
+        expr: rate(frontend_javascript_errors_total[5m]) > 1.0
+        for: 30s
+        labels:
+          severity: critical
+          component: frontend
+          category: errors
+        annotations:
+          summary: "JavaScript error rate spike"
+          description: "Critical JS error spike: {{ $value }} errors/sec in {{ $labels.environment }}"
+
+      # API Performance from Frontend
+      - alert: FrontendSlowAPIRequests
+        expr: histogram_quantile(0.95, rate(frontend_api_request_duration_bucket[5m])) > 2000
+        for: 3m
+        labels:
+          severity: warning
+          component: frontend
+          category: api_performance
+        annotations:
+          summary: "Slow API requests from frontend"
+          description: "API P95 latency is {{ $value }}ms for {{ $labels.endpoint }} in {{ $labels.environment }}"
+
+      - alert: FrontendAPIErrorRate
+        expr: rate(frontend_api_request_total{status=~"5.."}[5m]) / rate(frontend_api_request_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          component: frontend
+          category: api_errors
+        annotations:
+          summary: "High API error rate from frontend"
+          description: "API 5xx error rate is {{ $value | humanizePercentage }} for {{ $labels.endpoint }}"
+
+  - name: frontend_user_experience
+    interval: 60s
+    rules:
+      # User Experience Metrics
+      - alert: FrontendLowUserExperienceScore
+        expr: (avg(frontend_web_vitals_lcp <= 2500) * 0.3 + avg(frontend_web_vitals_fid <= 100) * 0.3 + avg(frontend_web_vitals_cls <= 0.1) * 0.4) * 100 < 75
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+          category: user_experience
+        annotations:
+          summary: "Low user experience score"
+          description: "UX score is {{ $value }}% in {{ $labels.environment }}, below 75% threshold"
+
+      - alert: FrontendHighBounceRate
+        expr: (sum(frontend_page_bounce_total) / sum(frontend_page_load_total)) * 100 > 70
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+          category: engagement
+        annotations:
+          summary: "High page bounce rate"
+          description: "Bounce rate is {{ $value }}% for {{ $labels.page }} in {{ $labels.environment }}"
+
+      - alert: FrontendLowFormCompletionRate
+        expr: rate(frontend_form_completion_total{status="success"}[5m]) / rate(frontend_form_start_total[5m]) < 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+          category: conversions
+        annotations:
+          summary: "Low form completion rate"
+          description: "Form {{ $labels.form }} has {{ $value | humanizePercentage }} completion rate in {{ $labels.environment }}"
+
+      # Business Critical Journeys
+      - alert: FrontendUserJourneyFailure
+        expr: rate(frontend_user_journey_step_total{journey="onboarding", step="complete"}[10m]) / rate(frontend_user_journey_step_total{journey="onboarding", step="start"}[10m]) < 0.3
+        for: 5m
+        labels:
+          severity: critical
+          component: frontend
+          category: business_critical
+        annotations:
+          summary: "Critical user journey failure"
+          description: "Onboarding completion rate is {{ $value | humanizePercentage }} in {{ $labels.environment }}"
+
+      - alert: FrontendConversionRateDrop
+        expr: (sum(frontend_conversion_total) / sum(frontend_page_load_total)) * 100 < 2
+        for: 10m
+        labels:
+          severity: warning
+          component: frontend
+          category: business_metrics
+        annotations:
+          summary: "Conversion rate below threshold"
+          description: "Conversion rate is {{ $value }}% in {{ $labels.environment }}, below 2% threshold"
+
+  - name: frontend_infrastructure
+    interval: 60s
+    rules:
+      # Resource and Performance
+      - alert: FrontendHighMemoryUsage
+        expr: frontend_memory_used_bytes / frontend_memory_limit_bytes > 0.8
+        for: 3m
+        labels:
+          severity: warning
+          component: frontend
+          category: resources
+        annotations:
+          summary: "High frontend memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} in {{ $labels.environment }}"
+
+      - alert: FrontendLargeBundleSize
+        expr: frontend_bundle_size_bytes > 2097152  # 2MB
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+          category: performance
+        annotations:
+          summary: "Large bundle size detected"
+          description: "Bundle size is {{ $value | humanizeBytes }} in {{ $labels.environment }}"
+
+      # Session and Connectivity
+      - alert: FrontendHighSessionErrorRate
+        expr: rate(frontend_session_error_total[5m]) / rate(frontend_session_start_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          component: frontend
+          category: stability
+        annotations:
+          summary: "High session error rate"
+          description: "Session error rate is {{ $value | humanizePercentage }} in {{ $labels.environment }}"
+
+      - alert: FrontendNetworkTimeouts
+        expr: rate(frontend_network_timeout_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          component: frontend
+          category: network
+        annotations:
+          summary: "High network timeout rate"
+          description: "Network timeout rate is {{ $value }} timeouts/sec in {{ $labels.environment }}"
+
+  - name: frontend_slo_alerts
+    interval: 30s
+    rules:
+      # SLO Error Budget Alerts (matching backend pattern)
+      - alert: FrontendSLOErrorBudgetBurnRateFast
+        expr: (
+          (1 - (sum(rate(frontend_sli_requests_good_total[1m])) / sum(rate(frontend_sli_requests_total[1m])))) > (14.4 * 0.001)
+          and
+          (1 - (sum(rate(frontend_sli_requests_good_total[5m])) / sum(rate(frontend_sli_requests_total[5m])))) > (14.4 * 0.001)
+        )
+        for: 2m
+        labels:
+          severity: critical
+          component: frontend
+          category: slo
+          burn_rate: fast
+        annotations:
+          summary: "Frontend SLO error budget burning fast"
+          description: "Error budget will be exhausted in < 1 hour at current burn rate for {{ $labels.environment }}"
+
+      - alert: FrontendSLOErrorBudgetBurnRateSlow
+        expr: (
+          (1 - (sum(rate(frontend_sli_requests_good_total[6h])) / sum(rate(frontend_sli_requests_total[6h])))) > (6 * 0.001)
+          and
+          (1 - (sum(rate(frontend_sli_requests_good_total[30m])) / sum(rate(frontend_sli_requests_total[30m])))) > (6 * 0.001)
+        )
+        for: 15m
+        labels:
+          severity: warning
+          component: frontend
+          category: slo
+          burn_rate: slow
+        annotations:
+          summary: "Frontend SLO error budget burning slowly"
+          description: "Error budget burning at sustained rate for {{ $labels.environment }}"
+
+      # Performance SLO
+      - alert: FrontendPerformanceSLOBreach
+        expr: histogram_quantile(0.95, rate(frontend_web_vitals_lcp_bucket[5m])) > 2500
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+          category: slo
+        annotations:
+          summary: "Frontend performance SLO breach"
+          description: "LCP P95 ({{ $value }}ms) exceeds SLO threshold of 2500ms for {{ $labels.environment }}"
+
+      # Availability SLO
+      - alert: FrontendAvailabilitySLOBreach
+        expr: (sum(rate(frontend_page_load_success_total[5m])) / sum(rate(frontend_page_load_total[5m]))) < 0.995
+        for: 2m
+        labels:
+          severity: critical
+          component: frontend
+          category: slo
+        annotations:
+          summary: "Frontend availability SLO breach"
+          description: "Page load success rate ({{ $value | humanizePercentage }}) below 99.5% SLO for {{ $labels.environment }}"
+
+  - name: frontend_security
+    interval: 60s
+    rules:
+      # Security and Abuse Detection
+      - alert: FrontendSuspiciousErrorPattern
+        expr: increase(frontend_javascript_errors_total[5m]) > 100 and rate(frontend_javascript_errors_total[1m]) > rate(frontend_javascript_errors_total[1m] offset 5m) * 10
+        for: 1m
+        labels:
+          severity: warning
+          component: frontend
+          category: security
+        annotations:
+          summary: "Suspicious error pattern detected"
+          description: "Abnormal error spike pattern in {{ $labels.environment }} - potential security issue"
+
+      - alert: FrontendAbnormalTrafficPattern
+        expr: rate(frontend_page_load_total[5m]) > rate(frontend_page_load_total[5m] offset 1h) * 5
+        for: 3m
+        labels:
+          severity: warning
+          component: frontend
+          category: security
+        annotations:
+          summary: "Abnormal traffic pattern"
+          description: "Traffic spike ({{ $value }}x normal) detected in {{ $labels.environment }}"
+
+      # Content Security Policy Violations
+      - alert: FrontendCSPViolations
+        expr: rate(frontend_csp_violation_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          component: frontend
+          category: security
+        annotations:
+          summary: "Content Security Policy violations"
+          description: "CSP violation rate is {{ $value }} violations/sec in {{ $labels.environment }}"

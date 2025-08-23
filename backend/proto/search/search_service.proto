@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package search;
+
+option go_package = "github.com/link-app/backend/proto/search";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/types.proto";
+
+// Search Service definition
+service SearchService {
+  // Perform semantic search on user profiles
+  rpc Search(SearchRequest) returns (SearchResponse);
+  
+  // Update user profile embedding
+  rpc UpdateUserEmbedding(UpdateUserEmbeddingRequest) returns (UpdateUserEmbeddingResponse);
+  
+  // Delete user profile embedding
+  rpc DeleteUserEmbedding(DeleteUserEmbeddingRequest) returns (DeleteUserEmbeddingResponse);
+  
+  // Check if user has embedding
+  rpc HasUserEmbedding(HasUserEmbeddingRequest) returns (HasUserEmbeddingResponse);
+  
+  // Batch update embeddings
+  rpc BatchUpdateEmbeddings(BatchUpdateEmbeddingsRequest) returns (BatchUpdateEmbeddingsResponse);
+  
+  // Trigger reindexing of user profiles
+  rpc Reindex(ReindexRequest) returns (ReindexResponse);
+  
+  // Get reindex job status
+  rpc GetReindexStatus(ReindexStatusRequest) returns (ReindexStatusResponse);
+  
+  // Stream reindex progress
+  rpc StreamReindexProgress(StreamReindexRequest) returns (stream ReindexProgress);
+  
+  // Health check
+  rpc Health(common.HealthCheckRequest) returns (common.HealthCheckResponse);
+}
+
+// Search scope enum
+enum SearchScope {
+  ALL_USERS = 0;
+  FRIENDS = 1;
+  DISCOVERY = 2;
+  NEARBY = 3;
+}
+
+// Search request message
+message SearchRequest {
+  string query = 1;
+  int32 limit = 2;
+  repeated common.UUID user_ids = 3;
+  common.UUID exclude_user_id = 4;
+  SearchScope scope = 5;
+  common.UUID requesting_user_id = 6;
+  Location center_location = 7;
+  double max_distance_km = 8;
+}
+
+// Location for proximity search
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  double accuracy = 3;
+}
+
+// Search response message
+message SearchResponse {
+  repeated SearchResult results = 1;
+  string query_processed = 2;
+  int32 total_candidates = 3;
+  int32 search_time_ms = 4;
+  SearchMetadata metadata = 5;
+}
+
+// Search metadata
+message SearchMetadata {
+  SearchScope scope_used = 1;
+  bool embedding_generated = 2;
+  string embedding_model = 3;
+  int32 vector_dimension = 4;
+}
+
+// Individual search result
+message SearchResult {
+  common.UUID user_id = 1;
+  float score = 2;
+  repeated string match_reasons = 3;
+  MatchMetadata match_metadata = 4;
+}
+
+// Match metadata
+message MatchMetadata {
+  repeated string matched_keywords = 1;
+  float semantic_similarity = 2;
+  float keyword_similarity = 3;
+  double distance_km = 4;
+}
+
+// User embedding operations
+message UpdateUserEmbeddingRequest {
+  common.UUID user_id = 1;
+  string profile_text = 2;
+  bool force_update = 3;
+}
+
+message UpdateUserEmbeddingResponse {
+  bool success = 1;
+  string embedding_model = 2;
+  int32 vector_dimension = 3;
+  google.protobuf.Timestamp updated_at = 4;
+  common.SuccessResponse result = 5;
+}
+
+message DeleteUserEmbeddingRequest {
+  common.UUID user_id = 1;
+}
+
+message DeleteUserEmbeddingResponse {
+  bool success = 1;
+  common.SuccessResponse result = 2;
+}
+
+message HasUserEmbeddingRequest {
+  common.UUID user_id = 1;
+}
+
+message HasUserEmbeddingResponse {
+  bool has_embedding = 1;
+  google.protobuf.Timestamp last_updated = 2;
+  string embedding_model = 3;
+}
+
+// Batch operations
+message BatchUpdateEmbeddingsRequest {
+  repeated UserEmbeddingUpdate updates = 1;
+  bool force_update = 2;
+}
+
+message UserEmbeddingUpdate {
+  common.UUID user_id = 1;
+  string profile_text = 2;
+}
+
+message BatchUpdateEmbeddingsResponse {
+  int32 successful_updates = 1;
+  int32 failed_updates = 2;
+  repeated BatchUpdateError errors = 3;
+  common.SuccessResponse result = 4;
+}
+
+message BatchUpdateError {
+  common.UUID user_id = 1;
+  string error_message = 2;
+  string error_code = 3;
+}
+
+// Reindex operations
+message ReindexRequest {
+  repeated common.UUID user_ids = 1;
+  bool force = 2;
+  ReindexOptions options = 3;
+}
+
+message ReindexOptions {
+  bool update_all_embeddings = 1;
+  bool cleanup_expired = 2;
+  bool rebuild_index = 3;
+  int32 batch_size = 4;
+}
+
+message ReindexResponse {
+  string job_id = 1;
+  ReindexStatus status = 2;
+  int32 users_queued = 3;
+  google.protobuf.Timestamp estimated_completion = 4;
+  ReindexMetadata metadata = 5;
+}
+
+enum ReindexStatus {
+  PENDING = 0;
+  RUNNING = 1;
+  COMPLETED = 2;
+  FAILED = 3;
+  CANCELLED = 4;
+}
+
+message ReindexMetadata {
+  int32 batch_size = 1;
+  string embedding_model = 2;
+  bool cleanup_enabled = 3;
+}
+
+message ReindexStatusRequest {
+  string job_id = 1;
+}
+
+message ReindexStatusResponse {
+  string job_id = 1;
+  ReindexStatus status = 2;
+  int32 users_total = 3;
+  int32 users_processed = 4;
+  int32 users_failed = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  string error_message = 8;
+  ReindexProgress progress = 9;
+}
+
+message StreamReindexRequest {
+  string job_id = 1;
+}
+
+message ReindexProgress {
+  string job_id = 1;
+  ReindexStatus status = 2;
+  int32 users_processed = 3;
+  int32 users_total = 4;
+  float progress_percentage = 5;
+  int32 current_batch = 6;
+  int32 total_batches = 7;
+  google.protobuf.Timestamp last_update = 8;
+  string current_operation = 9;
+  repeated string recent_errors = 10;
+}

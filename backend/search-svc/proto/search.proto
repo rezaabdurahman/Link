@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package search;
 
-option go_package = "github.com/link-app/search-svc/pkg/pb";
+option go_package = "github.com/link-app/search-svc/pkg/pb/search";
 
 // Search service definition
 service SearchService {

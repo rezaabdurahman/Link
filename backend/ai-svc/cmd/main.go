@@ -14,12 +14,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/link-app/ai-svc/internal/config"
 	"github.com/link-app/ai-svc/internal/service"
 	"github.com/link-app/shared-libs/lifecycle"
+	aiMetrics "github.com/link-app/ai-svc/internal/middleware"
 )
 
 // @title AI Service API
@@ -62,6 +64,7 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5)) // Enable compression
+	r.Use(aiMetrics.PrometheusMiddleware()) // Prometheus metrics middleware
 
 	// Structured request logging with zerolog
 	r.Use(func(next http.Handler) http.Handler {
@@ -134,13 +137,10 @@ func main() {
 	// Health endpoints (will be registered after lifecycle manager is created)
 	// Note: These are registered after lifecycle manager initialization
 
-	// Metrics endpoint (if enabled)
-	if cfg.EnableMetrics {
-		log.Info().
-			Str("metrics_port", cfg.MetricsPort).
-			Msg("Metrics endpoint enabled (placeholder)")
-		// Implement metrics endpoint here
-	}
+	// Metrics endpoint for Prometheus scraping
+	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		promhttp.Handler().ServeHTTP(w, r)
+	})
 
 	// Create HTTP server
 	server := &http.Server{

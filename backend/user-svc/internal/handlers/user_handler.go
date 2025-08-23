@@ -356,6 +356,148 @@ func (h *UserHandler) RespondToFriendRequest(c *gin.Context) {
 	})
 }
 
+// GetHiddenUsers returns the current user's hidden users list
+func (h *UserHandler) GetHiddenUsers(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User ID not found in context",
+			"code":    "USER_ID_NOT_FOUND",
+		})
+		return
+	}
+
+	userUUID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid user ID format",
+			"code":    "INVALID_USER_ID",
+		})
+		return
+	}
+
+	hiddenUsers, err := h.userService.GetHiddenUsers(userUUID)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"hidden_users": hiddenUsers,
+	})
+}
+
+// HideUser adds a user to the current user's hidden list
+func (h *UserHandler) HideUser(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User ID not found in context",
+			"code":    "USER_ID_NOT_FOUND",
+		})
+		return
+	}
+
+	userUUID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid user ID format",
+			"code":    "INVALID_USER_ID",
+		})
+		return
+	}
+
+	var req struct {
+		UserID string `json:"user_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid request data",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	userToHideUUID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid user ID to hide",
+			"code":    "INVALID_USER_ID_TO_HIDE",
+		})
+		return
+	}
+
+	// Prevent users from hiding themselves
+	if userUUID == userToHideUUID {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Cannot hide yourself",
+			"code":    "CANNOT_HIDE_SELF",
+		})
+		return
+	}
+
+	err = h.userService.HideUser(userUUID, userToHideUUID)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "User hidden successfully",
+	})
+}
+
+// UnhideUser removes a user from the current user's hidden list
+func (h *UserHandler) UnhideUser(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "User ID not found in context",
+			"code":    "USER_ID_NOT_FOUND",
+		})
+		return
+	}
+
+	userUUID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid user ID format",
+			"code":    "INVALID_USER_ID",
+		})
+		return
+	}
+
+	userToUnhideParam := c.Param("userId")
+	userToUnhideUUID, err := uuid.Parse(userToUnhideParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "VALIDATION_ERROR",
+			"message": "Invalid user ID to unhide",
+			"code":    "INVALID_USER_ID_TO_UNHIDE",
+		})
+		return
+	}
+
+	err = h.userService.UnhideUser(userUUID, userToUnhideUUID)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "User unhidden successfully",
+	})
+}
 
 // getPaginationParams extracts pagination parameters from request
 func (h *UserHandler) getPaginationParams(c *gin.Context) (int, int) {

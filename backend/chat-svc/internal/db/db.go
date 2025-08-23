@@ -9,13 +9,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/link-app/chat-svc/internal/config"
-	"github.com/link-app/shared-libs/database/monitoring"
 )
 
-// Database wraps the pgx connection pool with monitoring
+// Database wraps the pgx connection pool
 type Database struct {
-	*monitoring.MonitoredPool
-	sentryWrapper *monitoring.PgxSentryWrapper
+	Pool *pgxpool.Pool
 }
 
 // Connect establishes a connection pool to the database
@@ -46,32 +44,14 @@ func Connect(cfg config.DatabaseConfig) (*Database, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Set up database monitoring
-	monitoringConfig := monitoring.DefaultConfig("chat-svc")
-	// Real-time messaging requires fast queries
-	monitoringConfig.SlowQueryThreshold = 50 * time.Millisecond
-
-	// Create pgx instrumentation
-	pgxInstrumentation := monitoring.NewPgxInstrumentation(monitoringConfig)
-	monitoredPool := pgxInstrumentation.WrapPool(pool)
-
-	// Set up Sentry integration for pgx
-	var sentryWrapper *monitoring.PgxSentryWrapper
-	// Check environment through environment variable since cfg doesn't have Environment field
-	env := getEnv("ENVIRONMENT", "development")
-	if env != "test" && getEnv("SENTRY_DSN", "") != "" {
-		sentryWrapper = monitoring.NewPgxSentryWrapper("chat-svc", monitoringConfig.SlowQueryThreshold)
-	}
-
 	return &Database{
-		MonitoredPool: monitoredPool,
-		sentryWrapper: sentryWrapper,
+		Pool: pool,
 	}, nil
 }
 
 // Close closes the database connection pool
 func (d *Database) Close() {
-	d.MonitoredPool.Close()
+	d.Pool.Close()
 }
 
 // Health checks if the database is healthy
@@ -79,70 +59,26 @@ func (d *Database) Health() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := d.MonitoredPool.Ping(ctx); err != nil {
+	if err := d.Pool.Ping(ctx); err != nil {
 		return fmt.Errorf("database health check failed: %w", err)
 	}
 
 	return nil
 }
 
-// Query wraps the monitored pool's Query method with additional Sentry reporting
+// Query wraps the pool's Query method
 func (d *Database) Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error) {
-	if d.sentryWrapper != nil {
-		d.sentryWrapper.AddQueryBreadcrumb(sql, args)
-	}
-	
-	start := time.Now()
-	rows, err := d.MonitoredPool.Query(ctx, sql, args...)
-	duration := time.Since(start)
-	
-	if d.sentryWrapper != nil {
-		if err != nil {
-			d.sentryWrapper.ReportQueryError(ctx, sql, err, duration)
-		} else {
-			d.sentryWrapper.ReportSlowQuery(ctx, sql, duration)
-		}
-	}
-	
-	return rows, err
+	return d.Pool.Query(ctx, sql, args...)
 }
 
-// QueryRow wraps the monitored pool's QueryRow method with additional Sentry reporting
+// QueryRow wraps the pool's QueryRow method
 func (d *Database) QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row {
-	if d.sentryWrapper != nil {
-		d.sentryWrapper.AddQueryBreadcrumb(sql, args)
-	}
-	
-	start := time.Now()
-	row := d.MonitoredPool.QueryRow(ctx, sql, args...)
-	duration := time.Since(start)
-	
-	if d.sentryWrapper != nil {
-		d.sentryWrapper.ReportSlowQuery(ctx, sql, duration)
-	}
-	
-	return row
+	return d.Pool.QueryRow(ctx, sql, args...)
 }
 
-// Exec wraps the monitored pool's Exec method with additional Sentry reporting
+// Exec wraps the pool's Exec method
 func (d *Database) Exec(ctx context.Context, sql string, args ...interface{}) (interface{}, error) {
-	if d.sentryWrapper != nil {
-		d.sentryWrapper.AddQueryBreadcrumb(sql, args)
-	}
-	
-	start := time.Now()
-	tag, err := d.MonitoredPool.Exec(ctx, sql, args...)
-	duration := time.Since(start)
-	
-	if d.sentryWrapper != nil {
-		if err != nil {
-			d.sentryWrapper.ReportQueryError(ctx, sql, err, duration)
-		} else {
-			d.sentryWrapper.ReportSlowQuery(ctx, sql, duration)
-		}
-	}
-	
-	return tag, err
+	return d.Pool.Exec(ctx, sql, args...)
 }
 
 // getEnv gets an environment variable with a default value

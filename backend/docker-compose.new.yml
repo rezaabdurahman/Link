@@ -1,0 +1,81 @@
+# Link Application - Root Orchestration Docker Compose
+# This file orchestrates shared infrastructure and all microservices
+version: '3.8'
+
+services:
+  # =================================================================
+  # SHARED INFRASTRUCTURE
+  # =================================================================
+  
+  # PostgreSQL Database (Shared)
+  postgres:
+    image: postgres:13
+    container_name: link_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-linkuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-linkpass_dev_only}
+      POSTGRES_DB: ${DB_NAME:-linkdb}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-linkuser} -d ${DB_NAME:-linkdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - link-network
+
+  # LocalStack for local AWS services (KMS)
+  localstack:
+    image: localstack/localstack
+    container_name: link_localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=kms
+      - DEBUG=1
+      - DEFAULT_REGION=us-west-2
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - link-network
+
+  # =================================================================
+  # MICROSERVICES (Include service-specific docker-compose files)
+  # =================================================================
+
+# Include service-specific compose files
+include:
+  # Core services
+  - user-svc/docker-compose.yml
+  - api-gateway/docker-compose.yml
+  - chat-svc/docker-compose.yml
+  - discovery-svc/docker-compose.yml
+  - ai-svc/docker-compose.yml
+  - search-svc/docker-compose.yml
+
+# =================================================================
+# SHARED VOLUMES AND NETWORKS
+# =================================================================
+
+volumes:
+  postgres_data:
+  localstack_data:
+
+networks:
+  link-network:
+    driver: bridge
+    name: link-network

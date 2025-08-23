@@ -1,0 +1,17 @@
+go 1.23.8
+
+use (
+    ./user-svc
+    ./discovery-svc
+    ./search-svc
+    ./chat-svc
+    ./ai-svc
+    ./api-gateway
+    ./shared-libs
+    ./proto/common
+    ./proto/user
+    ./proto/discovery
+    ./proto/search
+    ./proto/chat
+    ./proto/ai
+)

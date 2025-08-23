@@ -35,36 +35,21 @@ afterAll(() => {
 });
 
 // MSW setup for API mocking
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { server } = require('./mocks/server');
-  
-  // MSW test setup
-  beforeAll(() => {
-    // Start the server before all tests
-    server.listen({ onUnhandledRequest: 'warn' });
-  });
+import { server } from './mocks/server';
 
-  afterEach(() => {
-    // Reset any request handlers that we may add during the tests,
-    // so they don't affect other tests
-    server.resetHandlers();
-  });
+// MSW test setup
+beforeAll(() => {
+  // Start the server before all tests
+  server.listen({ onUnhandledRequest: 'warn' });
+});
 
-  afterAll(() => {
-    // Stop the server after all tests
-    server.close();
-  });
-} catch (error) {
-  console.warn('MSW setup skipped due to module resolution issues:', error instanceof Error ? error.message : String(error));
-  
-  // Provide mock implementations for tests that depend on MSW
-  const mockServer = {
-    listen: jest.fn(),
-    close: jest.fn(), 
-    resetHandlers: jest.fn(),
-    use: jest.fn(),
-  };
-  
-  (global as unknown as { mockServer: typeof mockServer }).mockServer = mockServer;
-}
+afterEach(() => {
+  // Reset any request handlers that we may add during the tests,
+  // so they don't affect other tests
+  server.resetHandlers();
+});
+
+afterAll(() => {
+  // Stop the server after all tests
+  server.close();
+});

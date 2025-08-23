@@ -1,0 +1,330 @@
+groups:
+  - name: slo_monitoring
+    interval: 30s
+    rules:
+      # ====================================
+      # Service Level Indicators (SLIs)
+      # ====================================
+      
+      # API Availability SLI - Percentage of successful requests
+      - record: sli:api_availability:rate5m
+        expr: |
+          (
+            sum(rate(api_gateway_http_requests_total{status_code!~"5.."}[5m])) by (service)
+            /
+            sum(rate(api_gateway_http_requests_total[5m])) by (service)
+          ) * 100
+
+      # API Latency SLI - 95th percentile response time
+      - record: sli:api_latency:p95_5m
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(api_gateway_http_request_duration_seconds_bucket[5m])) by (le, service)
+          ) * 1000
+
+      # API Latency SLI - 99th percentile response time  
+      - record: sli:api_latency:p99_5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(api_gateway_http_request_duration_seconds_bucket[5m])) by (le, service)
+          ) * 1000
+
+      # Service Availability per individual service
+      - record: sli:service_availability:rate5m
+        expr: |
+          (
+            (
+              sum(rate(user_svc_http_requests_total{status_code!~"5.."}[5m])) or 
+              sum(rate(chat_svc_http_requests_total{status_code!~"5.."}[5m])) or
+              sum(rate(discovery_svc_http_requests_total{status_code!~"5.."}[5m])) or
+              sum(rate(search_svc_http_requests_total{status_code!~"5.."}[5m])) or
+              sum(rate(ai_svc_http_requests_total{status_code!~"5.."}[5m]))
+            )
+            /
+            (
+              sum(rate(user_svc_http_requests_total[5m])) or
+              sum(rate(chat_svc_http_requests_total[5m])) or  
+              sum(rate(discovery_svc_http_requests_total[5m])) or
+              sum(rate(search_svc_http_requests_total[5m])) or
+              sum(rate(ai_svc_http_requests_total[5m]))
+            )
+          ) * 100
+
+      # Database Query Success Rate SLI
+      - record: sli:database_success:rate5m
+        expr: |
+          (
+            sum(rate(database_queries_total{result="success"}[5m]))
+            /
+            sum(rate(database_queries_total[5m]))
+          ) * 100
+
+      # Chat Message Delivery Success Rate SLI
+      - record: sli:chat_delivery:rate5m
+        expr: |
+          (
+            sum(rate(chat_svc_messages_total{operation="send", result="success"}[5m]))
+            /
+            sum(rate(chat_svc_messages_total{operation="send"}[5m]))
+          ) * 100
+
+      # Search Query Success Rate SLI
+      - record: sli:search_success:rate5m
+        expr: |
+          (
+            sum(rate(search_svc_queries_total{result="success"}[5m]))
+            /
+            sum(rate(search_svc_queries_total[5m]))
+          ) * 100
+
+      # AI Service Success Rate SLI
+      - record: sli:ai_success:rate5m
+        expr: |
+          (
+            sum(rate(ai_svc_ai_requests_total{result="success"}[5m]))
+            /
+            sum(rate(ai_svc_ai_requests_total[5m]))
+          ) * 100
+
+      # ====================================
+      # Error Budget Calculations
+      # ====================================
+      
+      # API Availability Error Budget (targeting 99.9% uptime)
+      # Error budget = (1 - SLO) = 0.1%
+      - record: slo:api_availability:error_budget_remaining
+        expr: |
+          (
+            (99.9 - sli:api_availability:rate5m) / 0.1
+          ) * 100
+      
+      # Service Latency Error Budget (targeting <200ms p95)
+      - record: slo:api_latency:error_budget_remaining
+        expr: |
+          clamp_max(
+            ((200 - sli:api_latency:p95_5m) / 200) * 100,
+            100
+          )
+
+  - name: slo_alerts
+    interval: 30s
+    rules:
+      # ====================================
+      # Service Level Objective (SLO) Alerts
+      # ====================================
+      
+      # Critical: API Availability SLO Breach (below 99.9%)
+      - alert: SLOAvailabilityCritical
+        expr: sli:api_availability:rate5m < 99.9
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+          error_budget: exhausted
+        annotations:
+          summary: "API availability SLO breach - below 99.9%"
+          description: |
+            API availability is {{ $value | humanizePercentage }} which is below the 99.9% SLO.
+            Error budget is likely exhausted.
+            
+            Current availability: {{ $value | humanizePercentage }}
+            SLO target: 99.9%
+            Time window: 5 minutes
+          runbook_url: "https://runbooks.yourdomain.com/slo/availability-breach"
+          dashboard_url: "https://grafana.yourdomain.com/d/slo-overview"
+
+      # Warning: API Availability approaching SLO (below 99.95%)
+      - alert: SLOAvailabilityWarning
+        expr: sli:api_availability:rate5m < 99.95 and sli:api_availability:rate5m >= 99.9
+        for: 5m
+        labels:
+          severity: warning
+          slo: availability
+          error_budget: low
+        annotations:
+          summary: "API availability approaching SLO limit"
+          description: |
+            API availability is {{ $value | humanizePercentage }}, approaching the 99.9% SLO.
+            Error budget remaining: {{ with query "slo:api_availability:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+          runbook_url: "https://runbooks.yourdomain.com/slo/availability-warning"
+
+      # Critical: API Latency SLO Breach (p95 > 200ms)
+      - alert: SLOLatencyCritical
+        expr: sli:api_latency:p95_5m > 200
+        for: 2m
+        labels:
+          severity: critical
+          slo: latency
+          error_budget: exhausted
+        annotations:
+          summary: "API latency SLO breach - p95 above 200ms"
+          description: |
+            API 95th percentile latency is {{ $value | humanizeDuration }} which exceeds the 200ms SLO.
+            
+            Current p95 latency: {{ $value | humanizeDuration }}
+            SLO target: 200ms
+            Error budget remaining: {{ with query "slo:api_latency:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+          runbook_url: "https://runbooks.yourdomain.com/slo/latency-breach"
+
+      # Warning: API Latency approaching SLO (p95 > 150ms)  
+      - alert: SLOLatencyWarning
+        expr: sli:api_latency:p95_5m > 150 and sli:api_latency:p95_5m <= 200
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+          error_budget: low
+        annotations:
+          summary: "API latency approaching SLO limit"
+          description: |
+            API 95th percentile latency is {{ $value | humanizeDuration }}, approaching the 200ms SLO.
+            Error budget remaining: {{ with query "slo:api_latency:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+
+      # Service-specific SLO alerts
+      - alert: SLOServiceAvailabilityBreach
+        expr: sli:service_availability:rate5m < 99.5
+        for: 3m
+        labels:
+          severity: critical
+          slo: service_availability
+        annotations:
+          summary: "Service availability SLO breach"
+          description: |
+            Service availability is {{ $value | humanizePercentage }} which is below the 99.5% SLO.
+            This indicates issues with individual service health.
+
+      # Database SLO alerts
+      - alert: SLODatabaseSuccessBreach
+        expr: sli:database_success:rate5m < 99.8
+        for: 2m
+        labels:
+          severity: critical
+          slo: database
+        annotations:
+          summary: "Database success rate SLO breach"
+          description: |
+            Database query success rate is {{ $value | humanizePercentage }} which is below the 99.8% SLO.
+            This indicates database connectivity or performance issues.
+
+      # Chat delivery SLO alerts
+      - alert: SLOChatDeliveryBreach
+        expr: sli:chat_delivery:rate5m < 99.0
+        for: 3m
+        labels:
+          severity: warning
+          slo: chat_delivery
+        annotations:
+          summary: "Chat message delivery SLO breach"
+          description: |
+            Chat message delivery success rate is {{ $value | humanizePercentage }} which is below the 99.0% SLO.
+            Users may be experiencing issues sending messages.
+
+      # Search SLO alerts
+      - alert: SLOSearchSuccessBreach
+        expr: sli:search_success:rate5m < 98.0
+        for: 5m
+        labels:
+          severity: warning
+          slo: search
+        annotations:
+          summary: "Search success rate SLO breach"
+          description: |
+            Search query success rate is {{ $value | humanizePercentage }} which is below the 98.0% SLO.
+            Users may be experiencing issues with search functionality.
+
+      # AI Service SLO alerts
+      - alert: SLOAIServiceBreach
+        expr: sli:ai_success:rate5m < 95.0
+        for: 5m
+        labels:
+          severity: warning
+          slo: ai_service
+        annotations:
+          summary: "AI service success rate SLO breach"
+          description: |
+            AI service success rate is {{ $value | humanizePercentage }} which is below the 95.0% SLO.
+            AI features may be experiencing issues.
+
+  - name: error_budget_monitoring
+    interval: 1m
+    rules:
+      # ====================================
+      # Error Budget Burn Rate Alerts
+      # ====================================
+      
+      # Fast burn rate (exhausting budget in 1 hour)
+      - alert: ErrorBudgetFastBurn
+        expr: |
+          (
+            slo:api_availability:error_budget_remaining < 90 and
+            rate(sli:api_availability:rate5m[1h]) < -0.001
+          ) or (
+            slo:api_latency:error_budget_remaining < 90 and
+            rate(sli:api_latency:p95_5m[1h]) > 5
+          )
+        for: 2m
+        labels:
+          severity: critical
+          alert_type: error_budget_burn
+          burn_rate: fast
+        annotations:
+          summary: "Error budget burning at fast rate"
+          description: |
+            Error budget is being consumed rapidly. At this rate, the SLO will be breached soon.
+            
+            Availability error budget remaining: {{ with query "slo:api_availability:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+            Latency error budget remaining: {{ with query "slo:api_latency:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+            
+            Immediate investigation required to prevent SLO breach.
+
+      # Moderate burn rate (exhausting budget in 6 hours)
+      - alert: ErrorBudgetModerateBurn
+        expr: |
+          (
+            slo:api_availability:error_budget_remaining < 50 and
+            slo:api_availability:error_budget_remaining > 10 and
+            rate(sli:api_availability:rate5m[6h]) < -0.0005
+          ) or (
+            slo:api_latency:error_budget_remaining < 50 and
+            slo:api_latency:error_budget_remaining > 10 and
+            rate(sli:api_latency:p95_5m[6h]) > 2
+          )
+        for: 10m
+        labels:
+          severity: warning
+          alert_type: error_budget_burn
+          burn_rate: moderate
+        annotations:
+          summary: "Error budget burning at moderate rate"
+          description: |
+            Error budget is being consumed at a concerning rate.
+            
+            Availability error budget remaining: {{ with query "slo:api_availability:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+            Latency error budget remaining: {{ with query "slo:api_latency:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+            
+            Consider investigating and implementing mitigations.
+
+      # Slow burn rate (exhausting budget in 3 days)
+      - alert: ErrorBudgetSlowBurn
+        expr: |
+          (
+            slo:api_availability:error_budget_remaining < 25 and
+            slo:api_availability:error_budget_remaining > 5
+          ) or (
+            slo:api_latency:error_budget_remaining < 25 and
+            slo:api_latency:error_budget_remaining > 5
+          )
+        for: 1h
+        labels:
+          severity: info
+          alert_type: error_budget_burn
+          burn_rate: slow
+        annotations:
+          summary: "Error budget slowly diminishing"
+          description: |
+            Error budget is consistently being consumed.
+            
+            Availability error budget remaining: {{ with query "slo:api_availability:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+            Latency error budget remaining: {{ with query "slo:api_latency:error_budget_remaining" }}{{ . | first | value | humanizePercentage }}{{ end }}
+            
+            Monitor trends and plan improvements for next cycle.

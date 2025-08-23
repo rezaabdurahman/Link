@@ -6,6 +6,7 @@ import {
   // getGridPositions,
   logGridChunks 
 } from '../services/clickLikelihoodClient';
+import { getDisplayName } from '../utils/nameHelpers';
 
 interface SmartGridProps {
   chunks: GridChunk[];
@@ -99,7 +100,7 @@ const GridUserCard: React.FC<GridUserCardProps> = ({
             {!isVideoLoaded && (
               <img
                 src={mediaSource}
-                alt={user.name}
+                alt={getDisplayName(user)}
                 className="absolute inset-0 w-full h-full object-cover"
               />
             )}
@@ -107,7 +108,7 @@ const GridUserCard: React.FC<GridUserCardProps> = ({
         ) : (
           <img
             src={mediaSource}
-            alt={user.name}
+            alt={getDisplayName(user)}
             className="w-full h-full object-cover"
           />
         )}

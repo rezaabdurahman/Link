@@ -1,0 +1,87 @@
+# =================================================================
+# Local Development Monitoring Stack
+# =================================================================
+# Usage: docker-compose -f docker-compose.monitoring.yml -f docker-compose.local.yml up -d
+# 
+# Local overrides for development:
+# - All ports exposed for easy access
+# - Reduced resource limits
+# - Shorter retention periods
+# - Less strict security
+# =================================================================
+
+version: '3.8'
+
+services:
+  prometheus:
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--storage.tsdb.retention.time=7d' # Shorter retention for local
+    environment:
+      - PROMETHEUS_RETENTION=7d
+
+  grafana:
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=true # Allow signup in local
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_AUTH_ANONYMOUS_ENABLED=true # Allow anonymous access in local
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+
+  loki:
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    environment:
+      - LOKI_RETENTION=7d
+
+  promtail:
+    ports:
+      - "9080:9080"
+
+  jaeger:
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger collector HTTP
+      - "4317:4317"     # OTLP receiver gRPC
+      - "4318:4318"     # OTLP receiver HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug # More verbose logging in local
+
+  alertmanager:
+    ports:
+      - "9093:9093"
+
+  node-exporter:
+    ports:
+      - "9100:9100"
+
+  cadvisor:
+    ports:
+      - "8080:8080"
+
+  blackbox-exporter:
+    ports:
+      - "9115:9115"
+
+  redis-exporter:
+    ports:
+      - "9121:9121"
+
+  postgres-exporter:
+    ports:
+      - "9187:9187"
+
+# Local development doesn't need resource limits
+# All services will use default Docker resource allocation

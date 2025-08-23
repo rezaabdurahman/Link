@@ -3,19 +3,27 @@ import React, { useState } from 'react';
 interface AddCuesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (cue: string) => void;
+  onSubmit: (cue: string) => Promise<void>;
 }
 
 const AddCuesModal: React.FC<AddCuesModalProps> = ({ isOpen, onClose, onSubmit }): JSX.Element | null => {
   const [cueText, setCueText] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (): void => {
-    if (cueText.trim()) {
-      onSubmit(cueText.trim());
-      setCueText('');
-      onClose();
+  const handleSubmit = async (): Promise<void> => {
+    if (cueText.trim() && !isSubmitting) {
+      setIsSubmitting(true);
+      try {
+        await onSubmit(cueText.trim());
+        setCueText('');
+      } catch (error) {
+        // Error handling is done in the parent component
+        console.error('Error in AddCuesModal:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -72,10 +80,10 @@ const AddCuesModal: React.FC<AddCuesModalProps> = ({ isOpen, onClose, onSubmit }
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!cueText.trim()}
+            disabled={!cueText.trim() || isSubmitting}
             className="flex-1 px-4 py-2.5 bg-aqua text-white font-medium rounded-xl hover:bg-aqua-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            Submit
+            {isSubmitting ? 'Submitting...' : 'Submit'}
           </button>
         </div>
       </div>

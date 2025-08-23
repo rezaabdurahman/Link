@@ -87,7 +87,7 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_NAME=${DB_NAME:-linkdb}
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+      - JWT_SECRET=${JWT_SECRET}
       - ENVIRONMENT=${ENVIRONMENT:-development}
     depends_on:
       postgres:

@@ -103,7 +103,7 @@ func main() {
 	// Basic middleware
 	// sentry.ChiSentryMiddleware removed - not available in stub
 	// tracing.ChiMiddleware removed - not available in stub
-	// metricsmw.PrometheusMiddleware removed - not available in stub
+	r.Use(authmw.PrometheusMiddleware(logger)) // Enable Prometheus metrics middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)

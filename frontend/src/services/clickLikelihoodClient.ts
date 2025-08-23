@@ -1,4 +1,5 @@
 import { User } from '../types';
+import { getFullName } from '../utils/nameHelpers';
 
 /**
  * Mock click likelihood calculation client
@@ -162,9 +163,9 @@ export const logGridChunks = (chunks: GridChunk[]): void => {
   console.log('🎯 Grid Chunks Analysis:');
   chunks.forEach((chunk, index) => {
     console.log(`\nChunk ${index + 1} (${chunk.is2x2TopLeft ? 'Top-Left' : 'Top-Right'} 2x2):`);
-    console.log(`  🌟 Prominent (${chunk.prominentUser.clickLikelihood.toFixed(2)}): ${chunk.prominentUser.name}`);
+    console.log(`  🌟 Prominent (${chunk.prominentUser.clickLikelihood.toFixed(2)}): ${getFullName(chunk.prominentUser)}`);
     chunk.regularUsers.forEach((user, i) => {
-      console.log(`  • Regular ${i + 1} (${user.clickLikelihood.toFixed(2)}): ${user.name}`);
+      console.log(`  • Regular ${i + 1} (${user.clickLikelihood.toFixed(2)}): ${getFullName(user)}`);
     });
   });
 };

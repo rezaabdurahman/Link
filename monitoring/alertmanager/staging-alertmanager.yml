@@ -1,0 +1,113 @@
+global:
+  smtp_smarthost: '${SMTP_HOST}:587'
+  smtp_from: 'alerts-staging@yourdomain.com'
+  smtp_auth_username: '${SMTP_USER}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 12h
+  receiver: 'staging-default'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'staging-critical'
+      repeat_interval: 5m
+    
+    - match:
+        severity: warning
+      receiver: 'staging-warning'
+      repeat_interval: 2h
+
+    - match:
+        alertname: ServiceDown
+      receiver: 'staging-service-down'
+      repeat_interval: 1m
+
+receivers:
+  - name: 'staging-default'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#link-staging-alerts'
+        title: '[STAGING] Link App Alert'
+        text: |
+          *Environment*: Staging
+          *Alert*: {{ .GroupLabels.alertname }}
+          *Summary*: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description*: {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+
+  - name: 'staging-critical'
+    email_configs:
+      - to: 'dev-team@yourdomain.com'
+        subject: '[CRITICAL - STAGING] {{ .GroupLabels.alertname }}'
+        body: |
+          Environment: Staging
+          Alert: {{ .GroupLabels.alertname }}
+          
+          {{ range .Alerts }}
+          Summary: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+          
+          Grafana: https://grafana-staging.yourdomain.com
+          Prometheus: https://prometheus-staging.yourdomain.com
+    
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#link-critical-alerts'
+        title: '[🚨 CRITICAL - STAGING] {{ .GroupLabels.alertname }}'
+        text: |
+          *Environment*: Staging
+          *Alert*: {{ .GroupLabels.alertname }}
+          *Summary*: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description*: {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          
+          <https://grafana-staging.yourdomain.com|Grafana> | <https://prometheus-staging.yourdomain.com|Prometheus>
+        send_resolved: true
+
+  - name: 'staging-warning'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#link-staging-alerts'
+        title: '[⚠️ WARNING - STAGING] {{ .GroupLabels.alertname }}'
+        text: |
+          *Environment*: Staging
+          *Alert*: {{ .GroupLabels.alertname }}
+          *Summary*: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description*: {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+
+  - name: 'staging-service-down'
+    email_configs:
+      - to: 'dev-team@yourdomain.com'
+        subject: '[SERVICE DOWN - STAGING] {{ .GroupLabels.alertname }}'
+        body: |
+          URGENT: Service is down in staging environment
+          
+          {{ range .Alerts }}
+          Service: {{ .Labels.job }}
+          Instance: {{ .Labels.instance }}
+          Summary: {{ .Annotations.summary }}
+          {{ end }}
+
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#link-critical-alerts'
+        title: '[🔴 SERVICE DOWN - STAGING] {{ .GroupLabels.alertname }}'
+        text: |
+          *Environment*: Staging
+          *Service*: {{ .GroupLabels.job }}
+          {{ range .Alerts }}*Instance*: {{ .Labels.instance }}{{ end }}
+          *Alert*: {{ .GroupLabels.alertname }}
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']

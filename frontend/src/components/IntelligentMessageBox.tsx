@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, User } from 'lucide-react';
 import { nearbyUsers, chats } from '../data/mockData';
 import { User as UserType } from '../types';
+import { getFullName, getDisplayName, getInitials } from '../utils/nameHelpers';
 
 interface IntelligentMessageBoxProps {
   onSendMessage: (message: string, recipientId?: string) => void;
@@ -33,7 +34,7 @@ const IntelligentMessageBox: React.FC<IntelligentMessageBoxProps> = ({ onSendMes
       let score = 0;
       
       // Check for name match
-      const nameWords = user.name.toLowerCase().split(' ');
+      const nameWords = getFullName(user).toLowerCase().split(' ');
       nameWords.forEach(nameWord => {
         if (words.some(word => word.includes(nameWord) || nameWord.includes(word))) {
           score += 10;
@@ -135,15 +136,15 @@ const IntelligentMessageBox: React.FC<IntelligentMessageBoxProps> = ({ onSendMes
                 {suggestedRecipient.profilePicture ? (
                   <img 
                     src={suggestedRecipient.profilePicture} 
-                    alt={suggestedRecipient.name}
+                    alt={getDisplayName(suggestedRecipient)}
                     className="w-4 h-4 rounded-full object-cover"
                   />
                 ) : (
                   <div className="w-4 h-4 rounded-full bg-gray-300 flex items-center justify-center text-[8px] text-gray-600 font-medium">
-                    {suggestedRecipient.name.charAt(0)}
+                    {getInitials(suggestedRecipient)}
                   </div>
                 )}
-                <span className="font-semibold">{suggestedRecipient.name}</span>
+                <span className="font-semibold">{getDisplayName(suggestedRecipient)}</span>
               </div>
             </div>
           </div>
