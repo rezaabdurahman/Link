@@ -1,0 +1,287 @@
+name: 'Health Check'
+description: 'Comprehensive health checking for infrastructure and services'
+author: 'Link App CI/CD'
+
+inputs:
+  environment:
+    description: 'Environment to check (development, staging, production)'
+    required: true
+  check_type:
+    description: 'Type of health check (infrastructure, database, services, api, all)'
+    required: false
+    default: 'all'
+  timeout_seconds:
+    description: 'Timeout for each check in seconds'
+    required: false
+    default: '30'
+  retry_attempts:
+    description: 'Number of retry attempts for failed checks'
+    required: false
+    default: '3'
+  retry_delay:
+    description: 'Delay between retries in seconds'
+    required: false
+    default: '10'
+
+outputs:
+  status:
+    description: 'Overall health check status (success, failure, warning)'
+    value: ${{ steps.health-check.outputs.status }}
+  infrastructure_status:
+    description: 'Infrastructure health status'
+    value: ${{ steps.health-check.outputs.infrastructure_status }}
+  database_status:
+    description: 'Database health status'
+    value: ${{ steps.health-check.outputs.database_status }}
+  services_status:
+    description: 'Services health status'
+    value: ${{ steps.health-check.outputs.services_status }}
+  api_status:
+    description: 'API health status'
+    value: ${{ steps.health-check.outputs.api_status }}
+  details:
+    description: 'Detailed health check results in JSON format'
+    value: ${{ steps.health-check.outputs.details }}
+
+runs:
+  using: 'composite'
+  steps:
+  - name: Install health check dependencies
+    shell: bash
+    run: |
+      # Install required tools
+      sudo apt-get update -qq
+      sudo apt-get install -y curl jq postgresql-client redis-tools
+      
+      # Install kubectl if not present
+      if ! command -v kubectl &> /dev/null; then
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+      fi
+
+  - name: Run comprehensive health check
+    id: health-check
+    shell: bash
+    run: |
+      echo "🏥 Health Check Starting..."
+      echo "=========================="
+      echo "Environment: ${{ inputs.environment }}"
+      echo "Check Type: ${{ inputs.check_type }}"
+      echo "Timeout: ${{ inputs.timeout_seconds }}s"
+      echo ""
+      
+      # Initialize results
+      overall_status="success"
+      infrastructure_status="not_checked"
+      database_status="not_checked"
+      services_status="not_checked"
+      api_status="not_checked"
+      
+      # Health check results array
+      results=()
+      
+      # Helper function for retries
+      retry_command() {
+        local cmd="$1"
+        local name="$2"
+        local attempts=${{ inputs.retry_attempts }}
+        local delay=${{ inputs.retry_delay }}
+        
+        for i in $(seq 1 $attempts); do
+          echo "🔍 $name (attempt $i/$attempts)..."
+          if eval "$cmd"; then
+            echo "✅ $name: OK"
+            return 0
+          else
+            if [ $i -lt $attempts ]; then
+              echo "⏳ $name: Failed, retrying in ${delay}s..."
+              sleep $delay
+            else
+              echo "❌ $name: Failed after $attempts attempts"
+              return 1
+            fi
+          fi
+        done
+      }
+      
+      # 1. Infrastructure Health Check
+      if [[ "${{ inputs.check_type }}" == "all" || "${{ inputs.check_type }}" == "infrastructure" ]]; then
+        echo "🏗️ Checking Infrastructure Health..."
+        infrastructure_status="success"
+        
+        # Check Kubernetes cluster (if applicable)
+        if [[ "${{ inputs.environment }}" != "development" ]]; then
+          if kubectl cluster-info --request-timeout=${{ inputs.timeout_seconds }}s >/dev/null 2>&1; then
+            echo "✅ Kubernetes cluster: OK"
+            results+=("{\"component\": \"kubernetes\", \"status\": \"ok\", \"message\": \"Cluster reachable\"}")
+            
+            # Check node status
+            if kubectl get nodes --no-headers | grep -q "Ready"; then
+              echo "✅ Kubernetes nodes: OK"
+              results+=("{\"component\": \"k8s-nodes\", \"status\": \"ok\", \"message\": \"Nodes ready\"}")
+            else
+              echo "⚠️ Kubernetes nodes: Some nodes not ready"
+              infrastructure_status="warning"
+              results+=("{\"component\": \"k8s-nodes\", \"status\": \"warning\", \"message\": \"Some nodes not ready\"}")
+            fi
+          else
+            echo "❌ Kubernetes cluster: Not reachable"
+            infrastructure_status="failure"
+            overall_status="failure"
+            results+=("{\"component\": \"kubernetes\", \"status\": \"error\", \"message\": \"Cluster not reachable\"}")
+          fi
+        fi
+      fi
+      
+      # 2. Database Health Check
+      if [[ "${{ inputs.check_type }}" == "all" || "${{ inputs.check_type }}" == "database" ]]; then
+        echo "🗄️ Checking Database Health..."
+        database_status="success"
+        
+        # Determine database connection details based on environment
+        case "${{ inputs.environment }}" in
+          "production")
+            db_host="${{ secrets.PROD_DB_HOST || 'localhost' }}"
+            db_port="${{ secrets.PROD_DB_PORT || '5432' }}"
+            db_name="${{ secrets.PROD_DB_NAME || 'linkdb' }}"
+            db_user="${{ secrets.PROD_DB_USER || 'link_user' }}"
+            ;;
+          "staging")
+            db_host="${{ secrets.STAGING_DB_HOST || 'localhost' }}"
+            db_port="${{ secrets.STAGING_DB_PORT || '5432' }}"
+            db_name="${{ secrets.STAGING_DB_NAME || 'linkdb' }}"
+            db_user="${{ secrets.STAGING_DB_USER || 'link_user' }}"
+            ;;
+          *)
+            db_host="localhost"
+            db_port="5432"
+            db_name="link_app_test"
+            db_user="link_user"
+            ;;
+        esac
+        
+        # Check PostgreSQL connectivity
+        if [[ "$db_host" != "localhost" ]]; then
+          pg_cmd="PGPASSWORD=\$POSTGRES_PASSWORD timeout ${{ inputs.timeout_seconds }} psql -h $db_host -p $db_port -U $db_user -d $db_name -c 'SELECT 1' >/dev/null 2>&1"
+          if retry_command "$pg_cmd" "PostgreSQL connection"; then
+            results+=("{\"component\": \"postgresql\", \"status\": \"ok\", \"message\": \"Connection successful\"}")
+          else
+            database_status="failure"
+            overall_status="failure"
+            results+=("{\"component\": \"postgresql\", \"status\": \"error\", \"message\": \"Connection failed\"}")
+          fi
+        else
+          echo "⚠️ Database: Skipping external DB check (localhost/development)"
+          results+=("{\"component\": \"postgresql\", \"status\": \"skipped\", \"message\": \"Development environment\"}")
+        fi
+        
+        # Check Redis connectivity (if available)
+        if [[ "${{ inputs.environment }}" != "development" ]]; then
+          redis_cmd="timeout ${{ inputs.timeout_seconds }} redis-cli -h redis.${{ inputs.environment }} ping | grep -q PONG"
+          if retry_command "$redis_cmd" "Redis connection"; then
+            results+=("{\"component\": \"redis\", \"status\": \"ok\", \"message\": \"Connection successful\"}")
+          else
+            echo "⚠️ Redis: Connection failed (non-critical)"
+            results+=("{\"component\": \"redis\", \"status\": \"warning\", \"message\": \"Connection failed\"}")
+          fi
+        fi
+      fi
+      
+      # 3. Services Health Check
+      if [[ "${{ inputs.check_type }}" == "all" || "${{ inputs.check_type }}" == "services" ]]; then
+        echo "🔧 Checking Services Health..."
+        services_status="success"
+        
+        if [[ "${{ inputs.environment }}" != "development" ]]; then
+          # Check Kubernetes services
+          services=("api-gateway" "user-svc" "chat-svc" "discovery-svc" "search-svc")
+          
+          for service in "${services[@]}"; do
+            # Check if service deployment is ready
+            if kubectl get deployment "$service" -n "${{ inputs.environment }}" --no-headers 2>/dev/null | grep -q "1/1"; then
+              echo "✅ Service $service: OK"
+              results+=("{\"component\": \"$service\", \"status\": \"ok\", \"message\": \"Deployment ready\"}")
+            else
+              echo "⚠️ Service $service: Not ready"
+              services_status="warning"
+              if [[ "$service" == "api-gateway" || "$service" == "user-svc" ]]; then
+                overall_status="failure"  # Critical services
+              fi
+              results+=("{\"component\": \"$service\", \"status\": \"warning\", \"message\": \"Deployment not ready\"}")
+            fi
+          done
+        else
+          echo "⚠️ Services: Skipping Kubernetes check (development)"
+          results+=("{\"component\": \"services\", \"status\": \"skipped\", \"message\": \"Development environment\"}")
+        fi
+      fi
+      
+      # 4. API Health Check
+      if [[ "${{ inputs.check_type }}" == "all" || "${{ inputs.check_type }}" == "api" ]]; then
+        echo "🌐 Checking API Health..."
+        api_status="success"
+        
+        # Determine API base URL
+        case "${{ inputs.environment }}" in
+          "production")
+            api_url="${{ vars.PROD_API_BASE_URL || 'https://api.link-app.com' }}"
+            ;;
+          "staging")
+            api_url="${{ vars.STAGING_API_BASE_URL || 'https://api-staging.link-app.com' }}"
+            ;;
+          *)
+            api_url="http://localhost:8080"
+            ;;
+        esac
+        
+        # Check API health endpoint
+        health_cmd="timeout ${{ inputs.timeout_seconds }} curl -f -s $api_url/health >/dev/null"
+        if retry_command "$health_cmd" "API health endpoint"; then
+          results+=("{\"component\": \"api-health\", \"status\": \"ok\", \"message\": \"Health endpoint responding\"}")
+          
+          # Check API version endpoint
+          version_cmd="timeout ${{ inputs.timeout_seconds }} curl -f -s $api_url/api/v1/version >/dev/null"
+          if retry_command "$version_cmd" "API version endpoint"; then
+            results+=("{\"component\": \"api-version\", \"status\": \"ok\", \"message\": \"Version endpoint responding\"}")
+          else
+            echo "⚠️ API version endpoint: Failed (non-critical)"
+            results+=("{\"component\": \"api-version\", \"status\": \"warning\", \"message\": \"Version endpoint failed\"}")
+          fi
+        else
+          api_status="failure"
+          overall_status="failure"
+          results+=("{\"component\": \"api-health\", \"status\": \"error\", \"message\": \"Health endpoint not responding\"}")
+        fi
+      fi
+      
+      # Generate detailed results JSON
+      results_json="[$(IFS=,; echo "${results[*]}")]"
+      
+      # Output summary
+      echo ""
+      echo "📊 Health Check Summary:"
+      echo "  Overall Status: $overall_status"
+      echo "  Infrastructure: $infrastructure_status"
+      echo "  Database: $database_status"
+      echo "  Services: $services_status"
+      echo "  API: $api_status"
+      echo ""
+      
+      # Set outputs
+      echo "status=$overall_status" >> $GITHUB_OUTPUT
+      echo "infrastructure_status=$infrastructure_status" >> $GITHUB_OUTPUT
+      echo "database_status=$database_status" >> $GITHUB_OUTPUT
+      echo "services_status=$services_status" >> $GITHUB_OUTPUT
+      echo "api_status=$api_status" >> $GITHUB_OUTPUT
+      echo "details=$results_json" >> $GITHUB_OUTPUT
+      
+      # Exit with error if overall status is failure
+      if [[ "$overall_status" == "failure" ]]; then
+        echo "❌ Health check failed"
+        exit 1
+      elif [[ "$overall_status" == "warning" ]]; then
+        echo "⚠️ Health check passed with warnings"
+      else
+        echo "✅ Health check passed"
+      fi

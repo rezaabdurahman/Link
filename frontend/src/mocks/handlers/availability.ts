@@ -38,7 +38,8 @@ mockAvailability.set('demo-user-3', {
 mockAvailability.set('user-jane', {
   id: generateId(),
   user_id: 'user-jane',
-  is_available: false,
+  is_available: true,
+  last_available_at: now(),
   created_at: now(),
   updated_at: now(),
 });
@@ -59,7 +60,8 @@ export const handlers = [
       availability = {
         id: generateId(),
         user_id: userId,
-        is_available: false,
+        is_available: true,
+        last_available_at: now(),
         created_at: now(),
         updated_at: now(),
       };

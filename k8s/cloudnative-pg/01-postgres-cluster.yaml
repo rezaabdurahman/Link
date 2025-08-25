@@ -1,0 +1,485 @@
+---
+# PostgreSQL High Availability Cluster with CloudNativePG
+# This creates a 3-node PostgreSQL cluster with automatic leader election and failover
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cluster
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: database
+  annotations:
+    linkerd.io/inject: enabled
+    config.linkerd.io/proxy-cpu-request: "100m"
+    config.linkerd.io/proxy-memory-request: "64Mi"
+spec:
+  # Cluster configuration
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      # Connection settings
+      max_connections: "200"
+      listen_addresses: "*"
+      
+      # Memory settings optimized for production
+      shared_buffers: "512MB"
+      effective_cache_size: "1536MB"
+      work_mem: "8MB"
+      maintenance_work_mem: "128MB"
+      
+      # WAL settings for high availability
+      wal_level: "replica"
+      max_wal_senders: "10"
+      max_replication_slots: "10"
+      wal_keep_size: "2GB"
+      wal_segment_size: "16MB"
+      
+      # Checkpoint settings for performance
+      checkpoint_timeout: "15min"
+      checkpoint_completion_target: "0.8"
+      max_wal_size: "4GB"
+      min_wal_size: "1GB"
+      
+      # Logging for monitoring and debugging
+      log_destination: "stderr"
+      log_line_prefix: "[%t] [%p] [%l] [%u@%d] "
+      log_statement: "ddl"
+      log_min_duration_statement: "1000"
+      log_connections: "on"
+      log_disconnections: "on"
+      log_lock_waits: "on"
+      log_temp_files: "0"
+      
+      # Performance settings for SSD
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      
+      # Security settings
+      password_encryption: "scram-sha-256"
+      ssl: "on"
+      ssl_ciphers: "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305"
+      ssl_prefer_server_ciphers: "on"
+      ssl_min_protocol_version: "TLSv1.2"
+      
+      # Replication settings
+      synchronous_commit: "on"
+      synchronous_standby_names: "FIRST 1 (*)"
+      hot_standby: "on"
+      hot_standby_feedback: "on"
+      
+      # Statistics and monitoring
+      shared_preload_libraries: "pg_stat_statements"
+      track_activities: "on"
+      track_counts: "on"
+      track_io_timing: "on"
+      track_functions: "all"
+      
+    # Shared libraries and extensions
+    shared_preload_libraries:
+      - pg_stat_statements
+    
+    # PostgreSQL Host-Based Authentication
+    pg_hba:
+      - local all all scram-sha-256
+      - host all all 127.0.0.1/32 scram-sha-256
+      - host all all ::1/128 scram-sha-256
+      - hostssl all all 0.0.0.0/0 scram-sha-256
+      - hostssl replication streaming_replica 0.0.0.0/0 scram-sha-256
+
+  # Bootstrap configuration
+  bootstrap:
+    initdb:
+      database: linkdb
+      owner: linkuser
+      secret:
+        name: postgres-cluster-credentials
+      dataChecksums: true
+      encoding: UTF8
+      localeCType: C
+      localeCollate: C
+      postInitTemplateSQL:
+        - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+        - ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
+        - CREATE DATABASE user_service_db OWNER linkuser;
+        - CREATE DATABASE chat_service_db OWNER linkuser;
+        - CREATE DATABASE discovery_service_db OWNER linkuser;
+        - CREATE DATABASE search_service_db OWNER linkuser;
+        - CREATE DATABASE ai_service_db OWNER linkuser;
+        
+        # Create service-specific users
+        - CREATE USER user_service_user WITH ENCRYPTED PASSWORD 'user_svc_pass_change_me';
+        - CREATE USER chat_service_user WITH ENCRYPTED PASSWORD 'chat_svc_pass_change_me';
+        - CREATE USER discovery_service_user WITH ENCRYPTED PASSWORD 'discovery_svc_pass_change_me';
+        - CREATE USER search_service_user WITH ENCRYPTED PASSWORD 'search_svc_pass_change_me';
+        - CREATE USER ai_service_user WITH ENCRYPTED PASSWORD 'ai_svc_pass_change_me';
+        
+        # Grant database permissions
+        - GRANT ALL PRIVILEGES ON DATABASE user_service_db TO user_service_user;
+        - GRANT ALL PRIVILEGES ON DATABASE chat_service_db TO chat_service_user;
+        - GRANT ALL PRIVILEGES ON DATABASE discovery_service_db TO discovery_service_user;
+        - GRANT ALL PRIVILEGES ON DATABASE search_service_db TO search_service_user;
+        - GRANT ALL PRIVILEGES ON DATABASE ai_service_db TO ai_service_user;
+        
+        # Create replication user
+        - CREATE USER streaming_replica WITH REPLICATION ENCRYPTED PASSWORD 'repl_pass_change_me';
+
+  # Storage configuration
+  storage:
+    size: 100Gi
+    storageClass: fast-ssd
+    resizeInUseVolumes: true
+  
+  # Backup configuration - S3 integration
+  backup:
+    # S3 backup target configuration
+    barmanObjectStore:
+      destinationPath: "s3://link-app-backups-production/postgresql-backups/postgres-cluster"
+      s3Credentials:
+        accessKeyId:
+          name: backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: backup-credentials
+          key: SECRET_ACCESS_KEY
+        region:
+          name: backup-credentials
+          key: AWS_REGION
+      wal:
+        # WAL archiving configuration
+        compression: gzip
+        encryption: "AES256"
+        maxParallel: 8
+        archiveAdditionalCommandArgs:
+        - "--storage-class=STANDARD_IA"
+      data:
+        # Base backup configuration  
+        compression: gzip
+        encryption: "AES256"
+        immediateCheckpoint: true
+        jobs: 2
+        additionalCommandArgs:
+        - "--storage-class=STANDARD_IA"
+      
+      # Backup tags for organization
+      tags:
+        environment: "production"
+        cluster: "postgres-cluster" 
+        application: "link-app"
+        backup-type: "continuous"
+        
+      # Backup retention policy
+      retentionPolicy: "30d"
+      
+    # Additional backup settings
+    target: "primary"  # Always backup from primary
+    method: "barmanObjectStore"  # Use Barman for S3 backups
+
+  # Monitoring configuration
+  monitoring:
+    enabled: true
+    podMonitorEnabled: true
+    customQueriesConfigMap:
+    - name: postgres-monitoring-queries
+      key: custom-queries.yaml
+  
+  # Resource requirements
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+
+  # Affinity rules to spread instances across nodes
+  affinity:
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: postgresql.cnpg.io/cluster
+            operator: In
+            values:
+            - postgres-cluster
+        topologyKey: kubernetes.io/hostname
+
+  # Node selection - prefer nodes with SSD storage
+  nodeSelector:
+    node.kubernetes.io/instance-type: m6i.xlarge
+
+  # Security context
+  securityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Pod security context
+  podSecurityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Pod template customization
+  podTemplate:
+    metadata:
+      labels:
+        app: postgres-cluster
+        component: database
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "100m"
+        config.linkerd.io/proxy-memory-request: "64Mi"
+    spec:
+      containers:
+      - name: postgres
+        env:
+        - name: POSTGRES_SSL_MODE
+          value: "require"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false  # PostgreSQL needs write access
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+          seccompProfile:
+            type: RuntimeDefault
+
+  # Failover configuration
+  failoverDelay: 30s
+  switchoverDelay: 15s
+  
+  # Smart shutdown configuration
+  smartShutdownTimeout: 60s
+  stopDelay: 10s
+
+---
+# PostgreSQL Cluster Credentials Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-cluster-credentials
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: credentials
+type: Opaque
+stringData:
+  # Main database credentials
+  username: linkuser
+  password: linkpass_change_in_production
+  database: linkdb
+  
+  # Replication credentials
+  replication-username: streaming_replica
+  replication-password: repl_pass_change_me
+  
+  # Service-specific credentials
+  user_service_password: user_svc_pass_change_me
+  chat_service_password: chat_svc_pass_change_me
+  discovery_service_password: discovery_svc_pass_change_me
+  search_service_password: search_svc_pass_change_me
+  ai_service_password: ai_svc_pass_change_me
+
+---
+# Service for Read-Write connections (Primary)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-cluster-rw
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: primary
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "false"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    postgresql.cnpg.io/cluster: postgres-cluster
+    postgresql.cnpg.io/instanceRole: primary
+
+---
+# Service for Read-Only connections (Replicas)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-cluster-ro
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: replica
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "false"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    postgresql.cnpg.io/cluster: postgres-cluster
+    postgresql.cnpg.io/instanceRole: replica
+
+---
+# Service for Any instance (Load balanced across all)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-cluster-r
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: any
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "false"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    postgresql.cnpg.io/cluster: postgres-cluster
+
+---
+# Pod Disruption Budget for High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-cluster-pdb
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+spec:
+  minAvailable: 2  # Always keep at least 2 instances running
+  selector:
+    matchLabels:
+      postgresql.cnpg.io/cluster: postgres-cluster
+
+---
+# Custom Monitoring Queries ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-monitoring-queries
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: monitoring
+data:
+  custom-queries.yaml: |
+    # Custom PostgreSQL monitoring queries for Prometheus
+    pg_database_size:
+      query: SELECT pg_database.datname, pg_database_size(pg_database.datname) as size FROM pg_database
+      metrics:
+        - datname:
+            usage: "LABEL"
+            description: "Name of the database"
+        - size:
+            usage: "GAUGE"
+            description: "Size of the database in bytes"
+            
+    pg_stat_statements:
+      query: |
+        SELECT 
+          query,
+          calls,
+          total_exec_time,
+          mean_exec_time,
+          rows
+        FROM pg_stat_statements 
+        WHERE calls > 100
+        ORDER BY total_exec_time DESC 
+        LIMIT 10
+      metrics:
+        - query:
+            usage: "LABEL"
+            description: "SQL Query"
+        - calls:
+            usage: "COUNTER"
+            description: "Number of times executed"
+        - total_exec_time:
+            usage: "COUNTER"
+            description: "Total time spent executing this statement"
+        - mean_exec_time:
+            usage: "GAUGE"
+            description: "Average execution time"
+        - rows:
+            usage: "COUNTER"
+            description: "Total number of rows retrieved or affected"
+            
+    pg_replication_lag:
+      query: |
+        SELECT 
+          client_addr,
+          application_name,
+          state,
+          pg_wal_lsn_diff(pg_current_wal_lsn(), flush_lsn) AS replication_lag_bytes
+        FROM pg_stat_replication
+      metrics:
+        - client_addr:
+            usage: "LABEL"
+            description: "Client IP address"
+        - application_name:
+            usage: "LABEL"
+            description: "Application name"
+        - state:
+            usage: "LABEL"
+            description: "Replication state"
+        - replication_lag_bytes:
+            usage: "GAUGE"
+            description: "Replication lag in bytes"
+            
+    pg_locks:
+      query: |
+        SELECT 
+          mode,
+          locktype,
+          granted,
+          COUNT(*) as count
+        FROM pg_locks
+        GROUP BY mode, locktype, granted
+      metrics:
+        - mode:
+            usage: "LABEL"
+            description: "Lock mode"
+        - locktype:
+            usage: "LABEL" 
+            description: "Type of lock"
+        - granted:
+            usage: "LABEL"
+            description: "Whether lock is granted"
+        - count:
+            usage: "GAUGE"
+            description: "Number of locks"
+
+---
+# ServiceAccount for PostgreSQL cluster
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-cluster
+  namespace: link-services
+  labels:
+    app: postgres-cluster

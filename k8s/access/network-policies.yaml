@@ -1,0 +1,526 @@
+---
+# Default deny-all network policy for link-services namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: security
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# Allow DNS resolution for all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: infrastructure
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS queries to kube-system
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # Allow to CoreDNS directly
+  - to:
+    - podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# Allow Linkerd proxy injection and communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-linkerd
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: service-mesh
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Linkerd control plane
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          linkerd.io/control-plane-ns: linkerd
+  # Allow from Linkerd proxy
+  - from:
+    - podSelector:
+        matchLabels:
+          linkerd.io/control-plane-component: proxy
+  egress:
+  # Allow to Linkerd control plane
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          linkerd.io/control-plane-ns: linkerd
+    ports:
+    - protocol: TCP
+      port: 8443
+    - protocol: TCP
+      port: 8086
+    - protocol: TCP
+      port: 9995
+    - protocol: TCP
+      port: 9996
+
+---
+# Allow inter-service communication within link-services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-inter-service-communication
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: application
+spec:
+  podSelector:
+    matchLabels:
+      part-of: link-platform
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from other services in the same namespace
+  - from:
+    - podSelector:
+        matchLabels:
+          part-of: link-platform
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8081
+    - protocol: TCP
+      port: 8082
+    - protocol: TCP
+      port: 8083
+    - protocol: TCP
+      port: 8084
+    - protocol: TCP
+      port: 8085
+  # Allow from API Gateway specifically
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+  egress:
+  # Allow to other services in the same namespace
+  - to:
+    - podSelector:
+        matchLabels:
+          part-of: link-platform
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8081
+    - protocol: TCP
+      port: 8082
+    - protocol: TCP
+      port: 8083
+    - protocol: TCP
+      port: 8084
+    - protocol: TCP
+      port: 8085
+  # Allow gRPC communication
+  - to:
+    - podSelector:
+        matchLabels:
+          part-of: link-platform
+    ports:
+    - protocol: TCP
+      port: 9081
+    - protocol: TCP
+      port: 9082
+    - protocol: TCP
+      port: 9083
+    - protocol: TCP
+      port: 9084
+    - protocol: TCP
+      port: 9085
+
+---
+# Allow communication to database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-database-access
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: database
+spec:
+  podSelector:
+    matchLabels:
+      part-of: link-platform
+  policyTypes:
+  - Egress
+  egress:
+  # Allow to PostgreSQL
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: postgres-system
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to PgBouncer
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pgbouncer
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to CloudNative-PG
+  - to:
+    - podSelector:
+        matchLabels:
+          cnpg.io/cluster: postgres-cluster
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# Allow communication to Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-access
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: cache
+spec:
+  podSelector:
+    matchLabels:
+      part-of: link-platform
+  policyTypes:
+  - Egress
+  egress:
+  # Allow to Redis cluster
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow to Redis Sentinel
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis-sentinel
+    ports:
+    - protocol: TCP
+      port: 26379
+
+---
+# Allow communication to Qdrant vector database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-qdrant-access
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: vector-db
+spec:
+  podSelector:
+    matchLabels:
+      app: search-svc
+  policyTypes:
+  - Egress
+  egress:
+  # Allow to Qdrant cluster
+  - to:
+    - podSelector:
+        matchLabels:
+          app: qdrant
+    ports:
+    - protocol: TCP
+      port: 6333  # HTTP API
+    - protocol: TCP
+      port: 6334  # gRPC API
+
+---
+# Allow external API calls (OpenAI, Sentry, etc.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-apis
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: external
+spec:
+  podSelector:
+    matchLabels:
+      part-of: link-platform
+  policyTypes:
+  - Egress
+  egress:
+  # Allow HTTPS to external APIs
+  - to: []  # Allow to any destination
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow HTTP for webhook callbacks and non-TLS services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+
+---
+# Allow monitoring and metrics collection
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      part-of: link-platform
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Prometheus
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - protocol: TCP
+      port: 2112  # Metrics port
+  # Allow from Grafana
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+  egress:
+  # Allow to monitoring namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+
+---
+# Special policy for API Gateway (ingress traffic)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-gateway-ingress
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from nginx ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow from any external source (through ingress)
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Special policy for frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-ingress
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: link-frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from nginx ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 80
+  # Allow from any external source (through ingress)
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  # Frontend typically doesn't need outbound connections
+  # Only allow DNS and essential services
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# Special policy for migration jobs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: migration-job-access
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: migration
+spec:
+  podSelector:
+    matchLabels:
+      app: link-migration
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # Allow to database
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pgbouncer
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to Linkerd control plane
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          linkerd.io/control-plane-ns: linkerd
+
+---
+# Allow ArgoCD to manage applications
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-argocd-management
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: gitops
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from ArgoCD application controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: argocd
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: argocd-application-controller
+
+---
+# Network policy for cert-manager access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cert-manager
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    policy-type: certificates
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from cert-manager
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: cert-manager
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: cert-manager

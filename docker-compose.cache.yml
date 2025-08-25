@@ -1,0 +1,83 @@
+# Docker Compose override for build caching and development optimization
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.cache.yml up
+
+version: '3.8'
+
+services:
+  # Add build cache volumes for Go services
+  user-svc:
+    volumes:
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      - GOCACHE=/root/.cache/go-build
+      - GOMODCACHE=/go/pkg/mod
+
+  chat-svc:
+    volumes:
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      - GOCACHE=/root/.cache/go-build
+      - GOMODCACHE=/go/pkg/mod
+
+  ai-svc:
+    volumes:
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      - GOCACHE=/root/.cache/go-build
+      - GOMODCACHE=/go/pkg/mod
+
+  discovery-svc:
+    volumes:
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      - GOCACHE=/root/.cache/go-build
+      - GOMODCACHE=/go/pkg/mod
+
+  search-svc:
+    volumes:
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      - GOCACHE=/root/.cache/go-build
+      - GOMODCACHE=/go/pkg/mod
+
+  api-gateway:
+    volumes:
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      - GOCACHE=/root/.cache/go-build
+      - GOMODCACHE=/go/pkg/mod
+
+  # Development frontend service with caching (if running frontend in container)
+  frontend-dev:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - node_modules_cache:/app/node_modules
+      - vite_cache:/app/node_modules/.vite
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:8080
+    networks:
+      - link_network
+    profiles:
+      - frontend-dev
+
+volumes:
+  go_mod_cache:
+  go_build_cache:
+  node_modules_cache:
+  vite_cache:
+
+networks:
+  link_network:
+    external: true

@@ -154,6 +154,8 @@ func (sm *ServiceMetrics) normalizePath(path string) string {
 		return sm.normalizeSearchSvcPath(path)
 	case "ai-svc":
 		return sm.normalizeAISvcPath(path)
+	case "feature-svc":
+		return sm.normalizeFeatureSvcPath(path)
 	default:
 		return sm.normalizeGenericPath(path)
 	}
@@ -240,6 +242,29 @@ func (sm *ServiceMetrics) normalizeAISvcPath(path string) string {
 		return "/ai/*"
 	case strings.HasPrefix(path, "/embeddings"):
 		return "/embeddings/*"
+	default:
+		return "/other"
+	}
+}
+
+func (sm *ServiceMetrics) normalizeFeatureSvcPath(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/api/v1/flags/"):
+		if strings.Contains(path, "/evaluate") {
+			return "/api/v1/flags/*/evaluate"
+		}
+		return "/api/v1/flags/*"
+	case path == "/api/v1/flags":
+		return "/api/v1/flags"
+	case strings.HasPrefix(path, "/api/v1/experiments/"):
+		if strings.Contains(path, "/evaluate") {
+			return "/api/v1/experiments/*/evaluate"
+		}
+		return "/api/v1/experiments/*"
+	case path == "/api/v1/events":
+		return "/api/v1/events"
+	case path == "/api/v1/cache/invalidate":
+		return "/api/v1/cache/invalidate"
 	default:
 		return "/other"
 	}

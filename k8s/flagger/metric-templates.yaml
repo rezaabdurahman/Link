@@ -1,0 +1,190 @@
+# Prometheus metric templates for canary analysis
+# These templates define the success criteria for automated promotion
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: success-rate
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    sum(
+      rate(
+        http_requests_total{
+          job=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*",
+          status!~"5.."
+        }[{{ .Interval }}]
+      )
+    ) 
+    / 
+    sum(
+      rate(
+        http_requests_total{
+          job=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*"
+        }[{{ .Interval }}]
+      )
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-duration-p99
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    histogram_quantile(0.99,
+      sum(
+        rate(
+          http_request_duration_seconds_bucket{
+            job=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*"
+          }[{{ .Interval }}]
+        )
+      ) by (le)
+    ) * 1000
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-rate
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    sum(
+      rate(
+        http_requests_total{
+          job=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*"
+        }[{{ .Interval }}]
+      )
+    )
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: error-rate
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    sum(
+      rate(
+        http_requests_total{
+          job=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*",
+          status=~"5.."
+        }[{{ .Interval }}]
+      )
+    )
+    /
+    sum(
+      rate(
+        http_requests_total{
+          job=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*"
+        }[{{ .Interval }}]
+      )
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: cpu-usage
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    sum(
+      rate(
+        container_cpu_usage_seconds_total{
+          namespace="{{ `{{` }} .Deployment.Namespace {{ `}}` }}",
+          pod=~"{{ `{{` }} .Deployment.Name {{ `}}` }}-[a-z0-9]+-[a-z0-9]+"
+        }[{{ .Interval }}]
+      )
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: memory-usage
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    sum(
+      container_memory_working_set_bytes{
+        namespace="{{ `{{` }} .Deployment.Namespace {{ `}}` }}",
+        pod=~"{{ `{{` }} .Deployment.Name {{ `}}` }}-[a-z0-9]+-[a-z0-9]+",
+        container!="POD"
+      }
+    ) / 1024 / 1024
+
+---
+# Linkerd-specific metrics for service mesh
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: linkerd-success-rate
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    sum(
+      rate(
+        response_total{
+          direction="inbound",
+          dst_service=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*",
+          classification!="failure"
+        }[{{ .Interval }}]
+      )
+    ) 
+    / 
+    sum(
+      rate(
+        response_total{
+          direction="inbound",
+          dst_service=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*"
+        }[{{ .Interval }}]
+      )
+    ) * 100
+
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: linkerd-request-duration
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus.monitoring:9090
+  query: |
+    histogram_quantile(0.99,
+      sum(
+        rate(
+          response_latency_ms_bucket{
+            direction="inbound",
+            dst_service=~"{{ `{{` }} index .Deployment.Labels "app.kubernetes.io/name" {{ `}}` }}.*"
+          }[{{ .Interval }}]
+        )
+      ) by (le)
+    )

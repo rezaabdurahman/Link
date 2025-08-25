@@ -1,0 +1,14 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Run linting and fix auto-fixable issues
+npm run lint:fix
+
+# Run type checking
+npm run type-check
+
+# Run tests to ensure changes don't break existing functionality
+npm run test:unit
+
+# Add any changes made by lint:fix back to staging
+git add .

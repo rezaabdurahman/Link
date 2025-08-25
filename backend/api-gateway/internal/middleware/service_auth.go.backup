@@ -1,0 +1,448 @@
+package middleware
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
+)
+
+// ServiceJWTClaims represents JWT claims for service accounts (mirrors user-svc)
+type ServiceJWTClaims struct {
+	ServiceAccountID uuid.UUID `json:"service_account_id"`
+	ClientID         string    `json:"client_id"`
+	ServiceName      string    `json:"service_name"`
+	Roles           []string   `json:"roles"`
+	Permissions     []string   `json:"permissions"`
+	Scopes          []string   `json:"scopes"`
+	jwt.RegisteredClaims
+}
+
+// SECURITY: Service permissions are now stored in the database only, not hardcoded.
+// Permissions come from the service JWT token claims, which are populated from the database
+// when the token is issued by the user service.
+
+// ServiceAuthMiddleware handles service-to-service authentication
+// This middleware works alongside the user AuthMiddleware for dual authentication support
+func ServiceAuthMiddleware(jwtSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip service auth if this is a user request (user JWT already validated)
+		if userID, exists := c.Get("user_id"); exists && userID != nil {
+			// This is a user request, add service context for downstream calls
+			c.Set("is_user_request", true)
+			c.Header("X-Request-Type", "user")
+			c.Next()
+			return
+		}
+
+		// Check if we have a service token
+		token := extractServiceToken(c)
+		if token == "" {
+			// Check if this is genuinely a public endpoint
+			if !isPublicServiceEndpoint(c.Request.URL.Path) {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error":     "SERVICE_AUTHENTICATION_REQUIRED",
+					"message":   "Service token required for this endpoint",
+					"code":      "MISSING_SERVICE_TOKEN",
+					"path":      c.Request.URL.Path,
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+			// This is a public endpoint, allow it to proceed
+			c.Set("is_public_endpoint", true)
+			c.Next()
+			return
+		}
+
+		// Validate service token
+		claims, err := validateServiceToken(token, jwtSecret)
+		if err != nil {
+			// SECURITY: Log authentication failures for monitoring
+			logServiceAuthEvent("AUTHENTICATION_FAILED", "", c.Request.URL.Path, c.Request.Method, err.Error(), c.ClientIP())
+			
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":     "SERVICE_AUTHENTICATION_ERROR",
+				"message":   "Invalid service token",
+				"code":      "INVALID_SERVICE_TOKEN",
+				"details":   err.Error(),
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		// SECURITY: Log successful authentication
+		logServiceAuthEvent("AUTHENTICATION_SUCCESS", claims.ServiceName, c.Request.URL.Path, c.Request.Method, "", c.ClientIP())
+
+		// Set service context in gin context
+		c.Set("service_account_id", claims.ServiceAccountID)
+		c.Set("service_client_id", claims.ClientID)
+		c.Set("service_name", claims.ServiceName)
+		c.Set("service_roles", claims.Roles)
+		c.Set("service_permissions", claims.Permissions)
+		c.Set("service_scopes", claims.Scopes)
+		c.Set("is_service_request", true)
+
+		// Set service context headers for downstream services
+		c.Header("X-Service-ID", claims.ServiceAccountID.String())
+		c.Header("X-Service-Name", claims.ServiceName)
+		c.Header("X-Service-Client-ID", claims.ClientID)
+		c.Header("X-Request-Type", "service")
+		
+		// Add service permissions as header
+		if len(claims.Permissions) > 0 {
+			c.Header("X-Service-Permissions", strings.Join(claims.Permissions, ","))
+		}
+		
+		// Add service roles as header
+		if len(claims.Roles) > 0 {
+			c.Header("X-Service-Roles", strings.Join(claims.Roles, ","))
+		}
+
+		c.Next()
+	}
+}
+
+// RequireServicePermission creates middleware that requires specific service permission
+func RequireServicePermission(requiredPermission string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip for user requests (users have their own permission system)
+		if isUserRequest, exists := c.Get("is_user_request"); exists && isUserRequest.(bool) {
+			c.Next()
+			return
+		}
+
+		// Check if this is a service request
+		isServiceRequest, exists := c.Get("is_service_request")
+		if !exists || !isServiceRequest.(bool) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":     "SERVICE_AUTHENTICATION_ERROR",
+				"message":   "Service authentication required",
+				"code":      "SERVICE_AUTH_REQUIRED",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		// Get service permissions
+		servicePermissions, exists := c.Get("service_permissions")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":     "SERVICE_AUTHORIZATION_ERROR",
+				"message":   "Service permissions not found",
+				"code":      "MISSING_SERVICE_PERMISSIONS",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		permissions, ok := servicePermissions.([]string)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":     "SERVICE_AUTHORIZATION_ERROR",
+				"message":   "Invalid service permissions format",
+				"code":      "INVALID_SERVICE_PERMISSIONS",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		// Check if service has required permission
+		if !hasServicePermission(permissions, requiredPermission) {
+			serviceName, _ := c.Get("service_name")
+			
+			// SECURITY: Log permission denial for monitoring
+			logServiceAuthEvent("PERMISSION_DENIED", serviceName.(string), c.Request.URL.Path, c.Request.Method, 
+				fmt.Sprintf("Required: %s, Has: %v", requiredPermission, permissions), c.ClientIP())
+			
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":            "SERVICE_AUTHORIZATION_ERROR",
+				"message":          "Insufficient service permissions",
+				"code":             "INSUFFICIENT_SERVICE_PERMISSIONS",
+				"required_permission": requiredPermission,
+				"service_name":     serviceName,
+				"timestamp":        time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// RequireServiceRole creates middleware that requires specific service role
+func RequireServiceRole(requiredRoles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip for user requests
+		if isUserRequest, exists := c.Get("is_user_request"); exists && isUserRequest.(bool) {
+			c.Next()
+			return
+		}
+
+		// Check if this is a service request
+		isServiceRequest, exists := c.Get("is_service_request")
+		if !exists || !isServiceRequest.(bool) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":     "SERVICE_AUTHENTICATION_ERROR",
+				"message":   "Service authentication required",
+				"code":      "SERVICE_AUTH_REQUIRED",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		// Get service roles
+		serviceRoles, exists := c.Get("service_roles")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":     "SERVICE_AUTHORIZATION_ERROR", 
+				"message":   "Service roles not found",
+				"code":      "MISSING_SERVICE_ROLES",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		roles, ok := serviceRoles.([]string)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":     "SERVICE_AUTHORIZATION_ERROR",
+				"message":   "Invalid service roles format",
+				"code":      "INVALID_SERVICE_ROLES",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		// Check if service has any of the required roles
+		if !hasAnyServiceRole(roles, requiredRoles) {
+			serviceName, _ := c.Get("service_name")
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":         "SERVICE_AUTHORIZATION_ERROR",
+				"message":       "Insufficient service roles",
+				"code":          "INSUFFICIENT_SERVICE_ROLES", 
+				"required_roles": requiredRoles,
+				"service_name":  serviceName,
+				"timestamp":     time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// Helper functions
+
+// extractServiceToken extracts the Bearer token from Authorization header
+func extractServiceToken(c *gin.Context) string {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return ""
+	}
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return ""
+	}
+
+	return strings.TrimPrefix(authHeader, "Bearer ")
+}
+
+// validateServiceToken validates a service JWT token and returns claims
+func validateServiceToken(tokenString, jwtSecret string) (*ServiceJWTClaims, error) {
+	// Parse the token
+	token, err := jwt.ParseWithClaims(tokenString, &ServiceJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		// Make sure the signing method is HMAC
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(jwtSecret), nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("token parsing failed: %w", err)
+	}
+
+	// Extract and validate claims
+	if claims, ok := token.Claims.(*ServiceJWTClaims); ok && token.Valid {
+		// Additional validation
+		if claims.ServiceName == "" || claims.ClientID == "" {
+			return nil, fmt.Errorf("invalid token claims: missing required fields")
+		}
+
+		// Check if token is expired
+		if time.Now().After(claims.ExpiresAt.Time) {
+			return nil, fmt.Errorf("token expired")
+		}
+
+		// Check issuer
+		if claims.Issuer != "user-svc" {
+			return nil, fmt.Errorf("invalid token issuer: %s", claims.Issuer)
+		}
+
+		// Check audience
+		if len(claims.Audience) == 0 || claims.Audience[0] != "link-app-services" {
+			return nil, fmt.Errorf("invalid token audience")
+		}
+
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("invalid token claims")
+}
+
+// hasServicePermission checks if the service has a specific permission
+func hasServicePermission(servicePermissions []string, requiredPermission string) bool {
+	for _, permission := range servicePermissions {
+		if permission == "*" || permission == requiredPermission {
+			return true
+		}
+		// Support wildcard matching (e.g., "user.*" matches "user.read")
+		if strings.HasSuffix(permission, ".*") {
+			prefix := strings.TrimSuffix(permission, ".*")
+			if strings.HasPrefix(requiredPermission, prefix+".") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hasAnyServiceRole checks if the service has any of the required roles
+func hasAnyServiceRole(serviceRoles []string, requiredRoles []string) bool {
+	roleMap := make(map[string]bool)
+	for _, role := range serviceRoles {
+		roleMap[role] = true
+	}
+
+	for _, requiredRole := range requiredRoles {
+		if roleMap[requiredRole] {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateServiceToServiceCall validates if a service has permission for an operation
+// This function now requires service permissions from JWT token claims, not hardcoded values
+func ValidateServiceToServiceCall(servicePermissions []string, targetService, operation string) bool {
+	if servicePermissions == nil {
+		return false
+	}
+
+	// Check for wildcard permission (dangerous - should be carefully controlled in database)
+	for _, permission := range servicePermissions {
+		if permission == "*" {
+			return true
+		}
+		
+		// Check for exact match
+		expectedPermission := fmt.Sprintf("%s.%s", targetService, operation)
+		if permission == expectedPermission {
+			return true
+		}
+
+		// Check for service-level wildcard
+		serviceWildcard := fmt.Sprintf("%s.*", targetService)
+		if permission == serviceWildcard {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isPublicServiceEndpoint checks if an endpoint should be accessible without service authentication
+func isPublicServiceEndpoint(path string) bool {
+	publicEndpoints := []string{
+		"/health",
+		"/metrics", 
+		"/ready",
+		"/api/v1/auth/service-token", // Token endpoint itself
+		"/api/v1/auth/login",         // User login
+		"/api/v1/auth/register",      // User registration
+		"/api/v1/auth/refresh",       // Token refresh
+		"/favicon.ico",               // Browser requests
+		"/robots.txt",                // SEO crawlers
+	}
+	
+	// Exact match for listed endpoints
+	for _, endpoint := range publicEndpoints {
+		if path == endpoint {
+			return true
+		}
+	}
+	
+	// Pattern matching for certain paths
+	publicPrefixes := []string{
+		"/api/v1/auth/",    // Most auth endpoints should be public
+		"/static/",         // Static assets
+		"/.well-known/",    // RFC 5785 well-known URIs
+	}
+	
+	for _, prefix := range publicPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			// Exception: some auth endpoints require service auth
+			protectedAuthEndpoints := []string{
+				"/api/v1/auth/validate-service-token",
+				"/api/v1/auth/service-info",
+			}
+			
+			for _, protected := range protectedAuthEndpoints {
+				if path == protected {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	
+	return false
+}
+
+// logServiceAuthEvent logs service authentication and authorization events for security monitoring
+func logServiceAuthEvent(event, serviceName, path, method, details, clientIP string) {
+	log.WithFields(log.Fields{
+		"event":        event,
+		"service_name": serviceName,
+		"path":         path,
+		"method":       method,
+		"client_ip":    clientIP,
+		"details":      details,
+		"timestamp":    time.Now().Unix(),
+		"component":    "service_auth_middleware",
+	}).Info("Service authentication event")
+}
+
+// GetServiceContext extracts service context from gin.Context
+func GetServiceContext(c *gin.Context) (serviceName string, permissions []string, isServiceRequest bool) {
+	isServiceRequest, exists := c.Get("is_service_request")
+	if !exists {
+		return "", nil, false
+	}
+
+	isService, ok := isServiceRequest.(bool)
+	if !ok || !isService {
+		return "", nil, false
+	}
+
+	serviceName, _ = c.Get("service_name").(string)
+	permissions, _ = c.Get("service_permissions").([]string)
+
+	return serviceName, permissions, true
+}

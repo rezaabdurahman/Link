@@ -160,3 +160,26 @@ Example:
   // Show welcome message in development
   console.log('🔧 Dev Authentication Helper loaded. Type "devAuth.help()" for commands.');
 }
+
+/**
+ * Auto-authenticate for development mode
+ * Automatically stores a development token and user data if none exists
+ */
+export async function autoAuthenticateForDev(): Promise<void> {
+  try {
+    // Check if we already have a token
+    const existingToken = await secureTokenStorage.getToken();
+    if (existingToken && existingToken.token) {
+      console.log('🔧 Dev auth: Existing token found, skipping auto-authentication');
+      return;
+    }
+
+    // Auto-login with the default demo user
+    console.log('🔧 Dev auth: No token found, auto-authenticating with demo user');
+    await devLogin(DEV_USERS.jane);
+    console.log('🔧 Dev auth: Auto-authentication completed successfully');
+  } catch (error) {
+    console.error('🔧 Dev auth: Auto-authentication failed:', error);
+    // Don't throw - let the app continue without auth
+  }
+}

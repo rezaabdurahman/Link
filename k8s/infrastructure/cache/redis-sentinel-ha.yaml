@@ -1,0 +1,828 @@
+---
+# Redis Sentinel High Availability Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-sentinel-config
+  namespace: link-services
+  labels:
+    app: redis-sentinel
+data:
+  sentinel.conf: |
+    # Redis Sentinel Configuration
+    port 26379
+    dir /data
+    
+    # Monitor Redis master
+    sentinel monitor mymaster redis-master 6379 2
+    sentinel auth-pass mymaster ${REDIS_PASSWORD}
+    sentinel auth-user mymaster default
+    
+    # Timeouts and thresholds
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel parallel-syncs mymaster 1
+    sentinel failover-timeout mymaster 30000
+    
+    # Notification scripts
+    sentinel notification-script mymaster /scripts/notify.sh
+    sentinel client-reconfig-script mymaster /scripts/reconfig.sh
+    
+    # Log configuration
+    loglevel notice
+    logfile /data/sentinel.log
+    
+    # Security
+    requirepass ${SENTINEL_PASSWORD}
+    
+    # Performance
+    tcp-keepalive 60
+    
+  notify.sh: |
+    #!/bin/bash
+    # Sentinel notification script
+    
+    EVENT_TYPE="$1"
+    EVENT_NAME="$2"
+    shift 2
+    
+    echo "$(date): Sentinel event: $EVENT_TYPE $EVENT_NAME $*" >> /data/notifications.log
+    
+    # Send to monitoring system
+    curl -X POST "http://prometheus-pushgateway:9091/metrics/job/redis-sentinel/instance/$(hostname)" \
+      -d "redis_sentinel_event{type=\"$EVENT_TYPE\",name=\"$EVENT_NAME\"} 1"
+    
+    # Send Slack notification for critical events
+    if [[ "$EVENT_TYPE" == "+failover-end" || "$EVENT_TYPE" == "+failover-triggered" ]]; then
+      curl -X POST "${SLACK_WEBHOOK_URL}" \
+        -H 'Content-type: application/json' \
+        -d "{\"text\":\"🔴 Redis Sentinel Event: $EVENT_TYPE $EVENT_NAME\"}"
+    fi
+    
+  reconfig.sh: |
+    #!/bin/bash
+    # Client reconfiguration script
+    
+    NEW_MASTER="$1"
+    OLD_MASTER="$2"
+    
+    echo "$(date): Redis master changed from $OLD_MASTER to $NEW_MASTER" >> /data/reconfig.log
+    
+    # Update application configuration if needed
+    # This could trigger a config reload in your applications
+
+---
+# Redis Master StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-master
+  namespace: link-services
+  labels:
+    app: redis-master
+    role: master
+spec:
+  serviceName: redis-master
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-master
+      role: master
+  template:
+    metadata:
+      labels:
+        app: redis-master
+        role: master
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: redis-ha
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /usr/local/etc/redis
+          readOnly: true
+        command:
+        - redis-server
+        - /usr/local/etc/redis/redis.conf
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        - --masterauth
+        - $(REDIS_PASSWORD)
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: 200m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-master-config
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# Redis Replica StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-replica
+  namespace: link-services
+  labels:
+    app: redis-replica
+    role: replica
+spec:
+  serviceName: redis-replica
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redis-replica
+      role: replica
+  template:
+    metadata:
+      labels:
+        app: redis-replica
+        role: replica
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: redis-ha
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /usr/local/etc/redis
+          readOnly: true
+        command:
+        - redis-server
+        - /usr/local/etc/redis/redis.conf
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        - --masterauth
+        - $(REDIS_PASSWORD)
+        - --replicaof
+        - redis-master.link-services.svc.cluster.local
+        - "6379"
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: 100m
+          limits:
+            memory: 1Gi
+            cpu: 300m
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-replica-config
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# Redis Sentinel StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-sentinel
+  namespace: link-services
+  labels:
+    app: redis-sentinel
+    role: sentinel
+spec:
+  serviceName: redis-sentinel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis-sentinel
+      role: sentinel
+  template:
+    metadata:
+      labels:
+        app: redis-sentinel
+        role: sentinel
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: redis-ha
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      initContainers:
+      - name: sentinel-init
+        image: redis:7-alpine
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        - name: SENTINEL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: sentinel-password
+        volumeMounts:
+        - name: sentinel-config
+          mountPath: /etc/redis-sentinel
+        - name: sentinel-data
+          mountPath: /data
+        - name: scripts
+          mountPath: /scripts
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          
+          # Create sentinel configuration with environment variable substitution
+          envsubst < /etc/redis-sentinel/sentinel.conf > /data/sentinel.conf
+          
+          # Make scripts executable
+          chmod +x /scripts/*.sh
+          
+          # Copy scripts to data directory
+          cp /scripts/*.sh /data/
+          
+          echo "Sentinel initialization completed"
+        resources:
+          requests:
+            memory: 64Mi
+            cpu: 50m
+          limits:
+            memory: 128Mi
+            cpu: 100m
+      containers:
+      - name: sentinel
+        image: redis:7-alpine
+        ports:
+        - containerPort: 26379
+          name: sentinel
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        - name: SENTINEL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: sentinel-password
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: slack-webhook-url
+              optional: true
+        volumeMounts:
+        - name: sentinel-data
+          mountPath: /data
+        command:
+        - redis-sentinel
+        - /data/sentinel.conf
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -p
+            - "26379"
+            - -a
+            - $(SENTINEL_PASSWORD)
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -p
+            - "26379"
+            - -a
+            - $(SENTINEL_PASSWORD)
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: sentinel-config
+        configMap:
+          name: redis-sentinel-config
+      - name: scripts
+        configMap:
+          name: redis-sentinel-config
+          defaultMode: 0755
+  volumeClaimTemplates:
+  - metadata:
+      name: sentinel-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# Redis Master Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-master-config
+  namespace: link-services
+  labels:
+    app: redis-master
+data:
+  redis.conf: |
+    # Network
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    tcp-backlog 511
+    tcp-keepalive 300
+    
+    # General
+    daemonize no
+    supervised no
+    pidfile /data/redis.pid
+    loglevel notice
+    logfile /data/redis.log
+    databases 16
+    
+    # Persistence - AOF
+    appendonly yes
+    appendfilename "redis.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    aof-load-truncated yes
+    aof-use-rdb-preamble yes
+    
+    # Persistence - RDB
+    save 900 1
+    save 300 10
+    save 60 10000
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    
+    # Replication
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-diskless-sync-delay 5
+    repl-ping-replica-period 10
+    repl-timeout 60
+    repl-disable-tcp-nodelay no
+    repl-backlog-size 1mb
+    repl-backlog-ttl 3600
+    
+    # Memory Management
+    maxmemory 768mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # Slow log
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    
+    # Client output buffer limits
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+    
+    # Advanced config
+    hash-max-ziplist-entries 512
+    hash-max-ziplist-value 64
+    list-max-ziplist-size -2
+    list-compress-depth 0
+    set-max-intset-entries 512
+    zset-max-ziplist-entries 128
+    zset-max-ziplist-value 64
+    hll-sparse-max-bytes 3000
+    activerehashing yes
+    hz 10
+    dynamic-hz yes
+    aof-rewrite-incremental-fsync yes
+    rdb-save-incremental-fsync yes
+
+---
+# Redis Replica Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-replica-config
+  namespace: link-services
+  labels:
+    app: redis-replica
+data:
+  redis.conf: |
+    # Network
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    tcp-keepalive 300
+    
+    # General
+    daemonize no
+    supervised no
+    pidfile /data/redis.pid
+    loglevel notice
+    logfile /data/redis-replica.log
+    databases 16
+    
+    # Persistence - AOF (enabled on replicas too)
+    appendonly yes
+    appendfilename "redis.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    aof-load-truncated yes
+    aof-use-rdb-preamble yes
+    
+    # Persistence - RDB
+    save 900 1
+    save 300 10
+    save 60 10000
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    
+    # Replication settings
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-diskless-sync-delay 5
+    repl-ping-replica-period 10
+    repl-timeout 60
+    repl-disable-tcp-nodelay no
+    
+    # Memory Management (slightly less than master)
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # Performance optimizations for read replicas
+    hz 10
+    dynamic-hz yes
+
+---
+# Services for Redis HA
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master
+  namespace: link-services
+  labels:
+    app: redis-master
+    role: master
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: redis-master
+    role: master
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-replica
+  namespace: link-services
+  labels:
+    app: redis-replica
+    role: replica
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: redis-replica
+    role: replica
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel
+  namespace: link-services
+  labels:
+    app: redis-sentinel
+    role: sentinel
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  ports:
+  - port: 26379
+    targetPort: 26379
+    protocol: TCP
+    name: sentinel
+  selector:
+    app: redis-sentinel
+    role: sentinel
+
+---
+# Redis Service for Applications (with Sentinel discovery)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: link-services
+  labels:
+    app: redis-ha
+    role: service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  - port: 26379
+    targetPort: 26379
+    protocol: TCP
+    name: sentinel
+  selector:
+    app: redis-master
+    role: master
+
+---
+# Service Account for Redis HA
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis-ha
+  namespace: link-services
+  labels:
+    app: redis-ha
+
+---
+# Redis Exporter for HA Monitoring
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-exporter-ha
+  namespace: link-services
+  labels:
+    app: redis-exporter-ha
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-exporter-ha
+  template:
+    metadata:
+      labels:
+        app: redis-exporter-ha
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      containers:
+      - name: redis-exporter
+        image: oliver006/redis_exporter:latest
+        ports:
+        - containerPort: 9121
+          name: metrics
+        env:
+        - name: REDIS_ADDR
+          value: "redis://redis-master:6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        - name: REDIS_EXPORTER_CHECK_KEYS
+          value: "*"
+        - name: REDIS_EXPORTER_CHECK_SINGLE_KEYS
+          value: "user:*,session:*"
+        resources:
+          requests:
+            memory: 64Mi
+            cpu: 50m
+          limits:
+            memory: 128Mi
+            cpu: 100m
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 9121
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 9121
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Redis Exporter Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-exporter-ha
+  namespace: link-services
+  labels:
+    app: redis-exporter-ha
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9121
+    targetPort: 9121
+    protocol: TCP
+    name: metrics
+  selector:
+    app: redis-exporter-ha
+
+---
+# PodDisruptionBudget for Redis Master
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-master-pdb
+  namespace: link-services
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis-master
+      role: master
+
+---
+# PodDisruptionBudget for Redis Sentinels
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-sentinel-pdb
+  namespace: link-services
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: redis-sentinel
+      role: sentinel
+
+---
+# Network Policy for Redis HA
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-ha-netpol
+  namespace: link-services
+  labels:
+    app: redis-ha
+spec:
+  podSelector:
+    matchLabels:
+      app: redis-master
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow application connections
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    - podSelector:
+        matchLabels:
+          app: user-svc
+    - podSelector:
+        matchLabels:
+          app: chat-svc
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow sentinel connections
+  - from:
+    - podSelector:
+        matchLabels:
+          app: redis-sentinel
+    ports:
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 26379
+  # Allow replica connections
+  - from:
+    - podSelector:
+        matchLabels:
+          app: redis-replica
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow monitoring
+  - from:
+    - podSelector:
+        matchLabels:
+          app: redis-exporter-ha
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53

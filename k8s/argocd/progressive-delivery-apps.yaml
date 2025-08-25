@@ -1,0 +1,316 @@
+# ArgoCD Applications for Progressive Delivery
+# Manages canary deployments across environments with GitOps
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: link-progressive-delivery
+  namespace: argocd
+spec:
+  description: Progressive delivery project for Link application
+  sourceRepos:
+  - 'https://github.com/RezaAbdurahman/Link'
+  destinations:
+  - namespace: 'staging'
+    server: 'https://kubernetes.default.svc'
+  - namespace: 'production'
+    server: 'https://kubernetes.default.svc'
+  - namespace: 'flagger-system'
+    server: 'https://kubernetes.default.svc'
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: 'rbac.authorization.k8s.io'
+    kind: ClusterRole
+  - group: 'rbac.authorization.k8s.io'
+    kind: ClusterRoleBinding
+  - group: 'apiextensions.k8s.io'
+    kind: CustomResourceDefinition
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: ConfigMap
+  - group: ''
+    kind: Secret
+  - group: ''
+    kind: Service
+  - group: 'apps'
+    kind: Deployment
+  - group: 'flagger.app'
+    kind: Canary
+  - group: 'flagger.app'
+    kind: MetricTemplate
+  - group: 'flagger.app'
+    kind: AlertProvider
+  - group: 'split.smi-spec.io'
+    kind: TrafficSplit
+  - group: 'autoscaling'
+    kind: HorizontalPodAutoscaler
+  - group: 'policy'
+    kind: PodDisruptionBudget
+  - group: 'monitoring.coreos.com'
+    kind: ServiceMonitor
+  - group: 'monitoring.coreos.com'
+    kind: PrometheusRule
+  roles:
+  - name: developer
+    description: Developer access to staging
+    policies:
+    - p, proj:link-progressive-delivery:developer, applications, sync, link-progressive-delivery/staging-*, allow
+    - p, proj:link-progressive-delivery:developer, applications, action/*, link-progressive-delivery/staging-*, allow
+    - p, proj:link-progressive-delivery:developer, applications, get, link-progressive-delivery/staging-*, allow
+    groups:
+    - developers
+  - name: operator
+    description: Production deployment access
+    policies:
+    - p, proj:link-progressive-delivery:operator, applications, *, link-progressive-delivery/*, allow
+    groups:
+    - platform-team
+
+---
+# Flagger Installation Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flagger-installation
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: link-progressive-delivery
+  source:
+    repoURL: 'https://github.com/RezaAbdurahman/Link'
+    targetRevision: HEAD
+    path: k8s/flagger
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: flagger-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
+
+---
+# Staging Environment Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: staging-link-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: deployments
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: deployments
+spec:
+  project: link-progressive-delivery
+  source:
+    repoURL: 'https://github.com/RezaAbdurahman/Link'
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+      - values-staging.yaml
+      parameters:
+      - name: canary.enabled
+        value: "true"
+      - name: featureFlags.canaryDeployment.autoPromote
+        value: "true"
+      - name: canary.analysis.stepWeight
+        value: "10"
+      - name: canary.analysis.maxWeight
+        value: "50"
+      - name: canary.analysis.iterations
+        value: "10"
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+  - group: flagger.app
+    kind: Canary
+    jsonPointers:
+    - /status
+  revisionHistoryLimit: 10
+
+---
+# Production Environment Application (Manual Sync)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: production-link-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: deployments
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: alerts
+    notifications.argoproj.io/subscribe.on-deployed.slack: deployments
+spec:
+  project: link-progressive-delivery
+  source:
+    repoURL: 'https://github.com/RezaAbdurahman/Link'
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+      - values-prod.yaml
+      parameters:
+      - name: canary.enabled
+        value: "true"
+      - name: featureFlags.canaryDeployment.autoPromote
+        value: "false"  # Manual promotion in production
+      - name: canary.analysis.stepWeight
+        value: "5"
+      - name: canary.analysis.maxWeight
+        value: "25"
+      - name: canary.analysis.iterations
+        value: "20"
+      - name: canary.analysis.interval
+        value: "2m"
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: production
+  syncPolicy:
+    # Manual sync for production
+    syncOptions:
+    - CreateNamespace=true
+    - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+  - group: flagger.app
+    kind: Canary
+    jsonPointers:
+    - /status
+  revisionHistoryLimit: 20
+
+---
+# Canary Promotion Job Template
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: canary-promotion
+  namespace: argocd
+spec:
+  entrypoint: promote-canary
+  arguments:
+    parameters:
+    - name: service-name
+    - name: namespace
+      value: "production"
+    - name: success-threshold
+      value: "99"
+    - name: max-wait-time
+      value: "30m"
+  templates:
+  - name: promote-canary
+    inputs:
+      parameters:
+      - name: service-name
+      - name: namespace
+      - name: success-threshold
+      - name: max-wait-time
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+      - |
+        set -e
+        SERVICE_NAME={{inputs.parameters.service-name}}
+        NAMESPACE={{inputs.parameters.namespace}}
+        SUCCESS_THRESHOLD={{inputs.parameters.success-threshold}}
+        MAX_WAIT={{inputs.parameters.max-wait-time}}
+        
+        echo "Starting canary promotion process for $SERVICE_NAME in $NAMESPACE"
+        
+        # Check if canary exists
+        if ! kubectl get canary $SERVICE_NAME-canary -n $NAMESPACE; then
+          echo "Canary $SERVICE_NAME-canary not found in $NAMESPACE"
+          exit 1
+        fi
+        
+        # Wait for canary analysis to complete
+        echo "Waiting for canary analysis to complete..."
+        kubectl wait --for=condition=promoted \
+          --timeout=$MAX_WAIT \
+          canary/$SERVICE_NAME-canary \
+          -n $NAMESPACE
+        
+        # Check canary status
+        STATUS=$(kubectl get canary $SERVICE_NAME-canary -n $NAMESPACE -o jsonpath='{.status.phase}')
+        
+        case $STATUS in
+          "Succeeded")
+            echo "✅ Canary deployment succeeded for $SERVICE_NAME"
+            # Promote canary
+            kubectl patch canary $SERVICE_NAME-canary -n $NAMESPACE \
+              --type='merge' -p='{"spec":{"analysis":{"skipAnalysis":true}}}'
+            echo "Canary promoted successfully"
+            ;;
+          "Failed")
+            echo "❌ Canary deployment failed for $SERVICE_NAME"
+            kubectl describe canary $SERVICE_NAME-canary -n $NAMESPACE
+            exit 1
+            ;;
+          *)
+            echo "⚠️ Canary deployment status: $STATUS"
+            echo "Manual intervention may be required"
+            exit 1
+            ;;
+        esac
+
+---
+# Monitoring and Alerting Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deployment-monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: link-progressive-delivery
+  source:
+    repoURL: 'https://github.com/RezaAbdurahman/Link'
+    targetRevision: HEAD
+    path: monitoring/grafana/dashboards
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 5

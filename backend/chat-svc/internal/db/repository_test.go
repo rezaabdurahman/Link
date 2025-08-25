@@ -89,9 +89,9 @@ func (s *RepositoryTestSuite) TearDownSuite() {
 }
 
 func (s *RepositoryTestSuite) SetupTest() {
-	// Clean up tables before each test
+	// Clean up tables before each test (using new schema table names)
 	ctx := context.Background()
-	_, err := s.db.Exec(ctx, "TRUNCATE message_reads, room_members, messages, chat_rooms RESTART IDENTITY CASCADE")
+	_, err := s.db.Exec(ctx, "TRUNCATE message_reads, conversation_participants, messages, conversations RESTART IDENTITY CASCADE")
 	s.Require().NoError(err, "failed to truncate tables")
 }
 
@@ -104,8 +104,7 @@ func (s *RepositoryTestSuite) TestCreateAndGetConversation() {
 	ctx := context.Background()
 	user_id := uuid.New()
 	room := &model.ChatRoom{
-		Name:        "Test Room",
-		Description: "A room for testing",
+		Type:        model.ConversationTypeGroup,
 		CreatedBy:   user_id,
 		IsPrivate:   false,
 		MaxMembers:  10,
@@ -126,12 +125,11 @@ func (s *RepositoryTestSuite) TestListConversations() {
 	ctx := context.Background()
 	userID := uuid.New()
 	
-	// Create some rooms and add the user
+	// Create some conversations and add the user
 	for i := 0; i < 5; i++ {
 		room := &model.ChatRoom{
-			Name:        fmt.Sprintf("Room %d", i),
-			Description: "Test Room",
-			CreatedBy:   uuid.New(),
+			Type:      model.ConversationTypeGroup,
+			CreatedBy: uuid.New(),
 		}
 		err := s.repo.Conversations.CreateConversation(ctx, room)
 		s.Require().NoError(err)

@@ -1,0 +1,558 @@
+# Link IAM Architecture - Kubernetes RBAC Configuration
+# 
+# This configuration implements the three-tier authentication architecture:
+#
+# 1. APP USERS: NOT managed in Kubernetes - handled by application services
+#    - Roles: user, premium_user, community_moderator, banned
+#    - Authentication: JWT tokens from user-svc
+#    - Access: Mobile/web app only, never infrastructure
+#
+# 2. EMPLOYEES: AWS IAM roles mapped to Kubernetes users
+#    - Roles: link-developer, link-devops, link-support
+#    - Authentication: AWS SSO -> IAM roles -> kubectl
+#    - Access: Infrastructure management only
+#
+# 3. SERVICES: Kubernetes service accounts for inter-service communication
+#    - Service accounts with minimal permissions
+#    - Internal service mesh communication only
+#
+# IMPORTANT: App users should NEVER have Kubernetes access
+# IMPORTANT: Employees should NEVER use app user credentials
+
+---
+# Employee Access - Developer Role (AWS IAM Integration)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: link-services
+  name: link-developer-role
+  labels:
+    environment: development
+    app.kubernetes.io/part-of: link-platform
+    access-type: employee
+rules:
+# Pod and service access for debugging
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "pods/exec", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "describe", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list"]
+# Deployment and application management
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "describe", "create", "update", "patch", "delete"]
+# Ingress for testing
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "describe", "create", "update", "patch", "delete"]
+# Job management for migrations
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "describe", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: link-developers
+  namespace: link-services
+  labels:
+    environment: development
+    app.kubernetes.io/part-of: link-platform
+subjects:
+# AWS IAM role integration - employees access via AWS SSO
+# These users are mapped from AWS IAM roles, not app users
+- kind: User
+  name: arn:aws:iam::ACCOUNT:role/link-developer
+  apiGroup: rbac.authorization.k8s.io
+# Service account for CI/CD in dev
+- kind: ServiceAccount
+  name: link-cicd-dev
+  namespace: link-system
+roleRef:
+  kind: Role
+  name: link-developer-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Employee Access - DevOps Role (AWS IAM Integration)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: link-devops-role
+  labels:
+    environment: all
+    app.kubernetes.io/part-of: link-platform
+    access-type: employee
+rules:
+# Full cluster access for DevOps engineers
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+# Employee Access - Support Role (Read-Only)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: link-services
+  name: link-support-role
+  labels:
+    environment: production
+    app.kubernetes.io/part-of: link-platform
+    access-type: employee
+rules:
+# Read-only access to applications
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "endpoints", "events"]
+  verbs: ["get", "list", "describe"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "describe"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "describe"]
+# Monitoring resources
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "prometheusrules"]
+  verbs: ["get", "list"]
+
+---
+# Service-to-Service RBAC (Internal Services Only)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: link-app-services
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    access-type: service
+  annotations:
+    # AWS IAM role for service accounts (if using EKS)
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/link-app-services
+automountServiceAccountToken: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: link-services
+  name: service-discovery-role
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    access-type: service
+rules:
+# Service discovery and health checks only
+- apiGroups: [""]
+  resources: ["endpoints", "services"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+  resourceNames: [] # Restrict to specific pods if needed
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: link-app-services-binding
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    access-type: service
+subjects:
+- kind: ServiceAccount
+  name: link-app-services
+  namespace: link-services
+roleRef:
+  kind: Role
+  name: service-discovery-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: link-support-binding
+  namespace: link-services
+  labels:
+    environment: production
+    app.kubernetes.io/part-of: link-platform
+    access-type: employee
+subjects:
+# AWS IAM role integration - support team access
+- kind: User
+  name: arn:aws:iam::ACCOUNT:role/link-support
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: link-support-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# DevOps ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: link-devops-binding
+  labels:
+    environment: all
+    app.kubernetes.io/part-of: link-platform
+    access-type: employee
+subjects:
+# AWS IAM role integration - DevOps engineers
+- kind: User
+  name: arn:aws:iam::ACCOUNT:role/link-devops
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: link-devops-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# CI/CD Deployer ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: link-cicd-deployer
+  labels:
+    app.kubernetes.io/part-of: link-platform
+rules:
+# Core resources for deployment
+- apiGroups: [""]
+  resources: ["secrets", "configmaps", "services", "serviceaccounts"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# Ingress management
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# RBAC management (limited)
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "create", "update", "patch"]
+# ArgoCD application management
+- apiGroups: ["argoproj.io"]
+  resources: ["applications", "applicationsets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# Monitoring resources
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "prometheusrules"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# HPA and PDB
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# Custom resources
+- apiGroups: ["linkerd.io"]
+  resources: ["serviceprofiles", "trafficsplits"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+
+---
+# CI/CD Service Accounts
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: link-cicd-dev
+  namespace: link-system
+  labels:
+    environment: development
+    app.kubernetes.io/part-of: link-platform
+automountServiceAccountToken: true
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: link-cicd-staging
+  namespace: link-system
+  labels:
+    environment: staging
+    app.kubernetes.io/part-of: link-platform
+automountServiceAccountToken: true
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: link-cicd-production
+  namespace: link-system
+  labels:
+    environment: production
+    app.kubernetes.io/part-of: link-platform
+automountServiceAccountToken: true
+
+---
+# CI/CD ClusterRoleBindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: link-cicd-dev-binding
+  labels:
+    environment: development
+    app.kubernetes.io/part-of: link-platform
+subjects:
+- kind: ServiceAccount
+  name: link-cicd-dev
+  namespace: link-system
+roleRef:
+  kind: ClusterRole
+  name: link-cicd-deployer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: link-cicd-staging-binding
+  labels:
+    environment: staging
+    app.kubernetes.io/part-of: link-platform
+subjects:
+- kind: ServiceAccount
+  name: link-cicd-staging
+  namespace: link-system
+roleRef:
+  kind: ClusterRole
+  name: link-cicd-deployer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: link-cicd-production-binding
+  labels:
+    environment: production
+    app.kubernetes.io/part-of: link-platform
+subjects:
+- kind: ServiceAccount
+  name: link-cicd-production
+  namespace: link-system
+roleRef:
+  kind: ClusterRole
+  name: link-cicd-deployer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Monitoring Service Accounts and RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: monitoring
+automountServiceAccountToken: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-scraper
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: monitoring
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-scraper-binding
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-scraper
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: monitoring
+
+---
+# Grafana Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: monitoring
+automountServiceAccountToken: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: monitoring
+  name: grafana-reader
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: monitoring
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana-reader-binding
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: monitoring
+subjects:
+- kind: ServiceAccount
+  name: grafana
+  namespace: monitoring
+roleRef:
+  kind: Role
+  name: grafana-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ArgoCD Application Controller (enhanced permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: link-argocd-application-controller
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: gitops
+rules:
+# Full application management
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["policy"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["autoscaling"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["argoproj.io"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["linkerd.io"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+# Service Account for database operations
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: link-db-operator
+  namespace: link-system
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: database
+automountServiceAccountToken: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: link-services
+  name: link-db-operator
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: database
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list", "create", "update", "patch"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "create", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: link-db-operator-binding
+  namespace: link-services
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    component: database
+subjects:
+- kind: ServiceAccount
+  name: link-db-operator
+  namespace: link-system
+roleRef:
+  kind: Role
+  name: link-db-operator
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Emergency break-glass access (restricted)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: link-emergency-access
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    access-level: emergency
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+# DO NOT BIND TO USERS BY DEFAULT - ONLY FOR EMERGENCY ACCESS
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: link-emergency-access-binding
+  labels:
+    app.kubernetes.io/part-of: link-platform
+    access-level: emergency
+    # This binding is suspended by default
+    suspended: "true"
+subjects: []  # Empty - must be populated manually during emergencies
+roleRef:
+  kind: ClusterRole
+  name: link-emergency-access
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,660 @@
+name: GitOps Sync and Management
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'k8s/argocd/**'
+      - 'k8s/helm/**'
+      - 'k8s/*.yaml'
+      - 'monitoring/**'
+  workflow_dispatch:
+    inputs:
+      sync_target:
+        description: 'Applications to sync'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - infrastructure
+        - monitoring
+        - microservices
+        - staging
+        - production
+      force_sync:
+        description: 'Force sync even if app is healthy'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+  ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+  ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+
+jobs:
+  # Validate ArgoCD applications
+  validate-apps:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Validate ArgoCD application manifests
+      run: |
+        echo "Validating ArgoCD application manifests..."
+        
+        # Check YAML syntax
+        for file in k8s/argocd/*.yaml; do
+          echo "Validating $file"
+          yq eval '.' "$file" > /dev/null || {
+            echo "❌ Invalid YAML in $file"
+            exit 1
+          }
+        done
+        
+        echo "✅ All ArgoCD manifests are valid"
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ env.ARGOCD_SERVER }} \
+          --username ${{ env.ARGOCD_USERNAME }} \
+          --password ${{ env.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Validate applications against cluster
+      run: |
+        echo "Validating applications against ArgoCD server..."
+        
+        # List current applications
+        argocd app list || echo "Failed to connect to ArgoCD server"
+        
+        # Validate specific applications exist
+        APPS=("link-platform" "postgres-ha-operator" "redis-cluster-ha" "prometheus-stack")
+        
+        for app in "${APPS[@]}"; do
+          if argocd app get "$app" > /dev/null 2>&1; then
+            echo "✅ Application $app exists"
+          else
+            echo "⚠️ Application $app not found (may be new)"
+          fi
+        done
+
+    - name: Detect configuration drift
+      run: |
+        echo "🔍 Detecting configuration drift between Git and cluster..."
+        
+        # Get all applications managed by ArgoCD
+        argocd app list -o name | while read app_name; do
+          if [ -n "$app_name" ]; then
+            echo ""
+            echo "Checking drift for application: $app_name"
+            
+            # Get app diff to check for drift
+            if argocd app diff "$app_name" > app_diff.txt 2>&1; then
+              if [ -s app_diff.txt ]; then
+                echo "⚠️ Configuration drift detected for $app_name:"
+                head -20 app_diff.txt  # Show first 20 lines of diff
+                if [ $(wc -l < app_diff.txt) -gt 20 ]; then
+                  echo "... (truncated, see full logs for complete diff)"
+                fi
+                echo ""
+              else
+                echo "✅ No drift detected for $app_name"
+              fi
+            else
+              echo "❌ Failed to check drift for $app_name"
+              cat app_diff.txt
+            fi
+            
+            rm -f app_diff.txt
+          fi
+        done
+
+    - name: Validate application health status
+      run: |
+        echo "🏥 Validating application health status..."
+        
+        # Check health of all applications
+        unhealthy_apps=()
+        degraded_apps=()
+        
+        argocd app list -o json | jq -r '.[] | select(.status != null) | "\(.metadata.name):\(.status.health.status):\(.status.sync.status)"' | while IFS=':' read app_name health_status sync_status; do
+          echo "Checking $app_name - Health: $health_status, Sync: $sync_status"
+          
+          case "$health_status" in
+            "Healthy")
+              echo "✅ $app_name is healthy"
+              ;;
+            "Progressing")
+              echo "⏳ $app_name is progressing (deployment in progress)"
+              ;;
+            "Degraded")
+              echo "⚠️ $app_name is degraded"
+              degraded_apps+=("$app_name")
+              ;;
+            "Suspended"|"Unknown")
+              echo "❌ $app_name is $health_status"
+              unhealthy_apps+=("$app_name")
+              ;;
+            *)
+              echo "❓ $app_name has unknown health status: $health_status"
+              ;;
+          esac
+          
+          case "$sync_status" in
+            "Synced")
+              echo "✅ $app_name is synced"
+              ;;
+            "OutOfSync")
+              echo "⚠️ $app_name is out of sync"
+              ;;
+            *)
+              echo "❓ $app_name has unknown sync status: $sync_status"
+              ;;
+          esac
+          echo ""
+        done
+        
+        # Summary
+        if [ ${#unhealthy_apps[@]} -gt 0 ]; then
+          echo "❌ Unhealthy applications found: ${unhealthy_apps[*]}"
+        fi
+        
+        if [ ${#degraded_apps[@]} -gt 0 ]; then
+          echo "⚠️ Degraded applications found: ${degraded_apps[*]}"
+        fi
+
+    - name: Validate sync prerequisites
+      run: |
+        echo "📋 Validating sync prerequisites..."
+        
+        # Check ArgoCD server connectivity and health
+        if argocd version --client --short; then
+          echo "✅ ArgoCD CLI is working"
+        else
+          echo "❌ ArgoCD CLI connection failed"
+          exit 1
+        fi
+        
+        # Check if ArgoCD server is healthy
+        if argocd app list --grpc-web > /dev/null 2>&1; then
+          echo "✅ ArgoCD server is accessible"
+        else
+          echo "❌ ArgoCD server is not accessible"
+          exit 1
+        fi
+        
+        # Validate Git repository access
+        echo "Validating Git repository access..."
+        
+        # Get repository URLs from applications
+        repo_urls=$(argocd app list -o json | jq -r '.[].spec.source.repoURL' | sort -u)
+        
+        echo "Repository URLs found:"
+        echo "$repo_urls"
+        
+        # For each repo, check if ArgoCD can access it
+        echo "$repo_urls" | while read repo_url; do
+          if [ -n "$repo_url" ] && [ "$repo_url" != "null" ]; then
+            echo "Checking repository access: $repo_url"
+            
+            # Test repository connection through ArgoCD
+            if timeout 30 argocd repo get "$repo_url" > /dev/null 2>&1; then
+              echo "✅ Repository accessible: $repo_url"
+            else
+              echo "❌ Repository not accessible: $repo_url"
+            fi
+          fi
+        done
+
+    - name: Check application dependencies
+      run: |
+        echo "🔗 Checking application dependencies..."
+        
+        # Define dependency order (infrastructure first, then applications)
+        infrastructure_apps=("postgres-ha-operator" "redis-cluster-ha" "prometheus-stack" "linkerd-control-plane")
+        platform_apps=("link-platform" "monitoring-stack")
+        application_apps=("link-app-staging" "link-app-production")
+        
+        echo "Checking infrastructure applications..."
+        for app in "${infrastructure_apps[@]}"; do
+          if argocd app get "$app" > /dev/null 2>&1; then
+            health=$(argocd app get "$app" -o json | jq -r '.status.health.status')
+            sync=$(argocd app get "$app" -o json | jq -r '.status.sync.status')
+            
+            if [ "$health" = "Healthy" ] && [ "$sync" = "Synced" ]; then
+              echo "✅ Infrastructure dependency ready: $app"
+            else
+              echo "⚠️ Infrastructure dependency not ready: $app (Health: $health, Sync: $sync)"
+            fi
+          else
+            echo "❓ Infrastructure app not found: $app"
+          fi
+        done
+        
+        echo ""
+        echo "Checking platform applications..."
+        for app in "${platform_apps[@]}"; do
+          if argocd app get "$app" > /dev/null 2>&1; then
+            health=$(argocd app get "$app" -o json | jq -r '.status.health.status')
+            sync=$(argocd app get "$app" -o json | jq -r '.status.sync.status')
+            
+            if [ "$health" = "Healthy" ] && [ "$sync" = "Synced" ]; then
+              echo "✅ Platform dependency ready: $app"
+            else
+              echo "⚠️ Platform dependency not ready: $app (Health: $health, Sync: $sync)"
+            fi
+          else
+            echo "❓ Platform app not found: $app"
+          fi
+        done
+
+    - name: Dry-run sync validation
+      run: |
+        echo "🧪 Performing dry-run sync validation..."
+        
+        # List applications that would be affected by sync
+        apps_to_sync=$(argocd app list -o json | jq -r '.[] | select(.status.sync.status == "OutOfSync") | .metadata.name')
+        
+        if [ -n "$apps_to_sync" ]; then
+          echo "Applications that would be synced:"
+          echo "$apps_to_sync"
+          
+          # For each out-of-sync app, show what would change
+          echo "$apps_to_sync" | while read app_name; do
+            if [ -n "$app_name" ]; then
+              echo ""
+              echo "🔍 Changes for $app_name:"
+              if argocd app diff "$app_name" | head -50; then
+                echo "✅ Diff retrieved successfully"
+              else
+                echo "❌ Failed to get diff for $app_name"
+              fi
+            fi
+          done
+        else
+          echo "✅ All applications are in sync - no changes would be made"
+        fi
+
+    - name: Generate sync report
+      run: |
+        echo "📊 Generating sync validation report..."
+        
+        # Create a comprehensive sync report
+        {
+          echo "# ArgoCD Sync Validation Report"
+          echo "Generated: $(date -u)"
+          echo ""
+          
+          echo "## Application Status Summary"
+          argocd app list -o wide
+          echo ""
+          
+          echo "## Applications by Health Status"
+          echo "### Healthy Applications"
+          argocd app list -o json | jq -r '.[] | select(.status.health.status == "Healthy") | .metadata.name' | sed 's/^/- /'
+          
+          echo ""
+          echo "### Applications with Issues"
+          argocd app list -o json | jq -r '.[] | select(.status.health.status != "Healthy") | "\(.metadata.name): \(.status.health.status)"' | sed 's/^/- /'
+          
+          echo ""
+          echo "## Sync Status"
+          echo "### Synced Applications"
+          argocd app list -o json | jq -r '.[] | select(.status.sync.status == "Synced") | .metadata.name' | sed 's/^/- /'
+          
+          echo ""
+          echo "### Out-of-Sync Applications"
+          argocd app list -o json | jq -r '.[] | select(.status.sync.status == "OutOfSync") | .metadata.name' | sed 's/^/- /'
+          
+          echo ""
+          echo "## Repository Status"
+          argocd repo list
+          
+        } > sync_validation_report.md
+        
+        echo "✅ Sync validation report generated"
+        echo ""
+        echo "=== SYNC VALIDATION SUMMARY ==="
+        cat sync_validation_report.md
+        echo "==============================="
+
+  # Sync infrastructure applications
+  sync-infrastructure:
+    needs: validate-apps
+    runs-on: ubuntu-latest
+    if: |
+      (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[infrastructure]')) ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.sync_target == 'all' || github.event.inputs.sync_target == 'infrastructure'))
+    
+    steps:
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ env.ARGOCD_SERVER }} \
+          --username ${{ env.ARGOCD_USERNAME }} \
+          --password ${{ env.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Sync infrastructure applications
+      run: |
+        echo "🏗️ Syncing infrastructure applications..."
+        
+        INFRASTRUCTURE_APPS=(
+          "link-prerequisites"
+          "external-secrets-operator"
+          "cert-manager"
+          "ingress-nginx"
+          "postgres-ha-operator"
+          "postgres-ha-cluster"
+          "postgres-ha-pgbouncer"
+          "redis-cluster-ha"
+          "redis-sentinel-ha"
+          "qdrant-cluster"
+          "qdrant-backup"
+          "linkerd-config"
+          "linkerd-monitoring"
+        )
+        
+        for app in "${INFRASTRUCTURE_APPS[@]}"; do
+          echo "Syncing $app..."
+          
+          if argocd app sync "$app" --timeout 300 ${{ github.event.inputs.force_sync == 'true' && '--force' || '' }}; then
+            echo "✅ $app synced successfully"
+            
+            # Wait for app to be healthy
+            argocd app wait "$app" --timeout 300 --health
+          else
+            echo "❌ Failed to sync $app"
+          fi
+        done
+        
+        echo "🎉 Infrastructure sync completed"
+
+  # Sync monitoring applications
+  sync-monitoring:
+    needs: [validate-apps, sync-infrastructure]
+    runs-on: ubuntu-latest
+    if: |
+      (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[monitoring]')) ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.sync_target == 'all' || github.event.inputs.sync_target == 'monitoring'))
+    
+    steps:
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ env.ARGOCD_SERVER }} \
+          --username ${{ env.ARGOCD_USERNAME }} \
+          --password ${{ env.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Sync monitoring applications
+      run: |
+        echo "📊 Syncing monitoring applications..."
+        
+        MONITORING_APPS=(
+          "prometheus-stack"
+          "loki-stack"
+          "jaeger-tracing"
+          "custom-dashboards"
+          "alert-rules"
+        )
+        
+        for app in "${MONITORING_APPS[@]}"; do
+          echo "Syncing $app..."
+          
+          if argocd app sync "$app" --timeout 600 ${{ github.event.inputs.force_sync == 'true' && '--force' || '' }}; then
+            echo "✅ $app synced successfully"
+            
+            # Wait for app to be healthy (longer timeout for monitoring)
+            argocd app wait "$app" --timeout 600 --health
+          else
+            echo "❌ Failed to sync $app"
+          fi
+        done
+        
+        echo "🎉 Monitoring sync completed"
+
+  # Sync microservices (development and staging only)
+  sync-microservices:
+    needs: [validate-apps, sync-infrastructure, sync-monitoring]
+    runs-on: ubuntu-latest
+    if: |
+      (github.ref == 'refs/heads/develop' && contains(github.event.head_commit.message, '[microservices]')) ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.sync_target == 'all' || github.event.inputs.sync_target == 'microservices'))
+    
+    steps:
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ env.ARGOCD_SERVER }} \
+          --username ${{ env.ARGOCD_USERNAME }} \
+          --password ${{ env.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Sync microservices applications
+      run: |
+        echo "🚀 Syncing microservices applications..."
+        
+        MICROSERVICE_APPS=(
+          "user-svc"
+          "chat-svc"
+          "ai-svc"
+          "discovery-svc"
+          "search-svc"
+          "api-gateway"
+        )
+        
+        for app in "${MICROSERVICE_APPS[@]}"; do
+          echo "Syncing $app..."
+          
+          if argocd app sync "$app" --timeout 300 ${{ github.event.inputs.force_sync == 'true' && '--force' || '' }}; then
+            echo "✅ $app synced successfully"
+            
+            # Wait for app to be healthy
+            argocd app wait "$app" --timeout 300 --health
+          else
+            echo "❌ Failed to sync $app"
+          fi
+        done
+        
+        echo "🎉 Microservices sync completed"
+
+  # Sync staging environment
+  sync-staging:
+    needs: [validate-apps, sync-infrastructure]
+    runs-on: ubuntu-latest
+    if: |
+      (github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.sync_target == 'all' || github.event.inputs.sync_target == 'staging'))
+    environment: staging
+    
+    steps:
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ env.ARGOCD_SERVER }} \
+          --username ${{ env.ARGOCD_USERNAME }} \
+          --password ${{ env.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Sync staging applications
+      run: |
+        echo "🧪 Syncing staging environment..."
+        
+        STAGING_APPS=(
+          "link-app-staging"
+          "link-frontend"
+        )
+        
+        for app in "${STAGING_APPS[@]}"; do
+          echo "Syncing $app..."
+          
+          if argocd app sync "$app" --timeout 600 ${{ github.event.inputs.force_sync == 'true' && '--force' || '' }}; then
+            echo "✅ $app synced successfully"
+            
+            # Wait for app to be healthy
+            argocd app wait "$app" --timeout 600 --health
+          else
+            echo "❌ Failed to sync $app"
+          fi
+        done
+        
+        echo "🎉 Staging sync completed"
+
+  # Sync production (manual approval required)
+  sync-production:
+    needs: [validate-apps, sync-infrastructure]
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.sync_target == 'production'))
+    environment: production
+    
+    steps:
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ env.ARGOCD_SERVER }} \
+          --username ${{ env.ARGOCD_USERNAME }} \
+          --password ${{ env.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Review production changes before sync
+      run: |
+        echo "🔍 Reviewing production changes..."
+        
+        # Show current production app status
+        argocd app get link-app-production
+        
+        # Show diff if available
+        argocd app diff link-app-production || echo "No diff available"
+
+    - name: Sync production application (manual approval completed)
+      run: |
+        echo "🚀 Syncing production environment..."
+        
+        PRODUCTION_APPS=(
+          "link-app-production"
+        )
+        
+        for app in "${PRODUCTION_APPS[@]}"; do
+          echo "Syncing $app..."
+          
+          if argocd app sync "$app" --timeout 900 ${{ github.event.inputs.force_sync == 'true' && '--force' || '' }}; then
+            echo "✅ $app synced successfully"
+            
+            # Wait for app to be healthy (longer timeout for production)
+            argocd app wait "$app" --timeout 900 --health
+          else
+            echo "❌ Failed to sync $app"
+            exit 1
+          fi
+        done
+        
+        echo "🎉 Production sync completed"
+
+    - name: Post-deployment verification
+      run: |
+        echo "✅ Running post-deployment verification..."
+        
+        # Check application health
+        argocd app get link-app-production
+        
+        # Verify all pods are ready
+        echo "Checking pod readiness..."
+        # Note: This would require kubectl access to the cluster
+        
+    - name: Notify production deployment
+      run: |
+        echo "📢 Notifying production deployment completion..."
+        
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"✅ Production deployment completed successfully\n**Environment:** Production\n**Time:** $(date)\n**Operator:** ${{ github.actor }}\n**Applications:** link-app-production\"}" \
+          ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification skipped"
+
+  # Health check for all applications
+  health-check:
+    needs: [sync-infrastructure, sync-monitoring, sync-microservices, sync-staging]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Install ArgoCD CLI
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Login to ArgoCD
+      run: |
+        argocd login ${{ env.ARGOCD_SERVER }} \
+          --username ${{ env.ARGOCD_USERNAME }} \
+          --password ${{ env.ARGOCD_PASSWORD }} \
+          --insecure
+
+    - name: Generate health report
+      run: |
+        echo "🏥 Generating application health report..."
+        
+        # Get all applications
+        argocd app list -o wide > app_status.txt
+        
+        # Count healthy vs unhealthy apps
+        HEALTHY=$(grep "Healthy" app_status.txt | wc -l)
+        TOTAL=$(tail -n +2 app_status.txt | wc -l)
+        UNHEALTHY=$((TOTAL - HEALTHY))
+        
+        echo "📊 Health Summary:"
+        echo "✅ Healthy: $HEALTHY"
+        echo "❌ Unhealthy: $UNHEALTHY"
+        echo "📝 Total: $TOTAL"
+        
+        # Show details of unhealthy apps
+        if [ $UNHEALTHY -gt 0 ]; then
+          echo ""
+          echo "🚨 Unhealthy Applications:"
+          grep -v "Healthy" app_status.txt | grep -v "NAME" || echo "No unhealthy apps found"
+        fi
+        
+        # Upload report as artifact
+        cat app_status.txt
+
+    - name: Upload health report
+      uses: actions/upload-artifact@v3
+      with:
+        name: argocd-health-report
+        path: app_status.txt
+        retention-days: 7

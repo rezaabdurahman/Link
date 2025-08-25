@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/link-app/shared-libs/database/monitoring"
+	sharedConfig "github.com/link-app/shared-libs/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -15,15 +16,15 @@ import (
 // ConnectDatabase initializes the PostgreSQL connection with pgvector extension
 func ConnectDatabase() (*gorm.DB, error) {
 	// Get database configuration from environment
-	host := getEnv("DB_HOST", "postgres")
-	port := getEnv("DB_PORT", "5432")
-	user := getEnv("DB_USER", "link_user")
-	password := getEnv("DB_PASSWORD", "")
-	dbname := getEnv("DB_NAME", "link_app")
-	sslmode := getEnv("DB_SSLMODE", "disable")
+	host := sharedConfig.GetEnv("DB_HOST", "postgres")
+	port := sharedConfig.GetEnv("DB_PORT", "5432")
+	user := sharedConfig.GetEnv("DB_USER", "link_user")
+	password := sharedConfig.GetDatabasePassword() // Use shared secrets management
+	dbname := sharedConfig.GetEnv("DB_NAME", "link_app")
+	sslmode := sharedConfig.GetEnv("DB_SSLMODE", "disable")
 
 	// Database encryption configuration
-	encryptionEnabled := getEnv("DB_ENCRYPTION_ENABLED", "true")
+	encryptionEnabled := sharedConfig.GetEnv("DB_ENCRYPTION_ENABLED", "true")
 	if encryptionEnabled == "true" {
 		// Enable PostgreSQL Transparent Data Encryption (TDE) or disk encryption
 		// This requires PostgreSQL to be configured with encryption at rest
@@ -64,7 +65,7 @@ func ConnectDatabase() (*gorm.DB, error) {
 	}
 
 	// Initialize Sentry integration for database errors
-	if getEnv("SENTRY_DSN", "") != "" {
+	if sharedConfig.GetEnv("SENTRY_DSN", "") != "" {
 		sentryPlugin := monitoring.NewGormSentryPlugin(monitoringConfig)
 		if err := db.Use(sentryPlugin); err != nil {
 			return nil, fmt.Errorf("failed to initialize database Sentry integration: %w", err)
@@ -83,7 +84,7 @@ func ConnectDatabase() (*gorm.DB, error) {
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	// Enable pgvector extension (skip for development)
-	if getEnv("ENABLE_VECTOR_EXTENSION", "false") == "true" {
+	if sharedConfig.GetEnv("ENABLE_VECTOR_EXTENSION", "false") == "true" {
 		if err := enablePgVectorExtension(db); err != nil {
 			log.Printf("Warning: Failed to enable pgvector extension: %v", err)
 			log.Println("Vector search features will be disabled")
@@ -113,10 +114,3 @@ func migrateModels(db *gorm.DB) error {
 	return nil
 }
 
-// getEnv returns the value of an environment variable or a default value
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}

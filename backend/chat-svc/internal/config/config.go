@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -81,52 +82,52 @@ type WebSocketConfig struct {
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
-		ServerHost: getEnv("SERVER_HOST", "0.0.0.0"),
-		ServerPort: getEnv("SERVER_PORT", "8080"),
+		ServerHost: GetEnv("SERVER_HOST", "0.0.0.0"),
+		ServerPort: GetEnv("SERVER_PORT", "8080"),
 
 		Database: DatabaseConfig{
-			Host:            getEnv("DB_HOST", "localhost"),
-			Port:            getEnv("DB_PORT", "5432"),
-			Name:            getEnv("DB_NAME", "chat_db"),
-			User:            getEnv("DB_USER", "postgres"),
-			Password:        getEnv("DB_PASSWORD", ""),
-			SSLMode:         getEnv("DB_SSL_MODE", "disable"),
-			MaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
-			MaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 25),
-			ConnMaxLifetime: getEnvAsDuration("DB_CONN_MAX_LIFETIME", 300*time.Second),
+			Host:            GetEnv("DB_HOST", "localhost"),
+			Port:            GetEnv("DB_PORT", "5432"),
+			Name:            GetEnv("DB_NAME", "chat_db"),
+			User:            GetEnv("DB_USER", "postgres"),
+			Password:        GetDatabasePassword(), // Use shared secrets management
+			SSLMode:         GetEnv("DB_SSL_MODE", "disable"),
+			MaxOpenConns:    GetEnvAsInt("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:    GetEnvAsInt("DB_MAX_IDLE_CONNS", 25),
+			ConnMaxLifetime: GetEnvAsDuration("DB_CONN_MAX_LIFETIME", 300*time.Second),
 		},
 
 		Redis: RedisConfig{
-			Host:     getEnv("REDIS_HOST", "localhost"),
-			Port:     getEnv("REDIS_PORT", "6379"),
-			Password: getEnv("REDIS_PASSWORD", ""),
-			DB:       getEnvAsInt("REDIS_DB", 0),
+			Host:     GetEnv("REDIS_HOST", "localhost"),
+			Port:     GetEnv("REDIS_PORT", "6379"),
+			Password: GetRedisPassword(), // Use shared secrets management
+			DB:       GetEnvAsInt("REDIS_DB", 0),
 		},
 
 		JWT: JWTConfig{
-			Secret:    getEnv("JWT_SECRET", "your_jwt_secret_key_here"),
-			ExpiresIn: getEnvAsDuration("JWT_EXPIRES_IN", 24*time.Hour),
+			Secret:    GetJWTSecret(), // Use shared secrets management
+			ExpiresIn: GetEnvAsDuration("JWT_EXPIRES_IN", 24*time.Hour),
 		},
 
 		WebSocket: WebSocketConfig{
-			ReadBufferSize:  getEnvAsInt("WS_READ_BUFFER_SIZE", 1024),
-			WriteBufferSize: getEnvAsInt("WS_WRITE_BUFFER_SIZE", 1024),
-			MaxMessageSize:  int64(getEnvAsInt("WS_MAX_MESSAGE_SIZE", 512)),
+			ReadBufferSize:  GetEnvAsInt("WS_READ_BUFFER_SIZE", 1024),
+			WriteBufferSize: GetEnvAsInt("WS_WRITE_BUFFER_SIZE", 1024),
+			MaxMessageSize:  int64(GetEnvAsInt("WS_MAX_MESSAGE_SIZE", 512)),
 		},
 
-		LogLevel:  getEnv("LOG_LEVEL", "info"),
-		LogFormat: getEnv("LOG_FORMAT", "json"),
+		LogLevel:  GetEnv("LOG_LEVEL", "info"),
+		LogFormat: GetEnv("LOG_FORMAT", "json"),
 
-		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
-		CORSAllowedMethods: getEnv("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"),
-		CORSAllowedHeaders: getEnv("CORS_ALLOWED_HEADERS", "Content-Type,Authorization"),
+		CORSAllowedOrigins: GetEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
+		CORSAllowedMethods: GetEnv("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"),
+		CORSAllowedHeaders: GetEnv("CORS_ALLOWED_HEADERS", "Content-Type,Authorization"),
 
-		RateLimitEnabled:           getEnvAsBool("RATE_LIMIT_ENABLED", true),
-		RateLimitRequestsPerMinute: getEnvAsInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 100),
+		RateLimitEnabled:           GetEnvAsBool("RATE_LIMIT_ENABLED", true),
+		RateLimitRequestsPerMinute: GetEnvAsInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 100),
 
-		HealthCheckInterval: getEnvAsDuration("HEALTH_CHECK_INTERVAL", 30*time.Second),
+		HealthCheckInterval: GetEnvAsDuration("HEALTH_CHECK_INTERVAL", 30*time.Second),
 
-		Environment: getEnv("ENVIRONMENT", "development"),
+		Environment: GetEnv("ENVIRONMENT", "development"),
 	}
 
 	return cfg, nil
@@ -134,33 +135,57 @@ func Load() (*Config, error) {
 
 // Helper functions for environment variable parsing
 
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
+// GetEnv retrieves an environment variable with fallback
+func GetEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
 		return value
 	}
 	return defaultValue
 }
 
-func getEnvAsInt(key string, defaultValue int) int {
-	valueStr := getEnv(key, "")
+// GetEnvAsInt retrieves an environment variable as integer
+func GetEnvAsInt(key string, defaultValue int) int {
+	valueStr := GetEnv(key, "")
 	if value, err := strconv.Atoi(valueStr); err == nil {
 		return value
 	}
 	return defaultValue
 }
 
-func getEnvAsBool(key string, defaultValue bool) bool {
-	valueStr := getEnv(key, "")
-	if value, err := strconv.ParseBool(valueStr); err == nil {
-		return value
+// GetEnvAsBool retrieves an environment variable as boolean
+func GetEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := strings.ToLower(GetEnv(key, ""))
+	switch valueStr {
+	case "true", "1", "yes", "on":
+		return true
+	case "false", "0", "no", "off":
+		return false
+	default:
+		return defaultValue
 	}
-	return defaultValue
 }
 
-func getEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
-	valueStr := getEnv(key, "")
+// GetEnvAsDuration retrieves an environment variable as duration
+func GetEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
+	valueStr := GetEnv(key, "")
 	if value, err := time.ParseDuration(valueStr); err == nil {
 		return value
 	}
 	return defaultValue
 }
+
+// GetDatabasePassword retrieves database password
+func GetDatabasePassword() string {
+	return GetEnv("DB_PASSWORD", "linkpass")
+}
+
+// GetJWTSecret retrieves JWT signing secret
+func GetJWTSecret() string {
+	return GetEnv("JWT_SECRET", "dev-secret-key-change-in-production")
+}
+
+// GetRedisPassword retrieves Redis password
+func GetRedisPassword() string {
+	return GetEnv("REDIS_PASSWORD", "")
+}
+

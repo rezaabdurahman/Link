@@ -18,12 +18,20 @@ import (
 	"github.com/link-app/discovery-svc/internal/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/link-app/shared-libs/lifecycle"
+	sharedConfig "github.com/link-app/shared-libs/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
 func main() {
+	// Initialize shared secrets management
+	if err := sharedConfig.InitSecrets(); err != nil {
+		log.Printf("Warning: Failed to initialize secrets management: %v", err)
+		log.Println("Continuing with environment variables...")
+	}
+	defer sharedConfig.CloseSecrets()
+
 	// Initialize Sentry for error reporting
 	if err := sentry.Init(); err != nil {
 		log.Printf("Failed to initialize Sentry: %v", err)
@@ -76,7 +84,7 @@ func main() {
 	router := gin.Default()
 
 	// Configure server with lifecycle management
-	port := getEnv("PORT", "8083")
+	port := sharedConfig.GetEnv("PORT", "8083")
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      router,
@@ -227,11 +235,11 @@ func main() {
 
 func initDB() (*gorm.DB, error) {
 	// Database connection parameters
-	host := getEnv("DB_HOST", "localhost")
-	port := getEnv("DB_PORT", "5432")
-	user := getEnv("DB_USER", "linkuser")
-	password := getEnv("DB_PASSWORD", "linkpass")
-	dbname := getEnv("DB_NAME", "linkdb")
+	host := sharedConfig.GetEnv("DB_HOST", "localhost")
+	port := sharedConfig.GetEnv("DB_PORT", "5432")
+	user := sharedConfig.GetEnv("DB_USER", "linkuser")
+	password := sharedConfig.GetDatabasePassword() // Use shared secrets management
+	dbname := sharedConfig.GetEnv("DB_NAME", "linkdb")
 
 	dsn := "host=" + host + " user=" + user + " password=" + password + " dbname=" + dbname + " port=" + port + " sslmode=disable TimeZone=UTC"
 
@@ -301,9 +309,3 @@ func startCleanupRoutine(broadcastService *service.BroadcastService, cueService 
 	}
 }
 
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}

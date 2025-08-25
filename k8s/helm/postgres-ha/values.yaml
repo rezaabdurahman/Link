@@ -1,0 +1,420 @@
+# Default values for postgres-ha
+# This is a YAML-formatted file.
+
+global:
+  # Global configuration
+  namespace: link-services
+  
+  # Image registry settings
+  imageRegistry: ghcr.io
+  imagePullSecrets: []
+  
+  # Common labels applied to all resources
+  commonLabels:
+    app.kubernetes.io/part-of: link-database
+    app.kubernetes.io/managed-by: helm
+  
+  # Storage class configuration
+  storageClass:
+    name: fast-ssd
+    create: false
+
+# CloudNativePG Operator Configuration
+operator:
+  # Whether to install the CloudNativePG operator
+  enabled: true
+  
+  # Operator image configuration
+  image:
+    repository: ghcr.io/cloudnative-pg/cloudnative-pg
+    tag: "1.23.0"
+    pullPolicy: IfNotPresent
+  
+  # Operator resource requirements
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+    limits:
+      cpu: 500m
+      memory: 500Mi
+  
+  # Operator configuration
+  config:
+    leaderElection: true
+    webhookPort: 9443
+    metricsAddr: ":8080"
+    logging:
+      level: info
+      format: json
+
+# PostgreSQL Cluster Configuration
+cluster:
+  # Cluster name
+  name: postgres-cluster
+  
+  # Number of PostgreSQL instances (HA requires >= 3)
+  instances: 3
+  
+  # Update strategy
+  primaryUpdateStrategy: unsupervised  # or 'supervised' for production
+  
+  # PostgreSQL configuration
+  postgresql:
+    # PostgreSQL version
+    image:
+      repository: ghcr.io/cloudnative-pg/postgresql
+      tag: "16.2"
+      pullPolicy: IfNotPresent
+    
+    # Database configuration
+    database: linkdb
+    username: linkuser
+    
+    # PostgreSQL parameters
+    parameters:
+      # Connection settings
+      max_connections: "200"
+      listen_addresses: "*"
+      
+      # Memory settings
+      shared_buffers: "512MB"
+      effective_cache_size: "1536MB"
+      work_mem: "8MB"
+      maintenance_work_mem: "128MB"
+      
+      # WAL and replication settings
+      wal_level: "replica"
+      max_wal_senders: "10"
+      max_replication_slots: "10"
+      wal_keep_size: "2GB"
+      synchronous_commit: "on"
+      synchronous_standby_names: "FIRST 1 (*)"
+      
+      # Performance settings for SSD
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      
+      # Security settings
+      password_encryption: "scram-sha-256"
+      ssl: "on"
+      
+      # Logging
+      log_statement: "ddl"
+      log_min_duration_statement: "1000"
+      log_connections: "on"
+      log_disconnections: "on"
+  
+  # Storage configuration
+  storage:
+    size: 100Gi
+    storageClass: fast-ssd
+    
+  # Resource requirements
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  
+  # Node selection
+  nodeSelector:
+    node.kubernetes.io/instance-type: m6i.xlarge
+  
+  # Anti-affinity rules
+  affinity:
+    enabled: true
+    topologyKey: kubernetes.io/hostname
+  
+  # Failover configuration
+  failoverDelay: 30s
+  switchoverDelay: 15s
+  smartShutdownTimeout: 60s
+
+# Backup Configuration
+backup:
+  # Enable S3 backup
+  enabled: true
+  
+  # S3 configuration
+  s3:
+    bucket: link-app-backups-production
+    path: postgresql-backups/postgres-cluster
+    region: us-west-2
+    storageClass: STANDARD_IA
+  
+  # Backup retention
+  retentionPolicy: "30d"
+  
+  # Scheduled backups
+  schedule:
+    # Daily backup at 2 AM UTC
+    daily:
+      enabled: true
+      schedule: "0 2 * * *"
+      retentionPolicy: "30d"
+    
+    # Weekly backup on Sunday at 1 AM UTC
+    weekly:
+      enabled: true
+      schedule: "0 1 * * 0"
+      retentionPolicy: "90d"
+  
+  # Backup verification
+  verification:
+    enabled: true
+    schedule: "0 4 * * *"  # Daily at 4 AM UTC
+  
+  # WAL archiving settings
+  wal:
+    compression: gzip
+    encryption: "AES256"
+    maxParallel: 8
+
+# Connection Pooling (PgBouncer)
+pgbouncer:
+  enabled: true
+  
+  # Image configuration
+  image:
+    repository: pgbouncer/pgbouncer
+    tag: "1.21"
+    pullPolicy: IfNotPresent
+  
+  # PgBouncer configuration
+  config:
+    # Pool settings
+    poolMode: transaction
+    maxClientConn: 2000
+    defaultPoolSize: 30
+    minPoolSize: 10
+    reservePoolSize: 10
+    
+    # Connection settings optimized for HA
+    serverConnectTimeout: 10
+    serverCheckDelay: 10
+    serverLifetime: 1800
+    serverIdleTimeout: 300
+    
+    # Authentication
+    authType: scram-sha-256
+    
+    # Logging
+    logConnections: true
+    logDisconnections: true
+    logPoolerErrors: true
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 5432
+  
+  # Resource requirements
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  
+  # Database pools for each service
+  databases:
+    user_service:
+      database: user_service_db
+      user: user_service_user
+      poolSize: 25
+      maxDbConnections: 30
+    
+    chat_service:
+      database: chat_service_db
+      user: chat_service_user
+      poolSize: 25
+      maxDbConnections: 30
+    
+    discovery_service:
+      database: discovery_service_db
+      user: discovery_service_user
+      poolSize: 20
+      maxDbConnections: 25
+    
+    search_service:
+      database: search_service_db
+      user: search_service_user
+      poolSize: 15
+      maxDbConnections: 20
+    
+    ai_service:
+      database: ai_service_db
+      user: ai_service_user
+      poolSize: 10
+      maxDbConnections: 15
+    
+    # Legacy database
+    linkdb:
+      database: linkdb
+      user: linkuser
+      poolSize: 15
+      maxDbConnections: 20
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  
+  # Prometheus ServiceMonitor
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    scrapeTimeout: 10s
+    
+    # Additional labels for ServiceMonitor
+    labels:
+      release: prometheus
+  
+  # Custom monitoring queries
+  customQueries:
+    enabled: true
+  
+  # Grafana dashboard
+  grafanaDashboard:
+    enabled: true
+    folder: "PostgreSQL"
+    
+  # Alerting rules
+  prometheusRules:
+    enabled: true
+    
+    # Critical alerts
+    alerts:
+      noPrimary:
+        enabled: true
+        severity: critical
+        for: 30s
+      
+      multiplePrimaries:
+        enabled: true
+        severity: critical
+        for: 30s
+      
+      replicationLag:
+        enabled: true
+        severity: warning
+        threshold: 16777216  # 16MB
+        for: 5m
+      
+      connectionsHigh:
+        enabled: true
+        severity: warning
+        threshold: 0.8
+        for: 5m
+      
+      backupFailed:
+        enabled: true
+        severity: critical
+        threshold: 86400  # 24 hours
+        for: 5m
+
+# Security Configuration
+security:
+  # Pod Security Context
+  podSecurityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Container Security Context
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: false  # PostgreSQL needs write access
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Network Policies
+  networkPolicy:
+    enabled: false  # Enable if you want to restrict network access
+  
+  # Service Mesh Integration
+  linkerd:
+    enabled: true
+    inject: true
+
+# External Secrets (if using external secret management)
+externalSecrets:
+  enabled: false
+  backend: aws-secrets-manager
+  region: us-west-2
+  
+  secrets:
+    - name: postgres-cluster-credentials
+      secretStore: aws-secrets-manager
+      data:
+        - secretKey: username
+          remoteRef:
+            key: postgres/cluster/credentials
+            property: username
+        - secretKey: password
+          remoteRef:
+            key: postgres/cluster/credentials
+            property: password
+    
+    - name: backup-credentials
+      secretStore: aws-secrets-manager
+      data:
+        - secretKey: ACCESS_KEY_ID
+          remoteRef:
+            key: postgres/backup/s3
+            property: access_key_id
+        - secretKey: SECRET_ACCESS_KEY
+          remoteRef:
+            key: postgres/backup/s3
+            property: secret_access_key
+
+# Environment-specific overrides
+environments:
+  development:
+    cluster:
+      instances: 1  # Single instance for dev
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "250m"
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+    backup:
+      enabled: false  # No backup in dev
+    monitoring:
+      prometheusRules:
+        enabled: false  # No alerts in dev
+  
+  staging:
+    cluster:
+      instances: 2  # Smaller HA setup
+      primaryUpdateStrategy: unsupervised
+    backup:
+      retentionPolicy: "7d"  # Shorter retention
+      schedule:
+        weekly:
+          enabled: false  # No weekly backup
+  
+  production:
+    cluster:
+      instances: 3
+      primaryUpdateStrategy: supervised  # Manual updates in prod
+    backup:
+      retentionPolicy: "30d"
+      schedule:
+        weekly:
+          enabled: true
+          retentionPolicy: "90d"

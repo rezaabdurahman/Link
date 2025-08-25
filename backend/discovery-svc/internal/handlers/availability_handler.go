@@ -269,7 +269,6 @@ func (h *AvailabilityHandler) BrowseAvailableUsers(c *gin.Context) {
 	// For now, return the same response as GetAvailableUsers
 	// TODO: Implement user client to fetch full profile data from user-svc
 	// This would call user-svc to get full profile data for each user ID
-	// and filter out users hidden by the current user
 	
 	// Convert to public responses
 	publicResponses := make([]models.PublicAvailabilityResponse, len(availabilities))
@@ -287,6 +286,6 @@ func (h *AvailabilityHandler) BrowseAvailableUsers(c *gin.Context) {
 			"has_more":    int64(offset+limit) < totalCount,
 			"total_pages": (totalCount + int64(limit) - 1) / int64(limit),
 		},
-		"note": "This endpoint will be enhanced to return full user profile data and filter hidden users",
+		"note": "This endpoint will be enhanced to return full user profile data",
 	})
 }

@@ -60,6 +60,9 @@ func initializeK8sServiceConfig() *K8sServiceConfig {
 	
 	config.Services["search-svc"] = createServiceConfig(
 		"search-svc", "SEARCH_SVC_URL", namespace, clusterDomain, 8080, 30*time.Second)
+	
+	config.Services["feature-svc"] = createServiceConfig(
+		"feature-svc", "FEATURE_SVC_URL", namespace, clusterDomain, 8080, 30*time.Second)
 
 	return config
 }
@@ -118,6 +121,8 @@ func RouteToK8sService(path string) (*K8sService, error) {
 		serviceName = "discovery-svc"
 	case matchesPath(path, "/search"):
 		serviceName = "search-svc"
+	case matchesPath(path, "/features/"):
+		serviceName = "feature-svc"
 	default:
 		return nil, fmt.Errorf("no service found for path: %s", path)
 	}

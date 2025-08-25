@@ -13,6 +13,7 @@ import {
   CreateCueRequest,
   UpdateCueRequest
 } from '../services/cueClient';
+import { useAuth } from './AuthContext';
 
 interface CueContextType {
   // Current user's cue state
@@ -54,6 +55,9 @@ interface CueProviderProps {
 }
 
 export const CueProvider: React.FC<CueProviderProps> = ({ children }) => {
+  // Auth context
+  const { isAuthenticated, isInitialized } = useAuth();
+  
   // Current cue state
   const [currentCue, setCurrentCue] = useState<CueResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -183,11 +187,13 @@ export const CueProvider: React.FC<CueProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Load initial data on mount
+  // Load initial data on mount - only when authenticated
   useEffect(() => {
-    refreshCue();
-    refreshMatches();
-  }, [refreshCue, refreshMatches]);
+    if (isInitialized && isAuthenticated) {
+      refreshCue();
+      refreshMatches();
+    }
+  }, [refreshCue, refreshMatches, isInitialized, isAuthenticated]);
 
   // Computed values
   const hasActiveCue = currentCue !== null && currentCue.is_active;

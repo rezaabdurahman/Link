@@ -10,39 +10,50 @@ on:
     paths: 
       - 'terraform/**'
       - '.github/workflows/terraform.yml'
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9 AM for drift detection
+  workflow_dispatch:  # Manual trigger
 
 env:
   TF_VERSION: '1.5.7'  # Match local development version
   TF_WORKING_DIR: './terraform'
 
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   terraform-validate:
-    name: Terraform Validate
+    name: Terraform Validate & Security Scan
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Run comprehensive Terraform validation
+        uses: ./.github/actions/terraform-validate
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          terraform-version: ${{ env.TF_VERSION }}
+          working-directory: ${{ env.TF_WORKING_DIR }}
+          environment: 'development'
+          run-plan: 'true'
+          plan-only: 'true'
+          enable-security-scan: 'true'
+          enable-drift-detection: 'false'
+          backend-config: 'local'
       
-      - name: Terraform Format Check
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform fmt -check -recursive
-      
-      - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -backend=false
-      
-      - name: Terraform Validate
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform validate
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-validation-reports
+          path: |
+            ${{ env.TF_WORKING_DIR }}/reports/
+          retention-days: 7
 
   terraform-plan:
-    name: Terraform Plan
+    name: Terraform Plan & Analysis
     if: github.event_name == 'pull_request'
     needs: [terraform-validate]
     runs-on: ubuntu-latest
@@ -51,91 +62,87 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Run Terraform plan with validation
+        id: terraform-plan
+        uses: ./.github/actions/terraform-validate
         with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false  # Important: allows capturing raw output
+          terraform-version: ${{ env.TF_VERSION }}
+          working-directory: ${{ env.TF_WORKING_DIR }}
+          environment: 'development'
+          run-plan: 'true'
+          plan-only: 'true'
+          enable-security-scan: 'true'
+          enable-drift-detection: 'false'
+          backend-config: 'local'
       
-      - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -backend=false
-      
-      - name: Create terraform.tfvars for CI
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          cat > terraform.tfvars << EOF
-          postgres_host = "localhost"
-          postgres_password = "ci_test_password"
-          postgres_user = "ci_user"
-          environment = "ci"
-          
-          # CI-specific settings
-          database_connection_limit = 20
-          user_connection_limit = 10
-          create_monitoring_user = false
-          enable_pgbouncer = false
-          enable_ssl = false
-          backup_retention_days = 7
-          
-          # Kubernetes settings
-          kubernetes_namespace = "default"
-          kubeconfig_path = "~/.kube/config"
-          kubernetes_context = "kind-kind"
-          EOF
-      
-      - name: Terraform Plan (with output capture)
-        id: plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          # Run plan and capture output
-          terraform plan -no-color -detailed-exitcode -out=tfplan.out > plan_output.txt 2>&1
-          
-          # Store exit code for later use
-          echo "plan_exit_code=$?" >> $GITHUB_OUTPUT
-          
-          # Show plan output in logs
-          cat plan_output.txt
-        continue-on-error: true
-      
-      - name: Save plan file as artifact
+      - name: Save plan and validation results
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan-${{ github.event.pull_request.number }}
           path: |
             ${{ env.TF_WORKING_DIR }}/tfplan.out
-            ${{ env.TF_WORKING_DIR }}/plan_output.txt
+            ${{ env.TF_WORKING_DIR }}/reports/
           retention-days: 30
       
-      - name: Comment Plan on PR
+      - name: Comment enhanced plan results on PR
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const path = require('path');
             
-            // Read the plan output
-            const planOutput = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan_output.txt', 'utf8');
-            const exitCode = '${{ steps.plan.outputs.plan_exit_code }}';
+            // Get plan results from our action
+            const planResult = '${{ steps.terraform-plan.outputs.plan-result }}';
+            const planExitCode = '${{ steps.terraform-plan.outputs.plan-exit-code }}';
+            const validationResult = '${{ steps.terraform-plan.outputs.validation-result }}';
+            const securityViolations = '${{ steps.terraform-plan.outputs.security-violations }}';
             
-            // Determine plan status
+            // Read plan output if available
+            let planOutput = 'Plan output not available';
+            try {
+              planOutput = fs.readFileSync('${{ env.TF_WORKING_DIR }}/reports/plan-output.txt', 'utf8');
+            } catch (e) {
+              console.log('Plan output file not found, using default message');
+            }
+            
+            // Read security report if available
+            let securitySummary = '';
+            try {
+              securitySummary = fs.readFileSync('${{ env.TF_WORKING_DIR }}/reports/security-summary.md', 'utf8');
+            } catch (e) {
+              securitySummary = 'Security scan completed - see artifacts for details';
+            }
+            
+            // Determine status
             let status = '✅ No changes';
             let emoji = '✅';
-            if (exitCode === '1') {
+            if (planExitCode === '1') {
               status = '❌ Plan failed';
               emoji = '❌';
-            } else if (exitCode === '2') {
+            } else if (planExitCode === '2') {
               status = '📋 Changes detected';
               emoji = '📋';
             }
             
-            // Create comment body
-            const body = `## ${emoji} Terraform Plan Results
+            // Create comprehensive comment body
+            const body = `## ${emoji} Terraform Plan & Security Analysis
             
-            **Status**: ${status}
-            **Working Directory**: \`${{ env.TF_WORKING_DIR }}\`
+            **Plan Status**: ${status}  
+            **Validation Result**: ${validationResult}  
+            **Security Violations**: ${securityViolations}  
+            **Working Directory**: \`${{ env.TF_WORKING_DIR }}\`  
             **Terraform Version**: \`${{ env.TF_VERSION }}\`
+            
+            ### 🔒 Security Analysis
+            
+            <details>
+            <summary>📊 Security Scan Results (Click to expand)</summary>
+            
+            ${securitySummary}
+            
+            </details>
+            
+            ### 📋 Terraform Plan
             
             <details>
             <summary>📋 View Plan Output (Click to expand)</summary>
@@ -146,22 +153,21 @@ jobs:
             
             </details>
             
-            ### 📁 Full Plan Output Available
+            ### 📁 Artifacts Available
             
-            The complete Terraform plan is available as a workflow artifact:
+            Complete analysis results are available as workflow artifacts:
             - **Artifact Name**: \`terraform-plan-${{ github.event.pull_request.number }}\`
-            - **Files**: \`tfplan.out\` (binary), \`plan_output.txt\` (readable)
+            - **Contents**: Plan files, security reports, validation results, documentation
             - **Retention**: 30 days
             
-            ### 🔍 How to Access Plan Output:
+            ### 🔍 How to Access Results:
             
-            1. **In this PR**: View the collapsed section above
-            2. **GitHub UI**: Go to Actions → This workflow run → Artifacts
-            3. **CLI**: \`gh run download ${{ github.run_id }} --name terraform-plan-${{ github.event.pull_request.number }}\`
-            4. **Local**: Download and run \`terraform show tfplan.out\`
+            1. **GitHub UI**: Actions → This workflow run → Artifacts
+            2. **CLI**: \`gh run download ${{ github.run_id }} --name terraform-plan-${{ github.event.pull_request.number }}\`
+            3. **Local Review**: \`terraform show tfplan.out\`
             
             ---
-            *Generated by Terraform CI/CD Pipeline*`;
+            *Generated by Enhanced Terraform CI/CD Pipeline with Security Analysis*`;
             
             // Post comment
             github.rest.issues.createComment({
@@ -172,13 +178,13 @@ jobs:
             });
       
       - name: Plan Status Check
-        if: steps.plan.outputs.plan_exit_code == '1'
+        if: steps.terraform-plan.outputs.plan-exit-code == '1'
         run: |
           echo "❌ Terraform plan failed!"
           exit 1
 
   terraform-apply:
-    name: Terraform Apply
+    name: Terraform Apply with Security Validation
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [terraform-validate]
     runs-on: ubuntu-latest
@@ -188,7 +194,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Terraform
+      - name: Pre-apply security validation
+        uses: ./.github/actions/terraform-validate
+        with:
+          terraform-version: ${{ env.TF_VERSION }}
+          working-directory: ${{ env.TF_WORKING_DIR }}
+          environment: 'production'
+          run-plan: 'true'
+          plan-only: 'false'
+          enable-security-scan: 'true'
+          enable-drift-detection: 'true'
+          backend-config: 's3'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+
+      - name: Setup Terraform for Apply
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -283,7 +308,7 @@ jobs:
             github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: 'post-deploy-validation.yml',
+              workflow_id: 'validation.yml',
               ref: 'main',
               inputs: {
                 environment: 'production',
@@ -318,8 +343,4 @@ jobs:
           }
           echo "✅ No infrastructure drift detected"
 
-# Add schedule for weekly drift detection
-on:
-  schedule:
-    - cron: '0 9 * * 1'  # Every Monday at 9 AM
-  workflow_dispatch:  # Manual trigger
+# Note: Schedule and workflow_dispatch already defined in main on: block above

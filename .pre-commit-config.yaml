@@ -1,0 +1,178 @@
+# Pre-commit hooks for Link project
+# Run locally with: pre-commit run --all-files
+# Install: pre-commit install
+
+repos:
+  # General code formatting and linting
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom YAML tags
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+      - id: check-merge-conflict
+      - id: check-json
+      - id: pretty-format-json
+        args: ['--autofix', '--no-sort-keys']
+      - id: check-toml
+      - id: check-xml
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # TypeScript/JavaScript formatting and linting
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.0.0
+    hooks:
+      - id: eslint
+        files: \.(js|ts|tsx)$
+        args: ['--fix']
+        additional_dependencies:
+          - '@typescript-eslint/parser@^6.0.0'
+          - '@typescript-eslint/eslint-plugin@^6.0.0'
+          - 'eslint-config-prettier@^9.0.0'
+
+  # Go formatting and linting
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-vet-mod
+      - id: go-mod-tidy
+      - id: go-unit-tests
+        args: [-short]
+      - id: golangci-lint
+        args: [--timeout=5m]
+
+  # Docker linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: ['--ignore', 'DL3008', '--ignore', 'DL3009']  # Ignore apt-get version pinning warnings
+
+  # Kubernetes manifest validation
+  - repo: local
+    hooks:
+      - id: kubeval-validate
+        name: Kubernetes manifest validation
+        entry: scripts/hooks/validate-k8s-manifests.sh
+        language: system
+        files: '^k8s/.*\.(yaml|yml)$'
+        pass_filenames: false
+
+  # Helm chart linting
+  - repo: local
+    hooks:
+      - id: helm-lint
+        name: Helm chart linting
+        entry: scripts/hooks/helm-lint.sh
+        language: system
+        files: '^k8s/helm/.*\.(yaml|yml)$'
+        pass_filenames: false
+
+  # Security scanning for secrets
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package-lock.json
+
+  # Infrastructure as Code security
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.2.25
+    hooks:
+      - id: checkov
+        args: [--framework, kubernetes, --framework, dockerfile, --framework, terraform]
+        files: \.(yaml|yml|tf|dockerfile)$i
+
+  # Policy as Code validation
+  - repo: local
+    hooks:
+      - id: conftest-validate
+        name: Policy validation with Conftest
+        entry: scripts/hooks/conftest-validate.sh
+        language: system
+        files: '^k8s/.*\.(yaml|yml)$'
+        pass_filenames: false
+
+  # Frontend specific hooks
+  - repo: local
+    hooks:
+      - id: frontend-type-check
+        name: TypeScript type checking
+        entry: bash -c 'cd frontend && npm run type-check'
+        language: system
+        files: '^frontend/.*\.(ts|tsx)$'
+        pass_filenames: false
+
+      - id: frontend-test
+        name: Frontend unit tests
+        entry: bash -c 'cd frontend && npm run test -- --passWithNoTests --watchAll=false'
+        language: system
+        files: '^frontend/(src|__tests__)/.*\.(ts|tsx|js|jsx)$'
+        pass_filenames: false
+
+  # Backend service validation
+  - repo: local
+    hooks:
+      - id: backend-service-tests
+        name: Backend service tests
+        entry: scripts/hooks/backend-tests.sh
+        language: system
+        files: '^backend/.*/.*\.go$'
+        pass_filenames: false
+
+  # Docker Compose validation
+  - repo: local
+    hooks:
+      - id: docker-compose-validate
+        name: Docker Compose validation
+        entry: docker-compose config
+        language: system
+        files: 'docker-compose.*\.ya?ml$'
+        pass_filenames: false
+
+  # ArgoCD application validation
+  - repo: local
+    hooks:
+      - id: argocd-app-validate
+        name: ArgoCD application validation
+        entry: scripts/hooks/argocd-validate.sh
+        language: system
+        files: '^k8s/argocd/.*\.(yaml|yml)$'
+        pass_filenames: false
+
+  # Terraform validation
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.88.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+      - id: terraform_docs
+      - id: terraform_tflint
+      - id: terraform_checkov
+        args: [--args=--framework terraform --args=--quiet]
+      - id: terraform_tfsec
+        args: [--args=--soft-fail]
+
+  # Custom Terraform validation using our reusable action logic
+  - repo: local
+    hooks:
+      - id: terraform-comprehensive-validation
+        name: Comprehensive Terraform validation
+        entry: scripts/hooks/terraform-validate.sh
+        language: system
+        files: '^terraform/.*\.tf$'
+        pass_filenames: false
+
+  # Commit message linting
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.1.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--strict, --force-scope]

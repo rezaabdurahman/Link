@@ -70,7 +70,7 @@ func (s *ChatService) CreateRoom(ctx context.Context, req model.CreateRoomReques
 	// Publish room created event
 	event := &model.RealtimeEvent{
 		Type:   model.EventTypeUserJoined,
-		RoomID: room.ID,
+		ConversationID: room.ID,
 		UserID: userID,
 		Data:   room,
 	}
@@ -181,7 +181,7 @@ func (s *ChatService) SendMessage(ctx context.Context, req model.SendMessageRequ
 	// Create message
 	message := &model.Message{
 		ID:          uuid.New(),
-		RoomID:      roomID,
+		ConversationID:      roomID,
 		UserID:      userID,
 		Content:     strings.TrimSpace(req.Content),
 		MessageType: req.MessageType,
@@ -205,7 +205,7 @@ func (s *ChatService) SendMessage(ctx context.Context, req model.SendMessageRequ
 	// Publish real-time event
 	event := &model.RealtimeEvent{
 		Type:    model.EventTypeNewMessage,
-		RoomID:  roomID,
+		ConversationID:  roomID,
 		UserID:  userID,
 		Message: message,
 	}
@@ -263,7 +263,7 @@ func (s *ChatService) MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, 
 	// Publish message read event
 	event := &model.RealtimeEvent{
 		Type:   model.EventTypeMessageRead,
-		RoomID: roomID,
+		ConversationID: roomID,
 		UserID: userID,
 		Data:   map[string]interface{}{"message_ids": messageIDs},
 	}
@@ -320,7 +320,7 @@ func (s *ChatService) JoinRoom(ctx context.Context, roomID, userID uuid.UUID) er
 	// Publish user joined event
 	event := &model.RealtimeEvent{
 		Type:   model.EventTypeUserJoined,
-		RoomID: roomID,
+		ConversationID: roomID,
 		UserID: userID,
 	}
 	s.redis.PublishRealtimeEvent(ctx, event)
@@ -352,7 +352,7 @@ func (s *ChatService) LeaveRoom(ctx context.Context, roomID, userID uuid.UUID) e
 	// Publish user left event
 	event := &model.RealtimeEvent{
 		Type:   model.EventTypeUserLeft,
-		RoomID: roomID,
+		ConversationID: roomID,
 		UserID: userID,
 	}
 	s.redis.PublishRealtimeEvent(ctx, event)
@@ -371,7 +371,7 @@ func (s *ChatService) SetUserPresence(ctx context.Context, userID uuid.UUID, sta
 		UserID:   userID,
 		Status:   status,
 		LastSeen: time.Now().UTC(),
-		RoomID:   roomID,
+		ConversationID:   roomID,
 	}
 
 	return s.redis.SetUserPresence(ctx, userID, presence)

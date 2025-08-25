@@ -1,0 +1,179 @@
+name: 'Detect Environment'
+description: 'Standardized environment detection and configuration for all workflows'
+author: 'Link App CI/CD'
+
+inputs:
+  fallback_environment:
+    description: 'Fallback environment if detection fails'
+    required: false
+    default: 'development'
+  override_environment:
+    description: 'Override automatic detection (for manual workflows)'
+    required: false
+    default: ''
+
+outputs:
+  environment:
+    description: 'Detected environment (development, staging, production)'
+    value: ${{ steps.detect.outputs.environment }}
+  secrets_prefix:
+    description: 'Prefix for environment-specific secrets (DEV, STAGING, PROD)'
+    value: ${{ steps.detect.outputs.secrets_prefix }}
+  vars_prefix:
+    description: 'Prefix for environment-specific variables'
+    value: ${{ steps.detect.outputs.vars_prefix }}
+  is_production:
+    description: 'True if environment is production'
+    value: ${{ steps.detect.outputs.is_production }}
+  is_staging:
+    description: 'True if environment is staging'
+    value: ${{ steps.detect.outputs.is_staging }}
+  is_development:
+    description: 'True if environment is development'
+    value: ${{ steps.detect.outputs.is_development }}
+  deployment_type:
+    description: 'How this deployment was triggered (automatic, manual, pr, scheduled)'
+    value: ${{ steps.detect.outputs.deployment_type }}
+
+runs:
+  using: 'composite'
+  steps:
+  - name: Detect environment and configuration
+    id: detect
+    shell: bash
+    run: |
+      echo "🎯 Environment Detection Starting..."
+      echo "======================================"
+      echo ""
+      echo "Context Information:"
+      echo "  Event: ${{ github.event_name }}"
+      echo "  Ref: ${{ github.ref }}"
+      echo "  Actor: ${{ github.actor }}"
+      echo "  Override: ${{ inputs.override_environment }}"
+      echo ""
+      
+      # Determine environment using standardized logic
+      environment=""
+      deployment_type=""
+      
+      if [[ -n "${{ inputs.override_environment }}" ]]; then
+        # Manual override (workflow_dispatch with environment input)
+        environment="${{ inputs.override_environment }}"
+        deployment_type="manual"
+        echo "🎯 Using override environment: $environment"
+        
+      elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+        # Manual workflow dispatch (check for common input patterns)
+        if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
+          environment="${{ github.event.inputs.environment }}"
+        else
+          environment="${{ inputs.fallback_environment }}"
+        fi
+        deployment_type="manual"
+        echo "🎯 Manual workflow dispatch: $environment"
+        
+      elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+        # Main branch = production
+        environment="production"
+        if [[ "${{ github.event_name }}" == "push" ]]; then
+          deployment_type="automatic"
+        elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+          deployment_type="scheduled"
+        else
+          deployment_type="automatic"
+        fi
+        echo "🚀 Main branch detected: $environment ($deployment_type)"
+        
+      elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+        # Develop branch = staging
+        environment="staging"
+        deployment_type="automatic"
+        echo "🧪 Develop branch detected: $environment ($deployment_type)"
+        
+      elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+        # Pull request = development
+        environment="development"
+        deployment_type="pr"
+        echo "🔍 Pull request detected: $environment ($deployment_type)"
+        
+      elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+        # Scheduled events = production (for promotions)
+        environment="production"
+        deployment_type="scheduled"
+        echo "⏰ Scheduled event: $environment ($deployment_type)"
+        
+      else
+        # Fallback
+        environment="${{ inputs.fallback_environment }}"
+        deployment_type="unknown"
+        echo "❓ Unknown context, using fallback: $environment ($deployment_type)"
+      fi
+      
+      # Generate prefixes for secrets and variables
+      case "$environment" in
+        "production")
+          secrets_prefix="PROD"
+          vars_prefix="PROD"
+          ;;
+        "staging")
+          secrets_prefix="STAGING"
+          vars_prefix="STAGING"
+          ;;
+        "development"|"dev")
+          secrets_prefix="DEV"
+          vars_prefix="DEV"
+          environment="development"  # Normalize dev -> development
+          ;;
+        *)
+          secrets_prefix="DEV"
+          vars_prefix="DEV"
+          environment="development"  # Default to development
+          echo "⚠️ Unknown environment '$environment', defaulting to development"
+          ;;
+      esac
+      
+      # Set boolean flags
+      is_production="false"
+      is_staging="false"
+      is_development="false"
+      
+      case "$environment" in
+        "production")
+          is_production="true"
+          ;;
+        "staging")
+          is_staging="true"
+          ;;
+        "development")
+          is_development="true"
+          ;;
+      esac
+      
+      # Output results
+      echo "📊 Environment Detection Results:"
+      echo "  Environment: $environment"
+      echo "  Secrets Prefix: $secrets_prefix"
+      echo "  Variables Prefix: $vars_prefix"
+      echo "  Deployment Type: $deployment_type"
+      echo "  Is Production: $is_production"
+      echo "  Is Staging: $is_staging"
+      echo "  Is Development: $is_development"
+      echo ""
+      
+      # Set outputs
+      echo "environment=$environment" >> $GITHUB_OUTPUT
+      echo "secrets_prefix=$secrets_prefix" >> $GITHUB_OUTPUT
+      echo "vars_prefix=$vars_prefix" >> $GITHUB_OUTPUT
+      echo "deployment_type=$deployment_type" >> $GITHUB_OUTPUT
+      echo "is_production=$is_production" >> $GITHUB_OUTPUT
+      echo "is_staging=$is_staging" >> $GITHUB_OUTPUT
+      echo "is_development=$is_development" >> $GITHUB_OUTPUT
+      
+      # Set environment variables for subsequent steps
+      echo "DETECTED_ENVIRONMENT=$environment" >> $GITHUB_ENV
+      echo "SECRETS_PREFIX=$secrets_prefix" >> $GITHUB_ENV
+      echo "VARS_PREFIX=$vars_prefix" >> $GITHUB_ENV
+      echo "DEPLOYMENT_TYPE=$deployment_type" >> $GITHUB_ENV
+      echo "IS_PRODUCTION=$is_production" >> $GITHUB_ENV
+      echo "IS_STAGING=$is_staging" >> $GITHUB_ENV
+      echo "IS_DEVELOPMENT=$is_development" >> $GITHUB_ENV

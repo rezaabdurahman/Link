@@ -1,0 +1,220 @@
+groups:
+  - name: feature-flags
+    rules:
+      # Feature Flag Evaluation Errors
+      - alert: FeatureFlagEvaluationErrors
+        expr: rate(feature_flag_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "High error rate in feature flag evaluations"
+          description: "Feature flag {{ $labels.flag_key }} in environment {{ $labels.environment }} has error rate of {{ $value }} errors/sec"
+
+      # Feature Flag Service Down
+      - alert: FeatureFlagServiceDown
+        expr: up{job="feature-svc"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: feature-svc
+        annotations:
+          summary: "Feature flag service is down"
+          description: "Feature flag service has been down for more than 1 minute"
+
+      # High Feature Flag Evaluation Latency
+      - alert: FeatureFlagHighLatency
+        expr: histogram_quantile(0.95, rate(feature_flag_evaluation_duration_seconds_bucket[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "High latency in feature flag evaluations"
+          description: "95th percentile latency for feature flag evaluations is {{ $value }}s"
+
+      # Low Cache Hit Rate
+      - alert: FeatureFlagLowCacheHitRate
+        expr: sum(rate(feature_flag_cache_hits_total[5m])) / (sum(rate(feature_flag_cache_hits_total[5m])) + sum(rate(feature_flag_cache_misses_total[5m]))) < 0.8
+        for: 15m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "Low cache hit rate for feature flags"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}, which is below 80%"
+
+      # Database Connection Issues
+      - alert: FeatureFlagDatabaseErrors
+        expr: rate(feature_service_database_operations_total{status="error"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: feature-svc
+        annotations:
+          summary: "Database errors in feature flag service"
+          description: "Database error rate is {{ $value }} errors/sec for operation {{ $labels.operation }} on table {{ $labels.table }}"
+
+      # Experiment Assignment Imbalance
+      - alert: ExperimentAssignmentImbalance
+        expr: |
+          (
+            max by (experiment_key) (rate(experiment_assignments_total[1h])) - 
+            min by (experiment_key) (rate(experiment_assignments_total[1h]))
+          ) / max by (experiment_key) (rate(experiment_assignments_total[1h])) > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "Experiment assignment imbalance detected"
+          description: "Experiment {{ $labels.experiment_key }} has variant assignment imbalance of {{ $value | humanizePercentage }}"
+
+      # Redis Cache Issues
+      - alert: RedisCacheErrors
+        expr: rate(redis_cache_operations_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "Redis cache errors in feature flag service"
+          description: "Redis cache error rate is {{ $value }} errors/sec for operation {{ $labels.operation }}"
+
+      # API Rate Limit Exceeded
+      - alert: FeatureFlagAPIHighTraffic
+        expr: rate(feature_service_api_requests_total[1m]) > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "High API traffic on feature flag service"
+          description: "API request rate is {{ $value }} requests/sec for endpoint {{ $labels.endpoint }}"
+
+      # Feature Flag Configuration Changes
+      - alert: FrequentFeatureFlagChanges
+        expr: rate(feature_flag_config_changes_total[1h]) > 10
+        for: 5m
+        labels:
+          severity: info
+          service: feature-svc
+        annotations:
+          summary: "Frequent feature flag configuration changes"
+          description: "Feature flag {{ $labels.flag_key }} has {{ $value }} config changes per hour"
+
+      # Experiment Evaluation Errors
+      - alert: ExperimentEvaluationErrors
+        expr: rate(experiment_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "High error rate in experiment evaluations"
+          description: "Experiment {{ $labels.experiment_key }} has error rate of {{ $value }} errors/sec ({{ $labels.error_type }})"
+
+      # Memory Usage
+      - alert: FeatureFlagServiceHighMemory
+        expr: process_resident_memory_bytes{job="feature-svc"} / 1024 / 1024 / 1024 > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "High memory usage in feature flag service"
+          description: "Feature flag service is using {{ $value | humanize }}GB of memory"
+
+      # Disk Usage for Event Storage
+      - alert: FeatureEventsDiskSpace
+        expr: |
+          (
+            (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) 
+            / node_filesystem_size_bytes{mountpoint="/"} * 100
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "Low disk space for feature events storage"
+          description: "Disk usage is {{ $value }}% on the feature service node"
+
+      # Stale Experiments
+      - alert: StaleExperiments
+        expr: experiments_active{status="running"} and (time() - experiments_active{status="running"}) > (30 * 24 * 3600)
+        for: 1h
+        labels:
+          severity: info
+          service: feature-svc
+        annotations:
+          summary: "Long-running experiments detected"
+          description: "Experiment has been running for more than 30 days and may need review"
+
+      # User Assignment Failures
+      - alert: UserAssignmentFailures
+        expr: rate(user_assignments_total{assignment_type="failed"}[5m]) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "User assignment failures in feature flag service"
+          description: "User assignment failure rate is {{ $value }} failures/sec"
+
+  - name: feature-flags.infrastructure
+    rules:
+      # PostgreSQL Connection Pool Exhaustion
+      - alert: FeatureFlagDatabasePoolExhaustion
+        expr: pg_stat_database_numbackends{datname="linkdb"} / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Database connection pool is {{ $value | humanizePercentage }} full"
+
+      # Redis Memory Usage
+      - alert: RedisCacheMemoryHigh
+        expr: redis_memory_used_bytes / redis_config_maxmemory * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "Redis cache memory usage high"
+          description: "Redis memory usage is {{ $value }}%"
+
+  - name: feature-flags.business
+    rules:
+      # Conversion Rate Drop
+      - alert: ExperimentConversionRateDrop
+        expr: |
+          (
+            (rate(feature_events_total{event_type="conversion"}[1h])[1h:5m] offset 1h) -
+            rate(feature_events_total{event_type="conversion"}[1h])
+          ) / (rate(feature_events_total{event_type="conversion"}[1h])[1h:5m] offset 1h) < -0.1
+        for: 30m
+        labels:
+          severity: warning
+          service: feature-svc
+        annotations:
+          summary: "Conversion rate drop detected"
+          description: "Conversion rate has dropped by {{ $value | humanizePercentage }} for feature {{ $labels.feature_key }}"
+
+      # Unusual Traffic Patterns
+      - alert: UnusualFeatureFlagTraffic
+        expr: |
+          (
+            rate(feature_flag_evaluations_total[5m]) - 
+            rate(feature_flag_evaluations_total[5m] offset 1w)
+          ) / rate(feature_flag_evaluations_total[5m] offset 1w) > 2
+        for: 15m
+        labels:
+          severity: info
+          service: feature-svc
+        annotations:
+          summary: "Unusual traffic pattern detected"
+          description: "Feature flag {{ $labels.flag_key }} traffic is {{ $value | humanizePercentage }} higher than usual"

@@ -1,0 +1,33 @@
+apiVersion: v2
+name: postgres-ha
+description: PostgreSQL High Availability with CloudNativePG - Leader Election and Automatic Failover
+type: application
+version: 1.0.0
+appVersion: "16.2"
+home: https://github.com/your-org/Link
+sources:
+  - https://github.com/your-org/Link
+keywords:
+  - postgresql
+  - database
+  - high-availability
+  - cloudnative-pg
+  - leader-election
+  - failover
+maintainers:
+  - name: Link Platform Team
+    email: platform-team@link-app.com
+annotations:
+  category: Database
+  images: |
+    - name: postgresql
+      image: ghcr.io/cloudnative-pg/postgresql:16.2
+    - name: cloudnative-pg
+      image: ghcr.io/cloudnative-pg/cloudnative-pg:1.23.0
+dependencies:
+  - name: common
+    repository: https://charts.bitnami.com/bitnami
+    tags:
+      - bitnami-common
+    version: 2.x.x
+    condition: common.enabled

@@ -1,0 +1,446 @@
+---
+# CloudNativePG Monitoring and Alerting Configuration
+# This sets up comprehensive monitoring for PostgreSQL HA cluster with leader election
+
+# ServiceMonitor for CloudNativePG Cluster
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres-cluster-monitor
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: monitoring
+    postgresql.cnpg.io/cluster: postgres-cluster
+spec:
+  selector:
+    matchLabels:
+      postgresql.cnpg.io/cluster: postgres-cluster
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod
+    - sourceLabels: [__meta_kubernetes_pod_label_postgresql_cnpg_io_instanceRole]
+      targetLabel: role
+    - sourceLabels: [__meta_kubernetes_pod_label_postgresql_cnpg_io_cluster]
+      targetLabel: cluster
+
+---
+# ServiceMonitor for CloudNativePG Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cnpg-operator-monitor
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    component: operator-monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+      app.kubernetes.io/component: metrics
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# PodMonitor for PostgreSQL instances
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: postgres-pod-monitor
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: pod-monitoring
+spec:
+  selector:
+    matchLabels:
+      postgresql.cnpg.io/cluster: postgres-cluster
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# PostgreSQL HA Alerting Rules
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: postgres-ha-alerts
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: alerting
+    postgresql.cnpg.io/cluster: postgres-cluster
+spec:
+  groups:
+  - name: postgresql-ha
+    interval: 30s
+    rules:
+    
+    # Leader Election Alerts
+    - alert: PostgreSQLNoPrimary
+      expr: absent(cnpg_pg_replication_is_replica == 0)
+      for: 30s
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL cluster has no primary instance"
+        description: "PostgreSQL cluster {{ $labels.cluster }} has no primary instance. Leader election may have failed."
+        runbook_url: "https://runbooks.link-app.com/postgresql/no-primary"
+        
+    - alert: PostgreSQLMultiplePrimaries
+      expr: count(cnpg_pg_replication_is_replica == 0) > 1
+      for: 30s
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL cluster has multiple primary instances"
+        description: "PostgreSQL cluster {{ $labels.cluster }} has {{ $value }} primary instances. This indicates a split-brain scenario."
+        runbook_url: "https://runbooks.link-app.com/postgresql/split-brain"
+    
+    # Failover and Recovery Alerts    
+    - alert: PostgreSQLFailoverInProgress
+      expr: increase(cnpg_pg_replication_in_recovery[5m]) > 0
+      for: 0s
+      labels:
+        severity: warning
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL failover in progress"
+        description: "PostgreSQL instance {{ $labels.pod }} is undergoing failover/recovery process"
+        
+    - alert: PostgreSQLSlowFailover
+      expr: cnpg_pg_replication_in_recovery == 1 and on(pod) increase(up[2m]) == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL failover taking too long"
+        description: "PostgreSQL failover for {{ $labels.pod }} is taking longer than 2 minutes"
+        
+    # Replication Health Alerts
+    - alert: PostgreSQLReplicationLag
+      expr: cnpg_pg_stat_replication_flush_lag > 16777216  # 16MB
+      for: 5m
+      labels:
+        severity: warning
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL replication lag is high"
+        description: "PostgreSQL replication lag for {{ $labels.application_name }} is {{ $value | humanizeBytes }}"
+        
+    - alert: PostgreSQLReplicationLagCritical
+      expr: cnpg_pg_stat_replication_flush_lag > 134217728  # 128MB
+      for: 2m
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL replication lag is critically high"
+        description: "PostgreSQL replication lag for {{ $labels.application_name }} is {{ $value | humanizeBytes }}"
+        
+    - alert: PostgreSQLReplicationDown
+      expr: cnpg_pg_stat_replication_sent_lsn == 0
+      for: 1m
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL replication is down"
+        description: "PostgreSQL replication for {{ $labels.application_name }} appears to be down"
+        
+    # Cluster Health Alerts
+    - alert: PostgreSQLInstanceDown
+      expr: up{job=~".*postgres.*"} == 0
+      for: 30s
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL instance is down"
+        description: "PostgreSQL instance {{ $labels.pod }} is down for more than 30 seconds"
+        
+    - alert: PostgreSQLClusterDegraded
+      expr: count(up{job=~".*postgres.*"} == 1) < 2
+      for: 1m
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL cluster is severely degraded"
+        description: "Only {{ $value }} PostgreSQL instances are running. Cluster is at risk."
+        
+    # Performance Alerts
+    - alert: PostgreSQLConnectionsHigh
+      expr: cnpg_pg_stat_database_numbackends / cnpg_pg_settings_max_connections > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL connection usage is high"
+        description: "PostgreSQL connection usage is {{ $value | humanizePercentage }} on {{ $labels.pod }}"
+        
+    - alert: PostgreSQLConnectionsExhausted
+      expr: cnpg_pg_stat_database_numbackends / cnpg_pg_settings_max_connections > 0.95
+      for: 1m
+      labels:
+        severity: critical
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL connections nearly exhausted"
+        description: "PostgreSQL connection usage is {{ $value | humanizePercentage }} on {{ $labels.pod }}"
+        
+    - alert: PostgreSQLLongRunningQueries
+      expr: cnpg_pg_stat_activity_max_tx_duration > 3600  # 1 hour
+      for: 5m
+      labels:
+        severity: warning
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL has long-running queries"
+        description: "PostgreSQL has queries running for {{ $value | humanizeDuration }} on {{ $labels.pod }}"
+        
+    # Storage and WAL Alerts
+    - alert: PostgreSQLDiskSpaceLow
+      expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) < 0.1
+      for: 5m
+      labels:
+        severity: warning
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL disk space is running low"
+        description: "Disk space usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+        
+    - alert: PostgreSQLWALFilesHigh
+      expr: cnpg_pg_stat_archiver_archived_count - cnpg_pg_stat_archiver_archived_count offset 1h > 1000
+      for: 5m
+      labels:
+        severity: warning
+        component: database
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL WAL file generation rate is high"
+        description: "PostgreSQL generated {{ $value }} WAL files in the last hour on {{ $labels.pod }}"
+
+  - name: postgresql-backup-alerts
+    interval: 60s
+    rules:
+    
+    # Backup Alerts
+    - alert: PostgreSQLBackupFailed
+      expr: time() - cnpg_pg_backup_last_successful_timestamp > 86400  # 24 hours
+      for: 5m
+      labels:
+        severity: critical
+        component: backup
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL backup has failed or hasn't run"
+        description: "PostgreSQL backup hasn't succeeded for {{ $value | humanizeDuration }} for cluster {{ $labels.cluster }}"
+        
+    - alert: PostgreSQLWALArchivingFailed
+      expr: increase(cnpg_pg_stat_archiver_failed_count[1h]) > 10
+      for: 5m
+      labels:
+        severity: critical
+        component: backup
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL WAL archiving is failing"
+        description: "PostgreSQL WAL archiving failed {{ $value }} times in the last hour for {{ $labels.pod }}"
+        
+    - alert: PostgreSQLBackupSizeChange
+      expr: abs(cnpg_pg_backup_size_bytes - cnpg_pg_backup_size_bytes offset 24h) / cnpg_pg_backup_size_bytes offset 24h > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        component: backup
+        service: postgresql
+      annotations:
+        summary: "PostgreSQL backup size has changed significantly"
+        description: "PostgreSQL backup size for {{ $labels.cluster }} changed by {{ $value | humanizePercentage }} compared to 24h ago"
+
+  - name: cloudnative-pg-operator
+    interval: 60s
+    rules:
+    
+    # Operator Health Alerts
+    - alert: CNPGOperatorDown
+      expr: up{job="cnpg-controller-manager-metrics-service"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: operator
+        service: cloudnative-pg
+      annotations:
+        summary: "CloudNativePG operator is down"
+        description: "CloudNativePG operator has been down for more than 2 minutes"
+        
+    - alert: CNPGOperatorErrors
+      expr: increase(controller_runtime_reconcile_errors_total[15m]) > 5
+      for: 5m
+      labels:
+        severity: warning
+        component: operator
+        service: cloudnative-pg
+      annotations:
+        summary: "CloudNativePG operator is experiencing errors"
+        description: "CloudNativePG operator had {{ $value }} reconciliation errors in the last 15 minutes"
+
+---
+# Grafana Dashboard ConfigMap for PostgreSQL HA
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-ha-dashboard
+  namespace: link-services
+  labels:
+    grafana_dashboard: "1"
+    app: postgres-cluster
+    component: grafana-dashboard
+data:
+  postgres-ha-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "PostgreSQL HA - CloudNativePG",
+        "tags": ["postgresql", "cloudnative-pg", "high-availability"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Cluster Overview",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(up{job=~\".*postgres.*\"} == 1)",
+                "legendFormat": "Active Instances"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 2},
+                    {"color": "green", "value": 3}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Primary Instance",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "cnpg_pg_replication_is_replica == 0",
+                "legendFormat": "{{ $labels.pod }}"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Replication Lag",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "cnpg_pg_stat_replication_flush_lag",
+                "legendFormat": "{{ $labels.application_name }}"
+              }
+            ],
+            "yAxes": [{"unit": "bytes"}]
+          },
+          {
+            "id": 4,
+            "title": "Connection Count",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "cnpg_pg_stat_database_numbackends",
+                "legendFormat": "{{ $labels.pod }} - {{ $labels.datname }}"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "WAL Generation Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(cnpg_pg_xlog_position_bytes[5m])",
+                "legendFormat": "{{ $labels.pod }}"
+              }
+            ],
+            "yAxes": [{"unit": "Bps"}]
+          },
+          {
+            "id": 6,
+            "title": "Query Performance",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(cnpg_pg_stat_database_tup_returned[5m])",
+                "legendFormat": "Rows Returned - {{ $labels.datname }}"
+              },
+              {
+                "expr": "rate(cnpg_pg_stat_database_tup_fetched[5m])",
+                "legendFormat": "Rows Fetched - {{ $labels.datname }}"
+              }
+            ]
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "10s"
+      }
+    }
+
+---
+# PgBouncer ServiceMonitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pgbouncer-monitor
+  namespace: link-services
+  labels:
+    app: pgbouncer
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: pgbouncer
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s

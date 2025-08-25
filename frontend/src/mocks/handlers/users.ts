@@ -9,6 +9,7 @@ import { getFullName } from '../../utils/nameHelpers';
 const mockUserProfiles: Map<string, any> = new Map();
 
 export const handlers = [
+
   // POST /search - Unified search endpoint
   http.post(buildApiUrl(API_ENDPOINTS.SEARCH.unified), async ({ request }) => {
     console.log('🔍 MSW: Search request received at:', buildApiUrl(API_ENDPOINTS.SEARCH.unified));

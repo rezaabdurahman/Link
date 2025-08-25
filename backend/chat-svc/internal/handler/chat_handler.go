@@ -182,7 +182,7 @@ func (h *ChatHandler) CreateConversation(w http.ResponseWriter, r *http.Request)
 
 	// Convert to API response
 	apiConv := h.mapToAPIConversation(&model.ConversationWithUnread{
-		ChatRoom:     conversation,
+		Conversation: model.ConversationFromChatRoom(conversation),
 		UnreadCount:  0,
 		LastMessage:  nil,
 	})
@@ -493,23 +493,32 @@ func (h *ChatHandler) handleWebSocketMessage(conn *websocket.Conn, wsMessage *mo
 
 // broadcastMessage broadcasts a new message to all WebSocket connections in a conversation
 func (h *ChatHandler) broadcastMessage(message *model.Message) {
+	// Ensure message has compatibility fields set
+	message.SetCompatibilityFields()
+	
 	wsMessage := model.WebSocketMessage{
-		Type:    model.WSMessageTypeMessage,
-		RoomID:  message.RoomID,
-		UserID:  message.UserID,
-		Message: message,
+		Type:           model.WSMessageTypeMessage,
+		ConversationID: message.ConversationID,
+		UserID:         message.SenderID,
+		Message:        message,
 	}
+	
+	// Set compatibility fields for WebSocket message
+	wsMessage.SetCompatibilityFields()
 
-	h.broadcastToConversation(message.RoomID, &wsMessage)
+	h.broadcastToConversation(message.ConversationID, &wsMessage)
 }
 
 // broadcastUserJoined broadcasts a user joined event to all WebSocket connections in a conversation
 func (h *ChatHandler) broadcastUserJoined(conversationID, userID uuid.UUID) {
 	wsMessage := model.WebSocketMessage{
-		Type:   model.WSMessageTypeUserJoined,
-		RoomID: conversationID,
-		UserID: userID,
+		Type:           model.WSMessageTypeUserJoined,
+		ConversationID: conversationID,
+		UserID:         userID,
 	}
+	
+	// Set compatibility fields
+	wsMessage.SetCompatibilityFields()
 
 	h.broadcastToConversation(conversationID, &wsMessage)
 }
@@ -517,10 +526,13 @@ func (h *ChatHandler) broadcastUserJoined(conversationID, userID uuid.UUID) {
 // broadcastUserLeft broadcasts a user left event to all WebSocket connections in a conversation
 func (h *ChatHandler) broadcastUserLeft(conversationID, userID uuid.UUID) {
 	wsMessage := model.WebSocketMessage{
-		Type:   model.WSMessageTypeUserLeft,
-		RoomID: conversationID,
-		UserID: userID,
+		Type:           model.WSMessageTypeUserLeft,
+		ConversationID: conversationID,
+		UserID:         userID,
 	}
+	
+	// Set compatibility fields
+	wsMessage.SetCompatibilityFields()
 
 	h.broadcastToConversation(conversationID, &wsMessage)
 }
@@ -569,9 +581,9 @@ func (h *ChatHandler) sendWebSocketError(conn *websocket.Conn, errorMsg string) 
 
 // mapToAPIConversation converts internal conversation model to API model
 func (h *ChatHandler) mapToAPIConversation(conv *model.ConversationWithUnread) api.Conversation {
-	// Determine conversation type
+	// Determine conversation type from the embedded Conversation
 	conversationType := api.Group
-	if conv.MaxMembers == 2 {
+	if conv.Type == model.ConversationTypeDirect {
 		conversationType = api.Direct
 	}
 
@@ -586,31 +598,37 @@ func (h *ChatHandler) mapToAPIConversation(conv *model.ConversationWithUnread) a
 		lastMessage = &msg
 	}
 
-	// Convert name and description to pointers
+	// Set default name and description based on conversation type
 	var name, description *string
-	if conv.Name != "" {
-		name = &conv.Name
+	defaultName := "Direct Conversation"
+	if conv.Type == model.ConversationTypeGroup {
+		defaultName = "Group Conversation"
 	}
-	if conv.Description != "" {
-		description = &conv.Description
+	name = &defaultName
+	
+	// Set default max members based on type
+	maxMembers := 100 // Default for group
+	if conv.Type == model.ConversationTypeDirect {
+		maxMembers = 2
 	}
+	maxMembersPtr := &maxMembers
 
-	// Convert max members to pointer
-	maxMembers := &conv.MaxMembers
+	// Set default privacy based on type
+	isPrivate := conv.Type == model.ConversationTypeDirect
 
 	return api.Conversation{
 		Id:          openapi_types.UUID(conv.ID),
 		Name:        name,
 		Description: description,
 		Type:        conversationType,
-		IsPrivate:   conv.IsPrivate,
-		MaxMembers:  maxMembers,
-		CreatedBy:   openapi_types.UUID(conv.CreatedBy),
+		IsPrivate:   isPrivate,
+		MaxMembers:  maxMembersPtr,
+		CreatedBy:   openapi_types.UUID(conv.CreatorID),
 		Participants: participants,
 		UnreadCount: conv.UnreadCount,
 		LastMessage: lastMessage,
 		CreatedAt:   conv.CreatedAt,
-		UpdatedAt:   conv.UpdatedAt,
+		UpdatedAt:   conv.CreatedAt, // Use CreatedAt since we don't track UpdatedAt in new schema
 	}
 }
 

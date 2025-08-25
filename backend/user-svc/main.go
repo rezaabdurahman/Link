@@ -15,6 +15,7 @@ import (
 
 	"github.com/link-app/user-svc/internal/auth"
 	"github.com/link-app/user-svc/internal/cache"
+	"github.com/link-app/user-svc/internal/checkin"
 	"github.com/link-app/user-svc/internal/config"
 	"github.com/link-app/user-svc/internal/events"
 	"github.com/link-app/user-svc/internal/friends"
@@ -23,14 +24,21 @@ import (
 	"github.com/link-app/user-svc/internal/profile"
 	"github.com/link-app/user-svc/internal/repository"
 	"github.com/link-app/user-svc/internal/security"
+	"github.com/link-app/user-svc/internal/uploads"
 	"github.com/link-app/shared-libs/metrics"
+	sharedConfig "github.com/link-app/shared-libs/config"
 )
 
 func main() {
-	// Simplified initialization for testing
+	// Initialize shared secrets management
+	if err := sharedConfig.InitSecrets(); err != nil {
+		log.Printf("Warning: Failed to initialize secrets management: %v", err)
+		log.Println("Continuing with environment variables...")
+	}
+	defer sharedConfig.CloseSecrets()
 
 	// Configure HTTP server
-	port := getEnvOrDefault("PORT", "8080")
+	port := sharedConfig.GetEnv("PORT", "8080")
 	server := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  30 * time.Second,
@@ -81,8 +89,8 @@ func main() {
 	}
 
 	// Initialize Redis cache (optional)
-	redisHost := getEnvOrDefault("REDIS_HOST", "localhost")
-	redisPort := getEnvOrDefault("REDIS_PORT", "6379")
+	redisHost := sharedConfig.GetEnv("REDIS_HOST", "localhost")
+	redisPort := sharedConfig.GetEnv("REDIS_PORT", "6379")
 	cacheService := cache.NewSimpleCache(redisHost, redisPort)
 	if cacheService != nil {
 		log.Println("Redis cache initialized successfully")
@@ -113,11 +121,20 @@ func main() {
 	// Initialize friend service
 	friendService := friends.NewFriendService(userRepo)
 
+	// Initialize check-in service
+	checkinRepo := checkin.NewRepository(db)
+	checkinService := checkin.NewService(checkinRepo)
+
+	// Initialize upload service
+	uploadService := uploads.NewService(db)
+
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
 	profileHandler := profile.NewProfileHandler(profileService)
 	onboardingHandler := onboarding.NewHandler(onboardingService)
 	friendHandler := friends.NewFriendHandler(friendService)
+	checkinHandler := checkin.NewHandler(checkinService)
+	uploadHandler := uploads.NewHandler(uploadService)
 
 	// Initialize metrics
 	serviceMetrics := metrics.NewServiceMetrics("user-svc")
@@ -158,11 +175,13 @@ func main() {
 		profile.RegisterRoutes(v1, profileHandler)
 		onboarding.RegisterRoutes(v1, onboardingHandler)
 		friends.RegisterRoutes(v1, friendHandler)
+		checkin.RegisterRoutes(v1, checkinHandler)
+		uploads.RegisterRoutes(v1, uploadHandler)
 
-		// Admin endpoints
-		admin := v1.Group("/admin")
+		// Content moderation endpoints
+		moderation := v1.Group("/moderation")
 		{
-			admin.POST("/cleanup-sessions", func(c *gin.Context) {
+			moderation.POST("/cleanup-sessions", func(c *gin.Context) {
 				if err := authService.CleanupExpiredSessions(); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"error":   "SERVER_ERROR",
@@ -299,10 +318,3 @@ func jwtAuthMiddleware(jwtService *auth.JWTService) gin.HandlerFunc {
 	}
 }
 
-// getEnvOrDefault returns environment variable or default value
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}

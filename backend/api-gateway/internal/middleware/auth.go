@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,12 +63,21 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 		c.Set("user_id", claims.UserID)
 		c.Set("user_email", claims.Email)
 		c.Set("user_username", claims.Username)
+		c.Set("user_roles", claims.Roles)
+		c.Set("user_permissions", claims.Permissions)
 		c.Set("jwt_id", claims.ID)
 
 		// Set user context headers for downstream services
 		c.Header("X-User-ID", claims.UserID.String())
 		c.Header("X-User-Email", claims.Email)
 		c.Header("X-User-Name", claims.Username)
+		// Convert roles and permissions to comma-separated strings for headers
+		if len(claims.Roles) > 0 {
+			c.Header("X-User-Roles", strings.Join(claims.Roles, ","))
+		}
+		if len(claims.Permissions) > 0 {
+			c.Header("X-User-Permissions", strings.Join(claims.Permissions, ","))
+		}
 
 		c.Next()
 	}
@@ -207,4 +217,84 @@ func GetUserEmail(c *gin.Context) (string, bool) {
 	}
 
 	return emailStr, true
+}
+
+// GetUserRoles extracts user roles from gin context
+func GetUserRoles(c *gin.Context) ([]string, bool) {
+	roles, exists := c.Get("user_roles")
+	if !exists {
+		return nil, false
+	}
+
+	roleSlice, ok := roles.([]string)
+	if !ok {
+		return nil, false
+	}
+
+	return roleSlice, true
+}
+
+// GetUserPermissions extracts user permissions from gin context
+func GetUserPermissions(c *gin.Context) ([]string, bool) {
+	permissions, exists := c.Get("user_permissions")
+	if !exists {
+		return nil, false
+	}
+
+	permissionSlice, ok := permissions.([]string)
+	if !ok {
+		return nil, false
+	}
+
+	return permissionSlice, true
+}
+
+// HasRole checks if user has a specific role
+func HasRole(c *gin.Context, roleName string) bool {
+	roles, exists := GetUserRoles(c)
+	if !exists {
+		return false
+	}
+
+	for _, role := range roles {
+		if role == roleName {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAnyRole checks if user has any of the specified roles
+func HasAnyRole(c *gin.Context, roleNames ...string) bool {
+	for _, roleName := range roleNames {
+		if HasRole(c, roleName) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasPermission checks if user has a specific permission
+func HasPermission(c *gin.Context, permissionName string) bool {
+	permissions, exists := GetUserPermissions(c)
+	if !exists {
+		return false
+	}
+
+	for _, permission := range permissions {
+		if permission == permissionName {
+			return true
+		}
+	}
+	return false
+}
+
+// IsCommunityModerator checks if user has community moderator role
+func IsCommunityModerator(c *gin.Context) bool {
+	return HasRole(c, "community_moderator")
+}
+
+// IsModerator checks if user has community moderator role
+func IsModerator(c *gin.Context) bool {
+	return HasRole(c, "community_moderator")
 }

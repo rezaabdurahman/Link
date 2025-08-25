@@ -1,0 +1,176 @@
+name: Setup Branch Protection Rules
+
+# This workflow sets up automated branch protection rules
+# Run this once to configure your repository for safe automated deployments
+
+on:
+  workflow_dispatch:
+    inputs:
+      github_token:
+        description: 'GitHub token with admin privileges (required for branch protection)'
+        required: true
+        type: string
+
+jobs:
+  setup-branch-protection:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup Branch Protection for main
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ github.event.inputs.github_token }}
+        script: |
+          const { owner, repo } = context.repo;
+          
+          // Main branch protection (production)
+          await github.rest.repos.updateBranchProtection({
+            owner,
+            repo,
+            branch: 'main',
+            required_status_checks: {
+              strict: true,
+              checks: [
+                { context: 'validate-and-plan' },
+                { context: 'integration-tests-staging' },
+                { context: 'deploy-staging' }
+              ]
+            },
+            enforce_admins: false, // Allow admins to bypass in emergencies
+            required_pull_request_reviews: {
+              required_approving_review_count: 2,
+              dismiss_stale_reviews: true,
+              require_code_owner_reviews: true,
+              require_last_push_approval: true
+            },
+            restrictions: null, // Allow all users to push (but they need PR approval)
+            allow_force_pushes: false,
+            allow_deletions: false,
+            block_creations: false,
+            required_conversation_resolution: true
+          });
+          
+          console.log('✅ Main branch protection configured');
+
+    - name: Setup Branch Protection for develop  
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ github.event.inputs.github_token }}
+        script: |
+          const { owner, repo } = context.repo;
+          
+          // Develop branch protection (staging)
+          await github.rest.repos.updateBranchProtection({
+            owner,
+            repo,
+            branch: 'develop',
+            required_status_checks: {
+              strict: true,
+              checks: [
+                { context: 'validate-and-plan' },
+                { context: 'frontend-tests' },
+                { context: 'backend-tests' }
+              ]
+            },
+            enforce_admins: false,
+            required_pull_request_reviews: {
+              required_approving_review_count: 1,
+              dismiss_stale_reviews: true,
+              require_code_owner_reviews: false,
+              require_last_push_approval: false
+            },
+            restrictions: null,
+            allow_force_pushes: false,
+            allow_deletions: false,
+            block_creations: false,
+            required_conversation_resolution: true
+          });
+          
+          console.log('✅ Develop branch protection configured');
+
+    - name: Create GitHub Environments
+      uses: actions/github-script@v7  
+      with:
+        github-token: ${{ github.event.inputs.github_token }}
+        script: |
+          const { owner, repo } = context.repo;
+          
+          // Production environment with required reviewers
+          try {
+            await github.rest.repos.createOrUpdateEnvironment({
+              owner,
+              repo,
+              environment_name: 'production',
+              wait_timer: 5, // 5 minute delay
+              reviewers: [
+                {
+                  type: 'Team',
+                  id: process.env.GITHUB_TEAM_ID || null // Configure your team ID
+                }
+              ],
+              deployment_branch_policy: {
+                protected_branches: true,
+                custom_branch_policies: false
+              }
+            });
+            console.log('✅ Production environment configured');
+          } catch (error) {
+            console.log('Production environment may already exist:', error.message);
+          }
+          
+          // Production approval environment (separate for approval gate)
+          try {
+            await github.rest.repos.createOrUpdateEnvironment({
+              owner,
+              repo,
+              environment_name: 'production-approval',
+              wait_timer: 0,
+              reviewers: [
+                {
+                  type: 'Team', 
+                  id: process.env.GITHUB_TEAM_ID || null
+                }
+              ],
+              deployment_branch_policy: {
+                protected_branches: true,
+                custom_branch_policies: false
+              }
+            });
+            console.log('✅ Production approval environment configured');
+          } catch (error) {
+            console.log('Production approval environment may already exist:', error.message);
+          }
+          
+          // Staging environment (automatic deployment)
+          try {
+            await github.rest.repos.createOrUpdateEnvironment({
+              owner,
+              repo,
+              environment_name: 'staging',
+              wait_timer: 0,
+              reviewers: [],
+              deployment_branch_policy: {
+                protected_branches: false,
+                custom_branch_policies: true,
+                custom_branches: ['develop', 'main']
+              }
+            });
+            console.log('✅ Staging environment configured');
+          } catch (error) {
+            console.log('Staging environment may already exist:', error.message);
+          }
+
+    - name: Summary
+      run: |
+        echo "🎉 Branch protection and environments configured!"
+        echo ""
+        echo "✅ Configured:"
+        echo "  • main branch: Requires 2 approvals, status checks, code owner review"
+        echo "  • develop branch: Requires 1 approval, status checks"
+        echo "  • production environment: Manual approval required"
+        echo "  • staging environment: Automatic deployment"
+        echo ""
+        echo "📋 Next Steps:"
+        echo "1. Add team members to the repository"
+        echo "2. Configure CODEOWNERS file"
+        echo "3. Set up GitHub secrets and variables"
+        echo "4. Test the deployment pipeline"

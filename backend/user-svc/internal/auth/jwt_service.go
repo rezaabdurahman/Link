@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	sharedConfig "github.com/link-app/shared-libs/config"
 )
 
 // JWTConfig holds JWT configuration
@@ -21,25 +22,27 @@ type JWTConfig struct {
 	CookieSameSite   string
 }
 
-// GetJWTConfig returns JWT configuration from environment variables
+// GetJWTConfig returns JWT configuration using shared secrets management
 func GetJWTConfig() *JWTConfig {
 	return &JWTConfig{
-		Secret:           getEnv("JWT_SECRET", "your-secret-key-change-this-in-production"),
-		AccessTokenTTL:   time.Hour,                            // 1 hour for access tokens
-		RefreshTokenTTL:  time.Hour * 24 * 30,                 // 30 days for refresh tokens
-		Issuer:           getEnv("JWT_ISSUER", "user-svc"),
-		CookieName:       getEnv("JWT_COOKIE_NAME", "link_auth"),
-		CookieSecure:     getEnv("ENVIRONMENT", "development") == "production",
+		Secret:           sharedConfig.GetJWTSecret(), // Use shared secrets management
+		AccessTokenTTL:   time.Hour,                   // 1 hour for access tokens
+		RefreshTokenTTL:  time.Hour * 24 * 30,         // 30 days for refresh tokens
+		Issuer:           sharedConfig.GetEnv("JWT_ISSUER", "user-svc"),
+		CookieName:       sharedConfig.GetEnv("JWT_COOKIE_NAME", "link_auth"),
+		CookieSecure:     sharedConfig.GetEnv("ENVIRONMENT", "development") == "production",
 		CookieHTTPOnly:   true,
-		CookieSameSite:   getEnv("JWT_COOKIE_SAMESITE", "strict"),
+		CookieSameSite:   sharedConfig.GetEnv("JWT_COOKIE_SAMESITE", "strict"),
 	}
 }
 
 // Claims represents the JWT claims structure
 type Claims struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Email    string    `json:"email"`
-	Username string    `json:"username"`
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	Username    string    `json:"username"`
+	Roles       []string  `json:"roles"`       // User role names
+	Permissions []string  `json:"permissions"` // User permission names
 	jwt.RegisteredClaims
 }
 
@@ -56,12 +59,14 @@ func NewJWTService(config *JWTConfig) *JWTService {
 }
 
 // GenerateAccessToken generates a new access token
-func (j *JWTService) GenerateAccessToken(userID uuid.UUID, email, username string) (string, error) {
+func (j *JWTService) GenerateAccessToken(userID uuid.UUID, email, username string, roles, permissions []string) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		UserID:   userID,
-		Email:    email,
-		Username: username,
+		UserID:      userID,
+		Email:       email,
+		Username:    username,
+		Roles:       roles,
+		Permissions: permissions,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.New().String(),
 			Issuer:    j.config.Issuer,
@@ -75,6 +80,11 @@ func (j *JWTService) GenerateAccessToken(userID uuid.UUID, email, username strin
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(j.config.Secret))
+}
+
+// GenerateAccessTokenLegacy generates a new access token (legacy method for backward compatibility)
+func (j *JWTService) GenerateAccessTokenLegacy(userID uuid.UUID, email, username string) (string, error) {
+	return j.GenerateAccessToken(userID, email, username, []string{"user"}, []string{})
 }
 
 // GenerateRefreshToken generates a new refresh token
@@ -164,10 +174,3 @@ func (j *JWTService) GetTokenID(tokenString string) (string, error) {
 	return "", fmt.Errorf("no JTI found in token")
 }
 
-// getEnv gets environment variable with fallback
-func getEnv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
-}

@@ -1,32 +1,44 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
-
+# Dependencies stage - for better layer caching
+FROM golang:1.23-alpine AS deps
 WORKDIR /app
 
-# Install dependencies
-RUN apk add --no-cache git
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy shared libs and go mod and sum files
-COPY shared-libs ./shared-libs
+# Copy go mod files first for better caching
+COPY shared-libs/go.mod shared-libs/go.sum ./shared-libs/
 COPY discovery-svc/go.mod discovery-svc/go.sum ./
 
+# Download dependencies (cached unless go.mod/go.sum changes)
+RUN go mod download
+
+# Build stage
+FROM deps AS builder
+
 # Copy source code
+COPY shared-libs/ ./shared-libs/
 COPY discovery-svc/ .
 
-# Tidy dependencies and download
-RUN go mod tidy && go mod download
+# Tidy and ensure all dependencies
+RUN go mod tidy
 
 # Ensure migrations directory is included
 COPY discovery-svc/migrations/ ./migrations/
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o discovery-svc .
+# Build the application with optimizations
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o discovery-svc .
 
-# Build the migration tool
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o migrate ./cmd/migrate
+# Build the migration tool with optimizations  
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o migrate ./cmd/migrate
 
-# Production stage
-FROM alpine:latest
+# Final stage - minimal production image
+FROM alpine:latest AS production
 
 RUN apk --no-cache add ca-certificates tzdata netcat-openbsd
 

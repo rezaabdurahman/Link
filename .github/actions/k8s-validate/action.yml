@@ -1,0 +1,170 @@
+name: 'Kubernetes Validation'
+description: 'Comprehensive Kubernetes manifest validation using multiple tools'
+inputs:
+  manifests-path:
+    description: 'Path to Kubernetes manifests'
+    required: true
+    default: 'k8s/'
+  helm-charts-path:
+    description: 'Path to Helm charts'
+    required: false
+    default: 'k8s/helm/'
+  kubeconform-version:
+    description: 'Kubeconform version to use'
+    required: false
+    default: 'v0.6.4'
+  helm-version:
+    description: 'Helm version to use'
+    required: false
+    default: 'v3.13.0'
+
+outputs:
+  validation-result:
+    description: 'Overall validation result'
+    value: ${{ steps.summary.outputs.result }}
+  violations-count:
+    description: 'Number of validation violations'
+    value: ${{ steps.summary.outputs.violations }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install kubeval
+      shell: bash
+      run: |
+        curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+        sudo mv kubeval /usr/local/bin
+        kubeval --version
+
+    - name: Install kubeconform
+      shell: bash
+      run: |
+        curl -L https://github.com/yannh/kubeconform/releases/download/${{ inputs.kubeconform-version }}/kubeconform-linux-amd64.tar.gz | tar xz
+        sudo mv kubeconform /usr/local/bin
+        kubeconform -v
+
+    - name: Install Helm
+      shell: bash
+      run: |
+        curl https://get.helm.sh/helm-${{ inputs.helm-version }}-linux-amd64.tar.gz | tar xz
+        sudo mv linux-amd64/helm /usr/local/bin
+        helm version
+
+    - name: Validate with kubeval
+      id: kubeval
+      shell: bash
+      run: |
+        echo "🔍 Running kubeval validation..."
+        violations=0
+        
+        # Find and validate all YAML files
+        find ${{ inputs.manifests-path }} -name "*.yaml" -o -name "*.yml" | while read -r file; do
+          echo "Validating $file..."
+          if ! kubeval "$file"; then
+            echo "❌ kubeval failed for $file"
+            violations=$((violations + 1))
+          else
+            echo "✅ kubeval passed for $file"
+          fi
+        done
+        
+        echo "kubeval-violations=$violations" >> $GITHUB_OUTPUT
+
+    - name: Validate with kubeconform
+      id: kubeconform
+      shell: bash
+      run: |
+        echo "🔍 Running kubeconform validation..."
+        violations=0
+        
+        # Validate with strict mode and summary
+        if ! find ${{ inputs.manifests-path }} -name "*.yaml" -o -name "*.yml" | xargs kubeconform -strict -summary; then
+          echo "❌ kubeconform validation failed"
+          violations=1
+        else
+          echo "✅ kubeconform validation passed"
+        fi
+        
+        echo "kubeconform-violations=$violations" >> $GITHUB_OUTPUT
+
+    - name: Lint Helm charts
+      id: helm-lint
+      shell: bash
+      run: |
+        echo "🔍 Running Helm chart validation..."
+        violations=0
+        
+        if [ -d "${{ inputs.helm-charts-path }}" ]; then
+          # Find and lint all Helm charts
+          find ${{ inputs.helm-charts-path }} -name "Chart.yaml" -exec dirname {} \; | while read -r chart_dir; do
+            echo "Linting Helm chart in $chart_dir..."
+            if ! helm lint "$chart_dir"; then
+              echo "❌ Helm lint failed for $chart_dir"
+              violations=$((violations + 1))
+            else
+              echo "✅ Helm lint passed for $chart_dir"
+            fi
+          done
+        else
+          echo "📝 No Helm charts directory found at ${{ inputs.helm-charts-path }}"
+        fi
+        
+        echo "helm-violations=$violations" >> $GITHUB_OUTPUT
+
+    - name: Template and validate Helm charts
+      id: helm-template
+      shell: bash
+      run: |
+        echo "🔍 Running Helm template validation..."
+        violations=0
+        
+        if [ -d "${{ inputs.helm-charts-path }}" ]; then
+          find ${{ inputs.helm-charts-path }} -name "Chart.yaml" -exec dirname {} \; | while read -r chart_dir; do
+            chart_name=$(basename "$chart_dir")
+            echo "Templating and validating $chart_name..."
+            
+            # Check if values files exist
+            for values_file in "$chart_dir/values.yaml" "$chart_dir/values-staging.yaml"; do
+              if [ -f "$values_file" ]; then
+                echo "Using values file: $values_file"
+                if ! helm template "$chart_name" "$chart_dir" --values "$values_file" | kubeval; then
+                  echo "❌ Helm template validation failed for $chart_name with $values_file"
+                  violations=$((violations + 1))
+                else
+                  echo "✅ Helm template validation passed for $chart_name with $values_file"
+                fi
+              fi
+            done
+          done
+        fi
+        
+        echo "helm-template-violations=$violations" >> $GITHUB_OUTPUT
+
+    - name: Validation summary
+      id: summary
+      shell: bash
+      run: |
+        kubeval_violations=${{ steps.kubeval.outputs.kubeval-violations || 0 }}
+        kubeconform_violations=${{ steps.kubeconform.outputs.kubeconform-violations || 0 }}
+        helm_violations=${{ steps.helm-lint.outputs.helm-violations || 0 }}
+        helm_template_violations=${{ steps.helm-template.outputs.helm-template-violations || 0 }}
+        
+        total_violations=$((kubeval_violations + kubeconform_violations + helm_violations + helm_template_violations))
+        
+        echo "📊 Validation Summary:"
+        echo "- kubeval violations: $kubeval_violations"
+        echo "- kubeconform violations: $kubeconform_violations"  
+        echo "- helm lint violations: $helm_violations"
+        echo "- helm template violations: $helm_template_violations"
+        echo "- Total violations: $total_violations"
+        
+        if [ $total_violations -eq 0 ]; then
+          echo "result=success" >> $GITHUB_OUTPUT
+          echo "✅ All Kubernetes validations passed!"
+        else
+          echo "result=failure" >> $GITHUB_OUTPUT
+          echo "❌ Found $total_violations validation violations"
+          exit 1
+        fi
+        
+        echo "violations=$total_violations" >> $GITHUB_OUTPUT

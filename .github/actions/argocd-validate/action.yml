@@ -1,0 +1,342 @@
+name: 'ArgoCD Validation'
+description: 'ArgoCD application health and sync validation with drift detection'
+inputs:
+  argocd-server:
+    description: 'ArgoCD server URL'
+    required: false
+    default: 'argocd-server.argocd.svc.cluster.local'
+  namespace:
+    description: 'Target namespace to validate'
+    required: true
+  applications:
+    description: 'Comma-separated list of applications to validate (or "all")'
+    required: false
+    default: 'all'
+  drift-check:
+    description: 'Enable configuration drift detection'
+    required: false
+    default: 'true'
+  health-timeout:
+    description: 'Timeout for health checks in seconds'
+    required: false
+    default: '300'
+  sync-timeout:
+    description: 'Timeout for sync operations in seconds'
+    required: false
+    default: '600'
+
+outputs:
+  validation-result:
+    description: 'Overall ArgoCD validation result'
+    value: ${{ steps.summary.outputs.result }}
+  unhealthy-apps:
+    description: 'Number of unhealthy applications'
+    value: ${{ steps.summary.outputs.unhealthy-apps }}
+  out-of-sync-apps:
+    description: 'Number of out-of-sync applications'
+    value: ${{ steps.summary.outputs.out-of-sync-apps }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install ArgoCD CLI
+      shell: bash
+      run: |
+        # Install ArgoCD CLI
+        curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+        argocd version --client
+
+    - name: Setup kubectl for ArgoCD
+      shell: bash
+      run: |
+        # Verify kubectl is available and can connect to cluster
+        kubectl version --client
+        kubectl cluster-info
+
+    - name: Login to ArgoCD
+      shell: bash
+      run: |
+        # Port forward to ArgoCD server (if running in cluster)
+        if kubectl get svc argocd-server -n argocd >/dev/null 2>&1; then
+          kubectl port-forward svc/argocd-server -n argocd 8080:443 &
+          sleep 5
+          export ARGOCD_SERVER=localhost:8080
+          export ARGOCD_OPTS="--insecure"
+        else
+          export ARGOCD_SERVER=${{ inputs.argocd-server }}
+        fi
+        
+        # Login using service account token or admin credentials
+        if [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+          argocd login $ARGOCD_SERVER --auth-token $ARGOCD_AUTH_TOKEN $ARGOCD_OPTS
+        else
+          # Fallback to admin password (should be provided via secret)
+          argocd login $ARGOCD_SERVER --username admin --password "$ARGOCD_PASSWORD" $ARGOCD_OPTS
+        fi
+
+    - name: Get applications list
+      id: apps-list
+      shell: bash
+      run: |
+        if [ "${{ inputs.applications }}" = "all" ]; then
+          # Get all applications in the specified namespace
+          apps=$(argocd app list --output name | grep "${{ inputs.namespace }}" | tr '\n' ',')
+        else
+          apps="${{ inputs.applications }}"
+        fi
+        
+        echo "apps=$apps" >> $GITHUB_OUTPUT
+        echo "📋 Applications to validate: $apps"
+
+    - name: Check application health
+      id: health-check
+      shell: bash
+      run: |
+        echo "🏥 Checking application health..."
+        unhealthy_apps=0
+        unhealthy_list=""
+        apps="${{ steps.apps-list.outputs.apps }}"
+        
+        IFS=',' read -ra APP_ARRAY <<< "$apps"
+        for app in "${APP_ARRAY[@]}"; do
+          if [ -n "$app" ]; then
+            echo "Checking health of $app..."
+            
+            # Get application health status
+            health_status=$(argocd app get "$app" --output json | jq -r '.status.health.status')
+            
+            if [ "$health_status" != "Healthy" ]; then
+              echo "❌ Application $app is $health_status"
+              unhealthy_apps=$((unhealthy_apps + 1))
+              unhealthy_list="$unhealthy_list,$app"
+              
+              # Get detailed health info
+              argocd app get "$app" --output json | jq '.status.health'
+            else
+              echo "✅ Application $app is healthy"
+            fi
+          fi
+        done
+        
+        echo "unhealthy-count=$unhealthy_apps" >> $GITHUB_OUTPUT
+        echo "unhealthy-list=${unhealthy_list#,}" >> $GITHUB_OUTPUT
+
+    - name: Check sync status
+      id: sync-check
+      shell: bash
+      run: |
+        echo "🔄 Checking application sync status..."
+        out_of_sync_apps=0
+        out_of_sync_list=""
+        apps="${{ steps.apps-list.outputs.apps }}"
+        
+        IFS=',' read -ra APP_ARRAY <<< "$apps"
+        for app in "${APP_ARRAY[@]}"; do
+          if [ -n "$app" ]; then
+            echo "Checking sync status of $app..."
+            
+            # Get application sync status
+            sync_status=$(argocd app get "$app" --output json | jq -r '.status.sync.status')
+            
+            if [ "$sync_status" != "Synced" ]; then
+              echo "❌ Application $app is $sync_status"
+              out_of_sync_apps=$((out_of_sync_apps + 1))
+              out_of_sync_list="$out_of_sync_list,$app"
+              
+              # Get detailed sync info
+              argocd app get "$app" --output json | jq '.status.sync'
+            else
+              echo "✅ Application $app is synced"
+            fi
+          fi
+        done
+        
+        echo "out-of-sync-count=$out_of_sync_apps" >> $GITHUB_OUTPUT
+        echo "out-of-sync-list=${out_of_sync_list#,}" >> $GITHUB_OUTPUT
+
+    - name: Configuration drift detection
+      id: drift-check
+      if: inputs.drift-check == 'true'
+      shell: bash
+      run: |
+        echo "🔍 Checking for configuration drift..."
+        drift_detected=0
+        drift_apps=""
+        apps="${{ steps.apps-list.outputs.apps }}"
+        
+        mkdir -p reports
+        
+        IFS=',' read -ra APP_ARRAY <<< "$apps"
+        for app in "${APP_ARRAY[@]}"; do
+          if [ -n "$app" ]; then
+            echo "Checking drift for $app..."
+            
+            # Check for differences between git and live state
+            if argocd app diff "$app" > "reports/${app}-drift.txt" 2>&1; then
+              if [ -s "reports/${app}-drift.txt" ]; then
+                echo "⚠️  Configuration drift detected in $app"
+                drift_detected=$((drift_detected + 1))
+                drift_apps="$drift_apps,$app"
+                
+                # Show first 20 lines of diff
+                echo "Drift preview for $app:"
+                head -20 "reports/${app}-drift.txt"
+              else
+                echo "✅ No drift detected for $app"
+              fi
+            else
+              echo "❌ Failed to check drift for $app"
+            fi
+          fi
+        done
+        
+        echo "drift-count=$drift_detected" >> $GITHUB_OUTPUT
+        echo "drift-apps=${drift_apps#,}" >> $GITHUB_OUTPUT
+
+    - name: Validate application dependencies
+      id: deps-check
+      shell: bash
+      run: |
+        echo "🔗 Validating application dependencies..."
+        dependency_issues=0
+        apps="${{ steps.apps-list.outputs.apps }}"
+        
+        IFS=',' read -ra APP_ARRAY <<< "$apps"
+        for app in "${APP_ARRAY[@]}"; do
+          if [ -n "$app" ]; then
+            echo "Checking dependencies for $app..."
+            
+            # Get application details
+            app_details=$(argocd app get "$app" --output json)
+            
+            # Check if application has required resources
+            if echo "$app_details" | jq -e '.status.resources[] | select(.kind == "Deployment")' >/dev/null; then
+              # Check if deployment is available
+              deployment_available=$(echo "$app_details" | jq -r '.status.resources[] | select(.kind == "Deployment") | .status')
+              if [ "$deployment_available" != "Synced" ]; then
+                echo "❌ Deployment not available for $app"
+                dependency_issues=$((dependency_issues + 1))
+              fi
+            fi
+            
+            # Check if required services exist
+            if echo "$app_details" | jq -e '.status.resources[] | select(.kind == "Service")' >/dev/null; then
+              echo "✅ Services found for $app"
+            else
+              echo "⚠️  No services found for $app (may be expected)"
+            fi
+          fi
+        done
+        
+        echo "dependency-issues=$dependency_issues" >> $GITHUB_OUTPUT
+
+    - name: Test dry-run sync
+      id: dry-run
+      shell: bash
+      run: |
+        echo "🧪 Testing dry-run sync..."
+        sync_issues=0
+        apps="${{ steps.apps-list.outputs.apps }}"
+        
+        IFS=',' read -ra APP_ARRAY <<< "$apps"
+        for app in "${APP_ARRAY[@]}"; do
+          if [ -n "$app" ]; then
+            echo "Testing dry-run sync for $app..."
+            
+            # Perform dry-run sync
+            if argocd app sync "$app" --dry-run > "reports/${app}-sync-preview.txt" 2>&1; then
+              echo "✅ Dry-run sync successful for $app"
+            else
+              echo "❌ Dry-run sync failed for $app"
+              sync_issues=$((sync_issues + 1))
+              
+              # Show sync errors
+              cat "reports/${app}-sync-preview.txt"
+            fi
+          fi
+        done
+        
+        echo "sync-issues=$sync_issues" >> $GITHUB_OUTPUT
+
+    - name: Generate ArgoCD report
+      shell: bash
+      run: |
+        echo "📋 Generating ArgoCD validation report..."
+        
+        cat > reports/argocd-validation-report.md << EOF
+        # ArgoCD Validation Report
+        
+        ## Summary
+        - **Namespace**: ${{ inputs.namespace }}
+        - **Applications validated**: $(echo "${{ steps.apps-list.outputs.apps }}" | tr ',' '\n' | wc -l)
+        - **Unhealthy applications**: ${{ steps.health-check.outputs.unhealthy-count || 0 }}
+        - **Out-of-sync applications**: ${{ steps.sync-check.outputs.out-of-sync-count || 0 }}
+        - **Applications with drift**: ${{ steps.drift-check.outputs.drift-count || 0 }}
+        - **Dependency issues**: ${{ steps.deps-check.outputs.dependency-issues || 0 }}
+        - **Sync issues**: ${{ steps.dry-run.outputs.sync-issues || 0 }}
+        
+        ## Health Issues
+        EOF
+        
+        if [ -n "${{ steps.health-check.outputs.unhealthy-list }}" ]; then
+          echo "Unhealthy applications: ${{ steps.health-check.outputs.unhealthy-list }}" >> reports/argocd-validation-report.md
+        else
+          echo "All applications are healthy! ✅" >> reports/argocd-validation-report.md
+        fi
+        
+        echo "
+        ## Sync Issues" >> reports/argocd-validation-report.md
+        
+        if [ -n "${{ steps.sync-check.outputs.out-of-sync-list }}" ]; then
+          echo "Out-of-sync applications: ${{ steps.sync-check.outputs.out-of-sync-list }}" >> reports/argocd-validation-report.md
+        else
+          echo "All applications are in sync! ✅" >> reports/argocd-validation-report.md
+        fi
+        
+        if [ "${{ inputs.drift-check }}" = "true" ]; then
+          echo "
+        ## Configuration Drift" >> reports/argocd-validation-report.md
+          
+          if [ -n "${{ steps.drift-check.outputs.drift-apps }}" ]; then
+            echo "Applications with drift: ${{ steps.drift-check.outputs.drift-apps }}" >> reports/argocd-validation-report.md
+          else
+            echo "No configuration drift detected! ✅" >> reports/argocd-validation-report.md
+          fi
+        fi
+
+    - name: Validation summary
+      id: summary
+      shell: bash
+      run: |
+        unhealthy_apps=${{ steps.health-check.outputs.unhealthy-count || 0 }}
+        out_of_sync_apps=${{ steps.sync-check.outputs.out-of-sync-count || 0 }}
+        drift_count=${{ steps.drift-check.outputs.drift-count || 0 }}
+        dependency_issues=${{ steps.deps-check.outputs.dependency-issues || 0 }}
+        sync_issues=${{ steps.dry-run.outputs.sync-issues || 0 }}
+        
+        total_issues=$((unhealthy_apps + out_of_sync_apps + dependency_issues + sync_issues))
+        
+        echo "📊 ArgoCD Validation Summary:"
+        echo "- Unhealthy applications: $unhealthy_apps"
+        echo "- Out-of-sync applications: $out_of_sync_apps"
+        echo "- Applications with drift: $drift_count"
+        echo "- Dependency issues: $dependency_issues"
+        echo "- Sync issues: $sync_issues"
+        echo "- Total critical issues: $total_issues"
+        
+        if [ $total_issues -eq 0 ]; then
+          echo "result=success" >> $GITHUB_OUTPUT
+          echo "✅ All ArgoCD validations passed!"
+        else
+          echo "result=failure" >> $GITHUB_OUTPUT
+          echo "❌ Found $total_issues ArgoCD issues"
+          
+          # Display the validation report
+          if [ -f "reports/argocd-validation-report.md" ]; then
+            cat reports/argocd-validation-report.md
+          fi
+        fi
+        
+        echo "unhealthy-apps=$unhealthy_apps" >> $GITHUB_OUTPUT
+        echo "out-of-sync-apps=$out_of_sync_apps" >> $GITHUB_OUTPUT

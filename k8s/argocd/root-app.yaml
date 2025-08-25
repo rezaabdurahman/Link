@@ -1,0 +1,362 @@
+---
+# ArgoCD Root Application - App of Apps Pattern
+# This application manages all other ArgoCD applications for the Link platform
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: link-platform
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: link-platform
+    app.kubernetes.io/part-of: link-platform
+    app.kubernetes.io/component: root-app
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: link-deployments
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: link-alerts
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/argocd
+    directory:
+      include: '{prerequisites-app.yaml,postgres-ha-operator-app.yaml,infrastructure-apps.yaml,monitoring-apps.yaml,microservices-apps.yaml,link-helm-app.yaml,database-migration-app.yaml}'
+      exclude: 'root-app.yaml'  # Exclude self to avoid recursion
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Ignore differences for the managed applications
+  ignoreDifferences:
+  - group: argoproj.io
+    kind: Application
+    jsonPointers:
+    - /status
+    - /spec/source/targetRevision  # Allow apps to target different revisions
+  - group: argoproj.io
+    kind: AppProject
+    jsonPointers:
+    - /status
+  
+  # Health checks for child applications
+  info:
+  - name: 'Platform Components'
+    value: 'Prerequisites + Database + Infrastructure + Microservices + Monitoring'
+  - name: 'Total Applications'
+    value: '~20 applications managed'
+  - name: 'Deployment Strategy'
+    value: 'GitOps with sync waves for dependency ordering'
+  - name: 'Repository'
+    value: 'Single source of truth for entire platform'
+
+---
+# ArgoCD Application to manage ArgoCD itself (optional but recommended)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-config
+    app.kubernetes.io/part-of: link-platform
+    app.kubernetes.io/component: gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"  # Deploy before everything else
+spec:
+  project: default
+  
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argo-cd
+    targetRevision: 5.46.7
+    helm:
+      values: |
+        global:
+          image:
+            tag: v2.8.4
+        
+        configs:
+          repositories:
+            link-repo:
+              url: https://github.com/RezaAbdurahman/Link.git
+              type: git
+              name: link-platform-repo
+          
+          cm:
+            url: https://argocd.linkapp.com  # Update with your ArgoCD URL
+            dex.config: |
+              connectors:
+              - type: github
+                id: github
+                name: GitHub
+                config:
+                  clientID: $github-client-id
+                  clientSecret: $github-client-secret
+                  orgs:
+                  - name: RezaAbdurahman
+                    teams:
+                    - link-platform-team
+                    - link-dev-team
+                    - link-sre-team
+            
+            oidc.config: |
+              name: GitHub
+              issuer: https://github.com
+              clientId: $github-client-id
+              clientSecret: $github-client-secret
+              requestedScopes: ["openid", "profile", "email", "groups"]
+              requestedIDTokenClaims: {"groups": {"essential": true}}
+            
+            policy.default: role:readonly
+            policy.csv: |
+              p, role:admin, applications, *, */*, allow
+              p, role:admin, certificates, *, *, allow
+              p, role:admin, clusters, *, *, allow
+              p, role:admin, repositories, *, *, allow
+              
+              p, role:developer, applications, get, */*, allow
+              p, role:developer, applications, sync, */*, allow
+              p, role:developer, applications, action/restart, */*, allow
+              p, role:developer, applications, delete, */*, deny
+              
+              p, role:readonly, applications, get, */*, allow
+              p, role:readonly, repositories, get, *, allow
+              p, role:readonly, clusters, get, *, allow
+              
+              g, RezaAbdurahman:link-platform-team, role:admin
+              g, RezaAbdurahman:link-sre-team, role:admin
+              g, RezaAbdurahman:link-dev-team, role:developer
+        
+        server:
+          service:
+            type: LoadBalancer
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+            - argocd.linkapp.com  # Update with your domain
+            tls:
+            - secretName: argocd-tls
+              hosts:
+              - argocd.linkapp.com
+          
+          config:
+            resource.customizations.health.argoproj.io_Application: |
+              hs = {}
+              hs.status = "Progressing"
+              hs.message = ""
+              if obj.status ~= nil then
+                if obj.status.health ~= nil then
+                  hs.status = obj.status.health.status
+                  if obj.status.health.message ~= nil then
+                    hs.message = obj.status.health.message
+                  end
+                end
+              end
+              return hs
+        
+        repoServer:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+        
+        controller:
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          
+          metrics:
+            enabled: true
+            serviceMonitor:
+              enabled: true
+              namespace: monitoring
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  
+  syncPolicy:
+    # Manual sync for ArgoCD itself - critical infrastructure
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  
+  info:
+  - name: 'Purpose'
+    value: 'ArgoCD self-management with RBAC & SSO'
+  - name: 'Authentication'
+    value: 'GitHub OAuth + Team-based RBAC'
+
+---
+# ArgoCD Notification Configuration
+apiVersion: argoproj.io/v1alpha1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-notifications
+    app.kubernetes.io/part-of: argocd
+data:
+  service.slack: |
+    token: $slack-token
+    username: ArgoCD
+    icon: ":argo:"
+    
+  template.app-deployed: |
+    message: |
+      {{if eq .serviceType "slack"}}:white_check_mark:{{end}} Application {{.app.metadata.name}} is now running new version.
+    slack:
+      attachments: |
+        [{
+          "title": "{{ .app.metadata.name}}",
+          "title_link":"{{.context.argocdUrl}}/applications/{{.app.metadata.name}}",
+          "color": "#18be52",
+          "fields": [
+          {
+            "title": "Sync Status",
+            "value": "{{.app.status.sync.status}}",
+            "short": true
+          },
+          {
+            "title": "Repository",
+            "value": "{{.app.spec.source.repoURL}}",
+            "short": true
+          },
+          {
+            "title": "Revision",
+            "value": "{{.app.status.sync.revision}}",
+            "short": true
+          }
+          {{range $index, $c := .app.status.conditions}}
+          ,
+          {
+            "title": "{{$c.type}}",
+            "value": "{{$c.message}}",
+            "short": true
+          }
+          {{end}}
+          ]
+        }]
+
+  template.app-health-degraded: |
+    message: |
+      {{if eq .serviceType "slack"}}:exclamation:{{end}} Application {{.app.metadata.name}} has degraded.
+    slack:
+      attachments: |
+        [{
+          "title": "{{ .app.metadata.name}}",
+          "title_link": "{{.context.argocdUrl}}/applications/{{.app.metadata.name}}",
+          "color": "#f4c430",
+          "fields": [
+          {
+            "title": "Health Status",
+            "value": "{{.app.status.health.status}}",
+            "short": true
+          },
+          {
+            "title": "Repository",
+            "value": "{{.app.spec.source.repoURL}}",
+            "short": true
+          }
+          {{range $index, $c := .app.status.conditions}}
+          ,
+          {
+            "title": "{{$c.type}}",
+            "value": "{{$c.message}}",
+            "short": true
+          }
+          {{end}}
+          ]
+        }]
+
+  template.app-sync-failed: |
+    message: |
+      {{if eq .serviceType "slack"}}:exclamation:{{end}} Application {{.app.metadata.name}} sync is failed.
+    slack:
+      attachments: |
+        [{
+          "title": "{{ .app.metadata.name}}",
+          "title_link":"{{.context.argocdUrl}}/applications/{{.app.metadata.name}}",
+          "color": "#E96D76",
+          "fields": [
+          {
+            "title": "Sync Status",
+            "value": "{{.app.status.sync.status}}",
+            "short": true
+          },
+          {
+            "title": "Repository",
+            "value": "{{.app.spec.source.repoURL}}",
+            "short": true
+          }
+          {{range $index, $c := .app.status.conditions}}
+          ,
+          {
+            "title": "{{$c.type}}",
+            "value": "{{$c.message}}",
+            "short": true
+          }
+          {{end}}
+          ]
+        }]
+  
+  trigger.on-deployed: |
+    - description: Application is synced and healthy
+      when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+      send:
+      - app-deployed
+  
+  trigger.on-health-degraded: |
+    - description: Application has degraded
+      when: app.status.health.status == 'Degraded'
+      send:
+      - app-health-degraded
+  
+  trigger.on-sync-failed: |
+    - description: Application syncing has failed
+      when: app.status.operationState.phase in ['Error', 'Failed']
+      send:
+      - app-sync-failed

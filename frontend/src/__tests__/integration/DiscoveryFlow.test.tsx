@@ -13,9 +13,6 @@ jest.mock('../../services/unifiedSearchClient', () => ({
   getUnifiedSearchErrorMessage: jest.fn(() => 'Mock error message')
 }));
 
-jest.mock('../../services/hiddenUsersClient', () => ({
-  getHiddenUsers: jest.fn(() => Promise.resolve([])),
-}));
 
 jest.mock('../../services/availabilityClient', () => ({
   getUserAvailability: jest.fn(),

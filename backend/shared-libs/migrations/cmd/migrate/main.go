@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -14,13 +15,14 @@ import (
 
 func main() {
 	var (
-		action      = flag.String("action", "up", "Migration action: 'up', 'down', 'status', 'generate', or 'verify'")
+		action      = flag.String("action", "up", "Migration action: 'up', 'down', 'status', 'generate', 'verify', or 'safe-up'")
 		serviceName = flag.String("service", "", "Service name (required)")
 		migrationsPath = flag.String("path", "", "Path to migrations directory (optional, will auto-detect if not provided)")
 		description = flag.String("description", "", "Description for new migration (required for 'generate' action)")
 		dryRun      = flag.Bool("dry-run", false, "Show what would be executed without actually running migrations")
 		// force       = flag.Bool("force", false, "Force migration even if checksums don't match")
 		autoConfirm = flag.Bool("yes", false, "Skip confirmation prompts")
+		zeroDowntime = flag.Bool("zero-downtime", false, "Use zero-downtime migration strategies")
 		help        = flag.Bool("help", false, "Show help message")
 	)
 	flag.Parse()
@@ -96,8 +98,20 @@ func main() {
 	// Execute the requested action
 	switch *action {
 	case "up":
-		if err := runMigrateUp(engine, *autoConfirm); err != nil {
-			fmt.Fprintf(os.Stderr, "Error running migrations: %v\n", err)
+		if *zeroDowntime {
+			if err := runZeroDowntimeMigration(engine, *serviceName, *migrationsPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Error running zero-downtime migrations: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			if err := runMigrateUp(engine, *autoConfirm); err != nil {
+				fmt.Fprintf(os.Stderr, "Error running migrations: %v\n", err)
+				os.Exit(1)
+			}
+		}
+	case "safe-up":
+		if err := runZeroDowntimeMigration(engine, *serviceName, *migrationsPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running zero-downtime migrations: %v\n", err)
 			os.Exit(1)
 		}
 	case "down":
@@ -231,6 +245,49 @@ func showStatus(engine *migrations.MigrationEngine) error {
 func verifyIntegrity(engine *migrations.MigrationEngine) error {
 	fmt.Println("🔍 Verifying migration integrity...")
 	return engine.VerifyIntegrity()
+}
+
+func runZeroDowntimeMigration(engine *migrations.MigrationEngine, serviceName, migrationsPath string) error {
+	fmt.Printf("🚀 Running zero-downtime migrations for service '%s'\n", serviceName)
+	
+	// Get database connection from the engine
+	db := engine.GetDB()
+	
+	// Create zero-downtime engine
+	zdEngine := migrations.NewZeroDowntimeEngine(db, serviceName, migrationsPath)
+	
+	// Configure zero-downtime settings for production
+	config := &migrations.ZeroDowntimeConfig{
+		MaxLockTimeout: 30 * time.Second,
+		ChunkSize:      1000,
+		PreMigrationChecks: []migrations.HealthCheck{
+			migrations.CheckDatabaseConnections,
+			migrations.CheckReplicationLag,
+		},
+		PostMigrationChecks: []migrations.HealthCheck{
+			migrations.CheckSchemaIntegrity,
+			migrations.CheckDataConsistency,
+		},
+		ConnectionPoolSettings: &migrations.ConnectionPoolConfig{
+			MaxOpenConns:    10,
+			MaxIdleConns:    5,
+			ConnMaxLifetime: 5 * time.Minute,
+			ConnMaxIdleTime: 1 * time.Minute,
+		},
+	}
+	
+	zdEngine = zdEngine.WithZeroDowntimeConfig(config)
+	
+	// Run safe migrations
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	
+	if err := zdEngine.SafeUp(ctx); err != nil {
+		return fmt.Errorf("zero-downtime migration failed: %w", err)
+	}
+	
+	fmt.Println("✅ Zero-downtime migrations completed successfully")
+	return nil
 }
 
 func generateMigration(migrationsPath, description string) error {

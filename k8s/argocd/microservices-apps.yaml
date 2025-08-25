@@ -1,0 +1,455 @@
+---
+# ArgoCD Application for User Service
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: user-svc
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: user-svc
+    app.kubernetes.io/part-of: link-microservices
+    app.kubernetes.io/component: backend-service
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      parameters:
+        - name: services.userSvc.enabled
+          value: "true"
+        - name: services.userSvc.replicaCount
+          value: "3"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  
+  info:
+  - name: 'Service Type'
+    value: 'User Management & Authentication'
+  - name: 'Database'
+    value: 'PostgreSQL'
+
+---
+# ArgoCD Application for Chat Service
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: chat-svc
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: chat-svc
+    app.kubernetes.io/part-of: link-microservices
+    app.kubernetes.io/component: backend-service
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      parameters:
+        - name: services.chatSvc.enabled
+          value: "true"
+        - name: services.chatSvc.replicaCount
+          value: "3"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  
+  info:
+  - name: 'Service Type'
+    value: 'Real-time Messaging & WebSocket'
+  - name: 'Database'
+    value: 'PostgreSQL + Redis'
+
+---
+# ArgoCD Application for AI Service
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-svc
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: ai-svc
+    app.kubernetes.io/part-of: link-microservices
+    app.kubernetes.io/component: backend-service
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      parameters:
+        - name: services.aiSvc.enabled
+          value: "true"
+        - name: services.aiSvc.replicaCount
+          value: "2"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  
+  info:
+  - name: 'Service Type'
+    value: 'AI Conversation Summarization'
+  - name: 'Provider'
+    value: 'OpenAI GPT'
+
+---
+# ArgoCD Application for Discovery Service
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: discovery-svc
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: discovery-svc
+    app.kubernetes.io/part-of: link-microservices
+    app.kubernetes.io/component: backend-service
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      parameters:
+        - name: services.discoverySvc.enabled
+          value: "true"
+        - name: services.discoverySvc.replicaCount
+          value: "2"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  
+  info:
+  - name: 'Service Type'
+    value: 'User Discovery & Availability'
+  - name: 'Features'
+    value: 'Ranking Algorithm + Broadcasts'
+
+---
+# ArgoCD Application for Search Service
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: search-svc
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: search-svc
+    app.kubernetes.io/part-of: link-microservices
+    app.kubernetes.io/component: backend-service
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"  # After Qdrant is ready
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      parameters:
+        - name: services.searchSvc.enabled
+          value: "true"
+        - name: services.searchSvc.replicaCount
+          value: "2"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  
+  info:
+  - name: 'Service Type'
+    value: 'Vector Search & Embeddings'
+  - name: 'Database'
+    value: 'Qdrant Vector DB'
+
+---
+# ArgoCD Application for API Gateway
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api-gateway
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: link-microservices
+    app.kubernetes.io/component: gateway
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"  # Deploy after all services
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/helm/link-app
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      parameters:
+        - name: services.apiGateway.enabled
+          value: "true"
+        - name: services.apiGateway.replicaCount
+          value: "3"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  - group: networking.k8s.io
+    kind: Ingress
+    jsonPointers:
+    - /status/loadBalancer/ingress
+  
+  info:
+  - name: 'Service Type'
+    value: 'Central API Gateway & Load Balancer'
+  - name: 'Features'
+    value: 'JWT Auth + Rate Limiting + Service Discovery'
+
+---
+# ArgoCD AppProject for Microservices
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: link-microservices
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: link-microservices
+    app.kubernetes.io/part-of: link-platform
+spec:
+  description: Link social app microservices (Go-based backend services)
+  
+  sourceRepos:
+  - 'https://github.com/RezaAbdurahman/Link.git'
+  
+  destinations:
+  - namespace: link-services
+    server: https://kubernetes.default.svc
+  - namespace: default
+    server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: networking.k8s.io
+    kind: Ingress
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: Secret
+  - group: ''
+    kind: ConfigMap
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: ServiceAccount
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: ReplicaSet
+  - group: policy
+    kind: PodDisruptionBudget
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+  - group: networking.k8s.io
+    kind: NetworkPolicy
+  - group: batch
+    kind: Job
+  - group: batch
+    kind: CronJob
+  - group: monitoring.coreos.com
+    kind: ServiceMonitor
+  
+  roles:
+  - name: microservices-admin
+    description: Full access to microservices
+    policies:
+    - p, proj:link-microservices:microservices-admin, applications, *, link-microservices/*, allow
+    groups:
+    - link-platform-team
+  
+  - name: microservices-developer
+    description: Developer access to microservices
+    policies:
+    - p, proj:link-microservices:microservices-developer, applications, get, link-microservices/*, allow
+    - p, proj:link-microservices:microservices-developer, applications, sync, link-microservices/*, allow
+    groups:
+    - link-dev-team

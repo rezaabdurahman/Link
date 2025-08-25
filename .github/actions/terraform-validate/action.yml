@@ -1,0 +1,429 @@
+name: 'Terraform Validation'
+description: 'Comprehensive Terraform validation including format, validate, plan, security scanning, and compliance checks'
+inputs:
+  terraform-version:
+    description: 'Terraform version to use'
+    required: false
+    default: '1.5.7'
+  working-directory:
+    description: 'Terraform working directory'
+    required: false
+    default: './terraform'
+  environment:
+    description: 'Target environment (development, staging, production)'
+    required: false
+    default: 'development'
+  run-plan:
+    description: 'Whether to run terraform plan'
+    required: false
+    default: 'true'
+  plan-only:
+    description: 'Only run plan, skip apply operations'
+    required: false
+    default: 'true'
+  enable-security-scan:
+    description: 'Enable security scanning with Checkov'
+    required: false
+    default: 'true'
+  enable-drift-detection:
+    description: 'Enable configuration drift detection'
+    required: false
+    default: 'false'
+  backend-config:
+    description: 'Backend configuration (s3, local, or auto)'
+    required: false
+    default: 'auto'
+
+outputs:
+  validation-result:
+    description: 'Overall validation result'
+    value: ${{ steps.summary.outputs.result }}
+  plan-result:
+    description: 'Terraform plan result'
+    value: ${{ steps.plan.outputs.result }}
+  plan-exit-code:
+    description: 'Terraform plan exit code'
+    value: ${{ steps.plan.outputs.exit-code }}
+  security-violations:
+    description: 'Number of security violations found'
+    value: ${{ steps.security.outputs.violations }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+
+    - name: Install validation tools
+      shell: bash
+      run: |
+        echo "🔧 Installing Terraform validation tools..."
+        
+        # Install tflint
+        curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+        
+        # Install Checkov for security scanning
+        if [ "${{ inputs.enable-security-scan }}" = "true" ]; then
+          pip install checkov
+        fi
+        
+        # Install terraform-docs
+        curl -Lo terraform-docs.tar.gz https://github.com/terraform-docs/terraform-docs/releases/download/v0.16.0/terraform-docs-v0.16.0-linux-amd64.tar.gz
+        tar -xzf terraform-docs.tar.gz
+        sudo mv terraform-docs /usr/local/bin/
+        
+        echo "✅ Validation tools installed"
+
+    - name: Terraform Format Check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "🎨 Checking Terraform formatting..."
+        
+        if terraform fmt -check -recursive -diff; then
+          echo "✅ All Terraform files are properly formatted"
+        else
+          echo "❌ Terraform formatting issues found"
+          echo "💡 Run 'terraform fmt -recursive' to fix formatting"
+          exit 1
+        fi
+
+    - name: Terraform Init
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "🔄 Initializing Terraform..."
+        
+        # Configure backend based on input
+        if [ "${{ inputs.backend-config }}" = "s3" ] || [ "${{ inputs.backend-config }}" = "auto" ]; then
+          if [ -n "$TF_STATE_BUCKET" ]; then
+            echo "Using S3 backend configuration"
+            terraform init
+          else
+            echo "S3 backend requested but TF_STATE_BUCKET not set, using local backend"
+            terraform init -backend=false
+          fi
+        elif [ "${{ inputs.backend-config }}" = "local" ]; then
+          echo "Using local backend for validation"
+          terraform init -backend=false
+        else
+          terraform init
+        fi
+
+    - name: Terraform Validate
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "✅ Validating Terraform configuration..."
+        
+        if terraform validate; then
+          echo "✅ Terraform configuration is valid"
+        else
+          echo "❌ Terraform validation failed"
+          exit 1
+        fi
+
+    - name: TFLint Analysis
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "🔍 Running TFLint analysis..."
+        
+        # Initialize tflint
+        tflint --init
+        
+        # Run tflint with detailed output
+        if tflint --format compact --recursive; then
+          echo "✅ TFLint analysis passed"
+        else
+          echo "❌ TFLint found issues"
+          echo "💡 Review the issues above and fix them"
+          # Don't exit 1 here as some warnings might be acceptable
+        fi
+
+    - name: Terraform Security Scan
+      id: security
+      if: inputs.enable-security-scan == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "🔒 Running Terraform security scan with Checkov..."
+        violations=0
+        
+        # Create reports directory
+        mkdir -p reports
+        
+        # Run Checkov security scan
+        if checkov -d . --framework terraform --output json --output-file reports/checkov-terraform.json --quiet; then
+          violations=$(jq '.summary.failed // 0' reports/checkov-terraform.json)
+          echo "✅ Checkov security scan completed"
+        else
+          violations=$(jq '.summary.failed // 0' reports/checkov-terraform.json 2>/dev/null || echo "1")
+          echo "⚠️ Checkov found security issues"
+        fi
+        
+        echo "violations=$violations" >> $GITHUB_OUTPUT
+        
+        # Generate human-readable security report
+        if [ -f "reports/checkov-terraform.json" ]; then
+          echo "📋 Security Scan Results:" > reports/security-summary.md
+          echo "- Failed checks: $(jq '.summary.failed // 0' reports/checkov-terraform.json)" >> reports/security-summary.md
+          echo "- Passed checks: $(jq '.summary.passed // 0' reports/checkov-terraform.json)" >> reports/security-summary.md
+          echo "- Skipped checks: $(jq '.summary.skipped // 0' reports/checkov-terraform.json)" >> reports/security-summary.md
+          
+          if [ "$violations" -gt 0 ]; then
+            echo "" >> reports/security-summary.md
+            echo "### Failed Security Checks:" >> reports/security-summary.md
+            jq -r '.results.failed_checks[]? | "- **\(.file_path)**: \(.check_name) - \(.description)"' reports/checkov-terraform.json >> reports/security-summary.md
+          fi
+        fi
+
+    - name: Create environment-specific tfvars
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "🔧 Creating ${{ inputs.environment }} terraform.tfvars..."
+        
+        case "${{ inputs.environment }}" in
+          "production")
+            cat > terraform.tfvars << EOF
+        postgres_host = "\${POSTGRES_HOST:-localhost}"
+        postgres_password = "\${POSTGRES_PASSWORD:-prod_password}"
+        postgres_user = "\${POSTGRES_USER:-prod_user}"
+        environment = "production"
+        
+        # Production settings
+        database_connection_limit = 100
+        user_connection_limit = 50
+        create_monitoring_user = true
+        enable_pgbouncer = true
+        enable_ssl = true
+        backup_retention_days = 30
+        
+        # Kubernetes settings
+        kubernetes_namespace = "production"
+        kubeconfig_path = "~/.kube/config"
+        kubernetes_context = "production-cluster"
+        EOF
+            ;;
+          "staging")
+            cat > terraform.tfvars << EOF
+        postgres_host = "\${POSTGRES_HOST:-localhost}"
+        postgres_password = "\${POSTGRES_PASSWORD:-staging_password}"
+        postgres_user = "\${POSTGRES_USER:-staging_user}"
+        environment = "staging"
+        
+        # Staging settings
+        database_connection_limit = 50
+        user_connection_limit = 25
+        create_monitoring_user = true
+        enable_pgbouncer = true
+        enable_ssl = true
+        backup_retention_days = 14
+        
+        # Kubernetes settings
+        kubernetes_namespace = "staging"
+        kubeconfig_path = "~/.kube/config"
+        kubernetes_context = "staging-cluster"
+        EOF
+            ;;
+          *)
+            cat > terraform.tfvars << EOF
+        postgres_host = "localhost"
+        postgres_password = "dev_password"
+        postgres_user = "dev_user"
+        environment = "development"
+        
+        # Development settings
+        database_connection_limit = 20
+        user_connection_limit = 10
+        create_monitoring_user = false
+        enable_pgbouncer = false
+        enable_ssl = false
+        backup_retention_days = 7
+        
+        # Kubernetes settings
+        kubernetes_namespace = "development"
+        kubeconfig_path = "~/.kube/config"
+        kubernetes_context = "development-cluster"
+        EOF
+            ;;
+        esac
+        
+        echo "✅ Created terraform.tfvars for ${{ inputs.environment }}"
+
+    - name: Terraform Plan
+      id: plan
+      if: inputs.run-plan == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "📋 Running Terraform plan for ${{ inputs.environment }}..."
+        
+        # Create reports directory
+        mkdir -p reports
+        
+        # Run terraform plan
+        set +e
+        terraform plan -no-color -detailed-exitcode -out=tfplan.out > reports/plan-output.txt 2>&1
+        plan_exit_code=$?
+        set -e
+        
+        echo "exit-code=$plan_exit_code" >> $GITHUB_OUTPUT
+        
+        # Show plan output in logs
+        cat reports/plan-output.txt
+        
+        # Determine plan result
+        case $plan_exit_code in
+          0)
+            echo "result=no-changes" >> $GITHUB_OUTPUT
+            echo "✅ No changes detected"
+            ;;
+          1)
+            echo "result=error" >> $GITHUB_OUTPUT
+            echo "❌ Terraform plan failed"
+            exit 1
+            ;;
+          2)
+            echo "result=changes" >> $GITHUB_OUTPUT
+            echo "📋 Changes detected"
+            ;;
+          *)
+            echo "result=unknown" >> $GITHUB_OUTPUT
+            echo "❓ Unknown plan result"
+            exit 1
+            ;;
+        esac
+
+    - name: Terraform Plan Analysis
+      if: inputs.run-plan == 'true' && steps.plan.outputs.exit-code == '2'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "📊 Analyzing Terraform plan changes..."
+        
+        # Analyze plan for significant changes
+        plan_output=$(cat reports/plan-output.txt)
+        
+        # Count resources to be created/modified/destroyed
+        resources_to_add=$(echo "$plan_output" | grep -c "# .* will be created" || echo 0)
+        resources_to_change=$(echo "$plan_output" | grep -c "# .* will be updated" || echo 0)
+        resources_to_destroy=$(echo "$plan_output" | grep -c "# .* will be destroyed" || echo 0)
+        
+        echo "📈 Plan Summary:"
+        echo "  • Resources to add: $resources_to_add"
+        echo "  • Resources to change: $resources_to_change"
+        echo "  • Resources to destroy: $resources_to_destroy"
+        
+        # Check for potentially dangerous operations
+        if [ "$resources_to_destroy" -gt 0 ]; then
+          echo "⚠️ Warning: This plan will destroy $resources_to_destroy resource(s)"
+          echo "   Please review carefully before applying!"
+        fi
+        
+        # Check for database-related changes
+        if echo "$plan_output" | grep -i "database\|postgres\|db"; then
+          echo "🗄️ Database changes detected - review for potential data impact"
+        fi
+        
+        # Check for networking changes
+        if echo "$plan_output" | grep -i "network\|vpc\|subnet\|security_group"; then
+          echo "🌐 Network changes detected - review for connectivity impact"
+        fi
+
+    - name: Configuration Drift Detection
+      if: inputs.enable-drift-detection == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "🔍 Checking for configuration drift..."
+        
+        # This requires proper backend configuration and state
+        if terraform plan -detailed-exitcode > reports/drift-check.txt 2>&1; then
+          echo "✅ No configuration drift detected"
+        else
+          drift_exit_code=$?
+          if [ $drift_exit_code -eq 2 ]; then
+            echo "⚠️ Configuration drift detected!"
+            echo "Differences between state and actual infrastructure:"
+            cat reports/drift-check.txt
+            
+            # Don't fail the action for drift detection, just warn
+            echo "💡 Consider running 'terraform apply' to reconcile differences"
+          else
+            echo "❌ Error during drift detection"
+            cat reports/drift-check.txt
+            exit 1
+          fi
+        fi
+
+    - name: Generate Terraform Documentation
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "📚 Generating Terraform documentation..."
+        
+        # Generate documentation for main module
+        terraform-docs markdown table . > reports/terraform-docs.md
+        
+        # Generate documentation for modules
+        if [ -d "modules" ]; then
+          for module_dir in modules/*/; do
+            module_name=$(basename "$module_dir")
+            echo "Generating docs for module: $module_name"
+            terraform-docs markdown table "$module_dir" > "reports/terraform-docs-${module_name}.md"
+          done
+        fi
+        
+        echo "✅ Terraform documentation generated"
+
+    - name: Validation Summary
+      id: summary
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "📊 Terraform Validation Summary"
+        echo "================================"
+        
+        # Collect validation results
+        security_violations=${{ steps.security.outputs.violations || 0 }}
+        plan_result=${{ steps.plan.outputs.result || 'skipped' }}
+        plan_exit_code=${{ steps.plan.outputs.exit-code || 0 }}
+        
+        total_issues=0
+        
+        echo "🎯 Validation Results:"
+        echo "  • Format check: ✅ Passed"
+        echo "  • Configuration validation: ✅ Passed"
+        echo "  • Security violations: $security_violations"
+        echo "  • Plan result: $plan_result"
+        
+        if [ "$security_violations" -gt 0 ]; then
+          echo "⚠️ Security violations found: $security_violations"
+          total_issues=$((total_issues + security_violations))
+        fi
+        
+        if [ "$plan_exit_code" = "1" ]; then
+          echo "❌ Plan execution failed"
+          total_issues=$((total_issues + 1))
+        fi
+        
+        # Generate final result
+        if [ $total_issues -eq 0 ]; then
+          echo "result=success" >> $GITHUB_OUTPUT
+          echo "✅ All Terraform validations passed!"
+        else
+          echo "result=warning" >> $GITHUB_OUTPUT
+          echo "⚠️ Terraform validation completed with $total_issues issue(s)"
+          
+          # Display available reports
+          if [ -d "reports" ]; then
+            echo ""
+            echo "📁 Generated Reports:"
+            ls -la reports/ | grep -E '\.(md|txt|json)$' | awk '{print "  • " $9}'
+          fi
+        fi

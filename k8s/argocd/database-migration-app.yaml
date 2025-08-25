@@ -1,0 +1,122 @@
+---
+# ArgoCD Application for Database Migrations
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: link-database-migrations
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: link-database-migrations
+    app.kubernetes.io/part-of: link-platform
+    app.kubernetes.io/component: database-migration
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"  # Run before all services
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/standalone
+    directory:
+      include: 'migration-*.yaml'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: batch
+    kind: Job
+    jsonPointers:
+    - /status
+    - /metadata/labels
+    - /metadata/annotations
+  
+  info:
+  - name: 'Purpose'
+    value: 'Database schema migrations and rollback jobs'
+  - name: 'Migration Mode'
+    value: 'Zero-downtime migrations with health checks'
+  - name: 'Monitoring'
+    value: 'Migration status monitoring and alerting'
+
+---
+# ArgoCD Application for RBAC and Network Policies
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: link-security-policies
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: link-security-policies
+    app.kubernetes.io/part-of: link-platform
+    app.kubernetes.io/component: security
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"  # Deploy early for security
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/access
+    directory:
+      include: '*.yaml'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+    jsonPointers:
+    - /metadata/resourceVersion
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+    jsonPointers:
+    - /metadata/resourceVersion
+  
+  info:
+  - name: 'Purpose'
+    value: 'RBAC policies, service accounts, and network policies'
+  - name: 'Security'
+    value: 'Least-privilege access and network segmentation'
+  - name: 'Compliance'
+    value: 'Pod security standards and security contexts'

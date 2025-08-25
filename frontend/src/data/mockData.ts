@@ -1,4 +1,5 @@
 import { User, Chat, Opportunity, SocialNote, CloseFriend } from '../types';
+import { CheckIn } from '../services/checkinClient';
 import { getDisplayName } from '../utils/nameHelpers';
 
 export const currentUser: User = {
@@ -719,4 +720,177 @@ export const generateAISummary = (friendId: string): string => {
   };
   
   return summaries[friendId] || `${getDisplayName(friend)} is an interesting person with diverse interests and experiences.`;
+};
+
+// Mock check-in data
+export const mockCheckIns: CheckIn[] = [
+  {
+    id: '1',
+    user_id: '1', // Alex Thompson (current user)
+    text_content: 'Perfect morning for a hike in Golden Gate Park! The fog is finally lifting 🌤️',
+    privacy: 'public',
+    media_attachments: [
+      {
+        id: 'media_1',
+        media_type: 'image',
+        file_name: 'golden_gate_hike.jpg',
+        file_url: 'https://images.unsplash.com/photo-1551632436-cbf8dd35adfa?w=500&h=300&fit=crop',
+        thumbnail_url: 'https://images.unsplash.com/photo-1551632436-cbf8dd35adfa?w=150&h=150&fit=crop',
+        file_size: 245760,
+        mime_type: 'image/jpeg'
+      }
+    ],
+    location: {
+      id: 'loc_1',
+      location_name: 'Golden Gate Park',
+      latitude: 37.7694,
+      longitude: -122.4862,
+      address: 'Golden Gate Park, San Francisco, CA'
+    },
+    tags: [
+      { id: 'tag_1', tag_name: 'hiking' },
+      { id: 'tag_2', tag_name: 'nature' },
+      { id: 'tag_3', tag_name: 'sf' }
+    ],
+    file_attachments: [],
+    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: '2',
+    user_id: '2', // Reza
+    text_content: 'Just launched a new feature! Coffee-fueled coding session paying off ☕️',
+    privacy: 'public',
+    media_attachments: [
+      {
+        id: 'media_2',
+        media_type: 'image',
+        file_name: 'coding_setup.jpg',
+        file_url: 'https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?w=500&h=300&fit=crop',
+        thumbnail_url: 'https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?w=150&h=150&fit=crop',
+        file_size: 189432,
+        mime_type: 'image/jpeg'
+      }
+    ],
+    location: {
+      id: 'loc_2', 
+      location_name: 'Blue Bottle Coffee',
+      latitude: 37.7849,
+      longitude: -122.4094,
+      address: '66 Mint St, San Francisco, CA 94103'
+    },
+    tags: [
+      { id: 'tag_4', tag_name: 'coding' },
+      { id: 'tag_5', tag_name: 'coffee' },
+      { id: 'tag_6', tag_name: 'startup' }
+    ],
+    file_attachments: [],
+    created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
+    updated_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: '3',
+    user_id: '3', // Marcus
+    text_content: 'Conquered this route today! The view from the top was absolutely worth it 🧗‍♂️',
+    privacy: 'friends',
+    media_attachments: [
+      {
+        id: 'media_3',
+        media_type: 'video',
+        file_name: 'climbing_video.mp4',
+        file_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        thumbnail_url: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=150&h=150&fit=crop',
+        file_size: 1248576,
+        duration_seconds: 45,
+        mime_type: 'video/mp4'
+      }
+    ],
+    location: {
+      id: 'loc_3',
+      location_name: 'Mission Cliffs',
+      latitude: 37.7599,
+      longitude: -122.4148,
+      address: '2295 Harrison St, San Francisco, CA 94110'
+    },
+    tags: [
+      { id: 'tag_7', tag_name: 'climbing' },
+      { id: 'tag_8', tag_name: 'fitness' },
+      { id: 'tag_9', tag_name: 'achievement' }
+    ],
+    file_attachments: [],
+    voice_note: {
+      id: 'voice_1',
+      file_name: 'post_climb_thoughts.wav',
+      file_url: '/audio/post_climb_thoughts.wav',
+      duration_seconds: 30,
+      file_size: 480000
+    },
+    created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+    updated_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: '4',
+    user_id: '6', // Sofia
+    text_content: 'New plant babies arrived today! My apartment is turning into a jungle and I love it 🌱',
+    privacy: 'public',
+    media_attachments: [
+      {
+        id: 'media_4',
+        media_type: 'image',
+        file_name: 'new_plants.jpg',
+        file_url: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=500&h=300&fit=crop',
+        thumbnail_url: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=150&h=150&fit=crop',
+        file_size: 334856,
+        mime_type: 'image/jpeg'
+      }
+    ],
+    tags: [
+      { id: 'tag_10', tag_name: 'plants' },
+      { id: 'tag_11', tag_name: 'home' },
+      { id: 'tag_12', tag_name: 'green' }
+    ],
+    file_attachments: [],
+    created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
+    updated_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: '5',
+    user_id: '1', // Alex Thompson
+    text_content: 'Just watched an incredible indie film at the Castro Theatre. The cinematography was stunning!',
+    privacy: 'public',
+    media_attachments: [],
+    location: {
+      id: 'loc_4',
+      location_name: 'Castro Theatre',
+      latitude: 37.7609,
+      longitude: -122.4350,
+      address: '429 Castro St, San Francisco, CA 94114'
+    },
+    tags: [
+      { id: 'tag_13', tag_name: 'film' },
+      { id: 'tag_14', tag_name: 'indie' },
+      { id: 'tag_15', tag_name: 'castro' }
+    ],
+    file_attachments: [
+      {
+        id: 'file_1',
+        file_name: 'movie_ticket.pdf',
+        file_url: '/files/movie_ticket.pdf',
+        file_size: 45632,
+        mime_type: 'application/pdf'
+      }
+    ],
+    created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+    updated_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+  }
+];
+
+// Helper function to get user's check-ins
+export const getUserCheckIns = (userId: string): CheckIn[] => {
+  return mockCheckIns.filter(checkIn => checkIn.user_id === userId);
+};
+
+// Helper function to get public check-ins for discovery
+export const getPublicCheckIns = (): CheckIn[] => {
+  return mockCheckIns.filter(checkIn => checkIn.privacy === 'public');
 };

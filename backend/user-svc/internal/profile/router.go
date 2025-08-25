@@ -26,10 +26,5 @@ func RegisterRoutes(router *gin.RouterGroup, profileHandler *ProfileHandler) {
 		users.DELETE("/block/:userId", profileHandler.UnblockUser)
 		users.GET("/blocked", profileHandler.GetBlockedUsers)
 
-		// Hidden users endpoints (require auth via gateway)
-		users.GET("/hidden", profileHandler.GetHiddenUsers)
-		users.POST("/hidden", profileHandler.HideUser)
-		users.DELETE("/hidden/:userId", profileHandler.UnhideUser)
-
 	}
 }

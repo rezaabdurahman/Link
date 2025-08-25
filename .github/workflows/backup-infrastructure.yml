@@ -1,0 +1,477 @@
+name: Backup & DR Infrastructure
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'k8s/helm/backup-system/**'
+      - 'terraform/modules/backup-storage/**'
+      - '.github/workflows/backup-infrastructure.yml'
+  
+  pull_request:
+    branches: [main, develop] 
+    paths:
+      - 'k8s/helm/backup-system/**'
+      - 'terraform/modules/backup-storage/**'
+      - '.github/workflows/backup-infrastructure.yml'
+
+  # Manual trigger for emergency deployments
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      
+      force_deploy:
+        description: 'Force deployment even if no changes detected'
+        required: false
+        type: boolean
+        default: false
+      
+      run_validation:
+        description: 'Run backup validation tests after deployment'
+        required: false
+        type: boolean
+        default: true
+
+  # Scheduled drift detection and health checks
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
+
+env:
+  HELM_VERSION: '3.14.0'
+  KUBECTL_VERSION: '1.28.0'
+  TERRAFORM_VERSION: '1.6.0'
+
+jobs:
+  # Validate Helm chart and configurations
+  validate-chart:
+    name: Validate Helm Chart
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Helm lint
+      run: |
+        cd k8s/helm/backup-system
+        helm lint . -f values-development.yaml
+        helm lint . -f values-staging.yaml  
+        helm lint . -f values-production.yaml
+
+    - name: Helm template validation
+      run: |
+        cd k8s/helm/backup-system
+        
+        # Test template rendering for each environment
+        for env in development staging production; do
+          echo "Validating templates for $env environment..."
+          helm template backup-system . \
+            -f values-${env}.yaml \
+            --validate \
+            --debug > /tmp/${env}-rendered.yaml
+          
+          # Check for required resources
+          if ! grep -q "kind: CronJob" /tmp/${env}-rendered.yaml; then
+            echo "ERROR: CronJob resources not found in $env templates"
+            exit 1
+          fi
+          
+          echo "✅ $env environment templates are valid"
+        done
+
+    - name: Security scan with Checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: k8s/helm/backup-system/
+        framework: kubernetes
+        soft_fail: true
+        output_format: sarif
+        output_file_path: checkov-results.sarif
+
+    - name: Upload Checkov results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov-results.sarif
+
+  # Deploy S3 infrastructure via Terraform
+  deploy-s3-infrastructure:
+    name: Deploy S3 Infrastructure
+    runs-on: ubuntu-latest
+    needs: [validate-chart]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    strategy:
+      matrix:
+        environment: [staging, production]
+        exclude:
+          - environment: ${{ github.ref != 'refs/heads/main' && 'production' || '' }}
+    
+    environment: ${{ matrix.environment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+    - name: Terraform Init
+      working-directory: terraform/modules/backup-storage
+      run: |
+        cat > backend.tf << EOF
+        terraform {
+          backend "s3" {
+            bucket = "${{ secrets.TF_STATE_BUCKET }}"
+            key    = "backup-storage/${{ matrix.environment }}/terraform.tfstate"
+            region = "us-west-2"
+            encrypt = true
+          }
+        }
+        EOF
+        
+        terraform init
+
+    - name: Create Terraform variables
+      working-directory: terraform/modules/backup-storage
+      run: |
+        # Generate encryption key if not provided
+        ENCRYPTION_KEY="${{ secrets.BACKUP_ENCRYPTION_KEY }}"
+        if [ -z "$ENCRYPTION_KEY" ]; then
+          ENCRYPTION_KEY=$(openssl rand -base64 32)
+          echo "Generated new encryption key"
+        fi
+        
+        cat > terraform.tfvars << EOF
+        environment = "${{ matrix.environment }}"
+        primary_region = "us-west-2"
+        secondary_region = "us-east-1"
+        primary_bucket_name = "link-app-backups-${{ matrix.environment }}"
+        secondary_bucket_name = "link-app-backups-${{ matrix.environment }}-dr"
+        backup_encryption_key = "$ENCRYPTION_KEY"
+        
+        common_tags = {
+          Environment = "${{ matrix.environment }}"
+          Project = "Link"
+          ManagedBy = "Terraform"
+          Component = "backup-storage"
+          GitCommit = "${{ github.sha }}"
+        }
+        EOF
+
+    - name: Terraform Plan
+      id: plan
+      working-directory: terraform/modules/backup-storage
+      run: |
+        terraform plan -no-color -out=tfplan.out > plan_output.txt 2>&1
+        echo "plan_exit_code=$?" >> $GITHUB_OUTPUT
+        cat plan_output.txt
+
+    - name: Terraform Apply
+      if: steps.plan.outputs.plan_exit_code == '0'
+      working-directory: terraform/modules/backup-storage
+      run: |
+        terraform apply -auto-approve tfplan.out
+        terraform output -json > terraform_outputs.json
+
+    - name: Save Terraform outputs
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-outputs-${{ matrix.environment }}
+        path: terraform/modules/backup-storage/terraform_outputs.json
+        retention-days: 7
+
+  # Deploy backup system to Kubernetes
+  deploy-backup-system:
+    name: Deploy Backup System
+    runs-on: ubuntu-latest
+    needs: [validate-chart, deploy-s3-infrastructure]
+    if: always() && (needs.validate-chart.result == 'success')
+    
+    strategy:
+      matrix:
+        environment: [staging, production]
+        exclude:
+          - environment: ${{ github.ref != 'refs/heads/main' && 'production' || '' }}
+    
+    environment: ${{ matrix.environment }}
+    
+    steps:
+    - name: Checkout code  
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBECONFIG }}
+        context: ${{ matrix.environment }}
+
+    - name: Download Terraform outputs
+      uses: actions/download-artifact@v4
+      continue-on-error: true
+      with:
+        name: terraform-outputs-${{ matrix.environment }}
+        path: ./terraform-outputs
+
+    - name: Create dynamic values override
+      run: |
+        mkdir -p /tmp/helm-values
+        
+        # Base values from environment
+        cp k8s/helm/backup-system/values-${{ matrix.environment }}.yaml /tmp/helm-values/values.yaml
+        
+        # Add dynamic values from Terraform outputs if available
+        if [ -f ./terraform-outputs/terraform_outputs.json ]; then
+          echo "Using Terraform outputs for S3 configuration"
+          
+          PRIMARY_BUCKET=$(cat ./terraform-outputs/terraform_outputs.json | jq -r '.primary_bucket_name.value // empty')
+          SECONDARY_BUCKET=$(cat ./terraform-outputs/terraform_outputs.json | jq -r '.secondary_bucket_name.value // empty')
+          
+          if [ -n "$PRIMARY_BUCKET" ]; then
+            yq e ".s3.primary.name = \"$PRIMARY_BUCKET\"" -i /tmp/helm-values/values.yaml
+          fi
+          
+          if [ -n "$SECONDARY_BUCKET" ]; then
+            yq e ".s3.replication.destinationBucket = \"$SECONDARY_BUCKET\"" -i /tmp/helm-values/values.yaml
+          fi
+        fi
+        
+        # Add Git metadata
+        yq e ".labels.\"app.kubernetes.io/version\" = \"${{ github.sha }}\"" -i /tmp/helm-values/values.yaml
+        yq e ".annotations.\"deployment.link-app.com/git-commit\" = \"${{ github.sha }}\"" -i /tmp/helm-values/values.yaml
+        yq e ".annotations.\"deployment.link-app.com/workflow-run\" = \"${{ github.run_id }}\"" -i /tmp/helm-values/values.yaml
+
+    - name: Deploy backup system
+      run: |
+        cd k8s/helm/backup-system
+        
+        # Create namespace if it doesn't exist
+        kubectl create namespace link-services --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Deploy the backup system
+        helm upgrade --install backup-system . \
+          --namespace link-services \
+          --values /tmp/helm-values/values.yaml \
+          --timeout 10m \
+          --wait \
+          --atomic
+
+    - name: Verify deployment
+      run: |
+        # Check that CronJobs were created
+        kubectl get cronjobs -n link-services -l app.kubernetes.io/name=backup-system
+        
+        # Check that secrets exist
+        kubectl get secrets -n link-services -l app.kubernetes.io/name=backup-system
+        
+        # Wait for any initial jobs to complete
+        kubectl wait --for=condition=Complete job \
+          -l app.kubernetes.io/name=backup-system \
+          -n link-services \
+          --timeout=300s || echo "No initial jobs found or jobs still running"
+
+    - name: Run backup validation tests
+      if: github.event.inputs.run_validation == 'true' || github.event.inputs.run_validation == ''
+      run: |
+        # Create a test backup job to validate the system
+        kubectl create job --from=cronjob/backup-system-postgres-backup \
+          backup-system-test-${{ github.run_id }} \
+          -n link-services
+        
+        # Wait for test job to complete
+        kubectl wait --for=condition=Complete job/backup-system-test-${{ github.run_id }} \
+          -n link-services --timeout=600s
+        
+        # Check job status
+        if kubectl get job backup-system-test-${{ github.run_id }} -n link-services \
+           -o jsonpath='{.status.succeeded}' | grep -q "1"; then
+          echo "✅ Backup validation test successful"
+        else
+          echo "❌ Backup validation test failed"
+          kubectl logs job/backup-system-test-${{ github.run_id }} -n link-services
+          exit 1
+        fi
+
+  # Drift detection and health monitoring
+  drift-detection:
+    name: Drift Detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    strategy:
+      matrix:
+        environment: [staging, production]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl  
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBECONFIG }}
+        context: ${{ matrix.environment }}
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Check for Helm drift
+      run: |
+        cd k8s/helm/backup-system
+        
+        # Check if backup-system release exists
+        if helm list -n link-services | grep -q backup-system; then
+          echo "Checking for drift in backup-system deployment..."
+          
+          # Get current values
+          helm get values backup-system -n link-services > /tmp/current-values.yaml
+          
+          # Compare with expected values
+          if ! diff -u values-${{ matrix.environment }}.yaml /tmp/current-values.yaml > /tmp/drift-report.txt; then
+            echo "🚨 Drift detected in backup-system configuration!"
+            cat /tmp/drift-report.txt
+            
+            # Create issue for drift
+            gh issue create \
+              --title "Backup System Configuration Drift Detected - ${{ matrix.environment }}" \
+              --body "$(cat /tmp/drift-report.txt)" \
+              --label "drift,backup-system,infrastructure" \
+              --assignee "@me" || echo "Failed to create issue"
+          else
+            echo "✅ No drift detected in backup-system configuration"
+          fi
+        else
+          echo "❌ backup-system release not found in ${{ matrix.environment }}"
+          exit 1
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Health check backup jobs
+      run: |
+        echo "Checking backup job health..."
+        
+        # Check recent job status
+        failed_jobs=$(kubectl get jobs -n link-services \
+          -l app.kubernetes.io/name=backup-system \
+          -o jsonpath='{.items[?(@.status.failed>0)].metadata.name}' \
+          --sort-by=.metadata.creationTimestamp | tail -5)
+        
+        if [ -n "$failed_jobs" ]; then
+          echo "❌ Recent backup job failures detected:"
+          echo "$failed_jobs"
+          
+          # Get logs from failed jobs
+          for job in $failed_jobs; do
+            echo "Logs for failed job $job:"
+            kubectl logs job/$job -n link-services --tail=50 || echo "No logs available"
+          done
+          
+          exit 1
+        else
+          echo "✅ No recent backup job failures"
+        fi
+
+  # Post-deployment notifications
+  notify-deployment:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-backup-system]
+    if: always()
+    
+    steps:
+    - name: Determine deployment status
+      id: status
+      run: |
+        if [[ "${{ needs.deploy-backup-system.result }}" == "success" ]]; then
+          echo "status=✅ Success" >> $GITHUB_OUTPUT
+          echo "color=good" >> $GITHUB_OUTPUT
+        else
+          echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          echo "color=danger" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Notify Slack
+      uses: 8398a7/action-slack@v3
+      if: always()
+      with:
+        status: custom
+        custom_payload: |
+          {
+            "text": "Backup Infrastructure Deployment",
+            "attachments": [{
+              "color": "${{ steps.status.outputs.color }}",
+              "fields": [
+                {
+                  "title": "Status",
+                  "value": "${{ steps.status.outputs.status }}",
+                  "short": true
+                },
+                {
+                  "title": "Environment",  
+                  "value": "${{ matrix.environment || 'Multiple' }}",
+                  "short": true
+                },
+                {
+                  "title": "Commit",
+                  "value": "${{ github.sha }}",
+                  "short": true
+                },
+                {
+                  "title": "Actor",
+                  "value": "${{ github.actor }}",
+                  "short": true
+                }
+              ]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+# Cleanup old workflow runs
+cleanup:
+  name: Cleanup Old Artifacts
+  runs-on: ubuntu-latest
+  if: github.event_name == 'schedule'
+  
+  steps:
+  - name: Delete old workflow runs
+    uses: Mattraks/delete-workflow-runs@v2
+    with:
+      token: ${{ github.token }}
+      repository: ${{ github.repository }}
+      retain_days: 30
+      keep_minimum_runs: 10

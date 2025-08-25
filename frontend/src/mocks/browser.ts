@@ -67,6 +67,7 @@ export const startMockWorker = async () => {
       });
       
       console.log('🔧 MSW: Mock Service Worker started successfully');
+      console.log('📡 MSW: Registered handlers count:', handlers.length);
       console.log('📡 MSW: Intercepting API calls for:', {
         'Auth': '/auth/login, /auth/register, /auth/me, /auth/refresh, /auth/logout',
         'Chat': '/api/v1/chat/conversations, /api/v1/chat/messages',
@@ -77,6 +78,12 @@ export const startMockWorker = async () => {
         'Broadcasts': '/broadcasts',
         'Montage': '/users/:id/montage',
         'Search': '/search'
+      });
+      
+      // Debug: Log first few handlers to verify search handler is included
+      console.log('🔧 MSW: First 5 registered handlers:');
+      handlers.slice(0, 5).forEach((handler, index) => {
+        console.log(`  ${index + 1}. ${handler.info?.header || 'Unknown handler'}`);
       });
       console.log('🔒 MSW: All backend calls will be mocked - no real server needed');
     } catch (error) {

@@ -1,0 +1,382 @@
+name: Frontend Quality
+
+# Frontend code quality, linting, and accessibility workflow
+# Split from large frontend-ci.yml for better maintainability
+
+on:
+  push:
+    branches: [main, develop]
+    paths: 
+      - 'frontend/**'
+      - '.github/workflows/frontend-quality.yml'
+  pull_request:
+    branches: [main, develop] 
+    paths: 
+      - 'frontend/**'
+  workflow_call:
+    outputs:
+      quality_status:
+        description: 'Overall quality status'
+        value: ${{ jobs.quality-summary.outputs.status }}
+
+env:
+  NODE_VERSION: '18'
+  CACHE_VERSION: 'v2'
+  FORCE_COLOR: 1
+
+concurrency:
+  group: frontend-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ================================================================
+  # CODE QUALITY & LINTING
+  # ================================================================
+  
+  lint-and-typecheck:
+    name: 🔍 Code Quality & Types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: 🗂️ Cache TypeScript build info
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/node_modules/.cache
+            frontend/.tsbuildinfo
+            frontend/dist/.vite
+          key: ${{ env.CACHE_VERSION }}-frontend-build-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ env.CACHE_VERSION }}-frontend-build-${{ runner.os }}-
+          
+      - name: 🔧 Install dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: 🧹 Run ESLint
+        working-directory: frontend
+        run: |
+          echo "Running ESLint..."
+          npm run lint 2>&1 | tee eslint-results.txt
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ ESLint found issues"
+            exit 1
+          fi
+          echo "✅ ESLint passed"
+          
+      - name: 🔍 Run TypeScript check
+        working-directory: frontend
+        run: |
+          echo "Running TypeScript check..."
+          npm run type-check 2>&1 | tee typecheck-results.txt
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ TypeScript check failed"
+            exit 1
+          fi
+          echo "✅ TypeScript check passed"
+          
+      - name: 📊 Upload lint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-results
+          path: |
+            frontend/eslint-results.txt
+            frontend/typecheck-results.txt
+          retention-days: 7
+
+  # ================================================================
+  # BUILD VALIDATION
+  # ================================================================
+  
+  build-validation:
+    name: 🏗️ Build Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [lint-and-typecheck]
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [demo, preview, production]
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: 🗂️ Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/node_modules/.cache
+            frontend/dist/.vite
+          key: ${{ env.CACHE_VERSION }}-frontend-build-${{ matrix.mode }}-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ env.CACHE_VERSION }}-frontend-build-${{ matrix.mode }}-${{ runner.os }}-
+          
+      - name: 🔧 Install dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: 🏗️ Build (${{ matrix.mode }})
+        working-directory: frontend
+        run: |
+          echo "Building in ${{ matrix.mode }} mode..."
+          npm run build:${{ matrix.mode }}
+          echo "✅ Build completed successfully"
+          
+      - name: 📏 Analyze bundle size
+        working-directory: frontend
+        run: |
+          echo "📦 Analyzing bundle size for ${{ matrix.mode }}..."
+          
+          if [ -d "dist" ]; then
+            # Calculate bundle sizes
+            main_size=$(du -sh dist/assets/*.js 2>/dev/null | head -1 | cut -f1 || echo "N/A")
+            total_size=$(du -sh dist/ | cut -f1)
+            
+            echo "Bundle Analysis for ${{ matrix.mode }}:" >> $GITHUB_STEP_SUMMARY
+            echo "- Total size: $total_size" >> $GITHUB_STEP_SUMMARY
+            echo "- Main JS bundle: $main_size" >> $GITHUB_STEP_SUMMARY
+            
+            # Check bundle size limits (warning only, don't fail CI)
+            if du -k dist/ | awk '{print $1}' | head -1 | awk '{if($1 > 2048) exit 1}'; then
+              echo "✅ Bundle size is acceptable"
+            else
+              echo "⚠️ Bundle size is large (>2MB), consider optimization"
+            fi
+          fi
+          
+      - name: 📤 Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.mode }}
+          path: frontend/dist/
+          retention-days: 7
+
+  # ================================================================
+  # ACCESSIBILITY TESTS
+  # ================================================================
+  
+  accessibility-tests:
+    name: ♿ Accessibility Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-validation]
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: 🔧 Install dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: 📥 Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-demo
+          path: frontend/dist/
+          
+      - name: 🌐 Start preview server
+        working-directory: frontend
+        run: |
+          npm install -g serve
+          serve -s dist -l 3000 &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          
+          # Wait for server to start
+          sleep 5
+          curl -f http://localhost:3000 > /dev/null || (echo "❌ Server failed to start" && exit 1)
+          echo "✅ Preview server started"
+
+      - name: ♿ Run accessibility audit
+        run: |
+          echo "Running accessibility audit..."
+          
+          # Install axe-core CLI
+          npm install -g @axe-core/cli
+          
+          # Run accessibility scan
+          axe http://localhost:3000 --reporter json --output accessibility-report.json || true
+          
+          # Check results
+          if [ -f "accessibility-report.json" ]; then
+            violations=$(jq '.violations | length' accessibility-report.json)
+            echo "Found $violations accessibility violations"
+            
+            if [ "$violations" -gt 0 ]; then
+              echo "♿ Accessibility Issues Found:" >> $GITHUB_STEP_SUMMARY
+              echo '```json' >> $GITHUB_STEP_SUMMARY
+              jq '.violations[] | {rule: .id, impact: .impact, description: .description, nodes: (.nodes | length)}' accessibility-report.json >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              
+              # Don't fail CI for accessibility yet, just warn
+              echo "⚠️ Accessibility violations found, but not failing CI"
+            else
+              echo "✅ No accessibility violations found"
+            fi
+          fi
+
+      - name: 🛑 Stop preview server
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill $SERVER_PID || true
+            echo "Preview server stopped"
+          fi
+
+      - name: 📤 Upload accessibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-report
+          path: accessibility-report.json
+          retention-days: 7
+
+  # ================================================================
+  # SECURITY AUDIT
+  # ================================================================
+  
+  security-audit:
+    name: 🔒 Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: 🔧 Install dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: 🔒 Run npm audit
+        working-directory: frontend
+        run: |
+          echo "Running npm security audit..."
+          
+          # Run audit and capture results
+          npm audit --json > audit-results.json || true
+          
+          # Check for high/critical vulnerabilities
+          high_vulns=$(jq '.metadata.vulnerabilities.high // 0' audit-results.json)
+          critical_vulns=$(jq '.metadata.vulnerabilities.critical // 0' audit-results.json)
+          
+          echo "Security Audit Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- Critical: $critical_vulns" >> $GITHUB_STEP_SUMMARY
+          echo "- High: $high_vulns" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$critical_vulns" -gt 0 ] || [ "$high_vulns" -gt 5 ]; then
+            echo "⚠️ Security vulnerabilities found, but not failing CI"
+            echo "Please review and update dependencies"
+          else
+            echo "✅ No critical security issues found"
+          fi
+
+      - name: 📤 Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-results
+          path: frontend/audit-results.json
+          retention-days: 7
+
+  # ================================================================
+  # QUALITY SUMMARY
+  # ================================================================
+  
+  quality-summary:
+    name: 📋 Quality Summary
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, build-validation, accessibility-tests, security-audit]
+    if: always()
+    outputs:
+      status: ${{ steps.summary.outputs.status }}
+    
+    steps:
+      - name: 📊 Generate quality summary
+        id: summary
+        run: |
+          echo "# 🔍 Frontend Quality Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check job results
+          lint_result="${{ needs.lint-and-typecheck.result }}"
+          build_result="${{ needs.build-validation.result }}"
+          accessibility_result="${{ needs.accessibility-tests.result }}"
+          security_result="${{ needs.security-audit.result }}"
+          
+          echo "## 📊 Results Overview" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint & TypeCheck | $lint_result |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Validation | $build_result |" >> $GITHUB_STEP_SUMMARY
+          echo "| Accessibility | $accessibility_result |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Audit | $security_result |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Determine overall status (only critical checks fail CI)
+          critical_failed=""
+          if [[ "$lint_result" == "failure" || "$build_result" == "failure" ]]; then
+            critical_failed="true"
+          fi
+          
+          if [[ -z "$critical_failed" ]]; then
+            echo "## ✅ Overall Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            echo "All critical quality checks passed!" >> $GITHUB_STEP_SUMMARY
+            
+            # Warnings for non-critical failures
+            if [[ "$accessibility_result" == "failure" ]]; then
+              echo "⚠️ Note: Accessibility tests failed but didn't block CI" >> $GITHUB_STEP_SUMMARY
+            fi
+            if [[ "$security_result" == "failure" ]]; then
+              echo "⚠️ Note: Security audit found issues but didn't block CI" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            overall_status="success"
+          else
+            echo "## ❌ Overall Status: FAILURE" >> $GITHUB_STEP_SUMMARY
+            echo "Critical quality checks failed. Please review the results above." >> $GITHUB_STEP_SUMMARY
+            overall_status="failure"
+          fi
+          
+          echo "status=$overall_status" >> $GITHUB_OUTPUT
+          
+      - name: ❌ Fail if critical quality checks failed
+        if: steps.summary.outputs.status == 'failure'
+        run: |
+          echo "Critical frontend quality checks failed"
+          exit 1

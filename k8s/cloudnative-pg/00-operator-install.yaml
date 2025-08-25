@@ -1,0 +1,521 @@
+---
+# CloudNativePG Operator Installation
+# This deploys the CloudNativePG operator for PostgreSQL high availability with leader election
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnpg-system
+  labels:
+    name: cnpg-system
+    app.kubernetes.io/name: cloudnative-pg
+
+---
+# CloudNativePG Operator ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cnpg-manager
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: manager
+
+---
+# ClusterRole for CloudNativePG Operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cnpg-manager-role
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: manager
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets", "services", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "events", "serviceaccounts"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["postgresql.cnpg.io"]
+  resources: ["clusters", "clusters/status", "backups", "backups/status", "scheduledbackups", "scheduledbackups/status", "poolers", "poolers/status"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+---
+# ClusterRoleBinding for CloudNativePG Operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cnpg-manager-rolebinding
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cnpg-manager-role
+subjects:
+- kind: ServiceAccount
+  name: cnpg-manager
+  namespace: cnpg-system
+
+---
+# CloudNativePG CRDs - Cluster
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusters.postgresql.cnpg.io
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+spec:
+  group: postgresql.cnpg.io
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              instances:
+                type: integer
+                minimum: 1
+                maximum: 1000
+              postgresql:
+                type: object
+              bootstrap:
+                type: object
+              storage:
+                type: object
+              monitoring:
+                type: object
+              backup:
+                type: object
+              nodeMaintenanceWindow:
+                type: object
+              primaryUpdateStrategy:
+                type: string
+              resources:
+                type: object
+              affinity:
+                type: object
+              nodeSelector:
+                type: object
+              tolerations:
+                type: array
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+              readyInstances:
+                type: integer
+              instances:
+                type: integer
+              currentPrimary:
+                type: string
+  scope: Namespaced
+  names:
+    plural: clusters
+    singular: cluster
+    kind: Cluster
+    shortNames:
+    - cnpg
+
+---
+# CloudNativePG CRDs - Backup
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: backups.postgresql.cnpg.io
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+spec:
+  group: postgresql.cnpg.io
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              cluster:
+                type: object
+              target:
+                type: string
+              method:
+                type: string
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+  scope: Namespaced
+  names:
+    plural: backups
+    singular: backup
+    kind: Backup
+
+---
+# CloudNativePG CRDs - ScheduledBackup
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: scheduledbackups.postgresql.cnpg.io
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+spec:
+  group: postgresql.cnpg.io
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              schedule:
+                type: string
+              cluster:
+                type: object
+              target:
+                type: string
+              method:
+                type: string
+              suspend:
+                type: boolean
+          status:
+            type: object
+  scope: Namespaced
+  names:
+    plural: scheduledbackups
+    singular: scheduledbackup
+    kind: ScheduledBackup
+
+---
+# CloudNativePG CRDs - Pooler
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: poolers.postgresql.cnpg.io
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+spec:
+  group: postgresql.cnpg.io
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              cluster:
+                type: object
+              type:
+                type: string
+              instances:
+                type: integer
+              pgbouncer:
+                type: object
+          status:
+            type: object
+  scope: Namespaced
+  names:
+    plural: poolers
+    singular: pooler
+    kind: Pooler
+
+---
+# CloudNativePG Operator Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnpg-controller-manager
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+      app.kubernetes.io/component: manager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudnative-pg
+        app.kubernetes.io/component: manager
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: cnpg-manager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: manager
+        image: ghcr.io/cloudnative-pg/cloudnative-pg:1.23.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - /manager
+        args:
+        - --leader-elect=true
+        - --config-map-name=cnpg-controller-manager-config
+        - --secret-name=cnpg-controller-manager-config
+        - --webhook-port=9443
+        - --metrics-addr=:8080
+        env:
+        - name: OPERATOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: OPERATOR_IMAGE_NAME
+          value: ghcr.io/cloudnative-pg/cloudnative-pg:1.23.0
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+          limits:
+            cpu: 500m
+            memory: 500Mi
+        livenessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: webhook-certificates
+          readOnly: true
+        - mountPath: /controller
+          name: scratch-data
+        - mountPath: /run/secrets
+          name: operator-pull-secret
+          readOnly: true
+      volumes:
+      - name: webhook-certificates
+        secret:
+          defaultMode: 420
+          secretName: cnpg-webhook-cert
+      - name: scratch-data
+        emptyDir: {}
+      - name: operator-pull-secret
+        secret:
+          defaultMode: 420
+          secretName: cnpg-controller-manager-config
+          optional: true
+      terminationGracePeriodSeconds: 10
+
+---
+# Webhook Certificate Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cnpg-webhook-cert
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: webhook
+type: Opaque
+data:
+  tls.crt: ""
+  tls.key: ""
+
+---
+# CloudNativePG Controller Manager Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cnpg-controller-manager-config
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: manager
+data:
+  config.yaml: |
+    # CloudNativePG Controller Manager Configuration
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: :8080
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: cnpg-controller-manager-leader-election
+      resourceNamespace: cnpg-system
+    logging:
+      level: info
+      format: json
+    
+    # PostgreSQL configuration defaults
+    postgresql:
+      # Default PostgreSQL configuration
+      parameters:
+        max_connections: "200"
+        shared_buffers: "256MB"
+        effective_cache_size: "1GB"
+        work_mem: "4MB"
+        maintenance_work_mem: "64MB"
+        random_page_cost: "1.1"
+        effective_io_concurrency: "200"
+        wal_level: "replica"
+        max_wal_senders: "10"
+        max_replication_slots: "10"
+        wal_keep_size: "1GB"
+        log_line_prefix: "[%t] [%p] [%l] [%u@%d] "
+        log_min_duration_statement: "1000"
+        log_connections: "on"
+        log_disconnections: "on"
+
+---
+# Webhook Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: cnpg-webhook-service
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: webhook
+spec:
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: 9443
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: manager
+
+---
+# Metrics Service for Prometheus
+apiVersion: v1
+kind: Service
+metadata:
+  name: cnpg-controller-manager-metrics-service
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: metrics
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: manager
+
+---
+# ValidatingAdmissionWebhook
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionWebhook
+metadata:
+  name: cnpg-validating-webhook-configuration
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: webhook
+webhooks:
+- name: vcluster.postgresql.cnpg.io
+  clientConfig:
+    service:
+      name: cnpg-webhook-service
+      namespace: cnpg-system
+      path: /validate-postgresql-cnpg-io-v1-cluster
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["postgresql.cnpg.io"]
+    apiVersions: ["v1"]
+    resources: ["clusters"]
+  sideEffects: None
+  admissionReviewVersions: ["v1", "v1beta1"]
+
+---
+# MutatingAdmissionWebhook
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionWebhook
+metadata:
+  name: cnpg-mutating-webhook-configuration
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: webhook
+webhooks:
+- name: mcluster.postgresql.cnpg.io
+  clientConfig:
+    service:
+      name: cnpg-webhook-service
+      namespace: cnpg-system
+      path: /mutate-postgresql-cnpg-io-v1-cluster
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["postgresql.cnpg.io"]
+    apiVersions: ["v1"]
+    resources: ["clusters"]
+  sideEffects: None
+  admissionReviewVersions: ["v1", "v1beta1"]

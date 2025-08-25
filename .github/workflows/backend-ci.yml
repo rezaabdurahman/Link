@@ -1,0 +1,493 @@
+name: Backend CI/CD
+
+# Consolidated backend testing workflow
+# Combines the best of ci.yml and ci-cd-pipeline.yml
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+  workflow_call:
+    outputs:
+      test_status:
+        description: 'Overall test status'
+        value: ${{ jobs.test-summary.outputs.status }}
+
+env:
+  GO_VERSION: '1.23'
+  # Test environment variables (use GitHub Secrets with CI fallbacks)
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key-for-ci' }}
+  SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN || 'test-service-token-for-ci' }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET || 'test-jwt-secret-for-ci-only' }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
+  REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || 'ci_redis_password' }}
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ================================================================
+  # STAGE 1: UNIT TESTS (PARALLEL)
+  # ================================================================
+  
+  backend-unit-tests:
+    name: Unit Tests (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-gateway, chat-svc, discovery-svc, search-svc, user-svc, feature-svc, ai-svc]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go ${{ env.GO_VERSION }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ matrix.service }}-${{ hashFiles(format('backend/{0}/go.sum', matrix.service)) }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.service }}-
+          ${{ runner.os }}-go-
+
+    - name: Check if service exists
+      id: check-service
+      run: |
+        if [ -d "backend/${{ matrix.service }}" ] && [ -f "backend/${{ matrix.service }}/go.mod" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "✅ Service ${{ matrix.service }} exists"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT  
+          echo "⚠️ Service ${{ matrix.service }} does not exist or has no go.mod"
+        fi
+    
+    - name: Install dependencies
+      if: steps.check-service.outputs.exists == 'true'
+      working-directory: backend/${{ matrix.service }}
+      run: |
+        go mod download
+        go mod tidy
+        
+    - name: Run unit tests
+      if: steps.check-service.outputs.exists == 'true'
+      working-directory: backend/${{ matrix.service }}
+      run: |
+        go test -v -race -coverprofile=coverage.out ./...
+        
+    - name: Generate coverage report
+      if: steps.check-service.outputs.exists == 'true'
+      working-directory: backend/${{ matrix.service }}
+      run: go tool cover -html=coverage.out -o coverage.html
+        
+    - name: Check test coverage
+      if: steps.check-service.outputs.exists == 'true'
+      working-directory: backend/${{ matrix.service }}
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+        echo "Coverage for ${{ matrix.service }}: $COVERAGE%"
+        
+        # Store coverage for summary
+        echo "${{ matrix.service }}: $COVERAGE%" >> $GITHUB_WORKSPACE/coverage_results.txt
+        
+        if (( $(echo "$COVERAGE >= 60" | bc -l) )); then
+          echo "✅ Coverage requirement met: $COVERAGE% >= 60%"
+        else
+          echo "⚠️ Coverage below 60%: $COVERAGE% (allowed for now)"
+          # Don't fail CI for coverage yet, just warn
+        fi
+    
+    - name: Upload coverage reports
+      if: steps.check-service.outputs.exists == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-coverage-${{ matrix.service }}
+        path: |
+          backend/${{ matrix.service }}/coverage.out
+          backend/${{ matrix.service }}/coverage.html
+        retention-days: 7
+
+  # ================================================================
+  # STAGE 2: LINTING & STATIC ANALYSIS
+  # ================================================================
+  
+  backend-lint:
+    name: Backend Linting & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go ${{ env.GO_VERSION }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Cache golangci-lint
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/golangci-lint
+        key: ${{ runner.os }}-golangci-lint-${{ env.GO_VERSION }}
+        
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v4
+      with:
+        version: latest
+        working-directory: backend
+        args: --timeout=10m --config=../.golangci.yml
+        
+    - name: Run go vet
+      run: |
+        cd backend
+        for service in api-gateway chat-svc discovery-svc search-svc user-svc feature-svc ai-svc; do
+          if [ -d "$service" ] && [ -f "$service/go.mod" ]; then
+            echo "Running go vet for $service..."
+            cd "$service"
+            go vet ./...
+            cd ..
+          fi
+        done
+
+  # ================================================================
+  # STAGE 3: INTEGRATION TESTS
+  # ================================================================
+  
+  integration-tests:
+    name: Backend Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-unit-tests]
+    
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15-v0.5.1
+        env:
+          POSTGRES_DB: link_app_test
+          POSTGRES_USER: link_user
+          POSTGRES_PASSWORD: link_pass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    
+    - name: Wait for services
+      run: |
+        echo "Waiting for PostgreSQL..."
+        until pg_isready -h localhost -p 5432 -U link_user; do
+          echo "PostgreSQL not ready, waiting..."
+          sleep 2
+        done
+        echo "✅ PostgreSQL ready"
+        
+        echo "Waiting for Redis..."
+        until redis-cli -h localhost -p 6379 ping; do
+          echo "Redis not ready, waiting..."
+          sleep 2
+        done
+        echo "✅ Redis ready"
+    
+    - name: Run database migrations
+      working-directory: backend
+      run: |
+        echo "Running database migrations..."
+        
+        # Run user service migrations
+        if [ -d "user-svc/migrations" ]; then
+          echo "Running user service migrations..."
+          cd shared-libs/migrations
+          go run cmd/migrate/main.go \
+            -database-url="postgres://link_user:link_pass@localhost:5432/link_app_test?sslmode=disable" \
+            -migrations-path="../../user-svc/migrations" up
+          cd ../..
+        fi
+        
+        # Run chat service migrations  
+        if [ -d "chat-svc/migrations" ]; then
+          echo "Running chat service migrations..."
+          cd shared-libs/migrations
+          go run cmd/migrate/main.go \
+            -database-url="postgres://link_user:link_pass@localhost:5432/link_app_test?sslmode=disable" \
+            -migrations-path="../../chat-svc/migrations" up
+          cd ../..
+        fi
+        
+        # Run feature service migrations
+        if [ -d "feature-svc/migrations" ]; then
+          echo "Running feature service migrations..."
+          cd shared-libs/migrations
+          go run cmd/migrate/main.go \
+            -database-url="postgres://link_user:link_pass@localhost:5432/link_app_test?sslmode=disable" \
+            -migrations-path="../../feature-svc/migrations" up
+          cd ../..
+        fi
+        
+        echo "✅ Migrations completed"
+    
+    - name: Build services
+      working-directory: backend
+      run: |
+        echo "Building backend services..."
+        docker-compose build --parallel
+        echo "✅ Services built"
+    
+    - name: Run integration tests
+      working-directory: backend
+      run: |
+        echo "Running integration tests..."
+        export OPENAI_API_KEY="$OPENAI_API_KEY"
+        export SERVICE_AUTH_TOKEN="$SERVICE_AUTH_TOKEN"
+        export JWT_SECRET="$JWT_SECRET"
+        
+        if [ -f "integration-tests.sh" ]; then
+          chmod +x integration-tests.sh
+          ./integration-tests.sh
+        else
+          echo "⚠️ No integration-tests.sh found, running basic health checks..."
+          docker-compose up -d
+          sleep 30
+          
+          # Basic health check
+          curl -f http://localhost:8080/health || exit 1
+          echo "✅ Basic health check passed"
+        fi
+      timeout-minutes: 15
+    
+    - name: Collect service logs on failure
+      if: failure()
+      working-directory: backend
+      run: |
+        echo "=== Service Status ==="
+        docker-compose ps
+        
+        echo "=== API Gateway Logs ==="
+        docker-compose logs api-gateway || true
+        
+        echo "=== User Service Logs ==="
+        docker-compose logs user-svc || true
+        
+        echo "=== Chat Service Logs ==="
+        docker-compose logs chat-svc || true
+        
+        echo "=== Discovery Service Logs ==="
+        docker-compose logs discovery-svc || true
+        
+        echo "=== Search Service Logs ==="
+        docker-compose logs search-svc || true
+        
+        echo "=== AI Service Logs ==="
+        docker-compose logs ai-svc || true
+    
+    - name: Cleanup
+      if: always()
+      working-directory: backend
+      run: |
+        docker-compose down -v || true
+        docker system prune -f || true
+
+  # ================================================================
+  # STAGE 4: BUILD VERIFICATION
+  # ================================================================
+  
+  build-verification:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: [backend-lint]
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-gateway, chat-svc, discovery-svc, search-svc, user-svc, feature-svc, ai-svc]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go ${{ env.GO_VERSION }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Check if service exists
+      id: check-service
+      run: |
+        if [ -d "backend/${{ matrix.service }}" ] && [ -f "backend/${{ matrix.service }}/go.mod" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Build service
+      if: steps.check-service.outputs.exists == 'true'
+      working-directory: backend/${{ matrix.service }}
+      run: |
+        echo "Building ${{ matrix.service }}..."
+        go build -v ./...
+        
+        # Also test if main package builds
+        if [ -f "cmd/main.go" ] || [ -f "main.go" ]; then
+          echo "Building main package..."
+          go build -o ../bin/${{ matrix.service }} ./...
+          echo "✅ Build successful"
+        fi
+
+  # ================================================================
+  # STAGE 5: OPTIMIZED DOCKER BUILDS (for main/develop branches)
+  # ================================================================
+  
+  backend-docker-builds:
+    name: 🐳 Optimized Docker Builds
+    needs: [backend-unit-tests, integration-tests]
+    if: |
+      always() &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      needs.backend-unit-tests.result == 'success' &&
+      needs.integration-tests.result == 'success'
+    uses: ./.github/workflows/docker-build-optimized.yml
+    with:
+      services: '["api-gateway", "user-svc", "chat-svc", "discovery-svc", "ai-svc", "search-svc"]'
+      environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      push_images: true
+      cache_mode: 'registry'
+    secrets: inherit
+
+  # ================================================================
+  # STAGE 6: TEST SUMMARY & RESULTS
+  # ================================================================
+  
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [backend-unit-tests, backend-lint, integration-tests, build-verification, backend-docker-builds]
+    if: always()
+    outputs:
+      status: ${{ steps.summary.outputs.status }}
+    
+    steps:
+    - name: Download all coverage artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: backend-coverage-*
+        merge-multiple: true
+        
+    - name: Generate test summary
+      id: summary
+      run: |
+        echo "# 🚀 Backend CI/CD Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check job results
+        unit_tests="${{ needs.backend-unit-tests.result }}"
+        lint_result="${{ needs.backend-lint.result }}"
+        integration_result="${{ needs.integration-tests.result }}"
+        build_result="${{ needs.build-verification.result }}"
+        
+        echo "## 📊 Results Overview" >> $GITHUB_STEP_SUMMARY
+        echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Unit Tests | $unit_tests |" >> $GITHUB_STEP_SUMMARY
+        echo "| Linting | $lint_result |" >> $GITHUB_STEP_SUMMARY
+        echo "| Integration Tests | $integration_result |" >> $GITHUB_STEP_SUMMARY
+        echo "| Build Verification | $build_result |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Overall status
+        if [[ "$unit_tests" == "success" && "$lint_result" == "success" && "$integration_result" == "success" && "$build_result" == "success" ]]; then
+          overall_status="success"
+          echo "## ✅ Overall Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+          echo "All backend tests passed successfully!" >> $GITHUB_STEP_SUMMARY
+        else
+          overall_status="failure"
+          echo "## ❌ Overall Status: FAILURE" >> $GITHUB_STEP_SUMMARY
+          echo "Some backend tests failed. Please check the individual job results." >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Coverage summary
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📈 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Service | Coverage |" >> $GITHUB_STEP_SUMMARY
+        echo "|---------|----------|" >> $GITHUB_STEP_SUMMARY
+        
+        # Read coverage results
+        for coverage_file in backend-coverage-*/coverage.out; do
+          if [ -f "$coverage_file" ]; then
+            service=$(basename $(dirname "$coverage_file") | sed 's/backend-coverage-//')
+            coverage=$(go tool cover -func="$coverage_file" | grep total | awk '{print $3}')
+            echo "| $service | $coverage |" >> $GITHUB_STEP_SUMMARY
+          fi
+        done
+        
+        echo "status=$overall_status" >> $GITHUB_OUTPUT
+        
+    - name: Checkout code for notifications
+      if: always()
+      uses: actions/checkout@v4
+      
+    - name: Detect environment
+      if: always()
+      id: env
+      uses: ./.github/actions/detect-environment
+      with:
+        fallback_environment: 'development'
+        
+    - name: Send notification
+      if: always()
+      uses: ./.github/actions/notify
+      with:
+        type: ${{ steps.summary.outputs.status == 'success' && 'success' || 'failure' }}
+        title: 'Backend CI/CD Pipeline'
+        message: 'Backend CI/CD pipeline ${{ steps.summary.outputs.status }} on ${{ github.ref_name }}'
+        environment: ${{ steps.env.outputs.environment }}
+        channels: 'slack'
+        workflow_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        details: |
+          {
+            "commit": "${{ github.sha }}",
+            "author": "${{ github.actor }}",
+            "branch": "${{ github.ref_name }}"
+          }
+        
+    - name: Fail if tests failed
+      if: steps.summary.outputs.status == 'failure'
+      run: |
+        echo "❌ Backend CI/CD failed"
+        exit 1

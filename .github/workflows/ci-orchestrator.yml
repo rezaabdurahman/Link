@@ -1,0 +1,360 @@
+name: CI Orchestrator - Testing & Validation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/**'
+      
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+    
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip test stages (emergency only)'
+        required: false
+        type: boolean
+        default: false
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - unit
+          - integration
+          - e2e
+          - security
+
+env:
+  CI_VERSION: "v2.0"
+  NODE_VERSION: '18'
+  GO_VERSION: '1.23'
+
+concurrency:
+  group: ci-orchestrator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ================================================================
+  # STAGE 0: CI STRATEGY & PLANNING
+  # ================================================================
+  
+  ci-strategy:
+    name: 🎯 Determine CI Strategy
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.strategy.outputs.environment }}
+      run_tests: ${{ steps.strategy.outputs.run_tests }}
+      test_suite: ${{ steps.strategy.outputs.test_suite }}
+      run_backend_tests: ${{ steps.detect-changes.outputs.backend }}
+      run_frontend_tests: ${{ steps.detect-changes.outputs.frontend }}
+      changed_services: ${{ steps.detect-changes.outputs.services }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+        
+    - name: Detect changed components
+      id: detect-changes
+      run: |
+        echo "🔍 Detecting changes in codebase..."
+        
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Manual dispatch - run all tests
+          echo "backend=true" >> $GITHUB_OUTPUT
+          echo "frontend=true" >> $GITHUB_OUTPUT
+          echo "services=[\"all\"]" >> $GITHUB_OUTPUT
+        else
+          # Detect changes from git diff
+          backend_changed=false
+          frontend_changed=false
+          services=()
+          
+          # Check backend changes
+          if git diff --name-only HEAD~1 | grep -q "^backend/"; then
+            backend_changed=true
+            
+            # Detect specific services
+            if git diff --name-only HEAD~1 | grep -q "backend/user-svc/"; then services+=(\"user-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/api-gateway/"; then services+=(\"api-gateway\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/chat-svc/"; then services+=(\"chat-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/discovery-svc/"; then services+=(\"discovery-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/ai-svc/"; then services+=(\"ai-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/search-svc/"; then services+=(\"search-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/shared-libs/"; then services+=(\"all\"); fi
+          fi
+          
+          # Check frontend changes
+          if git diff --name-only HEAD~1 | grep -q "^frontend/"; then
+            frontend_changed=true
+          fi
+          
+          # If no services specified but backend changed, test all
+          if [ $backend_changed = true ] && [ ${#services[@]} -eq 0 ]; then
+            services=(\"all\")
+          fi
+          
+          services_json=$(IFS=,; echo "[${services[*]}]")
+          
+          echo "backend=$backend_changed" >> $GITHUB_OUTPUT
+          echo "frontend=$frontend_changed" >> $GITHUB_OUTPUT
+          echo "services=$services_json" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "📊 Change Detection Results:"
+        echo "  Backend changed: $(cat $GITHUB_OUTPUT | grep backend= | cut -d= -f2)"
+        echo "  Frontend changed: $(cat $GITHUB_OUTPUT | grep frontend= | cut -d= -f2)" 
+        echo "  Services: $(cat $GITHUB_OUTPUT | grep services= | cut -d= -f2)"
+        
+    - name: Determine CI strategy
+      id: strategy
+      run: |
+        echo "🎯 CI Strategy Analysis"
+        echo "======================"
+        echo "Event: ${{ github.event_name }}"
+        echo "Ref: ${{ github.ref }}"
+        echo "Actor: ${{ github.actor }}"
+        echo ""
+        
+        # Determine environment
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          environment="production"
+        elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+          environment="staging"
+        elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          environment="development"
+        else
+          environment="development"
+        fi
+        
+        # Determine test suite
+        test_suite="${{ github.event.inputs.test_suite || 'all' }}"
+        
+        # Determine if we should run tests
+        run_tests="true"
+        if [[ "${{ github.event.inputs.skip_tests }}" == "true" ]]; then
+          run_tests="false"
+          echo "⚠️ Skipping tests (emergency mode)"
+        fi
+        
+        # Output strategy
+        echo "environment=$environment" >> $GITHUB_OUTPUT
+        echo "run_tests=$run_tests" >> $GITHUB_OUTPUT
+        echo "test_suite=$test_suite" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "📊 CI Strategy:"
+        echo "  Environment: $environment"
+        echo "  Run tests: $run_tests"
+        echo "  Test suite: $test_suite"
+
+  # ================================================================
+  # STAGE 1: PARALLEL QUALITY GATES
+  # ================================================================
+  
+  code-quality:
+    name: 🔍 Code Quality & Security
+    needs: ci-strategy
+    if: needs.ci-strategy.outputs.run_tests == 'true'
+    uses: ./.github/workflows/safety-checks.yml
+    with:
+      environment: ${{ needs.ci-strategy.outputs.environment }}
+    secrets: inherit
+    
+  backend-tests:
+    name: 🚀 Backend Tests
+    needs: ci-strategy  
+    if: needs.ci-strategy.outputs.run_tests == 'true' && needs.ci-strategy.outputs.run_backend_tests == 'true'
+    uses: ./.github/workflows/backend-ci.yml
+    secrets: inherit
+    
+  frontend-tests:
+    name: 🧪 Frontend Unit Tests
+    needs: ci-strategy
+    if: needs.ci-strategy.outputs.run_tests == 'true' && needs.ci-strategy.outputs.run_frontend_tests == 'true'
+    uses: ./.github/workflows/frontend-tests.yml
+    secrets: inherit
+    
+  frontend-quality:
+    name: 🔍 Frontend Quality
+    needs: ci-strategy
+    if: needs.ci-strategy.outputs.run_tests == 'true' && needs.ci-strategy.outputs.run_frontend_tests == 'true'
+    uses: ./.github/workflows/frontend-quality.yml
+    secrets: inherit
+
+  # ================================================================
+  # STAGE 2: INTEGRATION & E2E TESTS
+  # ================================================================
+    
+  frontend-e2e:
+    name: 🎭 Frontend E2E Tests
+    needs: [ci-strategy, frontend-tests, frontend-quality]
+    if: |
+      always() &&
+      needs.ci-strategy.outputs.run_tests == 'true' && 
+      needs.ci-strategy.outputs.run_frontend_tests == 'true' &&
+      (needs.frontend-tests.result == 'success' && needs.frontend-quality.result == 'success') &&
+      (needs.ci-strategy.outputs.test_suite == 'all' || needs.ci-strategy.outputs.test_suite == 'e2e')
+    uses: ./.github/workflows/frontend-e2e.yml
+    with:
+      environment: ${{ needs.ci-strategy.outputs.environment }}
+    secrets: inherit
+
+  # ================================================================
+  # STAGE 3: CI SUMMARY & RESULTS
+  # ================================================================
+  
+  ci-summary:
+    name: 📋 CI Results Summary
+    needs: [ci-strategy, code-quality, backend-tests, frontend-tests, frontend-quality, frontend-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      ci_status: ${{ steps.summary.outputs.status }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Calculate CI results
+      id: summary
+      run: |
+        echo "📊 CI EXECUTION SUMMARY"
+        echo "======================="
+        echo ""
+        
+        # Collect all job results
+        strategy_result="${{ needs.ci-strategy.result }}"
+        quality_result="${{ needs.code-quality.result }}"
+        backend_result="${{ needs.backend-tests.result }}"
+        frontend_tests_result="${{ needs.frontend-tests.result }}"
+        frontend_quality_result="${{ needs.frontend-quality.result }}"
+        frontend_e2e_result="${{ needs.frontend-e2e.result }}"
+        
+        echo "🎯 Strategy: $strategy_result"
+        echo "🔍 Code Quality: $quality_result"
+        echo "🚀 Backend Tests: $backend_result"
+        echo "🧪 Frontend Tests: $frontend_tests_result"
+        echo "🔍 Frontend Quality: $frontend_quality_result"
+        echo "🎭 Frontend E2E: $frontend_e2e_result"
+        echo ""
+        
+        # Determine overall status
+        overall_status="success"
+        critical_failures=""
+        
+        # Check critical jobs (strategy and quality are always required)
+        if [[ "$strategy_result" == "failure" ]]; then
+          overall_status="failure"
+          critical_failures="$critical_failures strategy"
+        fi
+        
+        if [[ "$quality_result" == "failure" ]]; then
+          overall_status="failure" 
+          critical_failures="$critical_failures code-quality"
+        fi
+        
+        # Check backend tests if they were supposed to run
+        if [[ "${{ needs.ci-strategy.outputs.run_backend_tests }}" == "true" && "$backend_result" == "failure" ]]; then
+          overall_status="failure"
+          critical_failures="$critical_failures backend-tests"
+        fi
+        
+        # Check frontend tests if they were supposed to run
+        if [[ "${{ needs.ci-strategy.outputs.run_frontend_tests }}" == "true" ]]; then
+          if [[ "$frontend_tests_result" == "failure" || "$frontend_quality_result" == "failure" ]]; then
+            overall_status="failure"
+            critical_failures="$critical_failures frontend-tests"
+          fi
+        fi
+        
+        # E2E tests are not critical - they can fail without blocking CI
+        if [[ "$frontend_e2e_result" == "failure" ]]; then
+          echo "⚠️ E2E tests failed but not blocking CI"
+        fi
+        
+        if [[ "$overall_status" == "success" ]]; then
+          echo "🎉 CI SUCCESS: All critical tests passed"
+          status_emoji="✅"
+          status_color="good"
+        else
+          echo "❌ CI FAILURE: Critical tests failed"
+          echo "Failed components: $critical_failures"
+          status_emoji="❌"
+          status_color="danger"
+        fi
+        
+        echo "status=$overall_status" >> $GITHUB_OUTPUT
+        echo "status_emoji=$status_emoji" >> $GITHUB_OUTPUT
+        echo "status_color=$status_color" >> $GITHUB_OUTPUT
+        echo "failed_components=$critical_failures" >> $GITHUB_OUTPUT
+        
+    - name: Generate CI report
+      run: |
+        echo "# 🔬 CI Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** ${{ needs.ci-strategy.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Test Suite:** ${{ needs.ci-strategy.outputs.test_suite }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ steps.summary.outputs.status_emoji }} ${{ steps.summary.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "## 📊 Component Results" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status | Required |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Code Quality & Security | ${{ needs.code-quality.result == 'success' && '✅ Passed' || needs.code-quality.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+        echo "| Backend Tests | ${{ needs.backend-tests.result == 'success' && '✅ Passed' || needs.backend-tests.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ needs.ci-strategy.outputs.run_backend_tests == 'true' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Frontend Unit Tests | ${{ needs.frontend-tests.result == 'success' && '✅ Passed' || needs.frontend-tests.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ needs.ci-strategy.outputs.run_frontend_tests == 'true' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Frontend Quality | ${{ needs.frontend-quality.result == 'success' && '✅ Passed' || needs.frontend-quality.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ needs.ci-strategy.outputs.run_frontend_tests == 'true' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Frontend E2E Tests | ${{ needs.frontend-e2e.result == 'success' && '✅ Passed' || needs.frontend-e2e.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ⚠️ Optional |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ steps.summary.outputs.status }}" == "success" ]]; then
+          echo "## 🎉 All Tests Passed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✨ Your code is ready for deployment! The CI pipeline has validated:" >> $GITHUB_STEP_SUMMARY
+          echo "- Code quality and security standards" >> $GITHUB_STEP_SUMMARY
+          echo "- Unit and integration tests" >> $GITHUB_STEP_SUMMARY
+          echo "- Type safety and linting rules" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Failed Components:** ${{ steps.summary.outputs.failed_components }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please fix the failing tests before proceeding with deployment." >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📊 **Build Details:** This CI run tested ${{ needs.ci-strategy.outputs.run_backend_tests == 'true' && 'backend services' || 'no backend changes' }} and ${{ needs.ci-strategy.outputs.run_frontend_tests == 'true' && 'frontend application' || 'no frontend changes' }}." >> $GITHUB_STEP_SUMMARY
+
+    - name: Send notification
+      if: always()
+      uses: ./.github/actions/notify
+      with:
+        type: ${{ steps.summary.outputs.status == 'success' && 'success' || 'failure' }}
+        title: 'CI Pipeline'
+        message: 'CI pipeline ${{ steps.summary.outputs.status }} on ${{ github.ref_name }}'
+        environment: ${{ needs.ci-strategy.outputs.environment }}
+        channels: 'slack'
+        workflow_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        details: |
+          {
+            "commit": "${{ github.sha }}",
+            "author": "${{ github.actor }}",
+            "branch": "${{ github.ref_name }}",
+            "backend_tested": "${{ needs.ci-strategy.outputs.run_backend_tests }}",
+            "frontend_tested": "${{ needs.ci-strategy.outputs.run_frontend_tests }}"
+          }
+        
+    - name: Fail if CI failed
+      if: steps.summary.outputs.status == 'failure'
+      run: |
+        echo "❌ CI pipeline failed - blocking further workflows"
+        exit 1

@@ -1,4 +1,8 @@
 import '@testing-library/jest-dom';
+import { setupCommonMocks } from './__test-utils__/mock-helpers';
+
+// Setup common mocks for all tests
+setupCommonMocks();
 
 // Mock Sentry to avoid errors in tests
 jest.mock('@sentry/react', () => ({

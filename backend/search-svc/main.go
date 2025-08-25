@@ -22,9 +22,17 @@ import (
 	"github.com/link-app/search-svc/internal/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/link-app/shared-libs/lifecycle"
+	sharedConfig "github.com/link-app/shared-libs/config"
 )
 
 func main() {
+	// Initialize shared secrets management
+	if err := sharedConfig.InitSecrets(); err != nil {
+		log.Printf("Warning: Failed to initialize secrets management: %v", err)
+		log.Println("Continuing with environment variables...")
+	}
+	defer sharedConfig.CloseSecrets()
+
 	// Initialize Sentry for error reporting
 	if err := sentry.InitSentry(); err != nil {
 		log.Printf("Failed to initialize Sentry: %v", err)
@@ -65,21 +73,21 @@ func main() {
 
 	// Initialize service clients for indexing pipeline
 	// Default to gRPC for service-to-service communication
-	useGRPC := getEnvOrDefault("USE_GRPC", "true") == "true"
+	useGRPC := sharedConfig.GetEnv("USE_GRPC", "true") == "true"
 	
 	var discoveryClient client.DiscoveryClient
 	var userClient client.UserClient
 	
 	if useGRPC {
 		// Use gRPC clients
-		discoveryEndpoint := getEnvOrDefault("DISCOVERY_GRPC_ENDPOINT", "discovery-svc:50052")
-		userEndpoint := getEnvOrDefault("USER_GRPC_ENDPOINT", "user-svc:50051")
+		discoveryEndpoint := sharedConfig.GetEnv("DISCOVERY_GRPC_ENDPOINT", "discovery-svc:50052")
+		userEndpoint := sharedConfig.GetEnv("USER_GRPC_ENDPOINT", "user-svc:50051")
 		
 		var err error
 		discoveryClient, err = client.NewDiscoveryGRPCClient(discoveryEndpoint)
 		if err != nil {
 			log.Printf("Failed to create gRPC discovery client: %v, falling back to HTTP", err)
-			discoveryURL := getEnvOrDefault("DISCOVERY_SVC_URL", "http://discovery-svc:8081")
+			discoveryURL := sharedConfig.GetEnv("DISCOVERY_SVC_URL", "http://discovery-svc:8081")
 			serviceToken := os.Getenv("SERVICE_AUTH_TOKEN")
 			discoveryClient = client.NewDiscoveryClient(discoveryURL, serviceToken)
 		} else {
@@ -89,7 +97,7 @@ func main() {
 		userClient, err = client.NewUserGRPCClient(userEndpoint)
 		if err != nil {
 			log.Printf("Failed to create gRPC user client: %v, falling back to HTTP", err)
-			userURL := getEnvOrDefault("USER_SVC_URL", "http://user-svc:8082")
+			userURL := sharedConfig.GetEnv("USER_SVC_URL", "http://user-svc:8082")
 			serviceToken := os.Getenv("SERVICE_AUTH_TOKEN")
 			userClient = client.NewUserClient(userURL, serviceToken)
 		} else {
@@ -97,8 +105,8 @@ func main() {
 		}
 	} else {
 		// Use HTTP clients
-		discoveryURL := getEnvOrDefault("DISCOVERY_SVC_URL", "http://discovery-svc:8081")
-		userURL := getEnvOrDefault("USER_SVC_URL", "http://user-svc:8082")
+		discoveryURL := sharedConfig.GetEnv("DISCOVERY_SVC_URL", "http://discovery-svc:8081")
+		userURL := sharedConfig.GetEnv("USER_SVC_URL", "http://user-svc:8082")
 		serviceToken := os.Getenv("SERVICE_AUTH_TOKEN")
 		
 		discoveryClient = client.NewDiscoveryClient(discoveryURL, serviceToken)
@@ -108,11 +116,11 @@ func main() {
 
 	// Initialize indexing configuration
 	indexingConfig := &service.IndexingConfig{
-		CronIntervalMinutes: getEnvOrDefaultInt("INDEXING_CRON_INTERVAL_MINUTES", 120), // 2 hours
-		WorkerPoolSize:      getEnvOrDefaultInt("INDEXING_WORKER_POOL_SIZE", 10),
-		RateLimitPerSecond:  getEnvOrDefaultInt("INDEXING_RATE_LIMIT_PER_SECOND", 50),
-		BatchSize:          getEnvOrDefaultInt("INDEXING_BATCH_SIZE", 100),
-		EmbeddingTTLHours:  getEnvOrDefaultInt("INDEXING_EMBEDDING_TTL_HOURS", 2),
+		CronIntervalMinutes: sharedConfig.GetEnvAsInt("INDEXING_CRON_INTERVAL_MINUTES", 120), // 2 hours
+		WorkerPoolSize:      sharedConfig.GetEnvAsInt("INDEXING_WORKER_POOL_SIZE", 10),
+		RateLimitPerSecond:  sharedConfig.GetEnvAsInt("INDEXING_RATE_LIMIT_PER_SECOND", 50),
+		BatchSize:          sharedConfig.GetEnvAsInt("INDEXING_BATCH_SIZE", 100),
+		EmbeddingTTLHours:  sharedConfig.GetEnvAsInt("INDEXING_EMBEDDING_TTL_HOURS", 2),
 	}
 
 	// Initialize services
@@ -132,7 +140,7 @@ func main() {
 	router := gin.Default()
 
 	// Configure server with lifecycle management
-	port := getEnvOrDefault("PORT", "8085")
+	port := sharedConfig.GetEnv("PORT", "8085")
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      router,
@@ -281,20 +289,3 @@ func corsMiddleware() gin.HandlerFunc {
 	}
 }
 
-// getEnvOrDefault returns the environment variable value or a default value if not set
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-// getEnvOrDefaultInt returns the environment variable value as int or a default value if not set
-func getEnvOrDefaultInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}

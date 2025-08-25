@@ -13,6 +13,12 @@ on:
       - 'monitoring/**'
       - 'backend/**/internal/middleware/metrics.go'
       - 'backend/shared-libs/metrics/**'
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy monitoring to'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       environment:
@@ -27,6 +33,10 @@ on:
 env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
+
+concurrency:
+  group: monitoring-deployment-${{ inputs.environment || github.event.inputs.environment || github.ref }}
+  cancel-in-progress: false # Don't cancel monitoring deployments
 
 jobs:
   validate-monitoring-configs:

@@ -1,0 +1,286 @@
+---
+# S3 Backup Configuration for PostgreSQL Cluster
+# This configures continuous WAL archiving and scheduled backups to S3
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-credentials
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: backup
+type: Opaque
+stringData:
+  # AWS credentials for S3 backup
+  ACCESS_KEY_ID: "CHANGEME_AWS_ACCESS_KEY"
+  SECRET_ACCESS_KEY: "CHANGEME_AWS_SECRET_KEY"
+  AWS_REGION: "us-west-2"
+  
+  # S3 backup configuration
+  BACKUP_S3_BUCKET: "link-app-backups-production"
+  BACKUP_S3_PATH: "postgresql-backups"
+  BACKUP_ENCRYPTION_KEY: "CHANGEME_BACKUP_ENCRYPTION_KEY_32_CHARS"
+  
+  # Backup retention settings
+  BACKUP_RETENTION_DAYS: "30"
+  WAL_RETENTION_DAYS: "7"
+
+---
+# NOTE: Backup configuration is now integrated into the main cluster in 01-postgres-cluster.yaml
+# This file only contains scheduled backups and verification components
+
+---
+# Scheduled Backup for Daily Base Backups
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-cluster-daily-backup
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: backup
+    backup-type: scheduled
+spec:
+  # Schedule: Daily at 2 AM UTC
+  schedule: "0 2 * * *"
+  
+  # Backup configuration
+  backupOwnerReference: self
+  cluster:
+    name: postgres-cluster
+  
+  # Backup method and target
+  method: barmanObjectStore
+  target: primary
+  
+  # Backup retention (overrides cluster setting)
+  retentionPolicy: "30d"
+  
+  # Suspend flag for maintenance
+  suspend: false
+  
+  # Immediate backup after creation
+  immediate: false
+
+---
+# Weekly Full Backup (for long-term retention)
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-cluster-weekly-backup
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: backup
+    backup-type: weekly
+spec:
+  # Schedule: Weekly on Sunday at 1 AM UTC
+  schedule: "0 1 * * 0"
+  
+  cluster:
+    name: postgres-cluster
+  
+  method: barmanObjectStore
+  target: primary
+  
+  # Longer retention for weekly backups
+  retentionPolicy: "90d"
+  
+  suspend: false
+
+---
+# On-Demand Backup Job (for manual backups)
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: postgres-cluster-manual-backup
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: backup
+    backup-type: manual
+spec:
+  cluster:
+    name: postgres-cluster
+  
+  method: barmanObjectStore
+  target: primary
+  
+  # Backup options
+  options:
+  - "--immediate-checkpoint"
+  - "--wait"
+
+---
+# Backup Monitoring ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres-backup-monitor
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: backup-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: postgres-cluster
+      component: backup
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# Backup Verification CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-verification
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: backup-verification
+spec:
+  # Run verification daily at 4 AM UTC (after backup completion)
+  schedule: "0 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: postgres-backup-verification
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: postgres-backup-verifier
+          containers:
+          - name: backup-verifier
+            image: postgres:16-alpine
+            env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: backup-credentials
+                  key: ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backup-credentials
+                  key: SECRET_ACCESS_KEY
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: backup-credentials
+                  key: AWS_REGION
+            - name: BACKUP_S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: backup-credentials
+                  key: BACKUP_S3_BUCKET
+            - name: BACKUP_S3_PATH
+              valueFrom:
+                secretKeyRef:
+                  name: backup-credentials
+                  key: BACKUP_S3_PATH
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              
+              echo "Starting backup verification at $(date)"
+              
+              # Install AWS CLI
+              apk add --no-cache aws-cli curl jq
+              
+              # Check if recent backups exist in S3
+              YESTERDAY=$(date -d '1 day ago' +%Y%m%d)
+              TODAY=$(date +%Y%m%d)
+              
+              echo "Checking for backups from $YESTERDAY to $TODAY"
+              
+              # List recent backups
+              RECENT_BACKUPS=$(aws s3 ls "s3://$BACKUP_S3_BUCKET/$BACKUP_S3_PATH/postgres-cluster/" --recursive | grep -E "$YESTERDAY|$TODAY" | wc -l)
+              
+              if [ "$RECENT_BACKUPS" -gt 0 ]; then
+                echo "✅ Found $RECENT_BACKUPS recent backup files"
+              else
+                echo "❌ No recent backups found! This may indicate a backup failure."
+                exit 1
+              fi
+              
+              # Check WAL files (should be continuous)
+              WAL_FILES=$(aws s3 ls "s3://$BACKUP_S3_BUCKET/$BACKUP_S3_PATH/postgres-cluster/wals/" --recursive | grep "$(date +%Y%m%d)" | wc -l)
+              
+              if [ "$WAL_FILES" -gt 10 ]; then
+                echo "✅ Found $WAL_FILES WAL files for today - continuous archiving is working"
+              else
+                echo "⚠️  Only found $WAL_FILES WAL files for today - check WAL archiving"
+              fi
+              
+              # Create verification report
+              cat > /tmp/backup-verification-report.json <<EOF
+              {
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                "cluster": "postgres-cluster",
+                "recent_backup_files": $RECENT_BACKUPS,
+                "wal_files_today": $WAL_FILES,
+                "status": "$([ $RECENT_BACKUPS -gt 0 ] && echo 'healthy' || echo 'failed')"
+              }
+              EOF
+              
+              echo "Backup verification completed successfully at $(date)"
+              cat /tmp/backup-verification-report.json
+            resources:
+              requests:
+                memory: 64Mi
+                cpu: 50m
+              limits:
+                memory: 128Mi
+                cpu: 100m
+
+---
+# ServiceAccount for backup verification
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-backup-verifier
+  namespace: link-services
+  labels:
+    app: postgres-cluster
+    component: backup-verification
+
+---
+# Role for backup verification access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: postgres-backup-verifier
+  namespace: link-services
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+- apiGroups: ["postgresql.cnpg.io"]
+  resources: ["clusters", "backups"]
+  verbs: ["get", "list"]
+
+---
+# RoleBinding for backup verification
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgres-backup-verifier
+  namespace: link-services
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: postgres-backup-verifier
+subjects:
+- kind: ServiceAccount
+  name: postgres-backup-verifier
+  namespace: link-services
