@@ -223,9 +223,9 @@ func (cs *ConversationService) JoinConversation(ctx context.Context, roomID, use
 
 	// Publish user joined event
 	event := &model.RealtimeEvent{
-		Type:   model.EventTypeUserJoined,
-		RoomID: roomID,
-		UserID: userID,
+		Type:           model.EventTypeUserJoined,
+		ConversationID: roomID,
+		UserID:         userID,
 	}
 	cs.redis.PublishRealtimeEvent(ctx, event)
 
@@ -255,7 +255,7 @@ func (cs *ConversationService) LeaveConversation(ctx context.Context, roomID, us
 	// Publish user left event
 	event := &model.RealtimeEvent{
 		Type:   model.EventTypeUserLeft,
-		RoomID: roomID,
+		ConversationID: roomID,
 		UserID: userID,
 	}
 	cs.redis.PublishRealtimeEvent(ctx, event)
@@ -362,7 +362,7 @@ func (ms *MessageService) MarkMessagesAsRead(ctx context.Context, userID uuid.UU
 	// Publish read event
 	event := &model.RealtimeEvent{
 		Type:   model.EventTypeMessageRead,
-		RoomID: roomID,
+		ConversationID: roomID,
 		UserID: userID,
 		Data:   map[string]interface{}{"message_ids": messageIDs, "count": len(messageIDs)},
 	}
@@ -404,7 +404,7 @@ func (ps *PresenceService) SetUserPresence(ctx context.Context, userID uuid.UUID
 		UserID:   userID,
 		Status:   status,
 		LastSeen: time.Now().UTC(),
-		RoomID:   roomID,
+		ConversationID: roomID,
 	}
 
 	if err := ps.redis.SetUserPresence(ctx, userID, presence); err != nil {
@@ -654,7 +654,7 @@ func (cs *ConversationService) publishGroupCreatedEvent(ctx context.Context, roo
 	for _, participantID := range participants {
 		event := &model.RealtimeEvent{
 			Type:   model.EventTypeUserJoined,
-			RoomID: room.ID,
+			ConversationID: room.ID,
 			UserID: participantID,
 			Data:   room,
 		}
@@ -667,7 +667,7 @@ func (cs *ConversationService) publishDirectConversationCreatedEvent(ctx context
 	for _, participantID := range participants {
 		event := &model.RealtimeEvent{
 			Type:   model.EventTypeUserJoined,
-			RoomID: room.ID,
+			ConversationID: room.ID,
 			UserID: participantID,
 			Data:   room,
 		}

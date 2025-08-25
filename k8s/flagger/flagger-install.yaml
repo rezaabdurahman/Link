@@ -1,0 +1,157 @@
+# Flagger installation for Linkerd service mesh
+# This enables automated canary deployments with metrics-based promotion
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flagger-system
+  labels:
+    linkerd.io/inject: enabled
+  annotations:
+    linkerd.io/inject: enabled
+
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: flagger
+  namespace: flagger-system
+spec:
+  interval: 5m
+  url: https://flagger.app
+
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: flagger
+  namespace: flagger-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: flagger
+      version: '>=1.34.0'
+      sourceRef:
+        kind: HelmRepository
+        name: flagger
+        namespace: flagger-system
+  values:
+    # Enable Linkerd integration
+    meshProvider: linkerd
+    # Enable Prometheus metrics
+    metricsServer: http://prometheus.monitoring:9090
+    # Slack notifications (optional)
+    slack:
+      url: "" # Add your Slack webhook URL
+      channel: "#deployments"
+    # Enable leader election for HA
+    leaderElection:
+      enabled: true
+    # Resource limits
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 1000m
+      requests:
+        memory: 32Mi
+        cpu: 10m
+    # Node selector and tolerations
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    # Service account
+    serviceAccount:
+      create: true
+      name: flagger
+
+---
+# LoadTester for generating traffic during canary analysis
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: loadtester
+  namespace: flagger-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: loadtester
+      version: '>=0.25.0'
+      sourceRef:
+        kind: HelmRepository
+        name: flagger
+        namespace: flagger-system
+  values:
+    # Image settings
+    image:
+      repository: ghcr.io/fluxcd/flagger-loadtester
+      tag: latest
+    # Resource limits
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 1000m
+      requests:
+        memory: 32Mi
+        cpu: 10m
+    # Service configuration
+    service:
+      type: ClusterIP
+      port: 80
+    # Command to run load tests
+    cmd:
+      timeout: 30s
+    # Linkerd injection
+    podAnnotations:
+      linkerd.io/inject: enabled
+
+---
+# RBAC for Flagger
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flagger
+  namespace: flagger-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: flagger
+rules:
+- apiGroups: [""]
+  resources: ["events", "configmaps", "secrets", "services"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["flagger.app"]
+  resources: ["canaries", "metrictemplates", "alertproviders"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["split.smi-spec.io"]
+  resources: ["trafficsplits"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["specs.smi-spec.io"]
+  resources: ["httproutegroups"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: flagger
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flagger
+subjects:
+- kind: ServiceAccount
+  name: flagger
+  namespace: flagger-system

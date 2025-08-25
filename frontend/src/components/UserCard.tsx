@@ -102,6 +102,8 @@ const UserCard: React.FC<UserCardProps> = ({ user, onClick, isVerticalLayout = f
         observer.disconnect();
       };
     }
+    // Return undefined cleanup for cases where there's no video
+    return undefined;
   }, [media?.type]);
   
   if (isVerticalLayout) {

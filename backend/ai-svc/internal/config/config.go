@@ -4,6 +4,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+	
+	sharedConfig "github.com/link-app/shared-libs/config"
 )
 
 // Config holds all configuration for the application
@@ -106,114 +108,74 @@ type ChatServiceConfig struct {
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
-		ServerHost: getEnv("SERVER_HOST", "0.0.0.0"),
-		ServerPort: getEnv("SERVER_PORT", "8081"),
+		ServerHost: sharedConfig.GetEnv("SERVER_HOST", "0.0.0.0"),
+		ServerPort: sharedConfig.GetEnv("SERVER_PORT", "8081"),
 
 		Database: DatabaseConfig{
-			Host:            getEnv("DB_HOST", "localhost"),
-			Port:            getEnv("DB_PORT", "5432"),
-			Name:            getEnv("DB_NAME", "ai_db"),
-			User:            getEnv("DB_USER", "postgres"),
-			Password:        getEnv("DB_PASSWORD", ""),
-			SSLMode:         getEnv("DB_SSL_MODE", "disable"),
-			MaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
-			MaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 25),
-			ConnMaxLifetime: getEnvAsDuration("DB_CONN_MAX_LIFETIME", 300*time.Second),
+			Host:            sharedConfig.GetEnv("DB_HOST", "localhost"),
+			Port:            sharedConfig.GetEnv("DB_PORT", "5432"),
+			Name:            sharedConfig.GetEnv("DB_NAME", "ai_db"),
+			User:            sharedConfig.GetEnv("DB_USER", "postgres"),
+			Password:        sharedConfig.GetDatabasePassword(), // Use shared secrets management
+			SSLMode:         sharedConfig.GetEnv("DB_SSL_MODE", "disable"),
+			MaxOpenConns:    sharedConfig.GetEnvAsInt("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:    sharedConfig.GetEnvAsInt("DB_MAX_IDLE_CONNS", 25),
+			ConnMaxLifetime: sharedConfig.GetEnvAsDuration("DB_CONN_MAX_LIFETIME", 300*time.Second),
 		},
 
 		Redis: RedisConfig{
-			Host:       getEnv("REDIS_HOST", "localhost"),
-			Port:       getEnv("REDIS_PORT", "6379"),
-			Password:   getEnv("REDIS_PASSWORD", ""),
-			DB:         getEnvAsInt("REDIS_DB", 1),
-			SummaryTTL: getEnvAsDuration("SUMMARY_TTL", time.Hour),
+			Host:       sharedConfig.GetEnv("REDIS_HOST", "localhost"),
+			Port:       sharedConfig.GetEnv("REDIS_PORT", "6379"),
+			Password:   sharedConfig.GetRedisPassword(), // Use shared secrets management
+			DB:         sharedConfig.GetEnvAsInt("REDIS_DB", 1),
+			SummaryTTL: sharedConfig.GetEnvAsDuration("SUMMARY_TTL", time.Hour),
 		},
 
 		JWT: JWTConfig{
-			Secret:    getEnv("JWT_SECRET", "your_jwt_secret_key_here"),
-			ExpiresIn: getEnvAsDuration("JWT_EXPIRES_IN", 24*time.Hour),
+			Secret:    sharedConfig.GetJWTSecret(), // Use shared secrets management
+			ExpiresIn: sharedConfig.GetEnvAsDuration("JWT_EXPIRES_IN", 24*time.Hour),
 		},
 
 		AI: AIConfig{
-			Provider:    getEnv("AI_PROVIDER", "openai"),
-			APIKey:      getEnv("AI_API_KEY", ""),
-			Model:       getEnv("AI_MODEL", "gpt-4"),
-			MaxTokens:   getEnvAsInt("AI_MAX_TOKENS", 2048),
-			Temperature: getEnvAsFloat64("AI_TEMPERATURE", 0.7),
-			Timeout:     getEnvAsDuration("AI_TIMEOUT", 30*time.Second),
-			MaxRetries:  getEnvAsInt("AI_MAX_RETRIES", 3),
+			Provider:    sharedConfig.GetEnv("AI_PROVIDER", "openai"),
+			APIKey:      sharedConfig.GetOpenAIAPIKey(), // Use shared secrets management
+			Model:       sharedConfig.GetEnv("AI_MODEL", "gpt-4"),
+			MaxTokens:   sharedConfig.GetEnvAsInt("AI_MAX_TOKENS", 2048),
+			Temperature: sharedConfig.GetEnvAsFloat64("AI_TEMPERATURE", 0.7),
+			Timeout:     sharedConfig.GetEnvAsDuration("AI_TIMEOUT", 30*time.Second),
+			MaxRetries:  sharedConfig.GetEnvAsInt("AI_MAX_RETRIES", 3),
 		},
 
 		ChatService: ChatServiceConfig{
-			BaseURL:                getEnv("CHAT_SERVICE_URL", "http://localhost:8080"),
-			Timeout:                getEnvAsDuration("CHAT_SERVICE_TIMEOUT", 10*time.Second),
-			MaxRetries:             getEnvAsInt("CHAT_SERVICE_MAX_RETRIES", 3),
-			RetryDelay:             getEnvAsDuration("CHAT_SERVICE_RETRY_DELAY", 100*time.Millisecond),
-			RetryBackoffMultiplier: getEnvAsFloat64("CHAT_SERVICE_RETRY_BACKOFF", 2.0),
-			CircuitBreakerEnabled:  getEnvAsBool("CHAT_SERVICE_CIRCUIT_BREAKER_ENABLED", true),
-			CircuitBreakerTimeout:  getEnvAsDuration("CHAT_SERVICE_CIRCUIT_BREAKER_TIMEOUT", 30*time.Second),
-			CircuitBreakerMaxFails: getEnvAsInt("CHAT_SERVICE_CIRCUIT_BREAKER_MAX_FAILS", 5),
+			BaseURL:                sharedConfig.GetEnv("CHAT_SERVICE_URL", "http://localhost:8080"),
+			Timeout:                sharedConfig.GetEnvAsDuration("CHAT_SERVICE_TIMEOUT", 10*time.Second),
+			MaxRetries:             sharedConfig.GetEnvAsInt("CHAT_SERVICE_MAX_RETRIES", 3),
+			RetryDelay:             sharedConfig.GetEnvAsDuration("CHAT_SERVICE_RETRY_DELAY", 100*time.Millisecond),
+			RetryBackoffMultiplier: sharedConfig.GetEnvAsFloat64("CHAT_SERVICE_RETRY_BACKOFF", 2.0),
+			CircuitBreakerEnabled:  sharedConfig.GetEnvAsBool("CHAT_SERVICE_CIRCUIT_BREAKER_ENABLED", true),
+			CircuitBreakerTimeout:  sharedConfig.GetEnvAsDuration("CHAT_SERVICE_CIRCUIT_BREAKER_TIMEOUT", 30*time.Second),
+			CircuitBreakerMaxFails: sharedConfig.GetEnvAsInt("CHAT_SERVICE_CIRCUIT_BREAKER_MAX_FAILS", 5),
 		},
 
-		LogLevel:  getEnv("LOG_LEVEL", "info"),
-		LogFormat: getEnv("LOG_FORMAT", "json"),
+		LogLevel:  sharedConfig.GetEnv("LOG_LEVEL", "info"),
+		LogFormat: sharedConfig.GetEnv("LOG_FORMAT", "json"),
 
-		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
-		CORSAllowedMethods: getEnv("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"),
-		CORSAllowedHeaders: getEnv("CORS_ALLOWED_HEADERS", "Content-Type,Authorization"),
+		CORSAllowedOrigins: sharedConfig.GetEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
+		CORSAllowedMethods: sharedConfig.GetEnv("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"),
+		CORSAllowedHeaders: sharedConfig.GetEnv("CORS_ALLOWED_HEADERS", "Content-Type,Authorization"),
 
-		RateLimitEnabled:             getEnvAsBool("RATE_LIMIT_ENABLED", true),
-		RateLimitRequestsPerMinute:   getEnvAsInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 60),
-		RateLimitAIRequestsPerMinute: getEnvAsInt("RATE_LIMIT_AI_REQUESTS_PER_MINUTE", 10),
+		RateLimitEnabled:             sharedConfig.GetEnvAsBool("RATE_LIMIT_ENABLED", true),
+		RateLimitRequestsPerMinute:   sharedConfig.GetEnvAsInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 60),
+		RateLimitAIRequestsPerMinute: sharedConfig.GetEnvAsInt("RATE_LIMIT_AI_REQUESTS_PER_MINUTE", 10),
 
-		HealthCheckInterval: getEnvAsDuration("HEALTH_CHECK_INTERVAL", 30*time.Second),
+		HealthCheckInterval: sharedConfig.GetEnvAsDuration("HEALTH_CHECK_INTERVAL", 30*time.Second),
 
-		EnableMetrics: getEnvAsBool("ENABLE_METRICS", true),
-		MetricsPort:   getEnv("METRICS_PORT", "9090"),
+		EnableMetrics: sharedConfig.GetEnvAsBool("ENABLE_METRICS", true),
+		MetricsPort:   sharedConfig.GetEnv("METRICS_PORT", "9090"),
 
-		Environment: getEnv("ENVIRONMENT", "development"),
+		Environment: sharedConfig.GetEnv("ENVIRONMENT", "development"),
 	}
 
 	return cfg, nil
 }
 
-// Helper functions for environment variable parsing
-
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsInt(key string, defaultValue int) int {
-	valueStr := getEnv(key, "")
-	if value, err := strconv.Atoi(valueStr); err == nil {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsBool(key string, defaultValue bool) bool {
-	valueStr := getEnv(key, "")
-	if value, err := strconv.ParseBool(valueStr); err == nil {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
-	valueStr := getEnv(key, "")
-	if value, err := time.ParseDuration(valueStr); err == nil {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsFloat64(key string, defaultValue float64) float64 {
-	valueStr := getEnv(key, "")
-	if value, err := strconv.ParseFloat(valueStr, 64); err == nil {
-		return value
-	}
-	return defaultValue
-}

@@ -1,0 +1,264 @@
+name: 'Policy Validation'
+description: 'Policy-as-Code validation using OPA/Conftest and security scanners'
+inputs:
+  manifests-path:
+    description: 'Path to Kubernetes manifests'
+    required: true
+    default: 'k8s/'
+  policies-path:
+    description: 'Path to OPA policies'
+    required: false
+    default: 'policies/'
+  conftest-version:
+    description: 'Conftest version to use'
+    required: false
+    default: 'v0.46.0'
+  checkov-enabled:
+    description: 'Enable Checkov scanning'
+    required: false
+    default: 'true'
+  datree-enabled:
+    description: 'Enable Datree scanning'
+    required: false
+    default: 'true'
+  fail-on-violations:
+    description: 'Fail the action if violations are found'
+    required: false
+    default: 'true'
+
+outputs:
+  policy-result:
+    description: 'Overall policy validation result'
+    value: ${{ steps.summary.outputs.result }}
+  violations-count:
+    description: 'Number of policy violations'
+    value: ${{ steps.summary.outputs.violations }}
+  report-path:
+    description: 'Path to detailed policy report'
+    value: ${{ steps.summary.outputs.report-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Conftest
+      shell: bash
+      run: |
+        curl -L https://github.com/open-policy-agent/conftest/releases/download/${{ inputs.conftest-version }}/conftest_${{ inputs.conftest-version }}_Linux_x86_64.tar.gz | tar xz
+        sudo mv conftest /usr/local/bin
+        conftest --version
+
+    - name: Install Checkov
+      if: inputs.checkov-enabled == 'true'
+      shell: bash
+      run: |
+        pip install checkov
+        checkov --version
+
+    - name: Install Datree
+      if: inputs.datree-enabled == 'true'
+      shell: bash
+      run: |
+        curl https://get.datree.io | /bin/bash
+        datree version
+
+    - name: Create default policies if not exists
+      shell: bash
+      run: |
+        mkdir -p ${{ inputs.policies-path }}
+        
+        # Create basic security policies if they don't exist
+        if [ ! -f "${{ inputs.policies-path }}/security.rego" ]; then
+          cat > ${{ inputs.policies-path }}/security.rego << 'EOF'
+        package main
+
+        import rego.v1
+
+        # Deny containers running as root
+        deny contains msg if {
+            input.kind == "Deployment"
+            input.spec.template.spec.securityContext.runAsUser == 0
+            msg := "Container should not run as root user"
+        }
+
+        # Require resource limits
+        deny contains msg if {
+            input.kind == "Deployment"
+            container := input.spec.template.spec.containers[_]
+            not container.resources.limits
+            msg := sprintf("Container '%s' must have resource limits", [container.name])
+        }
+
+        # Require security context
+        deny contains msg if {
+            input.kind == "Deployment"
+            container := input.spec.template.spec.containers[_]
+            not container.securityContext
+            msg := sprintf("Container '%s' must have securityContext", [container.name])
+        }
+
+        # Deny privileged containers
+        deny contains msg if {
+            input.kind == "Deployment"
+            container := input.spec.template.spec.containers[_]
+            container.securityContext.privileged == true
+            msg := sprintf("Container '%s' should not run in privileged mode", [container.name])
+        }
+        EOF
+        fi
+        
+        if [ ! -f "${{ inputs.policies-path }}/network.rego" ]; then
+          cat > ${{ inputs.policies-path }}/network.rego << 'EOF'
+        package main
+
+        import rego.v1
+
+        # Require NetworkPolicies for namespaces
+        warn contains msg if {
+            input.kind == "Namespace"
+            input.metadata.name != "kube-system"
+            input.metadata.name != "default"
+            msg := sprintf("Namespace '%s' should have associated NetworkPolicy", [input.metadata.name])
+        }
+
+        # Validate service types
+        deny contains msg if {
+            input.kind == "Service"
+            input.spec.type == "NodePort"
+            not startswith(input.metadata.namespace, "dev")
+            msg := "NodePort services should only be used in development environments"
+        }
+        EOF
+        fi
+
+    - name: Run Conftest validation
+      id: conftest
+      shell: bash
+      run: |
+        echo "🔍 Running Conftest policy validation..."
+        violations=0
+        mkdir -p reports
+        
+        # Run conftest on all YAML files
+        if find ${{ inputs.manifests-path }} -name "*.yaml" -o -name "*.yml" | head -1 | read; then
+          if ! find ${{ inputs.manifests-path }} -name "*.yaml" -o -name "*.yml" | xargs conftest test --policy ${{ inputs.policies-path }} --output json > reports/conftest-report.json; then
+            violations=$(jq '[.[] | select(.failures | length > 0)] | length' reports/conftest-report.json)
+            echo "❌ Conftest found $violations policy violations"
+          else
+            echo "✅ Conftest validation passed"
+          fi
+        else
+          echo "📝 No YAML files found to validate"
+        fi
+        
+        echo "conftest-violations=$violations" >> $GITHUB_OUTPUT
+
+    - name: Run Checkov security scan
+      id: checkov
+      if: inputs.checkov-enabled == 'true'
+      shell: bash
+      run: |
+        echo "🔍 Running Checkov security scan..."
+        violations=0
+        
+        if [ -d "${{ inputs.manifests-path }}" ]; then
+          if ! checkov -d ${{ inputs.manifests-path }} --framework kubernetes --output json --output-file reports/checkov-report.json; then
+            violations=$(jq '.summary.failed' reports/checkov-report.json 2>/dev/null || echo "1")
+            echo "❌ Checkov found security issues"
+          else
+            echo "✅ Checkov security scan passed"
+          fi
+        fi
+        
+        echo "checkov-violations=$violations" >> $GITHUB_OUTPUT
+
+    - name: Run Datree policy check
+      id: datree
+      if: inputs.datree-enabled == 'true'
+      shell: bash
+      run: |
+        echo "🔍 Running Datree policy validation..."
+        violations=0
+        
+        if [ -d "${{ inputs.manifests-path }}" ]; then
+          # Run datree test (Note: requires DATREE_TOKEN environment variable in production)
+          if ! find ${{ inputs.manifests-path }} -name "*.yaml" -o -name "*.yml" | head -10 | xargs datree test --output json > reports/datree-report.json; then
+            violations=$(jq '.policiesValidationResults[] | select(.ruleResults[] | select(.ruleResults[] | .status == "FAILED")) | length' reports/datree-report.json 2>/dev/null || echo "1")
+            echo "❌ Datree found policy violations"
+          else
+            echo "✅ Datree policy validation passed"
+          fi
+        fi
+        
+        echo "datree-violations=$violations" >> $GITHUB_OUTPUT
+
+    - name: Generate policy report
+      shell: bash
+      run: |
+        echo "📋 Generating comprehensive policy report..."
+        
+        cat > reports/policy-summary.md << 'EOF'
+        # Policy Validation Report
+        
+        ## Summary
+        - **Conftest violations**: ${{ steps.conftest.outputs.conftest-violations || 0 }}
+        - **Checkov violations**: ${{ steps.checkov.outputs.checkov-violations || 0 }}
+        - **Datree violations**: ${{ steps.datree.outputs.datree-violations || 0 }}
+        
+        ## Details
+        
+        ### Conftest Policy Violations
+        EOF
+        
+        if [ -f "reports/conftest-report.json" ]; then
+          jq -r '.[] | select(.failures | length > 0) | "- **\(.filename)**: \(.failures[] | .msg)"' reports/conftest-report.json >> reports/policy-summary.md
+        fi
+        
+        echo "
+        ### Checkov Security Issues" >> reports/policy-summary.md
+        
+        if [ -f "reports/checkov-report.json" ]; then
+          jq -r '.results.failed_checks[]? | "- **\(.file_path)**: \(.check_name) - \(.description)"' reports/checkov-report.json >> reports/policy-summary.md
+        fi
+        
+        echo "
+        ### Datree Policy Violations" >> reports/policy-summary.md
+        
+        if [ -f "reports/datree-report.json" ]; then
+          jq -r '.policiesValidationResults[]? | .ruleResults[]? | select(.ruleResults[]? | .status == "FAILED") | "- **\(.identifier)**: \(.name)"' reports/datree-report.json >> reports/policy-summary.md
+        fi
+
+    - name: Policy validation summary
+      id: summary
+      shell: bash
+      run: |
+        conftest_violations=${{ steps.conftest.outputs.conftest-violations || 0 }}
+        checkov_violations=${{ steps.checkov.outputs.checkov-violations || 0 }}
+        datree_violations=${{ steps.datree.outputs.datree-violations || 0 }}
+        
+        total_violations=$((conftest_violations + checkov_violations + datree_violations))
+        
+        echo "📊 Policy Validation Summary:"
+        echo "- Conftest violations: $conftest_violations"
+        echo "- Checkov violations: $checkov_violations"
+        echo "- Datree violations: $datree_violations"
+        echo "- Total violations: $total_violations"
+        
+        if [ $total_violations -eq 0 ]; then
+          echo "result=success" >> $GITHUB_OUTPUT
+          echo "✅ All policy validations passed!"
+        else
+          echo "result=failure" >> $GITHUB_OUTPUT
+          echo "❌ Found $total_violations policy violations"
+          
+          # Display the policy report
+          if [ -f "reports/policy-summary.md" ]; then
+            cat reports/policy-summary.md
+          fi
+          
+          if [ "${{ inputs.fail-on-violations }}" = "true" ]; then
+            exit 1
+          fi
+        fi
+        
+        echo "violations=$total_violations" >> $GITHUB_OUTPUT
+        echo "report-path=reports/policy-summary.md" >> $GITHUB_OUTPUT

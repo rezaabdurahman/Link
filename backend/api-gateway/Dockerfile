@@ -1,29 +1,35 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
-
-# Set working directory
+# Dependencies stage - for better layer caching
+FROM golang:1.23-alpine AS deps
 WORKDIR /app
 
-# Install dependencies for building
+# Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy shared libs to parent directory structure
-COPY shared-libs ../shared-libs
-
-# Copy go mod files
+# Copy go mod files first for better caching
+COPY shared-libs/go.mod shared-libs/go.sum ../shared-libs/
 COPY api-gateway/go.mod api-gateway/go.sum ./
 
-# Copy source code  
+# Download dependencies (cached unless go.mod/go.sum changes)
+RUN go mod download
+
+# Build stage
+FROM deps AS builder
+
+# Copy source code
+COPY shared-libs/ ../shared-libs/
 COPY api-gateway/ .
 
-# Tidy dependencies and download
-RUN go mod tidy && go mod download
+# Tidy and ensure all dependencies
+RUN go mod tidy
 
-# Build the integrated API Gateway application (combines legacy + enhanced features)
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main cmd/gateway/integrated_main.go
+# Build the application with optimizations
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o main cmd/gateway/integrated_main.go
 
-# Final stage
-FROM alpine:latest
+# Final stage - minimal production image
+FROM alpine:latest AS production
 
 # Install ca-certificates for HTTPS requests
 RUN apk --no-cache add ca-certificates tzdata

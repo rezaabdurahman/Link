@@ -1,0 +1,189 @@
+# Alert provider configuration for Flagger
+# Enables automated rollback based on Prometheus alerts
+
+apiVersion: flagger.app/v1beta1
+kind: AlertProvider
+metadata:
+  name: prometheus
+  namespace: flagger-system
+spec:
+  type: prometheus
+  address: http://prometheus.monitoring:9090
+
+---
+# Slack alert provider for deployment notifications
+apiVersion: flagger.app/v1beta1
+kind: AlertProvider
+metadata:
+  name: slack
+  namespace: flagger-system
+spec:
+  type: slack
+  channel: "#deployments"
+  username: flagger
+  iconEmoji: ":robot_face:"
+  secretRef:
+    name: slack-url
+    key: address
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: slack-url
+  namespace: flagger-system
+type: Opaque
+data:
+  address: "" # Base64 encoded Slack webhook URL
+
+---
+# Prometheus alerting rules for deployment monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: flagger-deployment-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: flagger.canary
+    interval: 30s
+    rules:
+    # High error rate alert
+    - alert: CanaryHighErrorRate
+      expr: |
+        (
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (service, namespace)
+          /
+          sum(rate(http_requests_total[5m])) by (service, namespace)
+        ) * 100 > 5
+      for: 1m
+      labels:
+        severity: warning
+        type: canary
+      annotations:
+        summary: "High error rate detected in canary deployment"
+        description: "Canary deployment {{ $labels.service }} in {{ $labels.namespace }} has error rate of {{ $value }}%"
+
+    # High latency alert
+    - alert: CanaryHighLatency
+      expr: |
+        histogram_quantile(0.99,
+          sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service, namespace)
+        ) * 1000 > 1000
+      for: 2m
+      labels:
+        severity: warning
+        type: canary
+      annotations:
+        summary: "High latency detected in canary deployment"
+        description: "Canary deployment {{ $labels.service }} in {{ $labels.namespace }} has P99 latency of {{ $value }}ms"
+
+    # Low success rate alert
+    - alert: CanaryLowSuccessRate
+      expr: |
+        (
+          sum(rate(http_requests_total{status!~"5.."}[5m])) by (service, namespace)
+          /
+          sum(rate(http_requests_total[5m])) by (service, namespace)
+        ) * 100 < 95
+      for: 1m
+      labels:
+        severity: critical
+        type: canary
+      annotations:
+        summary: "Low success rate in canary deployment"
+        description: "Canary deployment {{ $labels.service }} in {{ $labels.namespace }} has success rate of {{ $value }}%"
+
+    # Memory usage alert
+    - alert: CanaryHighMemoryUsage
+      expr: |
+        (
+          sum(container_memory_working_set_bytes{pod=~".*-canary-.*", container!="POD"}) by (pod, namespace)
+          /
+          sum(container_spec_memory_limit_bytes{pod=~".*-canary-.*", container!="POD"}) by (pod, namespace)
+        ) * 100 > 90
+      for: 2m
+      labels:
+        severity: warning
+        type: canary
+      annotations:
+        summary: "High memory usage in canary deployment"
+        description: "Canary pod {{ $labels.pod }} in {{ $labels.namespace }} is using {{ $value }}% of memory limit"
+
+    # CPU usage alert
+    - alert: CanaryHighCPUUsage
+      expr: |
+        (
+          sum(rate(container_cpu_usage_seconds_total{pod=~".*-canary-.*", container!="POD"}[5m])) by (pod, namespace)
+          /
+          sum(container_spec_cpu_quota{pod=~".*-canary-.*", container!="POD"} / container_spec_cpu_period{pod=~".*-canary-.*", container!="POD"}) by (pod, namespace)
+        ) * 100 > 90
+      for: 2m
+      labels:
+        severity: warning
+        type: canary
+      annotations:
+        summary: "High CPU usage in canary deployment"
+        description: "Canary pod {{ $labels.pod }} in {{ $labels.namespace }} is using {{ $value }}% of CPU limit"
+
+    # Linkerd-specific alerts
+    - alert: CanaryLinkerdHighErrorRate
+      expr: |
+        (
+          sum(rate(response_total{direction="inbound", classification="failure"}[5m])) by (dst_service, dst_namespace)
+          /
+          sum(rate(response_total{direction="inbound"}[5m])) by (dst_service, dst_namespace)
+        ) * 100 > 2
+      for: 1m
+      labels:
+        severity: warning
+        type: canary
+        source: linkerd
+      annotations:
+        summary: "High error rate in Linkerd mesh"
+        description: "Service {{ $labels.dst_service }} in {{ $labels.dst_namespace }} has {{ $value }}% error rate in Linkerd mesh"
+
+    - alert: CanaryLinkerdHighLatency
+      expr: |
+        histogram_quantile(0.99,
+          sum(rate(response_latency_ms_bucket{direction="inbound"}[5m])) by (le, dst_service, dst_namespace)
+        ) > 2000
+      for: 2m
+      labels:
+        severity: warning
+        type: canary
+        source: linkerd
+      annotations:
+        summary: "High latency in Linkerd mesh"
+        description: "Service {{ $labels.dst_service }} in {{ $labels.dst_namespace }} has P99 latency of {{ $value }}ms in Linkerd mesh"
+
+  # Database-related alerts for deployments
+  - name: flagger.database
+    interval: 30s
+    rules:
+    - alert: CanaryDatabaseConnectionsHigh
+      expr: |
+        sum(pg_stat_activity_count{state="active"}) by (instance) > 80
+      for: 2m
+      labels:
+        severity: warning
+        type: canary
+        component: database
+      annotations:
+        summary: "High database connections during canary"
+        description: "Database {{ $labels.instance }} has {{ $value }} active connections"
+
+    - alert: CanaryDatabaseSlowQueries
+      expr: |
+        rate(pg_stat_statements_mean_time_ms[5m]) > 1000
+      for: 1m
+      labels:
+        severity: warning
+        type: canary
+        component: database
+      annotations:
+        summary: "Slow database queries during canary"
+        description: "Database has queries with average execution time of {{ $value }}ms"

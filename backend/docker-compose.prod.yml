@@ -1,0 +1,262 @@
+version: '3.8'
+
+# Production overrides for Link services
+# This file demonstrates how external secrets management works in production
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  # Production PostgreSQL with enhanced security
+  postgres:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-linkuser}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: ${DB_NAME:-linkdb}
+    secrets:
+      - db_password
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+  # Production API Gateway
+  api-gateway:
+    environment:
+      ENVIRONMENT: "production"
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      
+      # K8s service discovery (production uses K8s)
+      K8S_NAMESPACE: ${K8S_NAMESPACE:-default}
+      K8S_CLUSTER_DOMAIN: "cluster.local"
+      
+      # Service URLs (K8s internal)
+      USER_SVC_URL: http://user-svc.${K8S_NAMESPACE:-default}.svc.cluster.local:8081
+      CHAT_SVC_URL: http://chat-svc.${K8S_NAMESPACE:-default}.svc.cluster.local:8082
+      DISCOVERY_SVC_URL: http://discovery-svc.${K8S_NAMESPACE:-default}.svc.cluster.local:8083
+      AI_SVC_URL: http://ai-svc.${K8S_NAMESPACE:-default}.svc.cluster.local:8084
+      SEARCH_SVC_URL: http://search-svc.${K8S_NAMESPACE:-default}.svc.cluster.local:8085
+      
+      # JWT Configuration (secret managed externally)
+      JWT_ISSUER: "link-app"
+      JWT_AUDIENCE: "link-api"
+      JWT_EXPIRY_HOURS: 24
+      
+      # Database config (password managed externally)
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: 5432
+      DB_USER: linkuser
+      DB_NAME: linkdb
+      DB_SSL_MODE: require
+      
+      # Redis (password managed externally)
+      REDIS_HOST: ${REDIS_HOST:-redis-gateway}
+      REDIS_PORT: 6379
+      
+      # Monitoring
+      SENTRY_ENVIRONMENT: production
+      LOG_LEVEL: info
+      ENABLE_DEBUG_ENDPOINTS: "false"
+      
+    # In production, secrets are mounted as files in K8s
+    secrets:
+      - jwt_secret
+      - redis_password
+      - sentry_dsn
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Production User Service
+  user-svc:
+    environment:
+      ENVIRONMENT: "production"
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      PORT: 8081
+      GRPC_PORT: 50051
+      METRICS_PORT: 9090
+      
+      # Database config
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: 5432
+      DB_USER: linkuser
+      DB_NAME: linkdb
+      DB_SSL_MODE: require
+      
+      # Redis config
+      REDIS_HOST: ${REDIS_HOST:-redis-user}
+      REDIS_PORT: 6379
+      
+      # Monitoring
+      SENTRY_ENVIRONMENT: production
+      LOG_LEVEL: info
+      ENABLE_DEBUG_ENDPOINTS: "false"
+      
+    secrets:
+      - db_password
+      - jwt_secret
+      - aws_kms_key_id
+      - redis_password
+      - sentry_dsn
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Production Chat Service
+  chat-svc:
+    environment:
+      ENVIRONMENT: "production"
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      PORT: 8082
+      GRPC_PORT: 50053
+      METRICS_PORT: 9092
+      
+      # Database config
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: 5432
+      DB_USER: linkuser
+      DB_NAME: linkdb
+      DB_SSL_MODE: require
+      
+      # Redis config
+      REDIS_HOST: ${REDIS_HOST:-redis-chat}
+      REDIS_PORT: 6379
+      
+      # Monitoring
+      SENTRY_ENVIRONMENT: production
+      LOG_LEVEL: info
+      
+    secrets:
+      - db_password
+      - redis_password
+      - sentry_dsn
+    deploy:
+      replicas: 3
+
+  # Production Discovery Service  
+  discovery-svc:
+    environment:
+      ENVIRONMENT: "production"
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      PORT: 8083
+      GRPC_PORT: 50052
+      METRICS_PORT: 9091
+      
+      # Database config
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: 5432
+      DB_USER: linkuser
+      DB_NAME: linkdb
+      DB_SSL_MODE: require
+      
+      # Redis config
+      REDIS_HOST: ${REDIS_HOST:-redis-discovery}
+      REDIS_PORT: 6379
+      
+      # Monitoring
+      SENTRY_ENVIRONMENT: production
+      LOG_LEVEL: info
+      
+    secrets:
+      - db_password
+      - redis_password
+      - sentry_dsn
+    deploy:
+      replicas: 2
+
+  # Production AI Service
+  ai-svc:
+    environment:
+      ENVIRONMENT: "production"
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      PORT: 8084
+      GRPC_PORT: 50054
+      METRICS_PORT: 9093
+      
+      # Monitoring
+      SENTRY_ENVIRONMENT: production
+      LOG_LEVEL: info
+      
+    secrets:
+      - openai_api_key
+      - sentry_dsn
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+  # Production Search Service
+  search-svc:
+    environment:
+      ENVIRONMENT: "production"  
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      PORT: 8085
+      GRPC_PORT: 50055
+      METRICS_PORT: 9094
+      
+      # Database config
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: 5432
+      DB_USER: linkuser
+      DB_NAME: linkdb
+      DB_SSL_MODE: require
+      
+      # Service-to-service communication
+      USE_GRPC: "true"
+      DISCOVERY_GRPC_ENDPOINT: discovery-svc.${K8S_NAMESPACE:-default}.svc.cluster.local:50052
+      USER_GRPC_ENDPOINT: user-svc.${K8S_NAMESPACE:-default}.svc.cluster.local:50051
+      
+      # Monitoring
+      SENTRY_ENVIRONMENT: production
+      LOG_LEVEL: info
+      
+    secrets:
+      - db_password
+      - sentry_dsn
+    deploy:
+      replicas: 2
+
+# Production secrets configuration
+# In real production, these would be managed by Docker Swarm secrets, 
+# Kubernetes secrets, or external secret managers like AWS Secrets Manager
+secrets:
+  db_password:
+    external: true
+    name: link_db_password_v1
+  jwt_secret:
+    external: true  
+    name: link_jwt_secret_v1
+  redis_password:
+    external: true
+    name: link_redis_password_v1
+  aws_kms_key_id:
+    external: true
+    name: link_kms_key_id_v1
+  openai_api_key:
+    external: true
+    name: link_openai_key_v1
+  sentry_dsn:
+    external: true
+    name: link_sentry_dsn_v1
+
+networks:
+  default:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"

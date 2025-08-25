@@ -1,0 +1,527 @@
+---
+# Redis Cluster with High Availability and Persistence
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cluster
+  namespace: link-services
+  labels:
+    app: redis-cluster
+spec:
+  serviceName: redis-cluster
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis-cluster
+  template:
+    metadata:
+      labels:
+        app: redis-cluster
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: redis-cluster
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        - containerPort: 16379
+          name: cluster
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        - name: REDIS_AOF_ENABLED
+          value: "yes"
+        - name: REDIS_SAVE_ENABLED
+          value: "yes"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /usr/local/etc/redis
+          readOnly: true
+        command:
+        - redis-server
+        - /usr/local/etc/redis/redis.conf
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: 100m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 1
+          successThreshold: 1
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-cluster-config
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# Redis Cluster Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster
+  namespace: link-services
+  labels:
+    app: redis-cluster
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  - port: 16379
+    targetPort: 16379
+    protocol: TCP
+    name: cluster
+  selector:
+    app: redis-cluster
+
+---
+# Redis Load Balancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: link-services
+  labels:
+    app: redis-cluster
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: redis-cluster
+
+---
+# Redis Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cluster-config
+  namespace: link-services
+  labels:
+    app: redis-cluster
+data:
+  redis.conf: |
+    # Network
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    
+    # General
+    daemonize no
+    supervised no
+    pidfile /data/redis.pid
+    loglevel notice
+    logfile /data/redis.log
+    
+    # Persistence - AOF (Append Only File)
+    appendonly yes
+    appendfilename "redis.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    aof-load-truncated yes
+    aof-use-rdb-preamble yes
+    
+    # Persistence - RDB Snapshots
+    save 900 1     # Save if at least 1 key changed in 900 seconds
+    save 300 10    # Save if at least 10 keys changed in 300 seconds  
+    save 60 10000  # Save if at least 10000 keys changed in 60 seconds
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    
+    # Memory Management
+    maxmemory 768mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # Security
+    protected-mode yes
+    
+    # Performance
+    tcp-keepalive 300
+    tcp-backlog 511
+    timeout 0
+    databases 16
+    
+    # Slow log
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    
+    # Client output buffer limits
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+    
+    # Advanced config
+    hash-max-ziplist-entries 512
+    hash-max-ziplist-value 64
+    list-max-ziplist-size -2
+    list-compress-depth 0
+    set-max-intset-entries 512
+    zset-max-ziplist-entries 128
+    zset-max-ziplist-value 64
+    hll-sparse-max-bytes 3000
+    stream-node-max-bytes 4096
+    stream-node-max-entries 100
+    activerehashing yes
+    hz 10
+    dynamic-hz yes
+    aof-rewrite-incremental-fsync yes
+    rdb-save-incremental-fsync yes
+
+---
+# Redis Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: link-services
+  labels:
+    app: redis-backup
+    component: backup
+spec:
+  # Backup every 6 hours
+  schedule: "0 */6 * * *"
+  successfulJobsHistoryLimit: 4
+  failedJobsHistoryLimit: 2
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800  # 30 minutes timeout
+      template:
+        metadata:
+          labels:
+            app: redis-backup
+            component: backup
+          annotations:
+            linkerd.io/inject: enabled
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: redis-backup
+          containers:
+          - name: backup
+            image: redis:7-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              
+              # Configuration
+              BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+              BACKUP_NAME="redis-backup-${BACKUP_DATE}"
+              REDIS_HOSTS="redis-cluster-0.redis-cluster.link-services.svc.cluster.local redis-cluster-1.redis-cluster.link-services.svc.cluster.local redis-cluster-2.redis-cluster.link-services.svc.cluster.local"
+              BACKUP_BUCKET="${BACKUP_S3_BUCKET}"
+              
+              echo "Starting Redis backup: $BACKUP_NAME"
+              
+              # Install dependencies
+              apk add --no-cache aws-cli openssl
+              
+              # Create backup directory
+              mkdir -p /tmp/backups
+              
+              backup_count=0
+              total_size=0
+              
+              for REDIS_HOST in $REDIS_HOSTS; do
+                NODE_NAME=$(echo $REDIS_HOST | cut -d'.' -f1)
+                echo "Backing up Redis node: $NODE_NAME"
+                
+                # Trigger RDB snapshot
+                redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" BGSAVE
+                
+                # Wait for background save to complete
+                while [ "$(redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" LASTSAVE)" = "$(redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" LASTSAVE)" ]; do
+                  sleep 2
+                done
+                
+                # Get RDB file info
+                RDB_SIZE=$(redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" DEBUG OBJECT non-existent-key 2>/dev/null | grep -o 'serializedlength:[0-9]*' | cut -d':' -f2 || echo "0")
+                
+                # Export data using DUMP commands for all keys
+                echo "Exporting data from $NODE_NAME..."
+                BACKUP_FILE="/tmp/backups/${NODE_NAME}_${BACKUP_DATE}.redis"
+                
+                # Get all keys and export them
+                redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" --scan > /tmp/${NODE_NAME}_keys.txt
+                
+                if [ -s "/tmp/${NODE_NAME}_keys.txt" ]; then
+                  cat > "$BACKUP_FILE" << EOF
+                  # Redis Backup for $NODE_NAME
+                  # Created: $(date)
+                  # Host: $REDIS_HOST
+              EOF
+                  
+                  while IFS= read -r key; do
+                    # Get key type and TTL
+                    KEY_TYPE=$(redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" TYPE "$key")
+                    KEY_TTL=$(redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" TTL "$key")
+                    
+                    # Export key data based on type
+                    case $KEY_TYPE in
+                      "string")
+                        VALUE=$(redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" GET "$key")
+                        echo "SET \"$key\" \"$VALUE\"" >> "$BACKUP_FILE"
+                        ;;
+                      "hash")
+                        redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" HGETALL "$key" | \
+                        while read field && read value; do
+                          echo "HSET \"$key\" \"$field\" \"$value\"" >> "$BACKUP_FILE"
+                        done
+                        ;;
+                      "list")
+                        redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" LRANGE "$key" 0 -1 | \
+                        while IFS= read -r item; do
+                          echo "RPUSH \"$key\" \"$item\"" >> "$BACKUP_FILE"
+                        done
+                        ;;
+                      "set")
+                        redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" SMEMBERS "$key" | \
+                        while IFS= read -r member; do
+                          echo "SADD \"$key\" \"$member\"" >> "$BACKUP_FILE"
+                        done
+                        ;;
+                      "zset")
+                        redis-cli -h "$REDIS_HOST" -a "$REDIS_PASSWORD" ZRANGE "$key" 0 -1 WITHSCORES | \
+                        while read member && read score; do
+                          echo "ZADD \"$key\" $score \"$member\"" >> "$BACKUP_FILE"
+                        done
+                        ;;
+                    esac
+                    
+                    # Set TTL if it exists
+                    if [ "$KEY_TTL" != "-1" ] && [ "$KEY_TTL" != "-2" ]; then
+                      echo "EXPIRE \"$key\" $KEY_TTL" >> "$BACKUP_FILE"
+                    fi
+                  done < "/tmp/${NODE_NAME}_keys.txt"
+                  
+                  # Compress and encrypt backup
+                  echo "Compressing and encrypting backup for $NODE_NAME..."
+                  gzip -c "$BACKUP_FILE" | \
+                  openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -k "$BACKUP_ENCRYPTION_KEY" \
+                  > "${BACKUP_FILE}.gz.enc"
+                  
+                  # Get file size
+                  file_size=$(stat -c%s "${BACKUP_FILE}.gz.enc")
+                  total_size=$((total_size + file_size))
+                  
+                  # Upload to S3
+                  echo "Uploading backup for $NODE_NAME to S3..."
+                  aws s3 cp "${BACKUP_FILE}.gz.enc" \
+                    "s3://$BACKUP_BUCKET/redis-backups/$BACKUP_NAME/${NODE_NAME}_backup.gz.enc" \
+                    --storage-class STANDARD_IA \
+                    --metadata "node=$NODE_NAME,timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                    --server-side-encryption AES256
+                  
+                  if [ $? -eq 0 ]; then
+                    echo "✅ Successfully backed up $NODE_NAME ($(($file_size / 1024)) KB)"
+                    ((backup_count++))
+                  else
+                    echo "❌ Failed to upload backup for $NODE_NAME"
+                  fi
+                  
+                  # Cleanup
+                  rm -f "$BACKUP_FILE" "${BACKUP_FILE}.gz.enc" "/tmp/${NODE_NAME}_keys.txt"
+                else
+                  echo "⚠️  No keys found in $NODE_NAME"
+                fi
+              done
+              
+              # Create backup metadata
+              cat > "/tmp/backups/${BACKUP_NAME}_metadata.json" << EOF
+              {
+                "backup_name": "$BACKUP_NAME",
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                "redis_nodes": 3,
+                "successful_backups": $backup_count,
+                "total_size_bytes": $total_size,
+                "backup_type": "full",
+                "encrypted": true,
+                "compressed": true,
+                "kubernetes_namespace": "link-services",
+                "cluster_name": "${CLUSTER_NAME:-unknown}"
+              }
+              EOF
+              
+              # Upload metadata
+              aws s3 cp "/tmp/backups/${BACKUP_NAME}_metadata.json" \
+                "s3://$BACKUP_BUCKET/redis-backups/$BACKUP_NAME/metadata.json"
+              
+              # Cleanup old backups (keep last 30 days)
+              echo "Cleaning up old backups..."
+              aws s3 ls "s3://$BACKUP_BUCKET/redis-backups/" | \
+                grep '^[[:space:]]*PRE redis-backup-[0-9]\{8\}_[0-9]\{6\}' | \
+                awk '{print $2}' | \
+                sed 's/\///g' | \
+                sort | \
+                head -n -120 | \
+                while read backup_dir; do
+                  echo "Deleting old backup: $backup_dir"
+                  aws s3 rm "s3://$BACKUP_BUCKET/redis-backups/$backup_dir/" --recursive
+                done
+              
+              echo "Redis backup completed: $BACKUP_NAME"
+              echo "Successful backups: $backup_count/3"
+              echo "Total size: $(($total_size / 1024)) KB"
+              
+              if [ $backup_count -eq 3 ]; then
+                echo "✅ All Redis nodes backed up successfully"
+                exit 0
+              else
+                echo "❌ Some Redis backups failed"
+                exit 1
+              fi
+              
+            env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-secret
+                  key: redis-password
+            - name: BACKUP_S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-secret
+                  key: s3-bucket
+            - name: BACKUP_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-secret
+                  key: encryption-key
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-secret
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-secret
+                  key: aws-secret-access-key
+            - name: AWS_DEFAULT_REGION
+              value: "us-west-2"
+            - name: CLUSTER_NAME
+              value: "link-production"
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "300m"
+            volumeMounts:
+            - name: tmp-storage
+              mountPath: /tmp
+          volumes:
+          - name: tmp-storage
+            emptyDir:
+              sizeLimit: 2Gi
+
+---
+# Service Account for Redis
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis-cluster
+  namespace: link-services
+  labels:
+    app: redis-cluster
+
+---
+# Service Account for Redis Backup
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis-backup
+  namespace: link-services
+  labels:
+    app: redis-backup
+
+---
+# Role for Redis backup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: redis-backup
+  namespace: link-services
+  labels:
+    app: redis-backup
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+
+---
+# RoleBinding for Redis backup service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: redis-backup
+  namespace: link-services
+  labels:
+    app: redis-backup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: redis-backup
+subjects:
+- kind: ServiceAccount
+  name: redis-backup
+  namespace: link-services

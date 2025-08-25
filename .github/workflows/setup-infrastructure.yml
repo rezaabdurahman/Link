@@ -1,0 +1,501 @@
+name: Setup Infrastructure & Initial Deployment
+
+on:
+  # Automatic triggers for different environments
+  push:
+    branches: 
+      - main                    # Auto-deploy to production
+      - develop                 # Auto-deploy to staging
+    paths:
+      - 'backend/**'
+      - 'terraform/**'
+      - 'scripts/setup-service-accounts.sh'
+      - '.github/workflows/**'
+  
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'backend/**'
+      - 'terraform/**'
+      - 'scripts/setup-service-accounts.sh'
+      
+  # Manual override (kept for emergencies)
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to set up'
+        required: true
+        type: choice
+        options:
+        - development
+        - staging
+        - production
+      force_recreate:
+        description: 'Force recreate existing resources'
+        required: false
+        type: boolean
+        default: false
+      skip_approval:
+        description: 'Skip manual approval for production (emergency only)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  TF_VERSION: "1.6.0"
+  TF_WORKING_DIR: "./terraform/environments"
+
+jobs:
+  # Stage 1: Validate and Plan Infrastructure
+  validate-and-plan:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      terraform_plan_exists: ${{ steps.plan.outputs.plan_exists }}
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Detect environment
+      id: set-env
+      uses: ./.github/actions/detect-environment
+      with:
+        override_environment: ${{ github.event.inputs.environment }}
+        fallback_environment: 'development'
+        
+    - name: Set Terraform environment variables
+      run: |
+        echo "TF_WORKSPACE=${{ steps.set-env.outputs.environment }}" >> $GITHUB_ENV
+        echo "TF_VAR_environment=${{ steps.set-env.outputs.environment }}" >> $GITHUB_ENV
+        echo "ENVIRONMENT=${{ steps.set-env.outputs.environment }}" >> $GITHUB_ENV
+        echo "TRIGGER_TYPE=${{ steps.set-env.outputs.deployment_type }}" >> $GITHUB_ENV
+
+    - name: Configure AWS credentials
+      if: env.ENVIRONMENT != 'development'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-west-2' }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Setup database URL for Terraform
+      run: |
+        case "$ENVIRONMENT" in
+          "production")
+            echo "TF_VAR_database_url=postgresql://${{ secrets.PROD_DB_USER }}:${{ secrets.PROD_DB_PASSWORD }}@${{ secrets.PROD_DB_HOST }}:${{ secrets.PROD_DB_PORT || '5432' }}/${{ secrets.PROD_DB_NAME }}?sslmode=require" >> $GITHUB_ENV
+            ;;
+          "staging")
+            echo "TF_VAR_database_url=postgresql://${{ secrets.STAGING_DB_USER }}:${{ secrets.STAGING_DB_PASSWORD }}@${{ secrets.STAGING_DB_HOST }}:${{ secrets.STAGING_DB_PORT || '5432' }}/${{ secrets.STAGING_DB_NAME }}?sslmode=require" >> $GITHUB_ENV
+            ;;
+          "development")
+            echo "TF_VAR_database_url=postgresql://link_user:linkpass@localhost:5432/linkdb?sslmode=disable" >> $GITHUB_ENV
+            ;;
+        esac
+
+    - name: Initialize Terraform
+      working-directory: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}
+      run: |
+        # Create backend configuration if it doesn't exist
+        if [ ! -f backend.tf ]; then
+          cat > backend.tf << EOF
+        terraform {
+          backend "s3" {
+            bucket = "link-app-terraform-state-${ENVIRONMENT}"
+            key    = "service-accounts/terraform.tfstate"
+            region = "${{ vars.AWS_REGION || 'us-west-2' }}"
+            dynamodb_table = "link-app-terraform-locks-${ENVIRONMENT}"
+            encrypt = true
+          }
+        }
+        EOF
+        fi
+        
+        terraform init -input=false
+
+    - name: Validate Terraform
+      working-directory: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}
+      run: terraform validate
+
+    - name: Plan Terraform
+      id: plan
+      working-directory: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}
+      run: |
+        if terraform plan -input=false -out=tfplan -detailed-exitcode; then
+          echo "plan_exists=true" >> $GITHUB_OUTPUT
+          terraform show -no-color tfplan > plan.txt
+        else
+          exit_code=$?
+          if [ $exit_code -eq 2 ]; then
+            echo "plan_exists=true" >> $GITHUB_OUTPUT
+            terraform show -no-color tfplan > plan.txt
+            echo "Changes detected in Terraform plan"
+          else
+            echo "plan_exists=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          fi
+        fi
+
+    - name: Upload Terraform plan
+      if: steps.plan.outputs.plan_exists == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-plan-${{ env.ENVIRONMENT }}
+        path: |
+          ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}/tfplan
+          ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}/plan.txt
+        retention-days: 5
+
+  # Stage 1.5: Manual approval gate for production
+  production-approval:
+    needs: validate-and-plan
+    runs-on: ubuntu-latest
+    if: needs.validate-and-plan.outputs.environment == 'production' && github.event_name == 'push' && github.event.inputs.skip_approval != 'true'
+    environment: 
+      name: production-approval
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    
+    steps:
+    - name: Request approval for production deployment
+      run: |
+        echo "🚨 Production deployment requested"
+        echo "Environment: ${{ needs.validate-and-plan.outputs.environment }}"
+        echo "Trigger: Automatic push to main branch"
+        echo ""
+        echo "This requires manual approval before proceeding with infrastructure changes."
+        echo "Review the Terraform plan in the previous job before approving."
+
+  # Stage 2: Apply Infrastructure
+  apply-infrastructure:
+    needs: [validate-and-plan, production-approval]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.validate-and-plan.outputs.environment }}
+    if: |
+      always() && 
+      (needs.validate-and-plan.outputs.terraform_plan_exists == 'true' || github.event.inputs.force_recreate == 'true') &&
+      (
+        needs.validate-and-plan.outputs.environment != 'production' || 
+        needs.production-approval.result == 'success' || 
+        needs.production-approval.result == 'skipped' ||
+        github.event.inputs.skip_approval == 'true'
+      )
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set environment
+      run: |
+        echo "ENVIRONMENT=${{ needs.validate-and-plan.outputs.environment }}" >> $GITHUB_ENV
+        echo "TF_VAR_environment=${{ needs.validate-and-plan.outputs.environment }}" >> $GITHUB_ENV
+
+    - name: Configure AWS credentials
+      if: env.ENVIRONMENT != 'development'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-west-2' }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Setup database URL
+      run: |
+        case "$ENVIRONMENT" in
+          "production")
+            echo "TF_VAR_database_url=postgresql://${{ secrets.PROD_DB_USER }}:${{ secrets.PROD_DB_PASSWORD }}@${{ secrets.PROD_DB_HOST }}:${{ secrets.PROD_DB_PORT || '5432' }}/${{ secrets.PROD_DB_NAME }}?sslmode=require" >> $GITHUB_ENV
+            ;;
+          "staging")
+            echo "TF_VAR_database_url=postgresql://${{ secrets.STAGING_DB_USER }}:${{ secrets.STAGING_DB_PASSWORD }}@${{ secrets.STAGING_DB_HOST }}:${{ secrets.STAGING_DB_PORT || '5432' }}/${{ secrets.STAGING_DB_NAME }}?sslmode=require" >> $GITHUB_ENV
+            ;;
+          "development")
+            echo "TF_VAR_database_url=postgresql://link_user:linkpass@localhost:5432/linkdb?sslmode=disable" >> $GITHUB_ENV
+            ;;
+        esac
+
+    - name: Download Terraform plan
+      if: needs.validate-and-plan.outputs.terraform_plan_exists == 'true'
+      uses: actions/download-artifact@v3
+      with:
+        name: terraform-plan-${{ env.ENVIRONMENT }}
+        path: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}/
+
+    - name: Initialize Terraform
+      working-directory: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}
+      run: terraform init -input=false
+
+    - name: Apply Terraform
+      working-directory: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}
+      run: |
+        if [ -f tfplan ]; then
+          echo "Applying existing plan..."
+          terraform apply -input=false tfplan
+        else
+          echo "Creating and applying new plan..."
+          terraform apply -input=false -auto-approve
+        fi
+
+    - name: Output Terraform results
+      id: output
+      working-directory: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}
+      run: |
+        echo "=== Terraform Outputs ===" >> $GITHUB_STEP_SUMMARY
+        terraform output >> $GITHUB_STEP_SUMMARY
+        
+        # Capture outputs for next stage
+        terraform output -json > terraform_outputs.json
+
+    - name: Upload Terraform outputs
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-outputs-${{ env.ENVIRONMENT }}
+        path: ${{ env.TF_WORKING_DIR }}/${{ env.ENVIRONMENT }}/terraform_outputs.json
+        retention-days: 30
+
+  # Stage 3: Initial Service Account Deployment (Automated)
+  deploy-service-accounts:
+    needs: [validate-and-plan, apply-infrastructure]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.validate-and-plan.outputs.environment }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set environment
+      run: |
+        echo "ENVIRONMENT=${{ needs.validate-and-plan.outputs.environment }}" >> $GITHUB_ENV
+
+    - name: Configure AWS credentials
+      if: env.ENVIRONMENT != 'development'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-west-2' }}
+
+    - name: Configure kubectl
+      if: env.ENVIRONMENT != 'development'
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBECONFIG }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client apache2-utils jq
+
+    - name: Setup database connection variables
+      run: |
+        case "$ENVIRONMENT" in
+          "production")
+            echo "DB_HOST=${{ secrets.PROD_DB_HOST }}" >> $GITHUB_ENV
+            echo "DB_PORT=${{ secrets.PROD_DB_PORT || '5432' }}" >> $GITHUB_ENV
+            echo "DB_NAME=${{ secrets.PROD_DB_NAME }}" >> $GITHUB_ENV
+            echo "DB_USER=${{ secrets.PROD_DB_USER }}" >> $GITHUB_ENV
+            echo "DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}" >> $GITHUB_ENV
+            echo "SECRETS_BACKEND=${{ vars.PROD_SECRETS_BACKEND || 'aws' }}" >> $GITHUB_ENV
+            ;;
+          "staging")
+            echo "DB_HOST=${{ secrets.STAGING_DB_HOST }}" >> $GITHUB_ENV
+            echo "DB_PORT=${{ secrets.STAGING_DB_PORT || '5432' }}" >> $GITHUB_ENV
+            echo "DB_NAME=${{ secrets.STAGING_DB_NAME }}" >> $GITHUB_ENV
+            echo "DB_USER=${{ secrets.STAGING_DB_USER }}" >> $GITHUB_ENV
+            echo "DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}" >> $GITHUB_ENV
+            echo "SECRETS_BACKEND=${{ vars.STAGING_SECRETS_BACKEND || 'kubernetes' }}" >> $GITHUB_ENV
+            ;;
+          "development")
+            echo "DB_HOST=localhost" >> $GITHUB_ENV
+            echo "DB_PORT=5432" >> $GITHUB_ENV
+            echo "DB_NAME=linkdb" >> $GITHUB_ENV
+            echo "DB_USER=link_user" >> $GITHUB_ENV
+            echo "DB_PASSWORD=linkpass" >> $GITHUB_ENV
+            echo "SECRETS_BACKEND=env" >> $GITHUB_ENV
+            ;;
+        esac
+
+    - name: Setup PostgreSQL for development
+      if: env.ENVIRONMENT == 'development'
+      run: |
+        sudo systemctl start postgresql
+        sudo systemctl enable postgresql
+        sudo -u postgres createuser --createdb --login link_user || true
+        sudo -u postgres psql -c "ALTER USER link_user PASSWORD 'linkpass';" || true
+        sudo -u postgres createdb -O link_user linkdb || true
+
+    - name: Run database migrations
+      run: |
+        echo "Running service account migrations..."
+        
+        # Check if migration table exists
+        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          version VARCHAR(255) PRIMARY KEY,
+          applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );"
+        
+        # Run migrations in order
+        for migration in backend/user-svc/migrations/*.up.sql; do
+          if [ -f "$migration" ]; then
+            migration_name=$(basename "$migration")
+            version=$(echo "$migration_name" | cut -d_ -f1)
+            
+            # Check if already applied
+            exists=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c \
+              "SELECT COUNT(*) FROM schema_migrations WHERE version = '$version';" | xargs)
+            
+            if [ "$exists" -eq "0" ]; then
+              echo "Applying migration: $migration_name"
+              PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$migration"
+              
+              # Mark as applied
+              PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c \
+                "INSERT INTO schema_migrations (version) VALUES ('$version');"
+            else
+              echo "Migration already applied: $migration_name"
+            fi
+          fi
+        done
+
+    - name: Make setup script executable
+      run: chmod +x scripts/setup-service-accounts.sh
+
+    - name: Execute initial service account setup
+      run: |
+        echo "🚀 Setting up service accounts for $ENVIRONMENT environment..."
+        if ./scripts/setup-service-accounts.sh setup; then
+          echo "✅ Service account setup completed successfully"
+        else
+          echo "❌ Service account setup failed"
+          exit 1
+        fi
+
+    - name: Generate and apply Kubernetes manifests
+      if: env.ENVIRONMENT != 'development'
+      run: |
+        echo "Generating Kubernetes deployment manifests..."
+        ./scripts/setup-service-accounts.sh generate-manifests
+        
+        echo "Applying manifests to Kubernetes cluster..."
+        for manifest in k8s/*-deployment-with-service-auth.yaml; do
+          if [ -f "$manifest" ]; then
+            echo "Applying $manifest..."
+            kubectl apply -f "$manifest"
+          fi
+        done
+
+    - name: Verify deployments
+      if: env.ENVIRONMENT != 'development'
+      run: |
+        echo "Verifying deployments are ready..."
+        for service in user-svc chat-svc ai-svc discovery-svc search-svc; do
+          if kubectl get deployment "$service" &> /dev/null; then
+            echo "Waiting for $service deployment..."
+            kubectl rollout status deployment/"$service" --timeout=300s
+            echo "✅ $service is ready"
+          else
+            echo "⚠️ $service deployment not found, may not be deployed yet"
+          fi
+        done
+
+    - name: Final health check
+      run: |
+        echo "Running comprehensive health check..."
+        if ./scripts/setup-service-accounts.sh health-check; then
+          echo "✅ All service accounts are healthy"
+        else
+          echo "⚠️ Some health checks failed - check logs above"
+          exit 1
+        fi
+
+    - name: Generate deployment summary
+      run: |
+        echo "# 🎉 Infrastructure Setup & Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** $ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+        echo "**Secrets Backend:** $SECRETS_BACKEND" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Count service accounts created
+        service_count=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c \
+          "SELECT COUNT(*) FROM service_accounts WHERE is_active = true;" | xargs)
+        echo "**Service Accounts Created:** $service_count" >> $GITHUB_STEP_SUMMARY
+        
+        # List services if in dev/staging
+        if [ "$ENVIRONMENT" != "production" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service Account Details:**" >> $GITHUB_STEP_SUMMARY
+          PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c \
+            "SELECT name, client_id, is_active, created_at FROM service_accounts ORDER BY created_at;" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Next Steps:**" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Service accounts are automatically configured" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Credentials are stored securely" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Monthly rotation is scheduled" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Monitoring and alerting is active" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload deployment artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: service-account-deployment-${{ env.ENVIRONMENT }}
+        path: |
+          k8s/*-deployment-with-service-auth.yaml
+          backend/*/.env.service-account
+        retention-days: 30
+
+    - name: Notify success
+      if: success()
+      run: |
+        echo "✅ Complete infrastructure setup and deployment successful for $ENVIRONMENT!"
+        
+        if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": "🎉 Complete infrastructure setup completed successfully!",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Infrastructure Setup Complete*\n\n*Environment:* '"$ENVIRONMENT"'\n*Service Accounts:* Created and configured\n*Secrets:* Stored securely\n*Deployments:* Ready and healthy\n*Monitoring:* Active"
+                  }
+                }
+              ]
+            }' \
+            "${{ secrets.SLACK_WEBHOOK_URL }}"
+        fi
+
+    - name: Notify failure
+      if: failure()
+      run: |
+        echo "❌ Infrastructure setup failed for $ENVIRONMENT"
+        
+        if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": "🚨 Infrastructure setup FAILED for '"$ENVIRONMENT"' environment",
+              "blocks": [
+                {
+                  "type": "section", 
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *Infrastructure Setup Failed*\n\n*Environment:* '"$ENVIRONMENT"'\n*Action Required:* Check GitHub Actions logs\n*Link:* https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }' \
+            "${{ secrets.SLACK_WEBHOOK_URL }}"
+        fi

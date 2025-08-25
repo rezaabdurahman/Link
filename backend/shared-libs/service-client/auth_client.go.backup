@@ -1,0 +1,255 @@
+package serviceclient
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+)
+
+// AuthClient handles service-to-service authentication
+type AuthClient struct {
+	clientID       string
+	clientSecret   string
+	authServiceURL string
+	httpClient     *http.Client
+	
+	// Token caching
+	tokenMutex   sync.RWMutex
+	cachedToken  *ServiceToken
+	tokenExpiry  time.Time
+}
+
+// ServiceToken represents a service authentication token
+type ServiceToken struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
+	Scope       string `json:"scope"`
+	ServiceName string `json:"service_name"`
+}
+
+// ServiceTokenRequest represents a token request
+type ServiceTokenRequest struct {
+	GrantType    string `json:"grant_type"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	Scope        string `json:"scope,omitempty"`
+}
+
+// NewAuthClient creates a new service authentication client
+func NewAuthClient(clientID, clientSecret, authServiceURL string) *AuthClient {
+	return &AuthClient{
+		clientID:       clientID,
+		clientSecret:   clientSecret,
+		authServiceURL: authServiceURL,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}
+}
+
+// GetToken retrieves a valid service token (uses cache if available)
+func (ac *AuthClient) GetToken(scope string) (string, error) {
+	ac.tokenMutex.RLock()
+	// Check if we have a cached token that's still valid
+	if ac.cachedToken != nil && time.Now().Before(ac.tokenExpiry.Add(-30*time.Second)) { // 30s buffer
+		token := ac.cachedToken.AccessToken
+		ac.tokenMutex.RUnlock()
+		return token, nil
+	}
+	ac.tokenMutex.RUnlock()
+
+	// Need to get a new token
+	ac.tokenMutex.Lock()
+	defer ac.tokenMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if ac.cachedToken != nil && time.Now().Before(ac.tokenExpiry.Add(-30*time.Second)) {
+		return ac.cachedToken.AccessToken, nil
+	}
+
+	// Request new token
+	token, err := ac.requestToken(scope)
+	if err != nil {
+		return "", fmt.Errorf("failed to get service token: %w", err)
+	}
+
+	// Cache the token
+	ac.cachedToken = token
+	ac.tokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+
+	return token.AccessToken, nil
+}
+
+// requestToken makes a token request to the authentication service
+func (ac *AuthClient) requestToken(scope string) (*ServiceToken, error) {
+	// Prepare request (using form encoding for OAuth 2.0 compliance)
+	data := url.Values{}
+	data.Set("grant_type", "client_credentials")
+	data.Set("client_id", ac.clientID)
+	data.Set("client_secret", ac.clientSecret)
+	if scope != "" {
+		data.Set("scope", scope)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", ac.authServiceURL+"/api/v1/auth/service-token", 
+		strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	// Send request
+	resp, err := ac.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read token response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var token ServiceToken
+	if err := json.Unmarshal(body, &token); err != nil {
+		return nil, fmt.Errorf("failed to parse token response: %w", err)
+	}
+
+	return &token, nil
+}
+
+// InvalidateToken invalidates the cached token (forces refresh on next request)
+func (ac *AuthClient) InvalidateToken() {
+	ac.tokenMutex.Lock()
+	defer ac.tokenMutex.Unlock()
+	
+	ac.cachedToken = nil
+	ac.tokenExpiry = time.Time{}
+}
+
+// AuthenticatedHTTPClient returns an HTTP client that automatically adds authentication
+type AuthenticatedHTTPClient struct {
+	authClient *AuthClient
+	httpClient *http.Client
+	scope      string
+}
+
+// NewAuthenticatedHTTPClient creates an HTTP client with automatic service authentication
+func NewAuthenticatedHTTPClient(authClient *AuthClient, scope string) *AuthenticatedHTTPClient {
+	return &AuthenticatedHTTPClient{
+		authClient: authClient,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		scope: scope,
+	}
+}
+
+// Do performs an HTTP request with automatic authentication
+func (c *AuthenticatedHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	// Get authentication token
+	token, err := c.authClient.GetToken(c.scope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get authentication token: %w", err)
+	}
+
+	// Add authorization header
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Perform request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// If we get 401, try refreshing the token once
+	if resp.StatusCode == http.StatusUnauthorized {
+		resp.Body.Close() // Close the response body
+		
+		// Invalidate cached token and try again
+		c.authClient.InvalidateToken()
+		
+		// Get fresh token
+		newToken, err := c.authClient.GetToken(c.scope)
+		if err != nil {
+			return nil, fmt.Errorf("failed to refresh authentication token: %w", err)
+		}
+
+		// Create new request (can't reuse the old one)
+		newReq := req.Clone(req.Context())
+		newReq.Header.Set("Authorization", "Bearer "+newToken)
+
+		// Retry the request
+		return c.httpClient.Do(newReq)
+	}
+
+	return resp, nil
+}
+
+// Example usage for a service client
+
+// UserServiceClient demonstrates how to use the authenticated client
+type UserServiceClient struct {
+	baseURL    string
+	httpClient *AuthenticatedHTTPClient
+}
+
+// NewUserServiceClient creates a new user service client
+func NewUserServiceClient(baseURL, clientID, clientSecret, authServiceURL string) *UserServiceClient {
+	authClient := NewAuthClient(clientID, clientSecret, authServiceURL)
+	httpClient := NewAuthenticatedHTTPClient(authClient, "user_management")
+
+	return &UserServiceClient{
+		baseURL:    baseURL,
+		httpClient: httpClient,
+	}
+}
+
+// GetUser demonstrates making an authenticated API call
+func (c *UserServiceClient) GetUser(userID string) (*User, error) {
+	req, err := http.NewRequest("GET", c.baseURL+"/api/v1/users/"+userID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get user failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var user User
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return nil, fmt.Errorf("failed to decode user response: %w", err)
+	}
+
+	return &user, nil
+}
+
+// User represents a user (simplified for example)
+type User struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}

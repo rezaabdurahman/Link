@@ -1,63 +1,100 @@
-# Link Chat Summarization - Documentation
+# Link Platform Documentation
 
-This directory contains versioned API documentation and specifications for the Link Chat Summarization project.
+Welcome to the Link platform documentation! This comprehensive guide covers all aspects of the social discovery platform, from setup to production deployment.
 
-## API Documentation
+## 🏗️ Documentation Structure
 
-### Current Version: v1.0.0
+This documentation is organized into logical sections for different audiences and use cases:
 
-- **AI Service OpenAPI Spec**: [v1.0.0/ai-service-openapi.yaml](./api/v1.0.0/ai-service-openapi.yaml)
-- **Release Date**: January 15, 2024
-- **Changelog**: [CHANGELOG.md](../CHANGELOG.md)
+### 🚀 [Getting Started](./getting-started/)
+Perfect for new developers and team members
+- **Quick Start** - Get up and running in minutes
+- **Local Development** - Set up your development environment
+- **Configuration Guide** - Environment and service configuration
 
-## API Versions
+### 🏗️ [Architecture](./architecture/)
+For understanding system design and making informed decisions
+- **System Overview** - High-level platform architecture
+- **[Service Discovery](./architecture/service-discovery.md)** - Load balancing and service mesh
+- **Microservices Design** - Service boundaries and communication
+- **[ADRs](./architecture/adr/)** - Architecture Decision Records
+  - [001: Domain Boundaries](./architecture/adr/001-domain-boundaries.md)
+  - [002: Database Strategy](./architecture/adr/002-database-strategy.md)
 
-| Version | Release Date | Status | Documentation |
-|---------|--------------|---------|---------------|
-| v1.0.0 | 2024-01-15 | Current | [OpenAPI Spec](./api/v1.0.0/ai-service-openapi.yaml) |
+### 🚀 [Deployment](./deployment/)
+For DevOps engineers and deployment workflows
+- **[Deployment Overview](./deployment/overview.md)** - Comprehensive deployment strategy
+- **[Docker Compose](./deployment/docker-compose.md)** - Local development deployment
+- **[Kubernetes](./deployment/kubernetes.md)** - Production Kubernetes deployment
+- **CI/CD Pipeline** - Continuous integration and deployment
 
-## Service Documentation
+### 🔐 [Security](./security/)
+For security engineers and compliance requirements
+- **[Security Overview](./security/overview.md)** - Security architecture and threat model
+- **[Authentication](./security/authentication.md)** - JWT authentication and authorization
+- **Database Security** - Database isolation and encryption
+- **mTLS Configuration** - Service mesh security
+- **Security Testing** - Security testing procedures
 
-### AI Service (ai-svc)
-- **README**: [backend/ai-svc/README.md](../backend/ai-svc/README.md)
-- **OpenAPI Spec**: [backend/ai-svc/api/openapi.yaml](../backend/ai-svc/api/openapi.yaml)
-- **Implementation Guide**: [backend/ai-svc/internal/ai/README.md](../backend/ai-svc/internal/ai/README.md)
+### 📊 [Observability](./observability/)
+For SRE and operations teams
+- **[Monitoring Overview](./observability/overview.md)** - Comprehensive observability strategy
+- **Metrics Implementation** - Application and infrastructure metrics
+- **Logging Configuration** - Structured logging and aggregation
+- **Alerting Setup** - Alert configuration and incident management
+- **Dashboard Creation** - Grafana dashboard setup
 
-## Architecture Documentation
+### 📡 [API Documentation](./api/)
+For frontend developers and API consumers
+- **API Overview** - API design principles and standards
+- **[Service APIs](./api/services/)** - Per-service API documentation
+  - User Service
+  - Chat Service
+  - Discovery Service
+  - AI Service
+  - Search Service
 
-- **Main README**: [README.md](../README.md)
-- **Architecture Decision Records**: [docs/adr/](../docs/adr/)
+### 🔧 [Operations](./operations/)
+For production operations and maintenance
+- **Troubleshooting Guide** - Common issues and solutions
+- **Database Operations** - Database management and maintenance
+- **Backup & Recovery** - Data backup and disaster recovery
+- **Runbooks** - Step-by-step operational procedures
 
-## Getting Started
+## 🎯 Quick Navigation
 
-1. **Development Setup**: See [README.md](../README.md#quick-start)
-2. **AI Service Setup**: See [backend/ai-svc/README.md](../backend/ai-svc/README.md#quick-start)
-3. **API Usage Examples**: See service-specific documentation
+### I want to...
+- **Start developing locally** → [Quick Start Guide](../README.md#-quick-start)
+- **Deploy to production** → [Kubernetes Deployment](./deployment/kubernetes.md)
+- **Understand the architecture** → [Architecture Overview](./architecture/)
+- **Implement security** → [Security Overview](./security/overview.md)
+- **Set up monitoring** → [Observability Overview](./observability/overview.md)
+- **Integrate with APIs** → [API Documentation](./api/)
+- **Troubleshoot issues** → [Operations Documentation](./operations/)
 
-## API Base URLs
+### I am a...
+- **New Developer** → [Getting Started](./getting-started/) → [Architecture](./architecture/)
+- **DevOps Engineer** → [Deployment](./deployment/) → [Operations](./operations/)
+- **Security Engineer** → [Security](./security/) → [Operations](./operations/)
+- **Frontend Developer** → [API Documentation](./api/) → [Main README](../README.md)
+- **SRE/Operations** → [Observability](./observability/) → [Operations](./operations/)
 
-| Environment | Base URL | Description |
-|-------------|----------|-------------|
-| Development | `http://localhost:8081` | Local development |
-| Staging | `https://staging-api.link-app.com` | Staging environment |
-| Production | `https://api.link-app.com` | Production environment |
+## 🔄 Document Maintenance
 
-## Authentication
+### Contributing to Documentation
+- Documentation follows the same Git workflow as code
+- All documentation changes require review
+- Keep documentation up-to-date with code changes
+- Use clear, concise language and provide examples
 
-All API endpoints require JWT authentication:
-
-```bash
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-## Support
-
-For questions about the API or documentation:
-
-1. Check the service-specific README files
-2. Review the OpenAPI specifications
-3. See the [CHANGELOG.md](../CHANGELOG.md) for recent changes
+### Documentation Standards
+- Use markdown format for all documentation
+- Include code examples for configuration
+- Add diagrams for complex concepts (Mermaid preferred)
+- Keep links relative within the documentation
 
 ---
 
-Last updated: January 15, 2024
+**Happy building!** 🚀
+
+The Link platform documentation is designed to help you be productive quickly while providing deep technical information when you need it.

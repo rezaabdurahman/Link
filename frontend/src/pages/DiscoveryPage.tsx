@@ -15,7 +15,7 @@ import ExpandableFAB from '../components/ExpandableFAB';
 import { isFeatureEnabled } from '../config/featureFlags';
 import { createBroadcast, updateBroadcast } from '../services/broadcastClient';
 import { unifiedSearch, isUnifiedSearchError, getUnifiedSearchErrorMessage, UnifiedSearchRequest } from '../services/unifiedSearchClient';
-import { getHiddenUsers } from '../services/hiddenUsersClient';
+import { createCheckIn, convertCheckInDataToRequest, isCheckInError, getCheckInErrorMessage } from '../services/checkinClient';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import { usePendingReceivedRequestsCount } from '../hooks/useFriendRequests';
 import ViewTransition from '../components/ViewTransition';
@@ -40,8 +40,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
   const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
-  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
-  const [isLoadingHiddenUsers, setIsLoadingHiddenUsers] = useState<boolean>(false);
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' }>({ 
     isVisible: false, 
     message: '', 
@@ -98,8 +96,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
       const response = await unifiedSearch(searchRequest);
       
-      // Filter out hidden users from search results
-      const filteredResults = response.users.filter(user => !hiddenUserIds.has(user.id));
+      const filteredResults = response.users;
       
       setSearchResults(filteredResults);
       setHasSearched(true);
@@ -152,6 +149,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
       return () => clearTimeout(timeoutId);
     }
+    // Return undefined cleanup for cases where no search is needed
+    return undefined;
   }, [activeFilters.distance, activeFilters.interests, hasSearched, performSearch]);
 
   // Effect to load initial users when available
@@ -162,31 +161,10 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     }
   }, [isAvailable, hasSearched, searchResults.length, isSearching, performSearch]);
 
-  // Load hidden users from API when component mounts
-  useEffect(() => {
-    const loadHiddenUsers = async () => {
-      if (isLoadingHiddenUsers) return;
-      
-      setIsLoadingHiddenUsers(true);
-      try {
-        const hiddenUsers = await getHiddenUsers();
-        setHiddenUserIds(new Set(hiddenUsers));
-      } catch (error) {
-        console.warn('Failed to load hidden users:', error);
-        // Remove the toast notification for hidden users API failure
-        // This feature is optional and shouldn't show error toasts
-      } finally {
-        setIsLoadingHiddenUsers(false);
-      }
-    };
-
-    loadHiddenUsers();
-  }, []); // Only run once on mount
 
   // Determine which users to display: search results only (we always use real client data)
   const baseDisplayUsers = searchResults
     .filter(user =>
-      !hiddenUserIds.has(user.id) && // Exclude hidden users
       (searchQuery === '' || 
        getFullName(user).toLowerCase().includes(searchQuery.toLowerCase()) ||
        user.interests.some(interest => 
@@ -363,21 +341,42 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setIsCheckInModalOpen(false);
   };
 
-  const handleCheckInSubmit = (checkInData: { text: string; mediaAttachments: any[]; fileAttachments: any[]; voiceNote: any; locationAttachment: any; tags: any[] }): void => {
-    // Store the check-in text for the snackbar
-    setLastCheckInText(checkInData.text);
-    
-    // Close modal and show success snackbar
-    setIsCheckInModalOpen(false);
-    setShowCheckInSnackbar(true);
-    
-    // Here you would typically save the check-in to your backend
-    console.log('New check-in from Discovery:', checkInData);
-    
-    // Auto-hide snackbar after 5 seconds
-    setTimeout(() => {
-      setShowCheckInSnackbar(false);
-    }, 5000);
+  const handleCheckInSubmit = async (checkInData: { text: string; mediaAttachments: any[]; fileAttachments: any[]; voiceNote: any; locationAttachment: any; tags: any[] }): Promise<void> => {
+    try {
+      // Convert frontend data to backend format
+      const createRequest = convertCheckInDataToRequest(checkInData, 'public'); // Default to public for discovery
+      
+      // Create the check-in via API
+      const newCheckIn = await createCheckIn(createRequest);
+      
+      // Store the check-in text for the snackbar
+      setLastCheckInText(checkInData.text || 'Check-in shared successfully!');
+      
+      // Close modal and show success snackbar
+      setIsCheckInModalOpen(false);
+      setShowCheckInSnackbar(true);
+      
+      console.log('Check-in created successfully:', newCheckIn);
+      
+      // Show success toast
+      showToast('Check-in shared successfully!', 'success');
+      
+      // Auto-hide snackbar after 5 seconds
+      setTimeout(() => {
+        setShowCheckInSnackbar(false);
+      }, 5000);
+      
+    } catch (error) {
+      console.error('Failed to create check-in:', error);
+      
+      let errorMessage = 'Failed to share check-in. Please try again.';
+      if (isCheckInError(error)) {
+        errorMessage = getCheckInErrorMessage(error.error);
+      }
+      
+      // Show error toast but don't close the modal so user can retry
+      showToast(errorMessage, 'error');
+    }
   };
 
   const handleViewProfile = (): void => {
@@ -393,40 +392,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     showToast('Check-in has been removed', 'success');
   };
 
-  // TODO: Implement user hiding functionality
-  // const handleHideUser = async (userId: string): Promise<void> => {
-  //   // Optimistic update
-  //   setHiddenUserIds(prev => new Set([...prev, userId]));
-  //   
-  //   try {
-  //     await hideUser(userId);
-  //     setToast({
-  //       isVisible: true,
-  //       message: 'User hidden from discovery',
-  //       type: 'success'
-  //     });
-  //   } catch (error) {
-  //     // Revert optimistic update on failure
-  //     setHiddenUserIds(prev => {
-  //       const newSet = new Set([...prev]);
-  //       newSet.delete(userId);
-  //       return newSet;
-  //     });
-  //     
-  //     console.error('Failed to hide user:', error);
-  //     let errorMessage = 'Failed to hide user. Please try again.';
-  //     
-  //     if (isHiddenUsersError(error)) {
-  //       errorMessage = getHiddenUsersErrorMessage(error);
-  //     }
-  //     
-  //     setToast({
-  //       isVisible: true,
-  //       message: errorMessage,
-  //       type: 'error'
-  //     });
-  //   }
-  // };
 
   return (
     <div className="min-h-screen relative">
@@ -620,7 +585,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                   {searchError}
                 </p>
                 <button
-                  onClick={performSearch}
+                  onClick={() => performSearch(true)}
                   className="px-4 py-2 bg-aqua text-white text-sm rounded-full hover:bg-aqua/90 transition-colors"
                 >
                   Try again

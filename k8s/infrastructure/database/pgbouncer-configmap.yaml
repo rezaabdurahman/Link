@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  namespace: link-services
+  labels:
+    app: pgbouncer
+    component: connection-pool
+data:
+  pgbouncer.ini: |
+    [databases]
+    ; Service-specific database pools - CloudNativePG Read-Write (Primary)
+    user_service = host=postgres-cluster-rw.link-services.svc.cluster.local port=5432 dbname=user_service_db user=user_service_user pool_size=25 max_db_connections=30
+    chat_service = host=postgres-cluster-rw.link-services.svc.cluster.local port=5432 dbname=chat_service_db user=chat_service_user pool_size=25 max_db_connections=30
+    ai_service = host=postgres-cluster-rw.link-services.svc.cluster.local port=5432 dbname=ai_service_db user=ai_service_user pool_size=25 max_db_connections=30
+    discovery_service = host=postgres-cluster-rw.link-services.svc.cluster.local port=5432 dbname=discovery_service_db user=discovery_service_user pool_size=25 max_db_connections=30
+    search_service = host=postgres-cluster-rw.link-services.svc.cluster.local port=5432 dbname=search_service_db user=search_service_user pool_size=25 max_db_connections=30
+
+    ; Read-Only database connections (Replicas) for read scaling
+    user_service_ro = host=postgres-cluster-ro.link-services.svc.cluster.local port=5432 dbname=user_service_db user=user_service_user pool_size=15 max_db_connections=20
+    chat_service_ro = host=postgres-cluster-ro.link-services.svc.cluster.local port=5432 dbname=chat_service_db user=chat_service_user pool_size=15 max_db_connections=20
+    ai_service_ro = host=postgres-cluster-ro.link-services.svc.cluster.local port=5432 dbname=ai_service_db user=ai_service_user pool_size=15 max_db_connections=20
+    discovery_service_ro = host=postgres-cluster-ro.link-services.svc.cluster.local port=5432 dbname=discovery_service_db user=discovery_service_user pool_size=15 max_db_connections=20
+    search_service_ro = host=postgres-cluster-ro.link-services.svc.cluster.local port=5432 dbname=search_service_db user=search_service_user pool_size=15 max_db_connections=20
+
+    ; Legacy shared database for migration period
+    linkdb = host=postgres-cluster-rw.link-services.svc.cluster.local port=5432 dbname=linkdb user=linkuser pool_size=15 max_db_connections=20
+    linkdb_ro = host=postgres-cluster-ro.link-services.svc.cluster.local port=5432 dbname=linkdb user=linkuser pool_size=10 max_db_connections=15
+
+    [pgbouncer]
+    ; Listen on all interfaces in container
+    listen_addr = 0.0.0.0
+    listen_port = 5432
+
+    ; Connection pooling settings - Optimized for HA
+    pool_mode = transaction  ; Better for microservices
+    max_client_conn = 2000   ; Increased for scale
+    default_pool_size = 30   ; Larger pools for 3-node cluster
+    min_pool_size = 10       ; Maintain minimum connections
+    reserve_pool_size = 10   ; Reserve connections for failover
+
+    ; Server connection settings - HA optimized
+    server_reset_query = DISCARD ALL
+    server_check_delay = 10    ; Faster health checks for failover
+    server_check_query = "SELECT 1"
+    server_connect_timeout = 10
+    server_lifetime = 1800     ; Shorter lifetime for connection refresh
+    server_idle_timeout = 300  ; Shorter timeout for faster failover
+    server_fast_close = 1      ; Quick failover
+
+    ; Client connection settings
+    client_idle_timeout = 0
+    client_login_timeout = 60
+
+    ; Authentication - Updated for CloudNativePG SCRAM-SHA-256
+    auth_type = scram-sha-256
+    auth_file = /etc/pgbouncer/userlist.txt
+
+    ; Logging
+    log_connections = 1
+    log_disconnections = 1
+    log_pooler_errors = 1
+    log_stats = 1
+    stats_period = 60
+
+    ; Admin interface
+    admin_users = pgbouncer_admin
+    stats_users = pgbouncer_stats
+
+    ; Security
+    ignore_startup_parameters = extra_float_digits,search_path
+
+    ; Performance tuning
+    tcp_keepalive = 1
+    tcp_keepcnt = 3
+    tcp_keepidle = 600
+    tcp_keepintvl = 30
+
+    ; Memory settings
+    pkt_buf = 4096
+    listen_backlog = 128
+    sbuf_loopcnt = 5
+
+  startup.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "Starting PgBouncer configuration..."
+
+    # Function to generate MD5 hash for PgBouncer authentication
+    generate_md5_hash() {
+        local username=$1
+        local password=$2
+        echo "md5$(echo -n "$password$username" | md5sum | cut -d' ' -f1)"
+    }
+
+    # Create userlist.txt with actual password hashes
+    cat > /etc/pgbouncer/userlist.txt << EOF
+    ; PgBouncer user list - Generated at startup
+    ; Format: "username" "password_hash"
+
+    ; Service users
+    "user_service_user" "$(generate_md5_hash "user_service_user" "${USER_SERVICE_DB_PASSWORD}")"
+    "chat_service_user" "$(generate_md5_hash "chat_service_user" "${CHAT_SERVICE_DB_PASSWORD}")"
+    "ai_service_user" "$(generate_md5_hash "ai_service_user" "${AI_SERVICE_DB_PASSWORD}")"
+    "discovery_service_user" "$(generate_md5_hash "discovery_service_user" "${DISCOVERY_SERVICE_DB_PASSWORD}")"
+    "search_service_user" "$(generate_md5_hash "search_service_user" "${SEARCH_SERVICE_DB_PASSWORD}")"
+
+    ; Legacy user for migration period
+    "linkuser" "$(generate_md5_hash "linkuser" "${DB_PASSWORD:-linkpass}")"
+
+    ; Admin users
+    "pgbouncer_admin" "$(generate_md5_hash "pgbouncer_admin" "${PGBOUNCER_ADMIN_PASSWORD:-admin_password_change_me}")"
+    "pgbouncer_stats" "$(generate_md5_hash "pgbouncer_stats" "${PGBOUNCER_STATS_PASSWORD:-stats_password_change_me}")"
+    EOF
+
+    echo "Generated userlist.txt with $(grep -c '^"' /etc/pgbouncer/userlist.txt) users"
+
+    # Set proper permissions
+    chmod 600 /etc/pgbouncer/userlist.txt
+    chmod 644 /etc/pgbouncer/pgbouncer.ini
+
+    # Start PgBouncer
+    echo "Starting PgBouncer..."
+    exec pgbouncer /etc/pgbouncer/pgbouncer.ini
+
+  health-check.sh: |
+    #!/bin/bash
+    # PgBouncer health check
+    if ! pg_isready -h localhost -p 5432 -q; then
+        exit 1
+    fi
+
+    # Check if PgBouncer is responding to SHOW POOLS
+    if ! psql -h localhost -p 5432 -U pgbouncer_stats -d pgbouncer -c "SHOW POOLS;" > /dev/null 2>&1; then
+        exit 1
+    fi
+
+    exit 0

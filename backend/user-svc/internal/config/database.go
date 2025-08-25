@@ -2,12 +2,13 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	
+	sharedConfig "github.com/link-app/shared-libs/config"
 )
 
 // DatabaseConfig holds database configuration
@@ -20,15 +21,15 @@ type DatabaseConfig struct {
 	SSLMode  string
 }
 
-// GetDatabaseConfig returns database configuration from environment variables
+// GetDatabaseConfig returns database configuration using shared secrets management
 func GetDatabaseConfig() *DatabaseConfig {
 	return &DatabaseConfig{
-		Host:     getEnv("DB_HOST", "localhost"),
-		Port:     getEnv("DB_PORT", "5432"),
-		User:     getEnv("DB_USER", "linkuser"),
-		Password: getEnv("DB_PASSWORD", "linkpass"),
-		DBName:   getEnv("DB_NAME", "linkdb"),
-		SSLMode:  getEnv("DB_SSL_MODE", "disable"),
+		Host:     sharedConfig.GetEnv("DB_HOST", "localhost"),
+		Port:     sharedConfig.GetEnv("DB_PORT", "5432"),
+		User:     sharedConfig.GetEnv("DB_USER", "linkuser"),
+		Password: sharedConfig.GetDatabasePassword(), // Use shared secrets management
+		DBName:   sharedConfig.GetEnv("DB_NAME", "linkdb"),
+		SSLMode:  sharedConfig.GetEnv("DB_SSL_MODE", "disable"),
 	}
 }
 
@@ -47,7 +48,7 @@ func ConnectDatabase() (*gorm.DB, error) {
 	}
 
 	// Set log level based on environment
-	if getEnv("ENVIRONMENT", "development") == "production" {
+	if sharedConfig.GetEnv("ENVIRONMENT", "development") == "production" {
 		gormConfig.Logger = logger.Default.LogMode(logger.Error)
 	}
 
@@ -76,7 +77,7 @@ func ConnectDatabase() (*gorm.DB, error) {
 
 	// Auto migrate the schema (for development only)
 	// Note: Commented out due to "insufficient arguments" error - using existing tables
-	// if getEnv("ENVIRONMENT", "development") == "development" {
+	// if sharedConfig.GetEnv("ENVIRONMENT", "development") == "development" {
 	//	if err := db.AutoMigrate(
 	//		&models.User{},
 	//		&models.Friendship{},
@@ -107,10 +108,3 @@ func enableExtensions(db *gorm.DB) error {
 	return nil
 }
 
-// getEnv gets an environment variable with a default value
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}

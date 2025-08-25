@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	sharedConfig "github.com/link-app/shared-libs/config"
 )
 
 // JWTConfig holds JWT configuration for the API Gateway
@@ -20,24 +21,26 @@ type JWTConfig struct {
 	CookieSameSite string
 }
 
-// GetJWTConfig returns JWT configuration from environment variables
+// GetJWTConfig returns JWT configuration using shared secrets management
 func GetJWTConfig() *JWTConfig {
 	return &JWTConfig{
-		Secret:         getEnv("JWT_SECRET", "your-secret-key-change-this-in-production"),
-		AccessTokenTTL: time.Hour, // 1 hour for access tokens
-		Issuer:         getEnv("JWT_ISSUER", "user-svc"),
-		CookieName:     getEnv("JWT_COOKIE_NAME", "link_auth"),
-		CookieSecure:   getEnv("ENVIRONMENT", "development") == "production",
+		Secret:         sharedConfig.GetJWTSecret(), // Use shared secrets management
+		AccessTokenTTL: time.Hour,                   // 1 hour for access tokens
+		Issuer:         sharedConfig.GetEnv("JWT_ISSUER", "user-svc"),
+		CookieName:     sharedConfig.GetEnv("JWT_COOKIE_NAME", "link_auth"),
+		CookieSecure:   sharedConfig.GetEnv("ENVIRONMENT", "development") == "production",
 		CookieHTTPOnly: true,
-		CookieSameSite: getEnv("JWT_COOKIE_SAMESITE", "strict"),
+		CookieSameSite: sharedConfig.GetEnv("JWT_COOKIE_SAMESITE", "strict"),
 	}
 }
 
 // Claims represents the JWT claims structure
 type Claims struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Email    string    `json:"email"`
-	Username string    `json:"username"`
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	Username    string    `json:"username"`
+	Roles       []string  `json:"roles"`       // User role names
+	Permissions []string  `json:"permissions"` // User permission names
 	jwt.RegisteredClaims
 }
 

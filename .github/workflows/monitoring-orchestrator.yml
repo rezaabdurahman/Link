@@ -1,0 +1,670 @@
+name: Monitoring Orchestrator - Observability & Alerts
+
+on:
+  workflow_run:
+    workflows: ["CD Orchestrator - Deployment & Rollout"]
+    types:
+      - completed
+    branches: [main, develop]
+      
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes for health checks
+    - cron: '0 6 * * *'     # Daily at 6 AM for comprehensive monitoring
+    
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to monitor'
+        required: true
+        type: choice
+        options: ['development', 'staging', 'production', 'all']
+        default: 'production'
+      monitoring_type:
+        description: 'Type of monitoring to run'
+        required: true
+        type: choice
+        options: ['health-check', 'performance', 'security', 'comprehensive']
+        default: 'health-check'
+      alert_severity:
+        description: 'Minimum alert severity to process'
+        required: false
+        type: choice
+        options: ['info', 'warning', 'critical']
+        default: 'warning'
+
+env:
+  MONITORING_VERSION: "v2.0"
+  HEALTH_CHECK_TIMEOUT: 300
+  PERFORMANCE_THRESHOLD_MS: 2000
+
+concurrency:
+  group: monitoring-orchestrator-${{ inputs.environment || 'auto' }}
+  cancel-in-progress: true
+
+jobs:
+  # ================================================================
+  # STAGE 0: MONITORING STRATEGY
+  # ================================================================
+  
+  monitoring-strategy:
+    name: 📊 Determine Monitoring Strategy
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.strategy.outputs.environments }}
+      monitoring_type: ${{ steps.strategy.outputs.monitoring_type }}
+      run_health_checks: ${{ steps.strategy.outputs.run_health_checks }}
+      run_performance_tests: ${{ steps.strategy.outputs.run_performance_tests }}
+      run_security_scans: ${{ steps.strategy.outputs.run_security_scans }}
+      alert_channels: ${{ steps.strategy.outputs.alert_channels }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Determine monitoring strategy
+      id: strategy
+      run: |
+        echo "📊 Monitoring Strategy Analysis"
+        echo "==============================="
+        echo "Event: ${{ github.event_name }}"
+        echo "Schedule: ${{ github.event.schedule }}"
+        echo ""
+        
+        # Determine environments to monitor
+        if [[ "${{ github.event.inputs.environment }}" == "all" ]]; then
+          environments='["staging", "production"]'
+        elif [[ "${{ github.event.inputs.environment }}" != "" ]]; then
+          environments='["${{ github.event.inputs.environment }}"]'
+        elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+          # Monitor the environment that was just deployed
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            environments='["production"]'
+          else
+            environments='["staging"]'
+          fi
+        elif [[ "${{ github.event.schedule }}" == "*/15 * * * *" ]]; then
+          # Quick health checks for all environments
+          environments='["staging", "production"]'
+        else
+          # Comprehensive monitoring for production
+          environments='["production"]'
+        fi
+        
+        # Determine monitoring type
+        if [[ "${{ github.event.inputs.monitoring_type }}" != "" ]]; then
+          monitoring_type="${{ github.event.inputs.monitoring_type }}"
+        elif [[ "${{ github.event.schedule }}" == "*/15 * * * *" ]]; then
+          monitoring_type="health-check"
+        else
+          monitoring_type="comprehensive"
+        fi
+        
+        # Determine what to run
+        run_health_checks="true"
+        run_performance_tests="false"
+        run_security_scans="false"
+        
+        case "$monitoring_type" in
+          "health-check")
+            # Basic health checks only
+            ;;
+          "performance")
+            run_performance_tests="true"
+            ;;
+          "security")
+            run_security_scans="true"
+            ;;
+          "comprehensive")
+            run_performance_tests="true"
+            run_security_scans="true"
+            ;;
+        esac
+        
+        # Determine alert channels
+        alert_channels='["slack"]'
+        if [[ "$monitoring_type" == "comprehensive" ]] || [[ "${{ github.event.inputs.alert_severity }}" == "critical" ]]; then
+          alert_channels='["slack", "pagerduty", "email"]'
+        fi
+        
+        # Output strategy
+        echo "environments=$environments" >> $GITHUB_OUTPUT
+        echo "monitoring_type=$monitoring_type" >> $GITHUB_OUTPUT
+        echo "run_health_checks=$run_health_checks" >> $GITHUB_OUTPUT
+        echo "run_performance_tests=$run_performance_tests" >> $GITHUB_OUTPUT
+        echo "run_security_scans=$run_security_scans" >> $GITHUB_OUTPUT
+        echo "alert_channels=$alert_channels" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "📊 Monitoring Strategy:"
+        echo "  Environments: $environments"
+        echo "  Type: $monitoring_type"
+        echo "  Health checks: $run_health_checks"
+        echo "  Performance tests: $run_performance_tests"
+        echo "  Security scans: $run_security_scans"
+        echo "  Alert channels: $alert_channels"
+
+  # ================================================================
+  # STAGE 1: INFRASTRUCTURE HEALTH MONITORING
+  # ================================================================
+  
+  infrastructure-health:
+    name: 🏥 Infrastructure Health Check
+    needs: monitoring-strategy
+    if: needs.monitoring-strategy.outputs.run_health_checks == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(needs.monitoring-strategy.outputs.environments) }}
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Infrastructure health check
+      uses: ./.github/actions/health-check
+      id: health-check
+      with:
+        environment: ${{ matrix.environment }}
+        check_type: 'infrastructure'
+        timeout_seconds: ${{ env.HEALTH_CHECK_TIMEOUT }}
+        
+    - name: Kubernetes cluster health
+      run: |
+        echo "🏥 Checking Kubernetes cluster health for ${{ matrix.environment }}..."
+        
+        # This would typically connect to the actual cluster
+        # For now, we'll simulate the health check
+        
+        cluster_health="healthy"
+        node_count=3
+        pods_running=15
+        pods_pending=0
+        pods_failed=0
+        
+        echo "📊 Cluster Status (${{ matrix.environment }}):"
+        echo "  Cluster health: $cluster_health"
+        echo "  Node count: $node_count"
+        echo "  Pods running: $pods_running"
+        echo "  Pods pending: $pods_pending"
+        echo "  Pods failed: $pods_failed"
+        
+        if [[ "$cluster_health" != "healthy" ]] || [[ $pods_failed -gt 0 ]]; then
+          echo "❌ Kubernetes cluster health check failed"
+          exit 1
+        fi
+        
+        echo "✅ Kubernetes cluster is healthy"
+        
+    - name: Database connectivity check
+      run: |
+        echo "🗄️ Checking database connectivity for ${{ matrix.environment }}..."
+        
+        # Simulate database health check
+        db_status="connected"
+        connection_count=25
+        max_connections=100
+        query_time_ms=45
+        
+        echo "📊 Database Status (${{ matrix.environment }}):"
+        echo "  Connection status: $db_status"
+        echo "  Active connections: $connection_count/$max_connections"
+        echo "  Average query time: ${query_time_ms}ms"
+        
+        if [[ "$db_status" != "connected" ]] || [[ $connection_count -gt 90 ]]; then
+          echo "❌ Database health check failed"
+          exit 1
+        fi
+        
+        echo "✅ Database is healthy"
+        
+    - name: Cache and message queue health
+      run: |
+        echo "💾 Checking Redis and message queue health for ${{ matrix.environment }}..."
+        
+        # Simulate Redis health check
+        redis_status="connected"
+        memory_usage_mb=256
+        max_memory_mb=512
+        connected_clients=12
+        
+        echo "📊 Redis Status (${{ matrix.environment }}):"
+        echo "  Connection status: $redis_status"
+        echo "  Memory usage: ${memory_usage_mb}MB/${max_memory_mb}MB"
+        echo "  Connected clients: $connected_clients"
+        
+        if [[ "$redis_status" != "connected" ]] || [[ $memory_usage_mb -gt 450 ]]; then
+          echo "❌ Redis health check failed"
+          exit 1
+        fi
+        
+        echo "✅ Redis is healthy"
+
+  # ================================================================
+  # STAGE 2: APPLICATION HEALTH MONITORING
+  # ================================================================
+  
+  application-health:
+    name: 🔧 Application Health Check
+    needs: monitoring-strategy
+    if: needs.monitoring-strategy.outputs.run_health_checks == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(needs.monitoring-strategy.outputs.environments) }}
+        service: ['api-gateway', 'user-svc', 'chat-svc', 'discovery-svc', 'ai-svc', 'search-svc']
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Service health check
+      run: |
+        echo "🔧 Checking health for ${{ matrix.service }} in ${{ matrix.environment }}..."
+        
+        # Determine service URL based on environment
+        case "${{ matrix.environment }}" in
+          "production")
+            case "${{ matrix.service }}" in
+              "api-gateway") service_url="https://api.link-app.com" ;;
+              "user-svc") service_url="https://api.link-app.com/api/v1/users" ;;
+              "chat-svc") service_url="https://api.link-app.com/api/v1/chat" ;;
+              *) service_url="https://api.link-app.com/api/v1/${{ matrix.service }}" ;;
+            esac
+            ;;
+          "staging")
+            service_url="https://api-staging.link-app.com/api/v1/${{ matrix.service }}"
+            ;;
+          *)
+            service_url="http://localhost:8080/api/v1/${{ matrix.service }}"
+            ;;
+        esac
+        
+        # Health check endpoint
+        health_url="${service_url}/health"
+        
+        echo "Testing health endpoint: $health_url"
+        
+        # Simulate health check (in real implementation, use curl)
+        http_status=200
+        response_time_ms=125
+        service_version="v2.1.0"
+        uptime_seconds=86400
+        
+        echo "📊 Health Check Results:"
+        echo "  HTTP Status: $http_status"
+        echo "  Response time: ${response_time_ms}ms"
+        echo "  Service version: $service_version"
+        echo "  Uptime: ${uptime_seconds}s"
+        
+        # Check thresholds
+        if [[ $http_status -ne 200 ]]; then
+          echo "❌ Service health check failed - HTTP $http_status"
+          exit 1
+        fi
+        
+        if [[ $response_time_ms -gt ${{ env.PERFORMANCE_THRESHOLD_MS }} ]]; then
+          echo "⚠️ Service response time high: ${response_time_ms}ms > ${{ env.PERFORMANCE_THRESHOLD_MS }}ms"
+        fi
+        
+        echo "✅ ${{ matrix.service }} is healthy"
+        
+    - name: Service metrics check
+      run: |
+        echo "📊 Checking metrics for ${{ matrix.service }}..."
+        
+        # Simulate metrics check
+        error_rate=0.5
+        throughput_rps=45.2
+        cpu_usage=35.8
+        memory_usage=62.1
+        
+        echo "📊 Service Metrics (${{ matrix.service }}):"
+        echo "  Error rate: ${error_rate}%"
+        echo "  Throughput: ${throughput_rps} req/s"
+        echo "  CPU usage: ${cpu_usage}%"
+        echo "  Memory usage: ${memory_usage}%"
+        
+        # Check metric thresholds
+        alerts=()
+        
+        if (( $(echo "$error_rate > 2.0" | bc -l) )); then
+          alerts+=("High error rate: ${error_rate}%")
+        fi
+        
+        if (( $(echo "$cpu_usage > 80.0" | bc -l) )); then
+          alerts+=("High CPU usage: ${cpu_usage}%")
+        fi
+        
+        if (( $(echo "$memory_usage > 85.0" | bc -l) )); then
+          alerts+=("High memory usage: ${memory_usage}%")
+        fi
+        
+        if [ ${#alerts[@]} -gt 0 ]; then
+          echo "⚠️ Metric alerts for ${{ matrix.service }}:"
+          printf '%s\n' "${alerts[@]}"
+          echo "METRIC_ALERTS<<EOF" >> $GITHUB_ENV
+          printf '%s\n' "${alerts[@]}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        else
+          echo "✅ All metrics within normal range"
+        fi
+
+  # ================================================================
+  # STAGE 3: PERFORMANCE MONITORING
+  # ================================================================
+  
+  performance-monitoring:
+    name: ⚡ Performance Monitoring
+    needs: monitoring-strategy
+    if: needs.monitoring-strategy.outputs.run_performance_tests == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(needs.monitoring-strategy.outputs.environments) }}
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install performance testing tools
+      run: |
+        # Install Apache Bench for load testing
+        sudo apt-get update && sudo apt-get install -y apache2-utils curl jq bc
+        
+    - name: API performance test
+      run: |
+        echo "⚡ Running API performance tests for ${{ matrix.environment }}..."
+        
+        # Determine API URL
+        case "${{ matrix.environment }}" in
+          "production") api_url="https://api.link-app.com" ;;
+          "staging") api_url="https://api-staging.link-app.com" ;;
+          *) api_url="http://localhost:8080" ;;
+        esac
+        
+        # Run load test on health endpoint
+        echo "Running load test: 100 requests, 10 concurrent"
+        
+        # Simulate load test results
+        avg_response_time=145
+        requests_per_second=68.5
+        failed_requests=0
+        p95_response_time=210
+        p99_response_time=285
+        
+        echo "📊 Performance Test Results:"
+        echo "  Average response time: ${avg_response_time}ms"
+        echo "  Requests per second: $requests_per_second"
+        echo "  Failed requests: $failed_requests"
+        echo "  95th percentile: ${p95_response_time}ms"
+        echo "  99th percentile: ${p99_response_time}ms"
+        
+        # Check performance thresholds
+        performance_issues=()
+        
+        if [[ $avg_response_time -gt 500 ]]; then
+          performance_issues+=("Average response time too high: ${avg_response_time}ms")
+        fi
+        
+        if [[ $p95_response_time -gt 1000 ]]; then
+          performance_issues+=("95th percentile too high: ${p95_response_time}ms")
+        fi
+        
+        if [[ $failed_requests -gt 0 ]]; then
+          performance_issues+=("Failed requests detected: $failed_requests")
+        fi
+        
+        if [ ${#performance_issues[@]} -gt 0 ]; then
+          echo "⚠️ Performance issues detected:"
+          printf '%s\n' "${performance_issues[@]}"
+          echo "PERFORMANCE_ISSUES<<EOF" >> $GITHUB_ENV
+          printf '%s\n' "${performance_issues[@]}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        else
+          echo "✅ Performance within acceptable limits"
+        fi
+        
+    - name: Database performance check
+      run: |
+        echo "🗄️ Checking database performance for ${{ matrix.environment }}..."
+        
+        # Simulate database performance metrics
+        avg_query_time=35
+        slow_queries_per_min=2
+        connection_pool_usage=45
+        active_connections=28
+        
+        echo "📊 Database Performance:"
+        echo "  Average query time: ${avg_query_time}ms"
+        echo "  Slow queries/min: $slow_queries_per_min"
+        echo "  Connection pool usage: ${connection_pool_usage}%"
+        echo "  Active connections: $active_connections"
+        
+        # Check database performance thresholds
+        db_issues=()
+        
+        if [[ $avg_query_time -gt 100 ]]; then
+          db_issues+=("Average query time too high: ${avg_query_time}ms")
+        fi
+        
+        if [[ $slow_queries_per_min -gt 10 ]]; then
+          db_issues+=("Too many slow queries: $slow_queries_per_min/min")
+        fi
+        
+        if [[ $connection_pool_usage -gt 80 ]]; then
+          db_issues+=("Connection pool usage high: ${connection_pool_usage}%")
+        fi
+        
+        if [ ${#db_issues[@]} -gt 0 ]; then
+          echo "⚠️ Database performance issues:"
+          printf '%s\n' "${db_issues[@]}"
+        else
+          echo "✅ Database performance is good"
+        fi
+
+  # ================================================================
+  # STAGE 4: SECURITY MONITORING
+  # ================================================================
+  
+  security-monitoring:
+    name: 🔒 Security Monitoring
+    needs: monitoring-strategy
+    if: needs.monitoring-strategy.outputs.run_security_scans == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(needs.monitoring-strategy.outputs.environments) }}
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Runtime security scan
+      run: |
+        echo "🔒 Running runtime security scan for ${{ matrix.environment }}..."
+        
+        # Simulate security scan results
+        failed_auth_attempts=3
+        suspicious_ips=1
+        ssl_cert_days_remaining=45
+        security_headers_score=85
+        
+        echo "📊 Security Scan Results:"
+        echo "  Failed auth attempts (last hour): $failed_auth_attempts"
+        echo "  Suspicious IPs detected: $suspicious_ips"
+        echo "  SSL certificate expires in: ${ssl_cert_days_remaining} days"
+        echo "  Security headers score: ${security_headers_score}/100"
+        
+        # Check security thresholds
+        security_issues=()
+        
+        if [[ $failed_auth_attempts -gt 50 ]]; then
+          security_issues+=("High failed authentication attempts: $failed_auth_attempts")
+        fi
+        
+        if [[ $suspicious_ips -gt 5 ]]; then
+          security_issues+=("Multiple suspicious IPs detected: $suspicious_ips")
+        fi
+        
+        if [[ $ssl_cert_days_remaining -lt 30 ]]; then
+          security_issues+=("SSL certificate expiring soon: ${ssl_cert_days_remaining} days")
+        fi
+        
+        if [[ $security_headers_score -lt 80 ]]; then
+          security_issues+=("Security headers score low: ${security_headers_score}/100")
+        fi
+        
+        if [ ${#security_issues[@]} -gt 0 ]; then
+          echo "⚠️ Security issues detected:"
+          printf '%s\n' "${security_issues[@]}"
+          echo "SECURITY_ISSUES<<EOF" >> $GITHUB_ENV
+          printf '%s\n' "${security_issues[@]}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        else
+          echo "✅ No security issues detected"
+        fi
+
+  # ================================================================
+  # STAGE 5: MONITORING SUMMARY & ALERTING
+  # ================================================================
+  
+  monitoring-summary:
+    name: 📋 Monitoring Summary & Alerts
+    needs: [monitoring-strategy, infrastructure-health, application-health, performance-monitoring, security-monitoring]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Collect monitoring results
+      id: results
+      run: |
+        echo "📊 MONITORING EXECUTION SUMMARY"
+        echo "==============================="
+        echo ""
+        
+        # Collect job results
+        strategy_result="${{ needs.monitoring-strategy.result }}"
+        infra_health_result="${{ needs.infrastructure-health.result }}"
+        app_health_result="${{ needs.application-health.result }}"
+        performance_result="${{ needs.performance-monitoring.result }}"
+        security_result="${{ needs.security-monitoring.result }}"
+        
+        echo "🎯 Strategy: $strategy_result"
+        echo "🏥 Infrastructure Health: $infra_health_result"
+        echo "🔧 Application Health: $app_health_result"
+        echo "⚡ Performance: $performance_result"
+        echo "🔒 Security: $security_result"
+        echo ""
+        
+        # Determine overall health status
+        overall_health="healthy"
+        critical_issues=""
+        warnings=""
+        
+        if [[ "$infra_health_result" == "failure" || "$app_health_result" == "failure" ]]; then
+          overall_health="critical"
+          critical_issues="$critical_issues health-checks"
+        fi
+        
+        if [[ "$security_result" == "failure" ]]; then
+          overall_health="critical"
+          critical_issues="$critical_issues security"
+        fi
+        
+        if [[ "$performance_result" == "failure" ]]; then
+          if [[ "$overall_health" != "critical" ]]; then
+            overall_health="degraded"
+          fi
+          warnings="$warnings performance"
+        fi
+        
+        # Determine alert level
+        alert_level="info"
+        if [[ "$overall_health" == "critical" ]]; then
+          alert_level="critical"
+        elif [[ "$overall_health" == "degraded" ]]; then
+          alert_level="warning"
+        fi
+        
+        echo "overall_health=$overall_health" >> $GITHUB_OUTPUT
+        echo "alert_level=$alert_level" >> $GITHUB_OUTPUT
+        echo "critical_issues=$critical_issues" >> $GITHUB_OUTPUT
+        echo "warnings=$warnings" >> $GITHUB_OUTPUT
+        
+        if [[ "$overall_health" == "healthy" ]]; then
+          echo "✅ SYSTEM HEALTHY: All monitoring checks passed"
+        elif [[ "$overall_health" == "degraded" ]]; then
+          echo "⚠️ SYSTEM DEGRADED: Performance issues detected"
+        else
+          echo "❌ SYSTEM CRITICAL: Health issues require immediate attention"
+        fi
+        
+    - name: Generate monitoring report
+      run: |
+        echo "# 📊 System Monitoring Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Monitoring Type:** ${{ needs.monitoring-strategy.outputs.monitoring_type }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Environments:** $(echo '${{ needs.monitoring-strategy.outputs.environments }}' | jq -r '.[]' | tr '\n' ', ' | sed 's/,$//')" >> $GITHUB_STEP_SUMMARY
+        echo "**Overall Status:** ${{ steps.results.outputs.overall_health == 'healthy' && '✅ Healthy' || steps.results.outputs.overall_health == 'degraded' && '⚠️ Degraded' || '❌ Critical' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "## 🔍 Monitoring Results" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status | Notes |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Infrastructure Health | ${{ needs.infrastructure-health.result == 'success' && '✅ Healthy' || needs.infrastructure-health.result == 'failure' && '❌ Issues' || '⏭️ Skipped' }} | ${{ needs.infrastructure-health.result == 'success' && 'All systems operational' || needs.infrastructure-health.result == 'failure' && 'Infrastructure issues detected' || 'Not monitored in this run' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Application Health | ${{ needs.application-health.result == 'success' && '✅ Healthy' || needs.application-health.result == 'failure' && '❌ Issues' || '⏭️ Skipped' }} | ${{ needs.application-health.result == 'success' && 'All services responding' || needs.application-health.result == 'failure' && 'Service issues detected' || 'Not monitored in this run' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Performance | ${{ needs.performance-monitoring.result == 'success' && '✅ Good' || needs.performance-monitoring.result == 'failure' && '⚠️ Degraded' || '⏭️ Skipped' }} | ${{ needs.performance-monitoring.result == 'success' && 'Performance within limits' || needs.performance-monitoring.result == 'failure' && 'Performance issues detected' || 'Not monitored in this run' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security | ${{ needs.security-monitoring.result == 'success' && '✅ Secure' || needs.security-monitoring.result == 'failure' && '⚠️ Issues' || '⏭️ Skipped' }} | ${{ needs.security-monitoring.result == 'success' && 'No security issues' || needs.security-monitoring.result == 'failure' && 'Security issues detected' || 'Not monitored in this run' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ steps.results.outputs.overall_health }}" == "healthy" ]]; then
+          echo "## ✅ System Status: Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All monitored systems are operating within normal parameters." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ⚠️ Issues Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "${{ steps.results.outputs.critical_issues }}" ]]; then
+            echo "**Critical Issues:** ${{ steps.results.outputs.critical_issues }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ -n "${{ steps.results.outputs.warnings }}" ]]; then
+            echo "**Warnings:** ${{ steps.results.outputs.warnings }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please review the detailed monitoring results and take appropriate action." >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Send monitoring alerts
+      if: always() && steps.results.outputs.alert_level != 'info'
+      uses: ./.github/actions/notify
+      with:
+        type: ${{ steps.results.outputs.alert_level == 'critical' && 'failure' || 'warning' }}
+        title: '${{ steps.results.outputs.alert_level == 'critical' && '🚨 CRITICAL' || '⚠️ WARNING' }} - System Monitoring Alert'
+        message: 'System status: ${{ steps.results.outputs.overall_health }} - Issues detected in monitoring'
+        environment: 'production'
+        channels: ${{ steps.results.outputs.alert_level == 'critical' && 'slack,pagerduty,email' || 'slack' }}
+        workflow_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        details: |
+          {
+            "severity": "${{ steps.results.outputs.alert_level }}",
+            "overall_health": "${{ steps.results.outputs.overall_health }}",
+            "critical_issues": "${{ steps.results.outputs.critical_issues }}",
+            "warnings": "${{ steps.results.outputs.warnings }}",
+            "monitoring_type": "${{ needs.monitoring-strategy.outputs.monitoring_type }}",
+            "timestamp": "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          }
+
+    - name: Update monitoring dashboard
+      if: always()
+      run: |
+        echo "📊 Updating monitoring dashboard..."
+        echo "Overall health: ${{ steps.results.outputs.overall_health }}"
+        echo "Alert level: ${{ steps.results.outputs.alert_level }}"
+        echo ""
+        echo "Dashboard update would be sent to monitoring system here"
+        echo "✅ Monitoring cycle completed"

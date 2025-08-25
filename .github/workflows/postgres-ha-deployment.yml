@@ -1,0 +1,350 @@
+name: PostgreSQL HA Deployment
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+    - 'k8s/cloudnative-pg/**'
+    - 'k8s/pgbouncer-*.yaml'
+    - 'monitoring/prometheus/rules/postgres-ha-alerts.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+    - 'k8s/cloudnative-pg/**'
+    - 'k8s/pgbouncer-*.yaml'
+    - 'monitoring/prometheus/rules/postgres-ha-alerts.yml'
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: string
+      action:
+        description: 'Action to perform'
+        required: false
+        default: 'deploy'
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+        - deploy
+        - upgrade
+        - verify
+        - rollback
+
+env:
+  KUBECTL_VERSION: '1.29.0'
+  HELM_VERSION: '3.14.0'
+
+jobs:
+  validate-manifests:
+    name: Validate CloudNativePG Manifests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: ${{ env.KUBECTL_VERSION }}
+
+    - name: Validate YAML syntax
+      run: |
+        find k8s/cloudnative-pg -name "*.yaml" -exec kubectl --dry-run=client --validate=true create -f {} \;
+
+    - name: Lint PostgreSQL configuration
+      run: |
+        # Check for common PostgreSQL configuration issues
+        grep -r "password.*=.*changeme\|password.*=.*test" k8s/cloudnative-pg/ && exit 1 || echo "✅ No test passwords found"
+        grep -r "instances.*:.*[0-2]" k8s/cloudnative-pg/ && echo "⚠️  Warning: Less than 3 instances configured" || echo "✅ HA configuration validated"
+
+    - name: Validate backup configuration
+      run: |
+        # Ensure backup credentials are properly referenced
+        grep -q "backup-credentials" k8s/cloudnative-pg/01-postgres-cluster.yaml || (echo "❌ Backup credentials not found" && exit 1)
+        grep -q "s3://.*backups" k8s/cloudnative-pg/01-postgres-cluster.yaml || (echo "❌ S3 backup path not found" && exit 1)
+        echo "✅ Backup configuration validated"
+
+  plan-deployment:
+    name: Plan CloudNativePG Deployment
+    runs-on: ubuntu-latest
+    needs: validate-manifests
+    if: github.event_name == 'pull_request'
+    outputs:
+      deployment-plan: ${{ steps.plan.outputs.plan }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate deployment plan
+      id: plan
+      run: |
+        echo "## CloudNativePG Deployment Plan" > deployment-plan.md
+        echo "" >> deployment-plan.md
+        echo "### Changes detected in:" >> deployment-plan.md
+        
+        if git diff --name-only origin/main...HEAD | grep -q "k8s/cloudnative-pg/00-operator-install.yaml"; then
+          echo "- 🔧 **CloudNativePG Operator** - Will be upgraded" >> deployment-plan.md
+        fi
+        
+        if git diff --name-only origin/main...HEAD | grep -q "k8s/cloudnative-pg/01-postgres-cluster.yaml"; then
+          echo "- 🐘 **PostgreSQL Cluster** - Configuration will be updated" >> deployment-plan.md
+          echo "  - ⚠️  **Note:** May trigger rolling restart of PostgreSQL instances" >> deployment-plan.md
+        fi
+        
+        if git diff --name-only origin/main...HEAD | grep -q "k8s/cloudnative-pg/02-backup-configuration.yaml"; then
+          echo "- 💾 **Backup Configuration** - Backup schedule/retention will be updated" >> deployment-plan.md
+        fi
+        
+        if git diff --name-only origin/main...HEAD | grep -q "k8s/cloudnative-pg/03-monitoring.yaml"; then
+          echo "- 📊 **Monitoring** - Alerts and dashboards will be updated" >> deployment-plan.md
+        fi
+        
+        if git diff --name-only origin/main...HEAD | grep -q "k8s/pgbouncer-"; then
+          echo "- 🔌 **PgBouncer** - Connection pooling configuration will be updated" >> deployment-plan.md
+          echo "  - ⚠️  **Note:** Will restart PgBouncer pods" >> deployment-plan.md
+        fi
+        
+        echo "" >> deployment-plan.md
+        echo "### Deployment Strategy:" >> deployment-plan.md
+        echo "1. Validate cluster health" >> deployment-plan.md
+        echo "2. Apply operator updates (if any)" >> deployment-plan.md
+        echo "3. Update cluster configuration with rolling restart" >> deployment-plan.md
+        echo "4. Apply monitoring updates" >> deployment-plan.md
+        echo "5. Verify cluster health and replication" >> deployment-plan.md
+        
+        cat deployment-plan.md
+        echo "plan<<EOF" >> $GITHUB_OUTPUT
+        cat deployment-plan.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Comment deployment plan
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `${{ steps.plan.outputs.plan }}`
+          })
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: validate-manifests
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && 
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: staging
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: ${{ env.KUBECTL_VERSION }}
+
+    - name: Configure kubectl for staging
+      run: |
+        aws eks update-kubeconfig --region us-west-2 --name link-staging-cluster
+        kubectl config current-context
+        kubectl get nodes
+
+    - name: Pre-deployment health check
+      run: |
+        echo "🔍 Checking existing PostgreSQL cluster health..."
+        if kubectl get cluster postgres-cluster -n link-services 2>/dev/null; then
+          kubectl get cluster postgres-cluster -n link-services -o jsonpath='{.status.phase}'
+          kubectl get pods -n link-services -l postgresql.cnpg.io/cluster=postgres-cluster
+        else
+          echo "No existing cluster found - fresh deployment"
+        fi
+
+    - name: Deploy CloudNativePG to staging
+      run: |
+        echo "🚀 Deploying CloudNativePG to staging..."
+        
+        # 1. Install/upgrade operator
+        kubectl apply -f k8s/cloudnative-pg/00-operator-install.yaml
+        kubectl wait --for=condition=Available deployment/cnpg-controller-manager -n cnpg-system --timeout=300s
+        
+        # 2. Apply secrets and credentials  
+        kubectl apply -f k8s/cloudnative-pg/02-backup-configuration.yaml
+        
+        # 3. Deploy/update cluster
+        kubectl apply -f k8s/cloudnative-pg/01-postgres-cluster.yaml
+        
+        # 4. Wait for cluster to be ready
+        kubectl wait --for=condition=Ready cluster/postgres-cluster -n link-services --timeout=600s
+        
+        # 5. Apply monitoring
+        kubectl apply -f k8s/cloudnative-pg/03-monitoring.yaml
+        
+        # 6. Update PgBouncer if needed
+        kubectl apply -f k8s/pgbouncer-configmap.yaml
+        kubectl rollout status deployment/pgbouncer -n link-services --timeout=300s
+
+    - name: Post-deployment verification
+      run: |
+        echo "✅ Verifying deployment..."
+        
+        # Check cluster status
+        kubectl get cluster postgres-cluster -n link-services -o yaml
+        
+        # Verify primary election
+        PRIMARY=$(kubectl get cluster postgres-cluster -n link-services -o jsonpath='{.status.currentPrimary}')
+        echo "Current primary: $PRIMARY"
+        
+        # Check replication status
+        kubectl exec $PRIMARY -n link-services -- psql -U linkuser -d linkdb -c "SELECT * FROM pg_stat_replication;"
+        
+        # Test connectivity through PgBouncer
+        kubectl exec deployment/pgbouncer -n link-services -- psql -h localhost -p 5432 -U linkuser -d linkdb -c "SELECT version();"
+        
+        echo "🎉 Staging deployment completed successfully!"
+
+    - name: Run health checks
+      run: |
+        # Wait a bit for metrics to populate
+        sleep 30
+        
+        # Check if Prometheus can scrape metrics
+        if kubectl get servicemonitor postgres-cluster-monitor -n link-services; then
+          echo "✅ ServiceMonitor configured"
+        else
+          echo "⚠️  ServiceMonitor not found"
+        fi
+        
+        # Basic connectivity test
+        for i in {1..3}; do
+          if kubectl exec postgres-cluster-$i -n link-services -- pg_isready -U linkuser; then
+            echo "✅ postgres-cluster-$i is ready"
+          else
+            echo "❌ postgres-cluster-$i is not ready"
+          fi
+        done
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [validate-manifests, deploy-staging]
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && 
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_PROD_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_PROD_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: ${{ env.KUBECTL_VERSION }}
+
+    - name: Configure kubectl for production
+      run: |
+        aws eks update-kubeconfig --region us-west-2 --name link-production-cluster
+        kubectl config current-context
+
+    - name: Production deployment with extra safety
+      run: |
+        echo "🚀 Deploying CloudNativePG to production with safety checks..."
+        
+        # Extra safety: Check if this is a major version change
+        if kubectl get cluster postgres-cluster -n link-services -o jsonpath='{.spec.postgresql.parameters.version}' 2>/dev/null; then
+          CURRENT_VERSION=$(kubectl get cluster postgres-cluster -n link-services -o jsonpath='{.spec.postgresql.parameters.version}')
+          echo "Current PostgreSQL version: $CURRENT_VERSION"
+        fi
+        
+        # 1. Install/upgrade operator (production-safe)
+        kubectl apply -f k8s/cloudnative-pg/00-operator-install.yaml
+        kubectl wait --for=condition=Available deployment/cnpg-controller-manager -n cnpg-system --timeout=300s
+        
+        # 2. Apply secrets (production credentials)
+        kubectl apply -f k8s/cloudnative-pg/02-backup-configuration.yaml
+        
+        # 3. Deploy cluster with supervised updates for safety
+        kubectl patch cluster postgres-cluster -n link-services --type='merge' -p='{"spec":{"primaryUpdateStrategy":"supervised"}}' 2>/dev/null || true
+        kubectl apply -f k8s/cloudnative-pg/01-postgres-cluster.yaml
+        
+        # 4. Wait longer for production
+        kubectl wait --for=condition=Ready cluster/postgres-cluster -n link-services --timeout=900s
+        
+        # 5. Apply monitoring
+        kubectl apply -f k8s/cloudnative-pg/03-monitoring.yaml
+        
+        # 6. Update PgBouncer
+        kubectl apply -f k8s/pgbouncer-configmap.yaml
+        kubectl rollout status deployment/pgbouncer -n link-services --timeout=300s
+        
+        echo "🎉 Production deployment completed!"
+
+    - name: Production health verification
+      run: |
+        echo "🔍 Running comprehensive production health checks..."
+        
+        # Cluster health
+        kubectl get cluster postgres-cluster -n link-services
+        PRIMARY=$(kubectl get cluster postgres-cluster -n link-services -o jsonpath='{.status.currentPrimary}')
+        echo "Production primary: $PRIMARY"
+        
+        # Check all replicas are in sync
+        kubectl exec $PRIMARY -n link-services -- psql -U linkuser -d linkdb -c "
+          SELECT application_name, state, sync_state, replay_lsn 
+          FROM pg_stat_replication 
+          ORDER BY application_name;
+        "
+        
+        # Verify backup is working
+        kubectl get backup -n link-services --sort-by='.metadata.creationTimestamp' | tail -5
+        
+        # Test application connectivity
+        for svc in user chat discovery search ai; do
+          echo "Testing ${svc} service..."
+          if kubectl get deployment ${svc}-svc -n link-services >/dev/null 2>&1; then
+            kubectl exec deployment/${svc}-svc -n link-services -- timeout 10 curl -f http://localhost:8080/health || echo "⚠️  ${svc} health check timeout"
+          fi
+        done
+        
+        echo "✅ Production health verification completed!"
+
+    - name: Post-deployment notification
+      if: always()
+      run: |
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "✅ PostgreSQL HA deployment to production completed successfully!"
+        else
+          echo "❌ PostgreSQL HA deployment to production failed!"
+        fi

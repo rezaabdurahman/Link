@@ -210,7 +210,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   };
   
   // Handle new check-in submission
-  const handleNewCheckInSubmit = (checkInData: any): void => {
+  const handleNewCheckInSubmit = async (checkInData: any): Promise<void> => {
     // Create new check-in from the modal data
     const newCheckIn: ExtendedCheckIn = {
       id: `checkin-${Date.now()}`,
@@ -262,6 +262,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       
       return () => clearTimeout(timer);
     }
+    // Return undefined cleanup for cases where there's no scroll restoration needed
+    return undefined;
   }, [preserveScrollPosition, isMontageLoading, montageItems]);
 
 

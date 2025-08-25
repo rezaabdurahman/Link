@@ -1,0 +1,255 @@
+---
+# ArgoCD Application for CloudNativePG Operator
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-ha-operator
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: postgres-ha-operator
+    app.kubernetes.io/part-of: link-infrastructure
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/cloudnative-pg
+    directory:
+      include: '00-operator-install.yaml'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  
+  syncPolicy:
+    automated:
+      prune: false  # Don't auto-prune operator resources
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Health checks for operator
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  - group: ""
+    kind: Secret
+    jsonPointers:
+    - /data
+  
+  # Custom health checks
+  info:
+  - name: 'Operator Version'
+    value: 'CloudNativePG v1.23.0'
+  - name: 'Purpose'
+    value: 'PostgreSQL HA with Leader Election'
+
+---
+# ArgoCD Application for PostgreSQL HA Cluster
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-ha-cluster
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: postgres-ha-cluster
+    app.kubernetes.io/part-of: link-database
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/cloudnative-pg
+    directory:
+      include: '{01-postgres-cluster.yaml,02-backup-configuration.yaml,03-monitoring.yaml}'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m
+  
+  # Sync waves for proper ordering
+  ignoreDifferences:
+  - group: postgresql.cnpg.io
+    kind: Cluster
+    jsonPointers:
+    - /status
+    - /spec/instances  # Allow manual scaling
+  - group: ""
+    kind: Secret
+    jsonPointers:
+    - /data  # Allow secret updates without sync issues
+  
+  # Custom sync hooks
+  info:
+  - name: 'Cluster Size'
+    value: '3 instances (1 primary + 2 replicas)'
+  - name: 'Backup'
+    value: 'S3 continuous WAL archiving + daily snapshots'
+  - name: 'Monitoring'
+    value: 'Prometheus + Grafana + 15+ alerts'
+
+---
+# ArgoCD Application for PgBouncer Connection Pooling
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-ha-pgbouncer
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: postgres-ha-pgbouncer
+    app.kubernetes.io/part-of: link-database
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: k8s/infrastructure/database
+    directory:
+      include: 'pgbouncer-*.yaml'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: link-services
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - ServerSideApply=true
+    - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m
+  
+  # Depends on the PostgreSQL cluster
+  info:
+  - name: 'Purpose'
+    value: 'Connection pooling for PostgreSQL HA cluster'
+  - name: 'Pool Mode'
+    value: 'Transaction pooling for microservices'
+
+---
+# ArgoCD AppProject for PostgreSQL HA (optional - for better organization)
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: postgres-ha-project
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: postgres-ha-project
+    app.kubernetes.io/part-of: link-infrastructure
+spec:
+  description: PostgreSQL High Availability with CloudNativePG
+  
+  sourceRepos:
+  - 'https://github.com/RezaAbdurahman/Link.git'
+  
+  destinations:
+  - namespace: cnpg-system
+    server: https://kubernetes.default.svc
+  - namespace: link-services
+    server: https://kubernetes.default.svc
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: admissionregistration.k8s.io
+    kind: ValidatingAdmissionWebhook
+  - group: admissionregistration.k8s.io
+    kind: MutatingAdmissionWebhook
+  - group: storage.k8s.io
+    kind: StorageClass
+  
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: Secret
+  - group: ''
+    kind: ConfigMap
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: ServiceAccount
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: StatefulSet
+  - group: postgresql.cnpg.io
+    kind: Cluster
+  - group: postgresql.cnpg.io
+    kind: Backup
+  - group: postgresql.cnpg.io
+    kind: ScheduledBackup
+  - group: monitoring.coreos.com
+    kind: ServiceMonitor
+  - group: monitoring.coreos.com
+    kind: PrometheusRule
+  - group: policy
+    kind: PodDisruptionBudget
+  - group: batch
+    kind: CronJob
+  
+  roles:
+  - name: postgres-ha-admin
+    description: Full access to PostgreSQL HA resources
+    policies:
+    - p, proj:postgres-ha-project:postgres-ha-admin, applications, *, postgres-ha-project/*, allow
+    - p, proj:postgres-ha-project:postgres-ha-admin, repositories, *, *, allow
+    groups:
+    - link-platform-team
+  
+  - name: postgres-ha-readonly
+    description: Read-only access to PostgreSQL HA resources  
+    policies:
+    - p, proj:postgres-ha-project:postgres-ha-readonly, applications, get, postgres-ha-project/*, allow
+    - p, proj:postgres-ha-project:postgres-ha-readonly, applications, action/*, postgres-ha-project/*, deny
+    groups:
+    - link-dev-team

@@ -73,10 +73,6 @@ type ProfileService interface {
 	IsBlocked(userA, userB uuid.UUID) (bool, error)
 	GetBlockedUsers(userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
 	
-	// Hidden users management
-	GetHiddenUsers(userID uuid.UUID) ([]uuid.UUID, error)
-	HideUser(userID, userToHide uuid.UUID) error
-	UnhideUser(userID, userToUnhide uuid.UUID) error
 }
 
 type profileService struct {
@@ -630,69 +626,4 @@ func (s *profileService) RemoveFriend(userID, friendID uuid.UUID) error {
 	return nil
 }
 
-// GetHiddenUsers returns the list of users hidden by the specified user
-func (s *profileService) GetHiddenUsers(userID uuid.UUID) ([]uuid.UUID, error) {
-	user, err := s.userRepo.GetUserByID(userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrUserNotFound
-		}
-		return nil, fmt.Errorf("failed to get user: %w", err)
-	}
-
-	return user.HiddenUsers, nil
-}
-
-// HideUser adds a user to the current user's hidden list
-func (s *profileService) HideUser(userID, userToHide uuid.UUID) error {
-	// Get the current user
-	user, err := s.userRepo.GetUserByID(userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrUserNotFound
-		}
-		return fmt.Errorf("failed to get user: %w", err)
-	}
-
-	// Verify the user to hide exists
-	_, err = s.userRepo.GetUserByID(userToHide)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrUserNotFound
-		}
-		return fmt.Errorf("failed to verify user to hide exists: %w", err)
-	}
-
-	// Add to hidden users list
-	user.HideUser(userToHide)
-
-	// Update the user in database
-	if err := s.userRepo.UpdateUser(user); err != nil {
-		return fmt.Errorf("failed to update user hidden list: %w", err)
-	}
-
-	return nil
-}
-
-// UnhideUser removes a user from the current user's hidden list
-func (s *profileService) UnhideUser(userID, userToUnhide uuid.UUID) error {
-	// Get the current user
-	user, err := s.userRepo.GetUserByID(userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrUserNotFound
-		}
-		return fmt.Errorf("failed to get user: %w", err)
-	}
-
-	// Remove from hidden users list
-	user.UnhideUser(userToUnhide)
-
-	// Update the user in database
-	if err := s.userRepo.UpdateUser(user); err != nil {
-		return fmt.Errorf("failed to update user hidden list: %w", err)
-	}
-
-	return nil
-}
 

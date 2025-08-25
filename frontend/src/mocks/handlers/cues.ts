@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import { API_CONFIG } from '../../config/appConstants';
+import { extractUserId } from '../utils/mockHelpers';
 
 // Mock cue storage
 interface MockCue {
@@ -93,24 +94,15 @@ const findMatches = (newCue: MockCue) => {
 export const cueHandlers = [
   // GET /api/v1/cues - Get current user's cue
   http.get(`${API_CONFIG.BASE_URL}/cues`, ({ request }) => {
-    const userId = request.headers.get('X-User-ID');
-    if (!userId) {
-      return HttpResponse.json(
-        { error: 'unauthorized', message: 'User not authenticated', code: 401 },
-        { status: 401 }
-      );
-    }
+    console.log('📝 MSW: Get current user cue request received');
+    const userId = extractUserId(request);
 
-    const userCue = mockCues.find(cue => cue.user_id === userId && cue.is_active);
-    
-    if (!userCue) {
-      return HttpResponse.json(
-        { error: 'not_found', message: 'No active cue found', code: 404 },
-        { status: 404 }
-      );
-    }
-
-    return HttpResponse.json(userCue);
+    // For demo mode, return no active cue (404 is normal)
+    console.log('📝 MSW: No active cue for demo user - returning 404');
+    return HttpResponse.json(
+      { error: 'not_found', message: 'No active cue found', code: 404 },
+      { status: 404 }
+    );
   }),
 
   // POST /api/v1/cues - Create a new cue
@@ -228,29 +220,14 @@ export const cueHandlers = [
 
   // GET /api/v1/cues/matches - Get user's cue matches
   http.get(`${API_CONFIG.BASE_URL}/cues/matches`, ({ request }) => {
-    const userId = request.headers.get('X-User-ID');
-    if (!userId) {
-      return HttpResponse.json(
-        { error: 'unauthorized', message: 'User not authenticated', code: 401 },
-        { status: 401 }
-      );
-    }
+    console.log('📝 MSW: Get cue matches request received');
+    const userId = extractUserId(request);
 
-    const userMatches = mockMatches
-      .filter(match => 
-        match.is_active && (match.user1_id === userId || match.user2_id === userId)
-      )
-      .map(match => ({
-        id: match.id,
-        matched_with: match.user1_id === userId ? match.user2_id : match.user1_id,
-        match_score: match.match_score,
-        is_viewed: match.user1_id === userId ? match.user1_viewed : match.user2_viewed,
-        created_at: match.created_at
-      }));
-
+    // For demo mode, return empty matches array
+    console.log('📝 MSW: Returning empty cue matches for demo');
     return HttpResponse.json({
-      matches: userMatches,
-      count: userMatches.length
+      matches: [],
+      count: 0
     });
   }),
 

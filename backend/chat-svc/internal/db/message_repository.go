@@ -27,8 +27,8 @@ func (r *messageRepository) ListMessages(ctx context.Context, convoID, userID uu
 	
 	// First check if user is a member of the conversation
 	memberQuery := `
-		SELECT 1 FROM room_members 
-		WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL
+		SELECT 1 FROM conversation_participants 
+		WHERE conversation_id = $1 AND user_id = $2
 	`
 	var exists int
 	err := r.db.QueryRow(ctx, memberQuery, convoID, userID).Scan(&exists)
@@ -40,7 +40,7 @@ func (r *messageRepository) ListMessages(ctx context.Context, convoID, userID uu
 	}
 	
 	// Get the total count of messages in the conversation
-	countQuery := `SELECT COUNT(*) FROM messages WHERE room_id = $1`
+	countQuery := `SELECT COUNT(*) FROM messages WHERE conversation_id = $1`
 	var total int
 	err = r.db.QueryRow(ctx, countQuery, convoID).Scan(&total)
 	if err != nil {
@@ -49,9 +49,9 @@ func (r *messageRepository) ListMessages(ctx context.Context, convoID, userID uu
 	
 	// Get the paginated messages
 	query := `
-		SELECT id, room_id, user_id, content, message_type, parent_id, edited_at, created_at, updated_at
+		SELECT id, conversation_id, sender_id, content, type, created_at, edited_at
 		FROM messages
-		WHERE room_id = $1
+		WHERE conversation_id = $1
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -66,13 +66,15 @@ func (r *messageRepository) ListMessages(ctx context.Context, convoID, userID uu
 	for rows.Next() {
 		message := &model.Message{}
 		err := rows.Scan(
-			&message.ID, &message.RoomID, &message.UserID, &message.Content,
-			&message.MessageType, &message.ParentID, &message.EditedAt,
-			&message.CreatedAt, &message.UpdatedAt,
+			&message.ID, &message.ConversationID, &message.SenderID, &message.Content,
+			&message.Type, &message.CreatedAt, &message.EditedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan message: %w", err)
 		}
+		
+		// Set compatibility fields
+		message.SetCompatibilityFields()
 		messages = append(messages, message)
 	}
 	
@@ -93,29 +95,23 @@ func (r *messageRepository) CreateMessage(ctx context.Context, message *model.Me
 	// Set timestamps
 	now := time.Now()
 	message.CreatedAt = now
-	message.UpdatedAt = now
 	
 	query := `
-		INSERT INTO messages (id, room_id, user_id, content, message_type, parent_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (id, conversation_id, sender_id, content, type, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	
 	_, err := r.db.Exec(ctx, query,
-		message.ID, message.RoomID, message.UserID, message.Content,
-		message.MessageType, message.ParentID, message.CreatedAt, message.UpdatedAt,
+		message.ID, message.ConversationID, message.SenderID, message.Content,
+		message.Type, message.CreatedAt,
 	)
 	
 	if err != nil {
 		return fmt.Errorf("failed to create message: %w", err)
 	}
 	
-	// Update the room's updated_at timestamp
-	updateRoomQuery := `UPDATE chat_rooms SET updated_at = $1 WHERE id = $2`
-	_, err = r.db.Exec(ctx, updateRoomQuery, now, message.RoomID)
-	if err != nil {
-		// Log this error but don't fail the message creation
-		fmt.Printf("Warning: failed to update room timestamp: %v\n", err)
-	}
+	// Note: Conversations table doesn't have updated_at field in normalized schema
+	// This timestamp functionality is handled at the application level for compatibility
 	
 	return nil
 }

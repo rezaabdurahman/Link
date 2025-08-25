@@ -1,0 +1,125 @@
+version: 2
+updates:
+  # Frontend Dependencies (npm)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "@core-team"
+    commit-message:
+      prefix: "deps(frontend)"
+      include: "scope"
+    groups:
+      react:
+        patterns:
+          - "react*"
+          - "@types/react*"
+      testing:
+        patterns:
+          - "*jest*"
+          - "*testing-library*"
+          - "cypress*"
+          - "playwright*"
+      build-tools:
+        patterns:
+          - "vite*"
+          - "typescript*"
+          - "eslint*"
+          - "@typescript-eslint*"
+      
+  # Backend Dependencies (Go modules)
+  - package-ecosystem: "gomod"
+    directories:
+      - "/backend/api-gateway"
+      - "/backend/user-svc"
+      - "/backend/chat-svc"
+      - "/backend/ai-svc"
+      - "/backend/discovery-svc"
+      - "/backend/search-svc"
+      - "/backend/shared-libs"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "@backend-team"
+    commit-message:
+      prefix: "deps(backend)"
+      include: "scope"
+    groups:
+      database:
+        patterns:
+          - "*postgres*"
+          - "*pgx*"
+          - "*redis*"
+      frameworks:
+        patterns:
+          - "*gin*"
+          - "*echo*"
+          - "*fiber*"
+      observability:
+        patterns:
+          - "*prometheus*"
+          - "*opentelemetry*"
+          - "*logrus*"
+
+  # Docker Dependencies
+  - package-ecosystem: "docker"
+    directories:
+      - "/backend"
+      - "/frontend"
+      - "/monitoring"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "@devops-team"
+    commit-message:
+      prefix: "deps(docker)"
+
+  # GitHub Actions Dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/.github/workflows"
+    schedule:
+      interval: "monthly"
+      day: "1"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "@devops-team"
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      core-actions:
+        patterns:
+          - "actions/*"
+      security:
+        patterns:
+          - "*security*"
+          - "*trivy*"
+          - "gitleaks*"
+      deployment:
+        patterns:
+          - "*deploy*"
+          - "*kubernetes*"
+          - "*helm*"
+
+  # Terraform Dependencies  
+  - package-ecosystem: "terraform"
+    directory: "/terraform"
+    schedule:
+      interval: "monthly"
+      day: "15"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "@infrastructure-team"
+    commit-message:
+      prefix: "deps(terraform)"

@@ -1,0 +1,672 @@
+name: Safety Checks & Quality Gates
+
+# Additional safety checks that run on every PR and push
+# These must pass before any deployment can proceed
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment being deployed to'
+        required: true
+        type: string
+
+env:
+  SECURITY_SCAN_TIMEOUT: 300
+  PERFORMANCE_BUDGET_MS: 5000
+
+jobs:
+  # Security scans
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository  
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Full history for better security scanning
+        
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        exit-code: '1' # Fail on HIGH/CRITICAL vulnerabilities
+        severity: 'HIGH,CRITICAL'
+        
+    - name: Upload Trivy scan results
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+        
+    - name: Scan for secrets with GitLeaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Enhanced credential and secret scanning
+      run: |
+        echo "🔍 Enhanced scanning for hardcoded credentials and secrets..."
+        
+        # Create comprehensive patterns file
+        cat > secret_patterns.txt << 'EOF'
+        # Common credential patterns
+        (password|passwd|pwd|secret|key|token|auth).*=.*['"'"'"][^'"'"'"]{8,}
+        # AWS credentials
+        AKIA[0-9A-Z]{16}
+        aws_access_key_id.*=.*['"'"'"][^'"'"'"]{16,}
+        aws_secret_access_key.*=.*['"'"'"][^'"'"'"]{32,}
+        # Database connections
+        postgres://[^:]+:[^@]+@
+        mysql://[^:]+:[^@]+@
+        mongodb://[^:]+:[^@]+@
+        redis://[^:]+:[^@]+@
+        # API keys
+        ['"'"'"][0-9a-zA-Z_-]{32,}['"'"'"].*api[_-]?key
+        ['"'"'"]sk_[0-9a-zA-Z_-]{24,}['"'"'"]
+        ['"'"'"]pk_[0-9a-zA-Z_-]{24,}['"'"'"]
+        # JWT tokens
+        eyJ[A-Za-z0-9_=-]+\.eyJ[A-Za-z0-9_=-]+\.[A-Za-z0-9_=-]*
+        # Private keys
+        -----BEGIN RSA PRIVATE KEY-----
+        -----BEGIN OPENSSH PRIVATE KEY-----
+        -----BEGIN PRIVATE KEY-----
+        # GitHub tokens
+        gh[pousr]_[A-Za-z0-9_]{36}
+        # Generic high-entropy strings in assignments
+        ['"'"'"][A-Za-z0-9+/=]{40,}['"'"'"]
+        EOF
+        
+        # Scan with improved patterns
+        scan_failed=false
+        
+        while IFS= read -r pattern; do
+          # Skip comments and empty lines
+          [[ "$pattern" =~ ^#.*$ ]] || [[ -z "$pattern" ]] && continue
+          
+          if grep -r -i --include="*.go" --include="*.ts" --include="*.js" --include="*.yml" --include="*.yaml" \
+            --include="*.json" --include="*.env*" --exclude-dir="node_modules" --exclude-dir=".git" \
+            -E "$pattern" . 2>/dev/null; then
+            echo "❌ Found potential secret with pattern: $pattern"
+            scan_failed=true
+          fi
+        done < secret_patterns.txt
+        
+        # Check for environment variable assignments with suspicious values
+        if find . -name "*.env*" -o -name ".env" | xargs grep -E ".*=.*[A-Za-z0-9+/=]{20,}" 2>/dev/null; then
+          echo "⚠️ Found potential secrets in environment files"
+          echo "Make sure environment files are properly excluded from version control"
+        fi
+        
+        # Check for secrets in Kubernetes manifests
+        if find k8s/ -name "*.yaml" -o -name "*.yml" 2>/dev/null | xargs grep -l "data:" | while read file; do
+          echo "Checking base64 encoded secrets in: $file"
+          if yq eval '.data | to_entries | .[] | select(.value | length > 20)' "$file" 2>/dev/null | grep -q "value:"; then
+            echo "⚠️ Found potential base64 encoded secrets in: $file"
+          fi
+        done; then
+          true # Continue processing
+        fi
+        
+        if [ "$scan_failed" = true ]; then
+          echo "❌ Credential scan failed - potential secrets detected!"
+          echo "Please remove hardcoded credentials and use proper secret management"
+          exit 1
+        else
+          echo "✅ Enhanced credential scan passed"
+        fi
+
+    - name: Scan container images for vulnerabilities
+      run: |
+        echo "🐳 Scanning container images referenced in Kubernetes manifests..."
+        
+        # Install yq if not already installed
+        sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        sudo chmod +x /usr/local/bin/yq
+        
+        # Extract container images from Kubernetes manifests
+        images=()
+        
+        # From Helm values files
+        if [ -f "k8s/helm/link-app/values.yaml" ]; then
+          registry=$(yq eval '.image.registry' k8s/helm/link-app/values.yaml)
+          
+          # Extract service images
+          for service in userSvc apiGateway chatSvc discoverySvc aiSvc searchSvc featureSvc; do
+            repo=$(yq eval ".services.${service}.image.repository" k8s/helm/link-app/values.yaml)
+            tag=$(yq eval ".services.${service}.image.tag" k8s/helm/link-app/values.yaml)
+            if [ "$repo" != "null" ] && [ "$tag" != "null" ]; then
+              images+=("$registry/$repo:$tag")
+            fi
+          done
+          
+          # Frontend image
+          frontend_repo=$(yq eval '.frontend.image.repository' k8s/helm/link-app/values.yaml)
+          frontend_tag=$(yq eval '.frontend.image.tag' k8s/helm/link-app/values.yaml)
+          if [ "$frontend_repo" != "null" ] && [ "$frontend_tag" != "null" ]; then
+            images+=("$registry/$frontend_repo:$frontend_tag")
+          fi
+        fi
+        
+        # From direct Kubernetes manifests
+        find k8s/ -name "*.yaml" -not -path "*/templates/*" -exec grep -l "image:" {} \; | while read file; do
+          yq eval '.. | select(has("image")) | .image' "$file" | grep -v "null" >> temp_images.txt
+        done
+        
+        if [ -f "temp_images.txt" ]; then
+          while IFS= read -r image; do
+            if [[ "$image" != *"@sha256"* ]] && [[ "$image" != "" ]]; then
+              images+=("$image")
+            fi
+          done < temp_images.txt
+          rm -f temp_images.txt
+        fi
+        
+        # Remove duplicates
+        unique_images=($(printf "%s\n" "${images[@]}" | sort -u))
+        
+        echo "Found ${#unique_images[@]} unique container images to scan:"
+        printf '%s\n' "${unique_images[@]}"
+        
+        # Scan each image with Trivy
+        scan_failed=false
+        for image in "${unique_images[@]}"; do
+          echo ""
+          echo "🔍 Scanning image: $image"
+          
+          # Skip scanning if image is not accessible (may be built later)
+          if [[ "$image" == *"ghcr.io/${{ github.repository }}"* ]]; then
+            echo "⏭️ Skipping scan of locally built image: $image"
+            continue
+          fi
+          
+          if timeout 120 trivy image --severity HIGH,CRITICAL --format json --quiet "$image" > "trivy-$image.json" 2>/dev/null; then
+            # Check if vulnerabilities were found
+            vuln_count=$(jq -r '.Results[]?.Vulnerabilities // [] | length' "trivy-$image.json" | awk '{sum+=$1} END {print sum}')
+            if [ "$vuln_count" -gt 0 ]; then
+              echo "❌ Found $vuln_count HIGH/CRITICAL vulnerabilities in $image"
+              trivy image --severity HIGH,CRITICAL --format table "$image"
+              scan_failed=true
+            else
+              echo "✅ No HIGH/CRITICAL vulnerabilities found in $image"
+            fi
+          else
+            echo "⚠️ Could not scan $image (image may not be available yet)"
+          fi
+        done
+        
+        if [ "$scan_failed" = true ]; then
+          echo ""
+          echo "❌ Container image security scan failed - vulnerabilities found"
+          echo "Please update base images or dependencies to fix security issues"
+          exit 1
+        else
+          echo ""
+          echo "✅ All accessible container images passed security scan"
+        fi
+
+    - name: Kubernetes security best practices scan
+      run: |
+        echo "🔐 Scanning Kubernetes configurations for security best practices..."
+        
+        # Install Checkov
+        pip3 install checkov
+        
+        # Install Datree CLI
+        curl https://get.datree.io | /bin/bash
+        
+        # Run Checkov scan on Kubernetes manifests
+        echo "Running Checkov scan..."
+        if checkov -d k8s/ --framework kubernetes --check CKV_K8S --compact --quiet; then
+          echo "✅ Checkov security scan passed"
+        else
+          echo "❌ Checkov found security issues"
+          # Don't fail the build for now, just warn
+          echo "⚠️ Security issues detected but not blocking deployment"
+        fi
+        
+        # Run Datree policy check (if policies exist)
+        echo "Running Datree policy scan..."
+        if [ -f ".datree/config.yaml" ]; then
+          # Custom policies configured
+          datree test k8s/**/*.yaml --only-k8s-files
+        else
+          # Use default policies
+          echo "No custom Datree policies found, using default rules..."
+          datree test k8s/**/*.yaml --only-k8s-files --policy-config https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/Datree/default-rules.yaml || {
+            echo "⚠️ Datree scan completed with warnings"
+          }
+        fi
+        
+    - name: RBAC and Service Account validation
+      run: |
+        echo "🔑 Validating RBAC and Service Account configurations..."
+        
+        # Check for overprivileged service accounts
+        find k8s/ -name "*.yaml" -exec grep -l "kind: ClusterRole\|kind: Role" {} \; | while read file; do
+          echo "Checking RBAC file: $file"
+          
+          # Check for wildcard permissions
+          if yq eval '.. | select(has("resources")) | .resources[]' "$file" | grep -q '\*'; then
+            echo "⚠️ Found wildcard resource permissions in: $file"
+          fi
+          
+          if yq eval '.. | select(has("verbs")) | .verbs[]' "$file" | grep -q '\*'; then
+            echo "⚠️ Found wildcard verb permissions in: $file"
+          fi
+          
+          # Check for dangerous permissions
+          dangerous_verbs=("create" "delete" "update" "patch")
+          for verb in "${dangerous_verbs[@]}"; do
+            if yq eval '.. | select(has("verbs")) | .verbs[]' "$file" | grep -q "$verb"; then
+              resources=$(yq eval '.. | select(has("resources")) | .resources[]' "$file" | tr '\n' ' ')
+              echo "ℹ️ Found $verb permissions on resources: $resources in $file"
+            fi
+          done
+        done
+        
+        # Check ServiceAccount configurations
+        find k8s/ -name "*.yaml" -exec grep -l "kind: ServiceAccount" {} \; | while read file; do
+          echo "Checking ServiceAccount: $file"
+          
+          # Check for automountServiceAccountToken
+          automount=$(yq eval '.automountServiceAccountToken' "$file")
+          if [ "$automount" = "true" ] || [ "$automount" = "null" ]; then
+            echo "⚠️ ServiceAccount allows token automounting: $file"
+          fi
+        done
+        
+        # Check Pod security contexts
+        find k8s/ -name "*.yaml" -exec grep -l "kind: Deployment\|kind: StatefulSet\|kind: DaemonSet" {} \; | while read file; do
+          echo "Checking security context in: $file"
+          
+          # Check runAsRoot
+          if ! yq eval '.spec.template.spec.securityContext.runAsNonRoot' "$file" | grep -q "true"; then
+            echo "⚠️ Pod may run as root: $file"
+          fi
+          
+          # Check for privileged containers
+          if yq eval '.spec.template.spec.containers[].securityContext.privileged' "$file" | grep -q "true"; then
+            echo "❌ Privileged container found: $file"
+          fi
+          
+          # Check for capabilities
+          caps=$(yq eval '.spec.template.spec.containers[].securityContext.capabilities.add[]?' "$file" 2>/dev/null | grep -v "null" || true)
+          if [ -n "$caps" ]; then
+            echo "⚠️ Container capabilities added: $caps in $file"
+          fi
+        done
+        
+        echo "✅ RBAC and Service Account validation completed"
+
+  # Database safety checks
+  database-safety:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'migrations/') || contains(github.event.pull_request.changed_files, 'migrations/')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Validate database migrations
+      run: |
+        echo "🗄️ Validating database migrations..."
+        
+        # Check for dangerous migration patterns
+        if find . -name "*.sql" -path "*/migrations/*" -exec grep -l "DROP\|DELETE\|TRUNCATE" {} \; | grep -q .; then
+          echo "⚠️ Found potentially destructive migration operations:"
+          find . -name "*.sql" -path "*/migrations/*" -exec grep -l "DROP\|DELETE\|TRUNCATE" {} \;
+          echo ""
+          echo "Please ensure these operations are safe and have been reviewed."
+          echo "Consider using soft deletes or data archiving instead."
+          
+          # In production environments, fail the check
+          if [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "❌ Destructive operations not allowed in production migrations"
+            exit 1
+          fi
+        fi
+        
+        # Check for missing rollback scripts
+        for migration in $(find . -name "*.up.sql" -path "*/migrations/*"); do
+          rollback="${migration/.up.sql/.down.sql}"
+          if [[ ! -f "$rollback" ]]; then
+            echo "❌ Missing rollback script for: $migration"
+            echo "Please create: $rollback"
+            exit 1
+          fi
+        done
+        
+        echo "✅ Migration safety checks passed"
+
+  # Performance budget enforcement
+  performance-budget:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'frontend/') || contains(github.event.pull_request.changed_files, 'frontend/')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: frontend
+      run: npm ci
+      
+    - name: Build application
+      working-directory: frontend  
+      run: npm run build
+      
+    - name: Analyze bundle size
+      working-directory: frontend
+      run: |
+        echo "📦 Analyzing bundle size..."
+        
+        # Check main bundle size (budget: 500KB gzipped)
+        main_size=$(du -k dist/assets/*.js | sort -n | tail -1 | cut -f1)
+        main_size_kb=$((main_size))
+        
+        echo "Main bundle size: ${main_size_kb}KB"
+        
+        if [[ $main_size_kb -gt 500 ]]; then
+          echo "❌ Main bundle exceeds 500KB budget (${main_size_kb}KB)"
+          echo "Consider code splitting or removing unused dependencies"
+          exit 1
+        fi
+        
+        # Check vendor bundle size (budget: 1MB gzipped)
+        if ls dist/assets/vendor*.js 2>/dev/null; then
+          vendor_size=$(du -k dist/assets/vendor*.js | sort -n | tail -1 | cut -f1)
+          vendor_size_kb=$((vendor_size))
+          echo "Vendor bundle size: ${vendor_size_kb}KB"
+          
+          if [[ $vendor_size_kb -gt 1024 ]]; then
+            echo "❌ Vendor bundle exceeds 1MB budget (${vendor_size_kb}KB)"
+            exit 1
+          fi
+        fi
+        
+        echo "✅ Bundle size within performance budget"
+
+  # API contract validation
+  api-contract-validation:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'backend/') || contains(github.event.pull_request.changed_files, 'backend/')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        
+    - name: Validate API contracts
+      run: |
+        echo "🔌 Validating API contracts..."
+        
+        # Check for breaking changes in API endpoints
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          # Get the base commit
+          git fetch origin ${{ github.base_ref }}
+          base_commit="origin/${{ github.base_ref }}"
+          
+          # Check for removed endpoints (breaking changes)
+          echo "Checking for removed API endpoints..."
+          removed_routes=$(git diff $base_commit...HEAD --unified=0 \
+            | grep "^-.*router\|^-.*Handle\|^-.*GET\|^-.*POST\|^-.*PUT\|^-.*DELETE" \
+            | grep -v "^++" || true)
+          
+          if [[ -n "$removed_routes" ]]; then
+            echo "⚠️ Potentially removed API endpoints detected:"
+            echo "$removed_routes"
+            echo ""
+            echo "If removing endpoints, ensure backward compatibility or coordinate with API consumers"
+          fi
+        fi
+        
+        # Validate OpenAPI specs if they exist
+        if find . -name "openapi*.yml" -o -name "swagger*.yml" -o -name "api*.yml" | grep -q .; then
+          echo "Validating OpenAPI specifications..."
+          # You can add OpenAPI validation here
+          echo "✅ OpenAPI validation would run here"
+        fi
+        
+        echo "✅ API contract validation completed"
+
+  # Configuration validation
+  config-validation:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Validate Kubernetes manifests
+      if: contains(github.event.head_commit.modified, 'k8s/') || contains(github.event.pull_request.changed_files, 'k8s/')
+      run: |
+        echo "☸️ Validating Kubernetes manifests..."
+        
+        # Install validation tools
+        echo "Installing validation tools..."
+        
+        # Install kubeval for K8s API validation
+        curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+        sudo mv kubeval /usr/local/bin
+        
+        # Install kubeconform (more modern alternative)
+        curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+        sudo mv kubeconform /usr/local/bin
+        
+        # Install Helm
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        
+        # Install OPA/Conftest for policy validation
+        curl -L https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_linux_x86_64.tar.gz | tar xz
+        sudo mv conftest /usr/local/bin
+        
+        # Install yq
+        sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        sudo chmod +x /usr/local/bin/yq
+        
+        # 1. Basic YAML syntax validation
+        echo "1️⃣ Validating YAML syntax..."
+        find k8s/ -name "*.yml" -o -name "*.yaml" | while read file; do
+          echo "Checking: $file"
+          if ! yq eval '.' "$file" > /dev/null 2>&1; then
+            echo "❌ Invalid YAML syntax in: $file"
+            exit 1
+          fi
+        done
+        
+        # 2. Kubernetes API validation
+        echo "2️⃣ Validating against Kubernetes API..."
+        find k8s/ -name "*.yaml" -not -path "*/templates/*" | while read file; do
+          echo "Validating K8s API: $file"
+          if ! kubeconform -summary -verbose "$file"; then
+            echo "❌ K8s API validation failed for: $file"
+            exit 1
+          fi
+        done
+        
+        # 3. Helm chart validation
+        echo "3️⃣ Validating Helm charts..."
+        if [ -d "k8s/helm" ]; then
+          for chart_dir in k8s/helm/*/; do
+            if [ -f "$chart_dir/Chart.yaml" ]; then
+              echo "Linting Helm chart: $chart_dir"
+              helm lint "$chart_dir"
+              
+              # Validate with different values files
+              for values_file in "$chart_dir"/values*.yaml; do
+                if [ -f "$values_file" ]; then
+                  echo "Templating with: $(basename $values_file)"
+                  helm template test-release "$chart_dir" -f "$values_file" | kubeconform -summary -
+                fi
+              done
+            fi
+          done
+        fi
+        
+        # 4. Required labels validation
+        echo "4️⃣ Checking required labels..."
+        find k8s/ -name "*.yml" -o -name "*.yaml" | while read file; do
+          if grep -q "kind: Deployment\|kind: Service\|kind: ConfigMap" "$file"; then
+            if ! grep -q "app:" "$file"; then
+              echo "⚠️ Missing required label 'app' in: $file"
+            fi
+            # Check for proper label structure
+            if grep -q "kind: Deployment" "$file"; then
+              if ! yq eval '.metadata.labels.version // .spec.template.metadata.labels.version' "$file" | grep -v "null" > /dev/null; then
+                echo "⚠️ Missing version label in Deployment: $file"
+              fi
+            fi
+          fi
+        done
+        
+        # 5. Resource limits validation
+        echo "5️⃣ Checking resource limits..."
+        find k8s/ -name "*.yaml" -exec grep -l "kind: Deployment" {} \; | while read file; do
+          if ! yq eval '.spec.template.spec.containers[].resources.limits' "$file" | grep -v "null" > /dev/null; then
+            echo "⚠️ Missing resource limits in Deployment: $file"
+          fi
+          if ! yq eval '.spec.template.spec.containers[].resources.requests' "$file" | grep -v "null" > /dev/null; then
+            echo "⚠️ Missing resource requests in Deployment: $file"
+          fi
+        done
+        
+        # 6. Security context validation
+        echo "6️⃣ Checking security contexts..."
+        find k8s/ -name "*.yaml" -exec grep -l "kind: Deployment" {} \; | while read file; do
+          # Check for runAsNonRoot
+          if ! yq eval '.spec.template.spec.securityContext.runAsNonRoot' "$file" | grep -q "true"; then
+            echo "⚠️ Deployment should run as non-root: $file"
+          fi
+          # Check for readOnlyRootFilesystem
+          if ! yq eval '.spec.template.spec.containers[].securityContext.readOnlyRootFilesystem' "$file" | grep -q "true"; then
+            echo "⚠️ Deployment should use read-only root filesystem: $file"
+          fi
+        done
+        
+        # 7. Network policy validation
+        echo "7️⃣ Checking network policies..."
+        if [ -d "k8s/access" ]; then
+          find k8s/access -name "*.yaml" -exec grep -l "kind: NetworkPolicy" {} \; | while read file; do
+            echo "Validating NetworkPolicy: $file"
+            # Ensure ingress/egress are properly defined
+            if ! yq eval '.spec | has("ingress") or has("egress")' "$file" | grep -q "true"; then
+              echo "⚠️ NetworkPolicy missing ingress/egress rules: $file"
+            fi
+          done
+        fi
+        
+        # 8. PodDisruptionBudget validation
+        echo "8️⃣ Checking PodDisruptionBudgets..."
+        find k8s/ -name "*.yaml" -exec grep -l "kind: PodDisruptionBudget" {} \; | while read file; do
+          echo "Validating PodDisruptionBudget: $file"
+          # Ensure either minAvailable or maxUnavailable is set
+          if ! yq eval '.spec | has("minAvailable") or has("maxUnavailable")' "$file" | grep -q "true"; then
+            echo "❌ PodDisruptionBudget missing minAvailable or maxUnavailable: $file"
+            exit 1
+          fi
+        done
+        
+        # 9. Deployment strategy validation
+        echo "9️⃣ Checking deployment strategies..."
+        if [ -f "k8s/helm/link-app/values.yaml" ]; then
+          # Check for consistent deployment strategy configuration
+          services_with_canary=$(yq eval '.services | to_entries | map(select(.value.deploymentStrategy == "canary")) | .[].key' k8s/helm/link-app/values.yaml)
+          if [ -n "$services_with_canary" ]; then
+            # Verify canary resources exist for services using canary strategy
+            if [ ! -f "k8s/helm/link-app/templates/canary-configs.yaml" ]; then
+              echo "❌ Services configured for canary deployment but no canary configs found"
+              exit 1
+            fi
+            echo "✅ Canary deployment configuration validated"
+          fi
+        fi
+        
+        echo "✅ Comprehensive Kubernetes manifest validation completed"
+        
+    - name: Validate Terraform configurations
+      if: contains(github.event.head_commit.modified, 'terraform/') || contains(github.event.pull_request.changed_files, 'terraform/')
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+        
+    - name: Terraform validation
+      if: contains(github.event.head_commit.modified, 'terraform/') || contains(github.event.pull_request.changed_files, 'terraform/')
+      run: |
+        echo "🏗️ Validating Terraform configurations..."
+        
+        find terraform/ -name "*.tf" -path "*/environments/*" | while read file; do
+          dir=$(dirname "$file")
+          echo "Validating: $dir"
+          cd "$dir"
+          
+          terraform init -backend=false
+          terraform validate
+          
+          cd - > /dev/null
+        done
+        
+        echo "✅ Terraform validation completed"
+
+  # Final safety gate
+  safety-gate-summary:
+    needs: [security-scan, database-safety, performance-budget, api-contract-validation, config-validation]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check all safety gates
+      run: |
+        echo "🔒 Safety Gate Summary"
+        echo "===================="
+        echo ""
+        
+        # Check each job result
+        security_result="${{ needs.security-scan.result }}"
+        database_result="${{ needs.database-safety.result }}"  
+        performance_result="${{ needs.performance-budget.result }}"
+        api_result="${{ needs.api-contract-validation.result }}"
+        config_result="${{ needs.config-validation.result }}"
+        
+        echo "Security scan: $security_result"
+        echo "Database safety: $database_result"
+        echo "Performance budget: $performance_result"  
+        echo "API contract validation: $api_result"
+        echo "Config validation: $config_result"
+        echo ""
+        
+        # Fail if any critical check failed
+        if [[ "$security_result" == "failure" ]]; then
+          echo "❌ SECURITY GATE FAILED - Deployment blocked"
+          exit 1
+        fi
+        
+        if [[ "$database_result" == "failure" ]]; then
+          echo "❌ DATABASE SAFETY GATE FAILED - Deployment blocked" 
+          exit 1
+        fi
+        
+        if [[ "$performance_result" == "failure" ]]; then
+          echo "⚠️ PERFORMANCE GATE FAILED - Consider optimizing"
+          # Don't fail deployment for performance, but warn
+        fi
+        
+        echo "✅ All critical safety gates passed"
+        echo ""
+        echo "🚀 Deployment can proceed safely"

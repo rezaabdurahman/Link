@@ -1,21 +1,26 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
-
-# Set working directory
+# Dependencies stage - for better layer caching
+FROM golang:1.23-alpine AS deps
 WORKDIR /app
 
-# Install git and ca-certificates for Go module dependencies
+# Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy shared libs and go mod and sum files
-COPY shared-libs ./shared-libs
+# Copy go mod files first for better caching
+COPY shared-libs/go.mod shared-libs/go.sum ./shared-libs/
 COPY search-svc/go.mod search-svc/go.sum ./
 
+# Download dependencies (cached unless go.mod/go.sum changes)
+RUN go mod download
+
+# Build stage
+FROM deps AS builder
+
 # Copy source code
+COPY shared-libs/ ./shared-libs/
 COPY search-svc/ .
 
-# Tidy dependencies and download
-RUN go mod tidy && go mod download
+# Tidy and ensure all dependencies
+RUN go mod tidy
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
@@ -26,8 +31,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # Build migration CLI
 RUN cd shared-libs && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o migrate ./migrations/cmd/migrate
 
-# Final stage
-FROM alpine:3.20.3
+# Final stage - minimal production image
+FROM alpine:3.20.3 AS production
 
 # Install required tools for database connectivity and healthchecks
 RUN apk --no-cache add ca-certificates netcat-openbsd wget

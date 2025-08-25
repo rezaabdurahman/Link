@@ -11,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
  * when the app is running in demo mode
  */
 const DemoInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isInitialized } = useAuth();
+  const { user, isInitialized, refresh } = useAuth();
   const [demoSetupAttempted, setDemoSetupAttempted] = useState(false);
 
   useEffect(() => {
@@ -19,16 +19,23 @@ const DemoInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
       // Only use build-time environment variables for security
       const isDemoMode = APP_CONFIG.isDemo;
       
+      console.log('🔧 Demo init check:', { isDemoMode, user: !!user, demoSetupAttempted, isInitialized });
+      
       // Only auto-login in demo mode when no user is authenticated and we haven't tried yet
       if (isDemoMode && !user && !demoSetupAttempted && isInitialized) {
         try {
+          console.log('🔧 Starting demo login...');
           setDemoSetupAttempted(true);
           
           // Use the 'jane' demo user for a more realistic demo experience
-          await devLogin(DEV_USERS.jane);
+          const result = await devLogin(DEV_USERS.jane);
+          console.log('🔧 Demo login completed:', result);
           
-          // Reload to trigger auth state update
-          window.location.reload();
+          // Force a small delay and then reload to ensure token is stored
+          setTimeout(() => {
+            console.log('🔧 Reloading page after demo login...');
+            window.location.reload();
+          }, 100);
         } catch (error) {
           console.error('Failed to auto-login demo user:', error);
           setDemoSetupAttempted(false); // Allow retry

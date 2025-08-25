@@ -23,11 +23,19 @@ import (
 	"github.com/link-app/api-gateway/internal/sentry"
 	"github.com/link-app/api-gateway/internal/tracing"
 	"github.com/link-app/shared-libs/lifecycle"
+	"github.com/link-app/shared-libs/versioning"
+	sharedConfig "github.com/link-app/shared-libs/config"
 )
 
 func main() {
 	// Initialize structured logger
 	loggerInstance := logger.InitLogger()
+
+	// Initialize shared secrets management
+	if err := sharedConfig.InitSecrets(); err != nil {
+		loggerInstance.WithError(err).Warn("Failed to initialize secrets management - continuing with environment variables")
+	}
+	defer sharedConfig.CloseSecrets()
 
 	// Initialize Sentry for error reporting
 	if err := sentry.InitSentry(); err != nil {
@@ -55,10 +63,13 @@ func main() {
 
 	// Create K8s proxy handler
 	k8sHandler := handlers.NewK8sProxyHandler(jwtValidator, jwtConfig)
+	
+	// Create version handler
+	versionHandler := handlers.NewVersionHandler()
 
 	// Configure server first (needed for lifecycle manager)
 	server := &http.Server{
-		Addr:         getEnvOrDefault("PORT", ":8080"),
+		Addr:         ":" + sharedConfig.GetEnv("PORT", "8080"),
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -81,10 +92,10 @@ func main() {
 	}
 
 	// Setup Redis connection for health checks
-	redisAddr := getEnvOrDefault("REDIS_HOST", "localhost") + ":" + getEnvOrDefault("REDIS_PORT", "6379")
+	redisAddr := sharedConfig.GetEnv("REDIS_HOST", "localhost") + ":" + sharedConfig.GetEnv("REDIS_PORT", "6379")
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     redisAddr,
-		Password: getEnvOrDefault("REDIS_PASSWORD", ""),
+		Password: sharedConfig.GetRedisPassword(),
 		DB:       0,
 	})
 	lifecycleManager.AddHealthChecker("redis", lifecycle.NewRedisHealthChecker(redisClient))
@@ -130,7 +141,13 @@ func main() {
 	router.Use(logger.CorrelationIDMiddleware())     // Add correlation ID tracking
 	router.Use(metrics.PrometheusMiddleware())       // Add Prometheus metrics collection
 	router.Use(logger.StructuredLoggingMiddleware()) // Replace basic logging with structured logging
+	router.Use(middleware.CompressionMiddleware())   // Add gzip compression
 	router.Use(middleware.CORSMiddleware())
+	
+	// API versioning middleware - handle version negotiation
+	versionConfig := versioning.DefaultConfig()
+	versionConfig.StrictVersioning = false // Allow unversioned requests for backward compatibility
+	router.Use(versioning.VersioningMiddleware(versionConfig))
 
 	// Initialize Redis rate limiter for stateless design
 	redisRateLimiterConfig := &middleware.RedisRateLimiterConfig{
@@ -159,6 +176,10 @@ func main() {
 	// Root endpoint with service discovery info
 	router.GET("/", k8sHandler.RootHandler)
 
+	// API version endpoints
+	router.GET("/api/version", versionHandler.GetAPIInfo)
+	router.GET("/api/version/compatibility", versionHandler.GetVersionCompatibility)
+
 	// API documentation endpoint
 	router.GET("/docs", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "/docs/")
@@ -167,9 +188,10 @@ func main() {
 	// Serve OpenAPI documentation
 	router.Static("/docs/", "./docs/")
 
-	// Authentication middleware (validates JWT and sets user context headers)
+	// Authentication middleware (validates JWT for users and Linkerd identity for services)
 	authGroup := router.Group("/")
 	authGroup.Use(middleware.AuthMiddleware(jwtValidator, jwtConfig))
+	authGroup.Use(middleware.LinkerdServiceAuthMiddleware()) // Add Linkerd-based service auth
 
 	// Unversioned API routes (for frontend compatibility)
 	// These routes map to /api/v1/* endpoints on the respective services
@@ -193,6 +215,30 @@ func main() {
 			// Extract the path after /users
 			path := c.Param("path")
 			c.Request.URL.Path = "/api/v1/users" + path
+			k8sHandler.ProxyToK8sService("user-svc")(c)
+		})
+		
+		// Check-in routes -> user-svc /api/v1/checkins
+		unversionedGroup.Any("/checkins", func(c *gin.Context) {
+			c.Request.URL.Path = "/api/v1/checkins"
+			k8sHandler.ProxyToK8sService("user-svc")(c)
+		})
+		unversionedGroup.Any("/checkins/*path", func(c *gin.Context) {
+			// Extract the path after /checkins
+			path := c.Param("path")
+			c.Request.URL.Path = "/api/v1/checkins" + path
+			k8sHandler.ProxyToK8sService("user-svc")(c)
+		})
+		
+		// Upload routes -> user-svc /api/v1/uploads
+		unversionedGroup.Any("/uploads", func(c *gin.Context) {
+			c.Request.URL.Path = "/api/v1/uploads"
+			k8sHandler.ProxyToK8sService("user-svc")(c)
+		})
+		unversionedGroup.Any("/uploads/*path", func(c *gin.Context) {
+			// Extract the path after /uploads
+			path := c.Param("path")
+			c.Request.URL.Path = "/api/v1/uploads" + path
 			k8sHandler.ProxyToK8sService("user-svc")(c)
 		})
 	}
@@ -250,6 +296,38 @@ func main() {
 		})
 	})
 
+	// Feature flags routes (proxied to feature-service)
+	featuresGroup := authGroup.Group("/features")
+	{
+		featuresGroup.Any("/*path", k8sHandler.ProxyToK8sService("feature-svc"))
+	}
+
+	// Unversioned feature flag routes for frontend compatibility
+	unversionedGroup.GET("/features/flags/:key/evaluate", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/flags/" + c.Param("key") + "/evaluate"
+		k8sHandler.ProxyToK8sService("feature-svc")(c)
+	})
+	unversionedGroup.POST("/features/flags/evaluate", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/flags/evaluate"
+		k8sHandler.ProxyToK8sService("feature-svc")(c)
+	})
+	unversionedGroup.GET("/features/flags", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/flags"
+		k8sHandler.ProxyToK8sService("feature-svc")(c)
+	})
+	unversionedGroup.POST("/features/flags", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/flags"
+		k8sHandler.ProxyToK8sService("feature-svc")(c)
+	})
+	unversionedGroup.GET("/features/experiments/:key/evaluate", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/experiments/" + c.Param("key") + "/evaluate"
+		k8sHandler.ProxyToK8sService("feature-svc")(c)
+	})
+	unversionedGroup.POST("/features/events", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/events"
+		k8sHandler.ProxyToK8sService("feature-svc")(c)
+	})
+
 	// Add enhanced health endpoints using lifecycle manager
 	router.GET("/health/live", gin.WrapH(http.HandlerFunc(lifecycleManager.CreateLivenessHandler())))
 	router.GET("/health/ready", gin.WrapH(http.HandlerFunc(lifecycleManager.CreateReadinessHandler())))
@@ -303,20 +381,14 @@ func main() {
 	loggerInstance.Info("API Gateway stopped")
 }
 
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
 
 func buildDatabaseURL() string {
-	host := getEnvOrDefault("DB_HOST", "localhost")
-	port := getEnvOrDefault("DB_PORT", "5432")
-	user := getEnvOrDefault("DB_USER", "linkuser")
-	password := getEnvOrDefault("DB_PASSWORD", "linkpass")
-	dbname := getEnvOrDefault("DB_NAME", "linkdb")
-	sslmode := getEnvOrDefault("DB_SSL_MODE", "disable")
+	host := sharedConfig.GetEnv("DB_HOST", "localhost")
+	port := sharedConfig.GetEnv("DB_PORT", "5432")
+	user := sharedConfig.GetEnv("DB_USER", "linkuser")
+	password := sharedConfig.GetDatabasePassword()
+	dbname := sharedConfig.GetEnv("DB_NAME", "linkdb")
+	sslmode := sharedConfig.GetEnv("DB_SSL_MODE", "disable")
 
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		host, port, user, password, dbname, sslmode)

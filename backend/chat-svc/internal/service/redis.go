@@ -38,14 +38,17 @@ func NewRedisService(cfg *config.RedisConfig, logger *logrus.Logger) *RedisServi
 func (r *RedisService) PublishRealtimeEvent(ctx context.Context, event *model.RealtimeEvent) error {
 	event.Timestamp = time.Now().UTC()
 	
+	// Ensure compatibility fields are set
+	event.SetCompatibilityFields()
+	
 	data, err := json.Marshal(event)
 	if err != nil {
 		r.logger.WithError(err).Error("Failed to marshal realtime event")
 		return fmt.Errorf("failed to marshal event: %w", err)
 	}
 
-	// Publish to room-specific channel
-	roomChannel := fmt.Sprintf("room:%s", event.RoomID.String())
+	// Publish to conversation-specific channel (using compatibility field for channel name)
+	roomChannel := fmt.Sprintf("conversation:%s", event.ConversationID.String())
 	if err := r.client.Publish(ctx, roomChannel, data).Err(); err != nil {
 		r.logger.WithError(err).WithField("channel", roomChannel).Error("Failed to publish to room channel")
 		return fmt.Errorf("failed to publish to room channel: %w", err)
@@ -61,9 +64,9 @@ func (r *RedisService) PublishRealtimeEvent(ctx context.Context, event *model.Re
 	}
 
 	r.logger.WithFields(logrus.Fields{
-		"event_type": event.Type,
-		"room_id":    event.RoomID,
-		"user_id":    event.UserID,
+		"event_type":      event.Type,
+		"conversation_id": event.ConversationID,
+		"user_id":         event.UserID,
 	}).Debug("Published realtime event")
 
 	return nil
@@ -72,6 +75,9 @@ func (r *RedisService) PublishRealtimeEvent(ctx context.Context, event *model.Re
 // SetUserPresence sets user presence status with TTL
 func (r *RedisService) SetUserPresence(ctx context.Context, userID uuid.UUID, presence model.UserPresence) error {
 	key := fmt.Sprintf("presence:%s", userID.String())
+	
+	// Ensure compatibility fields are set
+	presence.SetCompatibilityFields()
 	
 	data, err := json.Marshal(presence)
 	if err != nil {
@@ -99,7 +105,7 @@ func (r *RedisService) SetUserPresence(ctx context.Context, userID uuid.UUID, pr
 	if presence.RoomID != nil {
 		event := &model.RealtimeEvent{
 			Type:     model.EventTypePresenceUpdate,
-			RoomID:   *presence.RoomID,
+			ConversationID:   *presence.RoomID,
 			UserID:   userID,
 			Presence: &presence,
 		}
@@ -196,7 +202,7 @@ func (r *RedisService) SetTypingIndicator(ctx context.Context, roomID, userID uu
 		// Publish typing start event
 		event := &model.RealtimeEvent{
 			Type:   model.EventTypeTypingStart,
-			RoomID: roomID,
+			ConversationID: roomID,
 			UserID: userID,
 		}
 		r.PublishRealtimeEvent(ctx, event)
@@ -209,7 +215,7 @@ func (r *RedisService) SetTypingIndicator(ctx context.Context, roomID, userID uu
 		// Publish typing stop event
 		event := &model.RealtimeEvent{
 			Type:   model.EventTypeTypingStop,
-			RoomID: roomID,
+			ConversationID: roomID,
 			UserID: userID,
 		}
 		r.PublishRealtimeEvent(ctx, event)

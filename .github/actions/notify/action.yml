@@ -1,0 +1,293 @@
+name: 'Notify'
+description: 'Standardized notification handling for CI/CD events'
+author: 'Link App CI/CD'
+
+inputs:
+  type:
+    description: 'Notification type (success, failure, warning, info, deployment, rollback)'
+    required: true
+  title:
+    description: 'Notification title'
+    required: true
+  message:
+    description: 'Notification message'
+    required: true
+  environment:
+    description: 'Environment context'
+    required: false
+    default: ''
+  workflow_url:
+    description: 'URL to the workflow run'
+    required: false
+    default: ''
+  details:
+    description: 'Additional details in JSON format'
+    required: false
+    default: '{}'
+  channels:
+    description: 'Comma-separated list of channels (slack, pagerduty, email, cloudwatch)'
+    required: false
+    default: 'slack'
+
+outputs:
+  status:
+    description: 'Notification status (sent, failed, skipped)'
+    value: ${{ steps.notify.outputs.status }}
+  sent_channels:
+    description: 'Channels where notification was sent'
+    value: ${{ steps.notify.outputs.sent_channels }}
+
+runs:
+  using: 'composite'
+  steps:
+  - name: Send notifications
+    id: notify
+    shell: bash
+    run: |
+      echo "📢 Notification Starting..."
+      echo "=========================="
+      echo "Type: ${{ inputs.type }}"
+      echo "Title: ${{ inputs.title }}"
+      echo "Environment: ${{ inputs.environment }}"
+      echo "Channels: ${{ inputs.channels }}"
+      echo ""
+      
+      # Initialize status tracking
+      sent_channels=""
+      notification_status="sent"
+      
+      # Determine notification color and emoji based on type
+      case "${{ inputs.type }}" in
+        "success")
+          color="good"
+          emoji="✅"
+          priority="info"
+          ;;
+        "failure")
+          color="danger"
+          emoji="❌"
+          priority="high"
+          ;;
+        "warning")
+          color="warning"
+          emoji="⚠️"
+          priority="normal"
+          ;;
+        "deployment")
+          color="#36a64f"
+          emoji="🚀"
+          priority="normal"
+          ;;
+        "rollback")
+          color="danger"
+          emoji="🔄"
+          priority="critical"
+          ;;
+        *)
+          color="#439fe0"
+          emoji="ℹ️"
+          priority="info"
+          ;;
+      esac
+      
+      # Parse channels
+      IFS=',' read -ra CHANNELS <<< "${{ inputs.channels }}"
+      
+      # Helper function to add successful channel
+      add_sent_channel() {
+        if [[ -z "$sent_channels" ]]; then
+          sent_channels="$1"
+        else
+          sent_channels="$sent_channels,$1"
+        fi
+      }
+      
+      # Parse additional details
+      details='${{ inputs.details }}'
+      if [[ "$details" == "{}" || -z "$details" ]]; then
+        details_fields=""
+      else
+        # Extract common fields from details JSON
+        commit_sha=$(echo "$details" | jq -r '.commit // empty')
+        author=$(echo "$details" | jq -r '.author // empty')
+        duration=$(echo "$details" | jq -r '.duration // empty')
+        
+        details_fields=""
+        if [[ -n "$commit_sha" ]]; then
+          details_fields="$details_fields{\"title\": \"Commit\", \"value\": \"$commit_sha\", \"short\": true},"
+        fi
+        if [[ -n "$author" ]]; then
+          details_fields="$details_fields{\"title\": \"Author\", \"value\": \"$author\", \"short\": true},"
+        fi
+        if [[ -n "$duration" ]]; then
+          details_fields="$details_fields{\"title\": \"Duration\", \"value\": \"$duration\", \"short\": true},"
+        fi
+        # Remove trailing comma
+        details_fields="${details_fields%,}"
+      fi
+      
+      # 1. Slack Notification
+      if [[ " ${CHANNELS[@]} " =~ " slack " ]] && [[ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]]; then
+        echo "📱 Sending Slack notification..."
+        
+        # Build workflow URL field
+        workflow_field=""
+        if [[ -n "${{ inputs.workflow_url }}" ]]; then
+          workflow_field="{\"title\": \"Workflow\", \"value\": \"<${{ inputs.workflow_url }}|View Details>\", \"short\": false},"
+        elif [[ -n "${{ github.server_url }}" && -n "${{ github.repository }}" && -n "${{ github.run_id }}" ]]; then
+          workflow_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          workflow_field="{\"title\": \"Workflow\", \"value\": \"<$workflow_url|View Details>\", \"short\": false},"
+        fi
+        
+        # Build environment field
+        env_field=""
+        if [[ -n "${{ inputs.environment }}" ]]; then
+          env_field="{\"title\": \"Environment\", \"value\": \"${{ inputs.environment }}\", \"short\": true},"
+        fi
+        
+        # Combine all fields
+        all_fields="$env_field$details_fields$workflow_field"
+        all_fields="${all_fields%,}"  # Remove trailing comma
+        
+        # Send Slack message
+        slack_payload="{
+          \"attachments\": [{
+            \"color\": \"$color\",
+            \"title\": \"$emoji ${{ inputs.title }}\",
+            \"text\": \"${{ inputs.message }}\",
+            \"fields\": [$all_fields],
+            \"ts\": $(date +%s)
+          }]
+        }"
+        
+        if curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+           -H 'Content-type: application/json' \
+           -d "$slack_payload" \
+           --silent --fail; then
+          echo "✅ Slack notification sent"
+          add_sent_channel "slack"
+        else
+          echo "❌ Slack notification failed"
+          notification_status="failed"
+        fi
+      fi
+      
+      # 2. PagerDuty Notification (for critical events)
+      if [[ " ${CHANNELS[@]} " =~ " pagerduty " ]] && [[ -n "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}" ]]; then
+        echo "🚨 Sending PagerDuty notification..."
+        
+        # Only send for critical events
+        if [[ "$priority" == "critical" || "$priority" == "high" ]]; then
+          pagerduty_payload="{
+            \"routing_key\": \"${{ secrets.PAGERDUTY_INTEGRATION_KEY }}\",
+            \"event_action\": \"trigger\",
+            \"payload\": {
+              \"summary\": \"${{ inputs.title }}\",
+              \"source\": \"GitHub Actions\",
+              \"severity\": \"$priority\",
+              \"component\": \"${{ inputs.environment }}\",
+              \"custom_details\": {
+                \"message\": \"${{ inputs.message }}\",
+                \"workflow_url\": \"${{ inputs.workflow_url }}\",
+                \"environment\": \"${{ inputs.environment }}\",
+                \"details\": $details
+              }
+            }
+          }"
+          
+          if curl -X POST "https://events.pagerduty.com/v2/enqueue" \
+             -H 'Content-Type: application/json' \
+             -d "$pagerduty_payload" \
+             --silent --fail; then
+            echo "✅ PagerDuty notification sent"
+            add_sent_channel "pagerduty"
+          else
+            echo "❌ PagerDuty notification failed"
+            notification_status="failed"
+          fi
+        else
+          echo "⚠️ PagerDuty: Skipping non-critical notification"
+        fi
+      fi
+      
+      # 3. CloudWatch Metrics (for monitoring)
+      if [[ " ${CHANNELS[@]} " =~ " cloudwatch " ]]; then
+        echo "📊 Publishing CloudWatch metrics..."
+        
+        # Determine metric value based on type
+        case "${{ inputs.type }}" in
+          "success")
+            metric_value=1
+            metric_name="DeploymentSuccess"
+            ;;
+          "failure")
+            metric_value=1
+            metric_name="DeploymentFailure"
+            ;;
+          "rollback")
+            metric_value=1
+            metric_name="DeploymentRollback"
+            ;;
+          *)
+            metric_value=1
+            metric_name="DeploymentEvent"
+            ;;
+        esac
+        
+        # Add dimensions
+        dimensions="Environment=${{ inputs.environment }},Type=${{ inputs.type }}"
+        if [[ -n "${{ github.workflow }}" ]]; then
+          dimensions="$dimensions,Workflow=${{ github.workflow }}"
+        fi
+        
+        # Publish metric (if AWS credentials are available)
+        if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null; then
+          aws cloudwatch put-metric-data \
+            --namespace "LinkApp/CICD" \
+            --metric-data MetricName="$metric_name",Value="$metric_value",Unit=Count,Dimensions="$dimensions" \
+            --region "${{ vars.AWS_REGION || 'us-west-2' }}" || echo "⚠️ CloudWatch metrics failed"
+          
+          echo "✅ CloudWatch metrics published"
+          add_sent_channel "cloudwatch"
+        else
+          echo "⚠️ CloudWatch: AWS credentials not available"
+        fi
+      fi
+      
+      # 4. Email Notification (via SNS if configured)
+      if [[ " ${CHANNELS[@]} " =~ " email " ]] && [[ -n "${{ secrets.SNS_TOPIC_ARN }}" ]]; then
+        echo "📧 Sending email notification..."
+        
+        email_subject="[${{ inputs.environment }}] ${{ inputs.title }}"
+        email_message="${{ inputs.message }}\n\nEnvironment: ${{ inputs.environment }}\nWorkflow: ${{ inputs.workflow_url }}\n\nDetails: $details"
+        
+        if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null; then
+          aws sns publish \
+            --topic-arn "${{ secrets.SNS_TOPIC_ARN }}" \
+            --subject "$email_subject" \
+            --message "$email_message" \
+            --region "${{ vars.AWS_REGION || 'us-west-2' }}" || echo "⚠️ Email notification failed"
+          
+          echo "✅ Email notification sent"
+          add_sent_channel "email"
+        else
+          echo "⚠️ Email: AWS credentials not available"
+        fi
+      fi
+      
+      # Summary
+      echo ""
+      echo "📊 Notification Summary:"
+      echo "  Status: $notification_status"
+      echo "  Sent Channels: $sent_channels"
+      echo ""
+      
+      # Set outputs
+      echo "status=$notification_status" >> $GITHUB_OUTPUT
+      echo "sent_channels=$sent_channels" >> $GITHUB_OUTPUT
+      
+      if [[ "$notification_status" == "sent" || -n "$sent_channels" ]]; then
+        echo "✅ Notifications completed"
+      else
+        echo "⚠️ No notifications were sent"
+      fi

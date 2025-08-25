@@ -9,6 +9,79 @@ import (
 	"gorm.io/gorm"
 )
 
+// Role represents a system role for RBAC
+type Role struct {
+	ID          uuid.UUID    `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Name        string       `json:"name" gorm:"uniqueIndex;not null;size:50"`
+	Description *string      `json:"description" gorm:"type:text"`
+	IsSystem    bool         `json:"is_system" gorm:"default:false"` // System roles cannot be deleted
+	CreatedAt   time.Time    `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   time.Time    `json:"updated_at" gorm:"autoUpdateTime"`
+	
+	// Relationships
+	Permissions []Permission `json:"permissions,omitempty" gorm:"many2many:role_permissions;"`
+	Users       []User       `json:"users,omitempty" gorm:"many2many:user_roles;"`
+}
+
+// Permission represents a fine-grained permission
+type Permission struct {
+	ID          uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Name        string    `json:"name" gorm:"uniqueIndex;not null;size:100"`
+	Description *string   `json:"description" gorm:"type:text"`
+	Resource    string    `json:"resource" gorm:"not null;size:50"` // e.g., 'users', 'messages', 'admin' (admin only for content moderation)
+	Action      string    `json:"action" gorm:"not null;size:50"`   // e.g., 'create', 'read', 'update', 'delete'
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+	
+	// Relationships
+	Roles []Role `json:"roles,omitempty" gorm:"many2many:role_permissions;"`
+}
+
+// UserRole represents the junction table with additional metadata
+type UserRole struct {
+	ID         uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID     uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;index"`
+	RoleID     uuid.UUID  `json:"role_id" gorm:"type:uuid;not null;index"`
+	AssignedBy *uuid.UUID `json:"assigned_by" gorm:"type:uuid"` // Who assigned this role
+	AssignedAt time.Time  `json:"assigned_at" gorm:"autoCreateTime"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"` // Optional expiration
+	IsActive   bool       `json:"is_active" gorm:"default:true"`
+	CreatedAt  time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	
+	// Relationships
+	User       User  `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Role       Role  `json:"role,omitempty" gorm:"foreignKey:RoleID"`
+	AssignedByUser *User `json:"assigned_by_user,omitempty" gorm:"foreignKey:AssignedBy"`
+}
+
+// Ensure unique constraint
+func (UserRole) TableName() string {
+	return "user_roles"
+}
+
+// BeforeCreate sets up the role before creation
+func (r *Role) BeforeCreate(tx *gorm.DB) error {
+	if r.ID == uuid.Nil {
+		r.ID = uuid.New()
+	}
+	return nil
+}
+
+// BeforeCreate sets up the permission before creation
+func (p *Permission) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == uuid.Nil {
+		p.ID = uuid.New()
+	}
+	return nil
+}
+
+// BeforeCreate sets up the user role before creation
+func (ur *UserRole) BeforeCreate(tx *gorm.DB) error {
+	if ur.ID == uuid.Nil {
+		ur.ID = uuid.New()
+	}
+	return nil
+}
+
 // SocialLink represents a social media link
 type SocialLink struct {
 	Platform string `json:"platform"`
@@ -51,7 +124,6 @@ type User struct {
 	AdditionalPhotos []string        `json:"additional_photos" gorm:"type:text;serializer:json"`
 	PrivacySettings PrivacySettings  `json:"privacy_settings" gorm:"type:jsonb;serializer:json;default:'{\"show_age\": true, \"show_location\": true, \"show_mutual_friends\": true, \"show_name\": true, \"show_social_media\": true, \"show_montages\": true, \"show_checkins\": true}'"`
 	ProfileVisibility ProfileVisibility `json:"profile_visibility" gorm:"type:varchar(20);default:'public'"`
-	HiddenUsers     []uuid.UUID      `json:"hidden_users" gorm:"type:jsonb;serializer:json;default:'[]'"` // Users hidden from discovery by this user
 	EmailVerified   bool             `json:"email_verified" gorm:"default:false"`
 	IsActive        bool             `json:"is_active" gorm:"default:true"`
 	PasswordHash    string           `json:"-" gorm:"not null"` // Never expose password hash
@@ -64,6 +136,8 @@ type User struct {
 	ReceivedFriendRequests []FriendRequest `json:"-" gorm:"foreignKey:RequesteeID"`
 	Friendships1           []Friendship    `json:"-" gorm:"foreignKey:User1ID"`
 	Friendships2           []Friendship    `json:"-" gorm:"foreignKey:User2ID"`
+	Roles                  []Role          `json:"roles,omitempty" gorm:"many2many:user_roles;"`
+	UserRoles             []UserRole      `json:"user_roles,omitempty" gorm:"foreignKey:UserID"`
 }
 
 // BeforeCreate sets up the user before creation
@@ -383,37 +457,6 @@ func (Block) TableName() string {
 	return "blocks"
 }
 
-// HideUser adds a user to the hidden users list
-func (u *User) HideUser(userIDToHide uuid.UUID) {
-	// Check if user is already hidden
-	for _, hiddenID := range u.HiddenUsers {
-		if hiddenID == userIDToHide {
-			return // Already hidden
-		}
-	}
-	u.HiddenUsers = append(u.HiddenUsers, userIDToHide)
-}
-
-// UnhideUser removes a user from the hidden users list
-func (u *User) UnhideUser(userIDToUnhide uuid.UUID) {
-	for i, hiddenID := range u.HiddenUsers {
-		if hiddenID == userIDToUnhide {
-			// Remove from slice
-			u.HiddenUsers = append(u.HiddenUsers[:i], u.HiddenUsers[i+1:]...)
-			return
-		}
-	}
-}
-
-// IsUserHidden checks if a user is in the hidden users list
-func (u *User) IsUserHidden(userID uuid.UUID) bool {
-	for _, hiddenID := range u.HiddenUsers {
-		if hiddenID == userID {
-			return true
-		}
-	}
-	return false
-}
 
 // EncryptFields encrypts sensitive PII fields before database storage
 // Temporarily disabled - implementation will be added back later
@@ -428,3 +471,90 @@ func (u *User) IsUserHidden(userID uuid.UUID) bool {
 //     // Implementation temporarily removed to avoid security package dependency
 //     return nil
 // }
+
+// RBAC Helper Methods
+
+// HasRole checks if user has a specific role
+func (u *User) HasRole(roleName string) bool {
+	for _, role := range u.Roles {
+		if role.Name == roleName {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAnyRole checks if user has any of the specified roles
+func (u *User) HasAnyRole(roleNames ...string) bool {
+	for _, roleName := range roleNames {
+		if u.HasRole(roleName) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasPermission checks if user has a specific permission through their roles
+func (u *User) HasPermission(permissionName string) bool {
+	for _, role := range u.Roles {
+		for _, permission := range role.Permissions {
+			if permission.Name == permissionName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// HasResourcePermission checks if user has permission for a specific resource and action
+func (u *User) HasResourcePermission(resource, action string) bool {
+	for _, role := range u.Roles {
+		for _, permission := range role.Permissions {
+			if permission.Resource == resource && permission.Action == action {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GetRoleNames returns a slice of role names for the user
+func (u *User) GetRoleNames() []string {
+	roleNames := make([]string, len(u.Roles))
+	for i, role := range u.Roles {
+		roleNames[i] = role.Name
+	}
+	return roleNames
+}
+
+// GetPermissionNames returns a slice of all permission names for the user
+func (u *User) GetPermissionNames() []string {
+	permissionMap := make(map[string]bool)
+	for _, role := range u.Roles {
+		for _, permission := range role.Permissions {
+			permissionMap[permission.Name] = true
+		}
+	}
+	
+	permissions := make([]string, 0, len(permissionMap))
+	for permissionName := range permissionMap {
+		permissions = append(permissions, permissionName)
+	}
+	return permissions
+}
+
+// IsCommunityModerator checks if user has community moderator role
+func (u *User) IsCommunityModerator() bool {
+	return u.HasRole("community_moderator")
+}
+
+
+// IsModerator checks if user has community moderator role  
+func (u *User) IsModerator() bool {
+	return u.HasRole("community_moderator")
+}
+
+// IsPremiumUser checks if user has premium user or community moderator role
+func (u *User) IsPremiumUser() bool {
+	return u.HasAnyRole("premium_user", "community_moderator")
+}

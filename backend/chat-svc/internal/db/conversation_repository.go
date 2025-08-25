@@ -27,10 +27,10 @@ func (r *conversationRepository) ListConversations(ctx context.Context, userID u
 	
 	// First get the total count
 	countQuery := `
-		SELECT COUNT(DISTINCT cr.id)
-		FROM chat_rooms cr
-		INNER JOIN room_members rm ON cr.id = rm.room_id
-		WHERE rm.user_id = $1 AND rm.left_at IS NULL
+		SELECT COUNT(DISTINCT c.id)
+		FROM conversations c
+		INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
+		WHERE cp.user_id = $1
 	`
 	
 	var total int
@@ -41,12 +41,11 @@ func (r *conversationRepository) ListConversations(ctx context.Context, userID u
 	
 	// Get the paginated conversations
 	query := `
-		SELECT cr.id, cr.name, cr.description, cr.created_by, cr.is_private, 
-		       cr.max_members, cr.created_at, cr.updated_at
-		FROM chat_rooms cr
-		INNER JOIN room_members rm ON cr.id = rm.room_id
-		WHERE rm.user_id = $1 AND rm.left_at IS NULL
-		ORDER BY cr.updated_at DESC
+		SELECT c.id, c.type, c.creator_id, c.created_at
+		FROM conversations c
+		INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
+		WHERE cp.user_id = $1
+		ORDER BY c.created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 	
@@ -60,12 +59,25 @@ func (r *conversationRepository) ListConversations(ctx context.Context, userID u
 	for rows.Next() {
 		room := &model.ChatRoom{}
 		err := rows.Scan(
-			&room.ID, &room.Name, &room.Description, &room.CreatedBy,
-			&room.IsPrivate, &room.MaxMembers, &room.CreatedAt, &room.UpdatedAt,
+			&room.ID, &room.Type, &room.CreatedBy, &room.CreatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan conversation: %w", err)
 		}
+		
+		// Set compatibility fields based on conversation type
+		room.UpdatedAt = room.CreatedAt
+		switch room.Type {
+		case model.ConversationTypeDirect:
+			room.Name = "Direct Conversation"
+			room.IsPrivate = true
+			room.MaxMembers = 2
+		case model.ConversationTypeGroup:
+			room.Name = "Group Conversation"
+			room.IsPrivate = false
+			room.MaxMembers = 100
+		}
+		
 		conversations = append(conversations, room)
 	}
 	
@@ -89,13 +101,12 @@ func (r *conversationRepository) CreateConversation(ctx context.Context, room *m
 	room.UpdatedAt = now
 	
 	query := `
-		INSERT INTO chat_rooms (id, name, description, created_by, is_private, max_members, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO conversations (id, type, creator_id, created_at)
+		VALUES ($1, $2, $3, $4)
 	`
 	
 	_, err := r.db.Exec(ctx, query,
-		room.ID, room.Name, room.Description, room.CreatedBy,
-		room.IsPrivate, room.MaxMembers, room.CreatedAt, room.UpdatedAt,
+		room.ID, room.Type, room.CreatedBy, room.CreatedAt,
 	)
 	
 	if err != nil {
@@ -108,16 +119,30 @@ func (r *conversationRepository) CreateConversation(ctx context.Context, room *m
 // GetConversationByID retrieves a conversation by ID
 func (r *conversationRepository) GetConversationByID(ctx context.Context, roomID uuid.UUID) (*model.ChatRoom, error) {
 	query := `
-		SELECT id, name, description, created_by, is_private, max_members, created_at, updated_at
-		FROM chat_rooms
+		SELECT id, type, creator_id, created_at
+		FROM conversations
 		WHERE id = $1
 	`
 	
 	room := &model.ChatRoom{}
 	err := r.db.QueryRow(ctx, query, roomID).Scan(
-		&room.ID, &room.Name, &room.Description, &room.CreatedBy,
-		&room.IsPrivate, &room.MaxMembers, &room.CreatedAt, &room.UpdatedAt,
+		&room.ID, &room.Type, &room.CreatedBy, &room.CreatedAt,
 	)
+	
+	if err == nil {
+		// Set compatibility fields
+		room.UpdatedAt = room.CreatedAt
+		switch room.Type {
+		case model.ConversationTypeDirect:
+			room.Name = "Direct Conversation"
+			room.IsPrivate = true
+			room.MaxMembers = 2
+		case model.ConversationTypeGroup:
+			room.Name = "Group Conversation"
+			room.IsPrivate = false
+			room.MaxMembers = 100
+		}
+	}
 	
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -134,13 +159,13 @@ func (r *conversationRepository) UpdateConversation(ctx context.Context, room *m
 	room.UpdatedAt = time.Now()
 	
 	query := `
-		UPDATE chat_rooms 
-		SET name = $2, description = $3, is_private = $4, max_members = $5, updated_at = $6
+		UPDATE conversations 
+		SET type = $2
 		WHERE id = $1
 	`
 	
 	result, err := r.db.Exec(ctx, query,
-		room.ID, room.Name, room.Description, room.IsPrivate, room.MaxMembers, room.UpdatedAt,
+		room.ID, room.Type,
 	)
 	
 	if err != nil {
@@ -154,9 +179,9 @@ func (r *conversationRepository) UpdateConversation(ctx context.Context, room *m
 	return nil
 }
 
-// DeleteConversation soft deletes a conversation (we'll implement this as a hard delete for now)
+// DeleteConversation deletes a conversation (cascade will handle participants)
 func (r *conversationRepository) DeleteConversation(ctx context.Context, roomID uuid.UUID) error {
-	query := `DELETE FROM chat_rooms WHERE id = $1`
+	query := `DELETE FROM conversations WHERE id = $1`
 	
 	result, err := r.db.Exec(ctx, query, roomID)
 	if err != nil {
@@ -173,12 +198,11 @@ func (r *conversationRepository) DeleteConversation(ctx context.Context, roomID 
 // GetConversationsByUserID returns all conversations for a user
 func (r *conversationRepository) GetConversationsByUserID(ctx context.Context, userID uuid.UUID) ([]*model.ChatRoom, error) {
 	query := `
-		SELECT cr.id, cr.name, cr.description, cr.created_by, cr.is_private, 
-		       cr.max_members, cr.created_at, cr.updated_at
-		FROM chat_rooms cr
-		INNER JOIN room_members rm ON cr.id = rm.room_id
-		WHERE rm.user_id = $1 AND rm.left_at IS NULL
-		ORDER BY cr.updated_at DESC
+		SELECT c.id, c.type, c.creator_id, c.created_at
+		FROM conversations c
+		INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
+		WHERE cp.user_id = $1
+		ORDER BY c.created_at DESC
 	`
 	
 	rows, err := r.db.Query(ctx, query, userID)
@@ -191,12 +215,25 @@ func (r *conversationRepository) GetConversationsByUserID(ctx context.Context, u
 	for rows.Next() {
 		room := &model.ChatRoom{}
 		err := rows.Scan(
-			&room.ID, &room.Name, &room.Description, &room.CreatedBy,
-			&room.IsPrivate, &room.MaxMembers, &room.CreatedAt, &room.UpdatedAt,
+			&room.ID, &room.Type, &room.CreatedBy, &room.CreatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
+		
+		// Set compatibility fields based on conversation type
+		room.UpdatedAt = room.CreatedAt
+		switch room.Type {
+		case model.ConversationTypeDirect:
+			room.Name = "Direct Conversation"
+			room.IsPrivate = true
+			room.MaxMembers = 2
+		case model.ConversationTypeGroup:
+			room.Name = "Group Conversation"
+			room.IsPrivate = false
+			room.MaxMembers = 100
+		}
+		
 		conversations = append(conversations, room)
 	}
 	
@@ -240,13 +277,13 @@ func (r *conversationRepository) CreateDirectConversation(ctx context.Context, p
 			member.Role = model.MemberRoleOwner
 		}
 
-		// Add member (we need to implement this manually here or use a different approach)
+		// Add participant to conversation_participants table
 		addMemberQuery := `
-			INSERT INTO room_members (id, room_id, user_id, role, joined_at)
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
+			VALUES ($1, $2, $3)
 		`
 		_, err := r.db.Exec(ctx, addMemberQuery,
-			member.ID, member.RoomID, member.UserID, member.Role, member.JoinedAt,
+			member.RoomID, member.UserID, member.JoinedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add participant %s: %w", participantID, err)
@@ -259,27 +296,24 @@ func (r *conversationRepository) CreateDirectConversation(ctx context.Context, p
 // GetDirectConversation finds existing direct conversation between two users
 func (r *conversationRepository) GetDirectConversation(ctx context.Context, participant1, participant2 uuid.UUID) (*model.ChatRoom, error) {
 	query := `
-		SELECT cr.id, cr.name, cr.description, cr.created_by, cr.is_private, 
-		       cr.max_members, cr.created_at, cr.updated_at
-		FROM chat_rooms cr
-		WHERE cr.max_members = 2 
-		  AND cr.is_private = true
+		SELECT c.id, c.type, c.creator_id, c.created_at
+		FROM conversations c
+		WHERE c.type = 'direct'
 		  AND EXISTS (
-		      SELECT 1 FROM room_members rm1 
-		      WHERE rm1.room_id = cr.id AND rm1.user_id = $1 AND rm1.left_at IS NULL
+		      SELECT 1 FROM conversation_participants cp1 
+		      WHERE cp1.conversation_id = c.id AND cp1.user_id = $1
 		  )
 		  AND EXISTS (
-		      SELECT 1 FROM room_members rm2 
-		      WHERE rm2.room_id = cr.id AND rm2.user_id = $2 AND rm2.left_at IS NULL
+		      SELECT 1 FROM conversation_participants cp2 
+		      WHERE cp2.conversation_id = c.id AND cp2.user_id = $2
 		  )
-		  AND (SELECT COUNT(*) FROM room_members rm WHERE rm.room_id = cr.id AND rm.left_at IS NULL) = 2
+		  AND (SELECT COUNT(*) FROM conversation_participants cp WHERE cp.conversation_id = c.id) = 2
 		LIMIT 1
 	`
 
 	room := &model.ChatRoom{}
 	err := r.db.QueryRow(ctx, query, participant1, participant2).Scan(
-		&room.ID, &room.Name, &room.Description, &room.CreatedBy,
-		&room.IsPrivate, &room.MaxMembers, &room.CreatedAt, &room.UpdatedAt,
+		&room.ID, &room.Type, &room.CreatedBy, &room.CreatedAt,
 	)
 
 	if err != nil {
@@ -288,6 +322,12 @@ func (r *conversationRepository) GetDirectConversation(ctx context.Context, part
 		}
 		return nil, fmt.Errorf("failed to get direct conversation: %w", err)
 	}
+	
+	// Set compatibility fields for direct conversation
+	room.UpdatedAt = room.CreatedAt
+	room.Name = "Direct Conversation"
+	room.IsPrivate = true
+	room.MaxMembers = 2
 
 	return room, nil
 }
@@ -298,10 +338,10 @@ func (r *conversationRepository) ListConversationsWithUnread(ctx context.Context
 
 	// First get the total count
 	countQuery := `
-		SELECT COUNT(DISTINCT cr.id)
-		FROM chat_rooms cr
-		INNER JOIN room_members rm ON cr.id = rm.room_id
-		WHERE rm.user_id = $1 AND rm.left_at IS NULL
+		SELECT COUNT(DISTINCT c.id)
+		FROM conversations c
+		INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
+		WHERE cp.user_id = $1
 	`
 
 	var total int
@@ -313,32 +353,31 @@ func (r *conversationRepository) ListConversationsWithUnread(ctx context.Context
 	// Get conversations with unread counts and last message
 	query := `
 		SELECT 
-			cr.id, cr.name, cr.description, cr.created_by, cr.is_private, 
-			cr.max_members, cr.created_at, cr.updated_at,
+			c.id, c.type, c.creator_id, c.created_at,
 			COALESCE(unread_counts.unread_count, 0) as unread_count,
-			lm.id as last_message_id, lm.user_id as last_message_user_id, 
-			lm.content as last_message_content, lm.message_type as last_message_type,
+			lm.id as last_message_id, lm.sender_id as last_message_sender_id, 
+			lm.content as last_message_content, lm.type as last_message_type,
 			lm.created_at as last_message_created_at
-		FROM chat_rooms cr
-		INNER JOIN room_members rm ON cr.id = rm.room_id
+		FROM conversations c
+		INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
 		LEFT JOIN (
 			SELECT 
-				m.room_id,
+				m.conversation_id,
 				COUNT(*) as unread_count
 			FROM messages m
 			LEFT JOIN message_reads mr ON m.id = mr.message_id AND mr.user_id = $1
-			WHERE m.user_id != $1 AND mr.id IS NULL
-			GROUP BY m.room_id
-		) unread_counts ON cr.id = unread_counts.room_id
+			WHERE m.sender_id != $1 AND mr.message_id IS NULL
+			GROUP BY m.conversation_id
+		) unread_counts ON c.id = unread_counts.conversation_id
 		LEFT JOIN LATERAL (
-			SELECT m.id, m.user_id, m.content, m.message_type, m.created_at
+			SELECT m.id, m.sender_id, m.content, m.type, m.created_at
 			FROM messages m
-			WHERE m.room_id = cr.id
+			WHERE m.conversation_id = c.id
 			ORDER BY m.created_at DESC
 			LIMIT 1
 		) lm ON true
-		WHERE rm.user_id = $1 AND rm.left_at IS NULL
-		ORDER BY cr.updated_at DESC
+		WHERE cp.user_id = $1
+		ORDER BY c.created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
@@ -351,22 +390,20 @@ func (r *conversationRepository) ListConversationsWithUnread(ctx context.Context
 	var conversations []*model.ConversationWithUnread
 	for rows.Next() {
 		convWithUnread := &model.ConversationWithUnread{
-			ChatRoom: &model.ChatRoom{},
+			Conversation: &model.Conversation{},
 		}
 
 		var lastMessageID *uuid.UUID
-		var lastMessageUserID *uuid.UUID
+		var lastMessageSenderID *uuid.UUID
 		var lastMessageContent *string
 		var lastMessageType *model.MessageType
 		var lastMessageCreatedAt *time.Time
 
 		err := rows.Scan(
-			&convWithUnread.ChatRoom.ID, &convWithUnread.ChatRoom.Name, 
-			&convWithUnread.ChatRoom.Description, &convWithUnread.ChatRoom.CreatedBy,
-			&convWithUnread.ChatRoom.IsPrivate, &convWithUnread.ChatRoom.MaxMembers, 
-			&convWithUnread.ChatRoom.CreatedAt, &convWithUnread.ChatRoom.UpdatedAt,
+			&convWithUnread.Conversation.ID, &convWithUnread.Conversation.Type, 
+			&convWithUnread.Conversation.CreatorID, &convWithUnread.Conversation.CreatedAt,
 			&convWithUnread.UnreadCount,
-			&lastMessageID, &lastMessageUserID, &lastMessageContent, 
+			&lastMessageID, &lastMessageSenderID, &lastMessageContent, 
 			&lastMessageType, &lastMessageCreatedAt,
 		)
 		if err != nil {
@@ -376,13 +413,15 @@ func (r *conversationRepository) ListConversationsWithUnread(ctx context.Context
 		// Set last message if exists
 		if lastMessageID != nil {
 			convWithUnread.LastMessage = &model.Message{
-				ID:          *lastMessageID,
-				RoomID:      convWithUnread.ChatRoom.ID,
-				UserID:      *lastMessageUserID,
-				Content:     *lastMessageContent,
-				MessageType: *lastMessageType,
-				CreatedAt:   *lastMessageCreatedAt,
+				ID:             *lastMessageID,
+				ConversationID: convWithUnread.Conversation.ID,
+				SenderID:       *lastMessageSenderID,
+				Content:        *lastMessageContent,
+				Type:           *lastMessageType,
+				CreatedAt:      *lastMessageCreatedAt,
 			}
+			// Set compatibility fields
+			convWithUnread.LastMessage.SetCompatibilityFields()
 		}
 
 		conversations = append(conversations, convWithUnread)

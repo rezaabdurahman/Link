@@ -1,0 +1,326 @@
+name: Branch Protection & Policy Enforcement
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly audit on Monday mornings
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'audit'
+        type: choice
+        options:
+          - audit
+          - enforce
+          - report
+
+env:
+  REPO_OWNER: ${{ github.repository_owner }}
+  REPO_NAME: ${{ github.event.repository.name }}
+
+concurrency:
+  group: branch-protection-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit-branch-protection:
+    name: Audit Branch Protection Rules
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      security-events: read
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install GitHub CLI
+      run: |
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh
+        
+    - name: Audit current branch protection settings
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "🔍 Auditing branch protection rules for main and develop branches..."
+        
+        # Function to check branch protection
+        check_branch_protection() {
+          local branch=$1
+          echo ""
+          echo "=== Branch: $branch ==="
+          
+          # Get branch protection details
+          if ! protection_data=$(gh api repos/${{ github.repository }}/branches/$branch/protection 2>/dev/null); then
+            echo "❌ No branch protection rules found for $branch"
+            return 1
+          fi
+          
+          # Parse protection settings
+          required_status_checks=$(echo "$protection_data" | jq -r '.required_status_checks.strict // false')
+          enforce_admins=$(echo "$protection_data" | jq -r '.enforce_admins.enabled // false')
+          required_pull_requests=$(echo "$protection_data" | jq -r '.required_pull_request_reviews.required_approving_review_count // 0')
+          dismiss_stale_reviews=$(echo "$protection_data" | jq -r '.required_pull_request_reviews.dismiss_stale_reviews // false')
+          require_code_owner_reviews=$(echo "$protection_data" | jq -r '.required_pull_request_reviews.require_code_owner_reviews // false')
+          restrict_pushes=$(echo "$protection_data" | jq -r '.restrictions != null')
+          
+          echo "📊 Current Protection Settings:"
+          echo "  • Required status checks (strict): $required_status_checks"
+          echo "  • Enforce for administrators: $enforce_admins"
+          echo "  • Required PR reviews: $required_pull_requests"
+          echo "  • Dismiss stale reviews: $dismiss_stale_reviews"
+          echo "  • Require code owner reviews: $require_code_owner_reviews"
+          echo "  • Push restrictions: $restrict_pushes"
+          
+          # Check required status checks
+          if [ "$required_status_checks" != "false" ]; then
+            contexts=$(echo "$protection_data" | jq -r '.required_status_checks.contexts[]?' 2>/dev/null)
+            if [ -n "$contexts" ]; then
+              echo "  • Required status check contexts:"
+              echo "$contexts" | sed 's/^/    - /'
+            fi
+          fi
+          
+          return 0
+        }
+        
+        # Check main branch
+        main_protected=true
+        check_branch_protection "main" || main_protected=false
+        
+        # Check develop branch  
+        develop_protected=true
+        check_branch_protection "develop" || develop_protected=false
+        
+        # Generate recommendations
+        echo ""
+        echo "🎯 RECOMMENDATIONS"
+        echo "=================="
+        
+        if [ "$main_protected" = false ] || [ "$develop_protected" = false ]; then
+          echo "❌ CRITICAL: Missing branch protection on critical branches"
+        fi
+        
+        # Store results for later steps
+        echo "main_protected=$main_protected" >> $GITHUB_ENV
+        echo "develop_protected=$develop_protected" >> $GITHUB_ENV
+
+    - name: Check CODEOWNERS file
+      run: |
+        echo ""
+        echo "👥 CODEOWNERS File Audit"
+        echo "======================"
+        
+        codeowners_exists=false
+        codeowners_valid=false
+        
+        if [ -f ".github/CODEOWNERS" ]; then
+          codeowners_exists=true
+          echo "✅ CODEOWNERS file exists"
+          
+          # Basic validation
+          if [ -s ".github/CODEOWNERS" ]; then
+            echo "✅ CODEOWNERS file is not empty"
+            
+            # Check for valid patterns
+            if grep -E '^\*|^/|^[^#].*@' .github/CODEOWNERS > /dev/null; then
+              codeowners_valid=true
+              echo "✅ CODEOWNERS file has valid ownership patterns"
+              
+              echo ""
+              echo "📋 Current CODEOWNERS rules:"
+              grep -v '^#' .github/CODEOWNERS | grep -v '^$' | head -10
+              
+              # Count number of rules
+              rule_count=$(grep -c -E '^\*|^/|^[^#].*@' .github/CODEOWNERS)
+              echo ""
+              echo "📊 Total ownership rules: $rule_count"
+            else
+              echo "⚠️ CODEOWNERS file exists but contains no valid ownership patterns"
+            fi
+          else
+            echo "⚠️ CODEOWNERS file exists but is empty"
+          fi
+        else
+          echo "❌ No CODEOWNERS file found"
+          echo "Consider creating .github/CODEOWNERS to define code ownership"
+        fi
+        
+        echo "codeowners_exists=$codeowners_exists" >> $GITHUB_ENV
+        echo "codeowners_valid=$codeowners_valid" >> $GITHUB_ENV
+
+    - name: Security policy audit
+      run: |
+        echo ""
+        echo "🔐 Security Policy Audit"
+        echo "======================"
+        
+        security_md_exists=false
+        security_reporting_exists=false
+        
+        # Check for SECURITY.md
+        for location in "SECURITY.md" ".github/SECURITY.md" "docs/SECURITY.md"; do
+          if [ -f "$location" ]; then
+            security_md_exists=true
+            echo "✅ Security policy found at: $location"
+            break
+          fi
+        done
+        
+        if [ "$security_md_exists" = false ]; then
+          echo "⚠️ No SECURITY.md file found"
+          echo "Consider adding a security policy to define vulnerability reporting process"
+        fi
+        
+        # Check if security reporting is enabled
+        if gh api repos/${{ github.repository }} --jq '.has_issues' | grep -q true; then
+          echo "✅ Issues are enabled (can be used for security reporting)"
+          security_reporting_exists=true
+        fi
+        
+        # Check for security advisories feature
+        if gh api repos/${{ github.repository }}/security-advisories 2>/dev/null | grep -q "advisories"; then
+          echo "✅ Security advisories are available"
+        fi
+        
+        echo "security_md_exists=$security_md_exists" >> $GITHUB_ENV
+        echo "security_reporting_exists=$security_reporting_exists" >> $GITHUB_ENV
+
+    - name: Generate compliance report
+      run: |
+        echo ""
+        echo "📊 COMPLIANCE REPORT"
+        echo "==================="
+        
+        # Calculate compliance score
+        score=0
+        total=10
+        
+        # Branch protection checks (4 points)
+        if [ "$main_protected" = true ]; then
+          score=$((score + 2))
+          echo "✅ [2/2] Main branch protected"
+        else
+          echo "❌ [0/2] Main branch not protected"
+        fi
+        
+        if [ "$develop_protected" = true ]; then
+          score=$((score + 2))
+          echo "✅ [2/2] Develop branch protected"  
+        else
+          echo "❌ [0/2] Develop branch not protected"
+        fi
+        
+        # CODEOWNERS checks (3 points)
+        if [ "$codeowners_exists" = true ] && [ "$codeowners_valid" = true ]; then
+          score=$((score + 3))
+          echo "✅ [3/3] CODEOWNERS file exists and valid"
+        elif [ "$codeowners_exists" = true ]; then
+          score=$((score + 1))
+          echo "⚠️ [1/3] CODEOWNERS file exists but needs improvement"
+        else
+          echo "❌ [0/3] No CODEOWNERS file"
+        fi
+        
+        # Security policy checks (2 points)
+        if [ "$security_md_exists" = true ]; then
+          score=$((score + 1))
+          echo "✅ [1/1] Security policy exists"
+        else
+          echo "❌ [0/1] No security policy"
+        fi
+        
+        if [ "$security_reporting_exists" = true ]; then
+          score=$((score + 1))
+          echo "✅ [1/1] Security reporting enabled"
+        else
+          echo "❌ [0/1] Security reporting not configured"
+        fi
+        
+        # Workflow security check (1 point)
+        if ls .github/workflows/*.yml | xargs grep -l "permissions:" > /dev/null 2>&1; then
+          score=$((score + 1))
+          echo "✅ [1/1] Workflows have permission declarations"
+        else
+          echo "❌ [0/1] Workflows missing permission declarations"
+        fi
+        
+        # Calculate percentage
+        percentage=$((score * 100 / total))
+        
+        echo ""
+        echo "🏆 FINAL COMPLIANCE SCORE: $score/$total ($percentage%)"
+        echo ""
+        
+        if [ $percentage -ge 80 ]; then
+          echo "🎉 EXCELLENT: Repository follows security best practices"
+        elif [ $percentage -ge 60 ]; then
+          echo "👍 GOOD: Minor improvements recommended"
+        elif [ $percentage -ge 40 ]; then
+          echo "⚠️ NEEDS IMPROVEMENT: Several security issues to address"
+        else
+          echo "❌ POOR: Critical security issues require immediate attention"
+        fi
+        
+        # Export for summary
+        echo "compliance_score=$score" >> $GITHUB_ENV
+        echo "compliance_total=$total" >> $GITHUB_ENV
+        echo "compliance_percentage=$percentage" >> $GITHUB_ENV
+
+    - name: Create GitHub Step Summary
+      if: always()
+      run: |
+        echo "# 🔒 Branch Protection & Security Compliance Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Audit Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        echo "**Compliance Score:** ${{ env.compliance_score }}/${{ env.compliance_total }} (${{ env.compliance_percentage }}%)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "## 🎯 Key Findings" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status | Recommendation |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|----------------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Main Branch Protection | ${{ env.main_protected == 'true' && '✅ Protected' || '❌ Not Protected' }} | ${{ env.main_protected == 'true' && 'Maintain current settings' || 'Enable branch protection immediately' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Develop Branch Protection | ${{ env.develop_protected == 'true' && '✅ Protected' || '❌ Not Protected' }} | ${{ env.develop_protected == 'true' && 'Maintain current settings' || 'Enable branch protection' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| CODEOWNERS File | ${{ env.codeowners_valid == 'true' && '✅ Valid' || env.codeowners_exists == 'true' && '⚠️ Needs Improvement' || '❌ Missing' }} | ${{ env.codeowners_valid == 'true' && 'Regular reviews recommended' || 'Create or improve CODEOWNERS file' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Policy | ${{ env.security_md_exists == 'true' && '✅ Present' || '❌ Missing' }} | ${{ env.security_md_exists == 'true' && 'Keep updated' || 'Create SECURITY.md file' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add recommendations based on score
+        if [ "${{ env.compliance_percentage }}" -lt 80 ]; then
+          echo "## 🚨 Priority Actions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ env.main_protected }}" != "true" ]; then
+            echo "1. **Enable main branch protection** - Critical security requirement" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ env.codeowners_exists }}" != "true" ]; then
+            echo "2. **Create CODEOWNERS file** - Define code ownership and review requirements" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ env.security_md_exists }}" != "true" ]; then
+            echo "3. **Add security policy** - Create SECURITY.md for vulnerability reporting" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📝 **Next Steps:** Consider running this audit weekly and implementing recommended security measures." >> $GITHUB_STEP_SUMMARY
+
+    - name: Fail on critical issues
+      if: env.main_protected == 'false'
+      run: |
+        echo "❌ CRITICAL: Main branch is not protected"
+        echo "This is a security risk and must be addressed before proceeding with deployments"
+        exit 1

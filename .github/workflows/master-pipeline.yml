@@ -1,0 +1,268 @@
+name: Master Pipeline Orchestrator
+
+# Simplified master orchestrator that delegates to focused pipelines:
+# - CI Orchestrator: Testing & Validation
+# - CD Orchestrator: Deployment & Rollout  
+# - Monitoring Orchestrator: Observability & Alerts
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'terraform/**'
+      - '.github/workflows/**'
+      
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+    
+  schedule:
+    # Daily promotion staging → production at 2 AM UTC
+    - cron: '0 2 * * *'
+    
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: ['development', 'staging', 'production']
+        default: 'development'
+      skip_tests:
+        description: 'Skip test stages (emergency only)'
+        required: false
+        type: boolean
+        default: false
+      force_deploy:
+        description: 'Force deployment even if no changes detected'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PIPELINE_VERSION: "v3.0"  # Updated for new orchestrator architecture
+
+concurrency:
+  group: master-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ================================================================
+  # STAGE 1: CI ORCHESTRATOR - TESTING & VALIDATION
+  # ================================================================
+  
+  continuous-integration:
+    name: 🔬 CI - Testing & Validation
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    uses: ./.github/workflows/ci-orchestrator.yml
+    with:
+      skip_tests: ${{ github.event.inputs.skip_tests || false }}
+      test_suite: 'all'
+    secrets: inherit
+
+  # ================================================================
+  # STAGE 2: CD ORCHESTRATOR - DEPLOYMENT & ROLLOUT
+  # ================================================================
+  
+  continuous-deployment:
+    name: 🚀 CD - Deployment & Rollout
+    needs: continuous-integration
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      (needs.continuous-integration.result == 'success' || github.event.inputs.force_deploy == 'true')
+    uses: ./.github/workflows/cd-orchestrator.yml
+    with:
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      skip_tests: ${{ github.event.inputs.skip_tests || false }}
+      force_deploy: ${{ github.event.inputs.force_deploy || false }}
+    secrets: inherit
+    
+  # ================================================================
+  # STAGE 3: MONITORING ORCHESTRATOR - OBSERVABILITY & ALERTS
+  # ================================================================
+  
+  continuous-monitoring:
+    name: 📊 Monitoring - Observability & Alerts
+    needs: continuous-deployment
+    if: |
+      always() &&
+      (needs.continuous-deployment.result == 'success' || needs.continuous-deployment.result == 'skipped')
+    uses: ./.github/workflows/monitoring-orchestrator.yml
+    with:
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      monitoring_type: 'health-check'
+    secrets: inherit
+
+  # ================================================================
+  # STAGE 4: PIPELINE SUMMARY & NOTIFICATIONS
+  # ================================================================
+  
+  pipeline-summary:
+    name: 📋 Master Pipeline Summary
+    needs: [continuous-integration, continuous-deployment, continuous-monitoring]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Calculate pipeline results
+      id: results
+      run: |
+        echo "📊 MASTER PIPELINE EXECUTION SUMMARY"
+        echo "===================================="
+        echo ""
+        
+        # Collect orchestrator results
+        ci_result="${{ needs.continuous-integration.result }}"
+        cd_result="${{ needs.continuous-deployment.result }}"
+        monitoring_result="${{ needs.continuous-monitoring.result }}"
+        
+        echo "🔬 CI Orchestrator: $ci_result"
+        echo "🚀 CD Orchestrator: $cd_result"
+        echo "📊 Monitoring Orchestrator: $monitoring_result"
+        echo ""
+        
+        # Determine overall status
+        overall_status="success"
+        failed_orchestrators=""
+        
+        # CI is always required for PRs and pushes
+        if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "push" ]]; then
+          if [[ "$ci_result" == "failure" ]]; then
+            overall_status="failure"
+            failed_orchestrators="$failed_orchestrators ci"
+          fi
+        fi
+        
+        # CD is required for non-PR events (unless skipped due to CI failure)
+        if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          if [[ "$cd_result" == "failure" ]]; then
+            overall_status="failure"
+            failed_orchestrators="$failed_orchestrators cd"
+          fi
+        fi
+        
+        # Monitoring failures are warnings, not critical
+        if [[ "$monitoring_result" == "failure" ]]; then
+          echo "⚠️ Monitoring issues detected but not blocking pipeline"
+        fi
+        
+        # Determine final message
+        if [[ "$overall_status" == "success" ]]; then
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            status_message="✅ Pull Request validation completed successfully"
+            status_emoji="✅"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            status_message="🎉 Production deployment pipeline completed successfully"
+            status_emoji="🎉"
+          else
+            status_message="✅ Development/Staging pipeline completed successfully"
+            status_emoji="✅"
+          fi
+        else
+          status_message="❌ Pipeline failed - check failed orchestrators: $failed_orchestrators"
+          status_emoji="❌"
+        fi
+        
+        echo "overall_status=$overall_status" >> $GITHUB_OUTPUT
+        echo "status_message=$status_message" >> $GITHUB_OUTPUT
+        echo "status_emoji=$status_emoji" >> $GITHUB_OUTPUT
+        echo "failed_orchestrators=$failed_orchestrators" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "$status_message"
+        
+    - name: Generate pipeline report
+      run: |
+        echo "# 🚀 Master Pipeline Execution Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Pipeline Version:** ${{ env.PIPELINE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Event Type:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ steps.results.outputs.status_emoji }} ${{ steps.results.outputs.overall_status }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Execution Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "## 🎯 Orchestrator Results" >> $GITHUB_STEP_SUMMARY
+        echo "| Orchestrator | Purpose | Status | Required |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------------|---------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+        echo "| CI - Testing & Validation | Code quality, tests, security | ${{ needs.continuous-integration.result == 'success' && '✅ Success' || needs.continuous-integration.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ github.event_name == 'pull_request' || github.event_name == 'push' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| CD - Deployment & Rollout | Infrastructure, deployment, validation | ${{ needs.continuous-deployment.result == 'success' && '✅ Success' || needs.continuous-deployment.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ github.event_name != 'pull_request' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Monitoring - Observability & Alerts | Health checks, performance, security | ${{ needs.continuous-monitoring.result == 'success' && '✅ Success' || needs.continuous-monitoring.result == 'failure' && '⚠️ Issues' || '⏭️ Skipped' }} | ⚠️ Optional |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ steps.results.outputs.overall_status }}" == "success" ]]; then
+          echo "## 🎉 Pipeline Success!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.results.outputs.status_message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "### ✅ Pull Request Ready" >> $GITHUB_STEP_SUMMARY
+            echo "- All tests passed ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- Code quality checks passed ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- Security scans passed ✅" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Your pull request is ready for review and merge!" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "### 🎉 Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+            echo "- Infrastructure deployed ✅" >> $GITHUB_STEP_SUMMARY  
+            echo "- Applications deployed ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- Health checks passed ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- Monitoring active ✅" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🌐 **Live Application**: https://link-app.com" >> $GITHUB_STEP_SUMMARY
+            echo "📊 **Monitoring Dashboard**: https://grafana.link-app.com" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ Development/Staging Complete" >> $GITHUB_STEP_SUMMARY
+            echo "- Code validated ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- Environment updated ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- Ready for further testing ✅" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "## ❌ Pipeline Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.results.outputs.status_message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Failed Orchestrators:** ${{ steps.results.outputs.failed_orchestrators }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the individual orchestrator logs for detailed failure information." >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "💡 **New Architecture**: This pipeline now uses focused orchestrators for better maintainability:" >> $GITHUB_STEP_SUMMARY
+        echo "- **CI Orchestrator**: Handles all testing and validation" >> $GITHUB_STEP_SUMMARY
+        echo "- **CD Orchestrator**: Manages deployment and rollout" >> $GITHUB_STEP_SUMMARY
+        echo "- **Monitoring Orchestrator**: Provides observability and alerts" >> $GITHUB_STEP_SUMMARY
+
+    - name: Send comprehensive notification
+      if: always()
+      uses: ./.github/actions/notify
+      with:
+        type: ${{ steps.results.outputs.overall_status == 'success' && 'success' || 'failure' }}
+        title: 'Master Pipeline'
+        message: '${{ steps.results.outputs.status_message }}'
+        environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+        channels: 'slack'
+        workflow_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        details: |
+          {
+            "pipeline_version": "${{ env.PIPELINE_VERSION }}",
+            "event_type": "${{ github.event_name }}",
+            "commit": "${{ github.sha }}",
+            "author": "${{ github.actor }}",
+            "branch": "${{ github.ref_name }}",
+            "ci_status": "${{ needs.continuous-integration.result }}",
+            "cd_status": "${{ needs.continuous-deployment.result }}",
+            "monitoring_status": "${{ needs.continuous-monitoring.result }}"
+          }
+
+    - name: Fail if pipeline failed
+      if: steps.results.outputs.overall_status == 'failure'
+      run: |
+        echo "❌ Master pipeline failed"
+        echo "Failed orchestrators: ${{ steps.results.outputs.failed_orchestrators }}"
+        exit 1

@@ -22,23 +22,42 @@ ENV NODE_ENV=test
 # Run tests
 RUN npm run test
 
-# Build stage
-FROM node:18-alpine AS builder
-
-# Set working directory
+# Dependencies stage for better layer caching
+FROM node:18-alpine AS deps
 WORKDIR /app
 
-# Copy package files
+# Copy package files first
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including dev deps needed for build)
+RUN npm ci --prefer-offline
+
+# Build stage
+FROM deps AS builder
+
+# Accept build arguments for environment configuration
+ARG NODE_ENV=production
+ARG VITE_APP_MODE=production
+
+# Set environment variables
+ENV NODE_ENV=${NODE_ENV}
+ENV VITE_APP_MODE=${VITE_APP_MODE}
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application with environment-specific configuration
+RUN if [ "$VITE_APP_MODE" = "development" ]; then \
+        npm run build:development; \
+    elif [ "$VITE_APP_MODE" = "test" ]; then \
+        npm run build:test; \
+    elif [ "$VITE_APP_MODE" = "staging" ]; then \
+        npm run build:staging; \
+    elif [ "$VITE_APP_MODE" = "demo" ]; then \
+        npm run build:demo; \
+    else \
+        npm run build:production; \
+    fi
 
 # Production stage
 FROM nginx:alpine AS production

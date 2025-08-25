@@ -27,6 +27,7 @@ spec:
         config.linkerd.io/proxy-cpu-limit: "200m"
         config.linkerd.io/proxy-memory-limit: "128Mi"
     spec:
+      serviceAccountName: link-api-gateway-sa
       containers:
       - name: api-gateway
         image: link/api-gateway:latest
@@ -120,6 +121,7 @@ spec:
         config.linkerd.io/proxy-cpu-request: "50m"
         config.linkerd.io/proxy-memory-request: "32Mi"
     spec:
+      serviceAccountName: link-user-service-sa
       containers:
       - name: user-svc
         image: link/user-svc:latest
@@ -212,6 +214,7 @@ spec:
         config.linkerd.io/proxy-cpu-request: "50m"
         config.linkerd.io/proxy-memory-request: "32Mi"
     spec:
+      serviceAccountName: link-chat-service-sa
       containers:
       - name: chat-svc
         image: link/chat-svc:latest
@@ -304,6 +307,7 @@ spec:
         config.linkerd.io/proxy-cpu-request: "50m"
         config.linkerd.io/proxy-memory-request: "32Mi"
     spec:
+      serviceAccountName: link-discovery-service-sa
       containers:
       - name: discovery-svc
         image: link/discovery-svc:latest
@@ -396,6 +400,7 @@ spec:
         config.linkerd.io/proxy-cpu-request: "100m"
         config.linkerd.io/proxy-memory-request: "64Mi"
     spec:
+      serviceAccountName: link-ai-service-sa
       containers:
       - name: ai-svc
         image: link/ai-svc:latest
@@ -493,6 +498,7 @@ spec:
         config.linkerd.io/proxy-cpu-request: "50m"
         config.linkerd.io/proxy-memory-request: "32Mi"
     spec:
+      serviceAccountName: link-search-service-sa
       containers:
       - name: search-svc
         image: link/search-svc:latest

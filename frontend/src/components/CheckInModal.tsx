@@ -1,6 +1,20 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, MapPin, Hash, Mic, Paperclip, X } from 'lucide-react';
+import { Camera, MapPin, Hash, Mic, Paperclip, X, Upload } from 'lucide-react';
+import { 
+  uploadMedia, 
+  uploadFile, 
+  // uploadVoiceNote,  // TODO: Will be used for voice note functionality
+  createFilePreview, 
+  revokeFilePreview, 
+  // getFileCategory,  // TODO: Will be used for file type categorization
+  getUploadErrorMessage,
+  // type MediaUploadResponse,  // TODO: Will be used for media upload responses
+  // type UploadResponse,  // TODO: Will be used for file upload responses
+  // type VoiceUploadResponse,  // TODO: Will be used for voice note responses
+  type UploadProgressCallback,
+  type UploadApiError
+} from '../services/uploadClient';
 
 // Import types for the check-in functionality
 interface MediaAttachment {
@@ -48,7 +62,7 @@ interface CheckInData {
 interface CheckInModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (checkInData: CheckInData) => void;
+  onSubmit: (checkInData: CheckInData) => Promise<void>;
   isSubmitting?: boolean;
 }
 
@@ -72,6 +86,11 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingDuration, setRecordingDuration] = useState<number>(0);
   
+  // Upload state
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [uploadErrors, setUploadErrors] = useState<{ [key: string]: string }>({});
+  
   // Tag state
   const [manualTags, setManualTags] = useState<Tag[]>([]);
   const [tagInput, setTagInput] = useState<string>('');
@@ -83,6 +102,13 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
   const tagInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
+    // Clean up any preview URLs
+    mediaAttachments.forEach(attachment => {
+      if (attachment.url.startsWith('blob:')) {
+        revokeFilePreview(attachment.url);
+      }
+    });
+    
     setSearchText('');
     setMediaAttachments([]);
     setFileAttachments([]);
@@ -93,6 +119,11 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     setShowTagSuggestions(false);
     setIsRecording(false);
     setRecordingDuration(0);
+    
+    // Clear upload state
+    setIsUploading(false);
+    setUploadProgress({});
+    setUploadErrors({});
   };
 
   const handleClose = () => {
@@ -101,39 +132,121 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
   };
 
   // Media handlers
-  const handleMediaUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file, index) => {
-      const id = `media_${Date.now()}_${index}`;
-      const url = URL.createObjectURL(file);
+    setIsUploading(true);
+    const newMediaAttachments: MediaAttachment[] = [];
+    const newUploadErrors: { [key: string]: string } = {};
+
+    for (const file of Array.from(files)) {
+      const tempId = `media_${Date.now()}_${Math.random()}`;
+      const previewUrl = createFilePreview(file);
       const type = file.type.startsWith('video/') ? 'video' : 'image';
       
-      setMediaAttachments(prev => [...prev, {
-        id,
+      // Add temporary attachment with preview
+      const tempAttachment: MediaAttachment = {
+        id: tempId,
         type,
-        url,
+        url: previewUrl,
         name: file.name
-      }]);
-    });
+      };
+      
+      newMediaAttachments.push(tempAttachment);
+      setMediaAttachments(prev => [...prev, tempAttachment]);
+      
+      try {
+        const progressCallback: UploadProgressCallback = (progress) => {
+          setUploadProgress(prev => ({ ...prev, [tempId]: progress }));
+        };
+        
+        const uploadResult = await uploadMedia(file, {
+          onProgress: progressCallback,
+          generateThumbnail: true
+        });
+        
+        // Update attachment with uploaded URL and thumbnail
+        setMediaAttachments(prev => prev.map(attachment => 
+          attachment.id === tempId 
+            ? { ...attachment, url: uploadResult.file_url }
+            : attachment
+        ));
+        
+        // Clean up preview URL
+        revokeFilePreview(previewUrl);
+        
+      } catch (error) {
+        const errorMessage = getUploadErrorMessage(error as UploadApiError);
+        newUploadErrors[tempId] = errorMessage;
+        
+        // Remove failed upload from attachments
+        setMediaAttachments(prev => prev.filter(attachment => attachment.id !== tempId));
+        revokeFilePreview(previewUrl);
+      } finally {
+        // Clear progress for this file
+        setUploadProgress(prev => {
+          const { [tempId]: _, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
+    
+    setUploadErrors(prev => ({ ...prev, ...newUploadErrors }));
+    setIsUploading(false);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file, index) => {
-      const id = `file_${Date.now()}_${index}`;
+    setIsUploading(true);
+    const newUploadErrors: { [key: string]: string } = {};
+
+    for (const file of Array.from(files)) {
+      const tempId = `file_${Date.now()}_${Math.random()}`;
       const size = (file.size / 1024).toFixed(1) + ' KB';
       
-      setFileAttachments(prev => [...prev, {
-        id,
+      // Add temporary attachment
+      const tempAttachment: FileAttachment = {
+        id: tempId,
         name: file.name,
         size,
         type: file.type
-      }]);
-    });
+      };
+      
+      setFileAttachments(prev => [...prev, tempAttachment]);
+      
+      try {
+        const progressCallback: UploadProgressCallback = (progress) => {
+          setUploadProgress(prev => ({ ...prev, [tempId]: progress }));
+        };
+        
+        const _uploadResult = await uploadFile(file, {  // TODO: Will be used to update file attachment data
+          onProgress: progressCallback
+        });
+        void _uploadResult; // Mark as intentionally unused
+        
+        // File attachment doesn't need URL update since it's handled by the backend
+        // The backend will serve the file via the returned file ID
+        
+      } catch (error) {
+        const errorMessage = getUploadErrorMessage(error as UploadApiError);
+        newUploadErrors[tempId] = errorMessage;
+        
+        // Remove failed upload from attachments
+        setFileAttachments(prev => prev.filter(attachment => attachment.id !== tempId));
+      } finally {
+        // Clear progress for this file
+        setUploadProgress(prev => {
+          const { [tempId]: _, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
+    
+    setUploadErrors(prev => ({ ...prev, ...newUploadErrors }));
+    setIsUploading(false);
   };
 
   const handleAddLocation = () => {
@@ -162,13 +275,30 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     }, 1000);
   };
 
-  const handleStopRecording = () => {
+  const handleStopRecording = async () => {
     setIsRecording(false);
-    setVoiceNote({
-      id: 'voice_' + Date.now(),
-      duration: recordingDuration,
-      url: '#'
-    });
+    
+    try {
+      // For now, create a temporary voice note
+      // In a real implementation, you would capture audio from MediaRecorder
+      const tempVoiceNote: VoiceNote = {
+        id: 'voice_' + Date.now(),
+        duration: recordingDuration,
+        url: '#' // Placeholder URL
+      };
+      
+      setVoiceNote(tempVoiceNote);
+      
+      // TODO: Implement actual audio recording and upload
+      // const audioBlob = getRecordedAudio(); // Get from MediaRecorder
+      // const audioFile = new File([audioBlob], 'voice-note.mp3', { type: 'audio/mp3' });
+      // const uploadResult = await uploadVoiceNote(audioFile);
+      // setVoiceNote({ ...tempVoiceNote, url: uploadResult.url });
+      
+    } catch (error) {
+      console.error('Failed to process voice note:', error);
+      // Handle error - maybe show a toast notification
+    }
   };
 
   const handleRemoveMedia = (id: string) => {
@@ -212,7 +342,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     ).slice(0, 5);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (isSubmitting) return;
     
     const checkInData: CheckInData = {
@@ -224,12 +354,18 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
       tags: manualTags,
     };
     
-    onSubmit(checkInData);
-    resetForm();
+    try {
+      await onSubmit(checkInData);
+      resetForm(); // Only reset form on successful submission
+    } catch (error) {
+      // Error is handled by the parent component
+      // Form stays open for user to retry
+      console.error('CheckInModal: Submission failed', error);
+    }
   };
 
   const hasAttachments = mediaAttachments.length > 0 || fileAttachments.length > 0 || voiceNote || locationAttachment;
-  const canSubmit = (searchText.trim() || hasAttachments) && !isSubmitting;
+  const canSubmit = (searchText.trim() || hasAttachments) && !isSubmitting && !isUploading;
 
   return (
     <>
@@ -291,11 +427,61 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
                 />
               </div>
 
+              {/* Upload Status */}
+              {isUploading && (
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Upload size={14} className="text-blue-500" />
+                    <span className="text-sm font-medium text-blue-700">Uploading files...</span>
+                  </div>
+                  {Object.entries(uploadProgress).length > 0 && (
+                    <div className="space-y-1">
+                      {Object.entries(uploadProgress).map(([fileId, progress]) => (
+                        <div key={fileId} className="flex items-center gap-2">
+                          <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                            <div 
+                              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300" 
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-600">{Math.round(progress)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Upload Errors */}
+              {Object.keys(uploadErrors).length > 0 && (
+                <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <div className="text-sm font-medium text-red-700 mb-1">Upload Errors:</div>
+                  <div className="space-y-1">
+                    {Object.entries(uploadErrors).map(([fileId, error]) => (
+                      <div key={fileId} className="text-xs text-red-600">
+                        • {error}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setUploadErrors({})}
+                    className="mt-2 text-xs text-red-500 hover:text-red-700 underline"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
               {/* Attachment Buttons */}
               <div className="flex gap-2 mb-4 flex-wrap">
                 <button
                   onClick={() => mediaInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                  disabled={isUploading}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 ${
+                    isUploading
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-aqua hover:bg-aqua-dark text-white'
+                  }`}
                 >
                   <Camera size={14} />
                   Media
@@ -323,7 +509,12 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
 
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                  disabled={isUploading}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 ${
+                    isUploading
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-aqua hover:bg-aqua-dark text-white'
+                  }`}
                 >
                   <Paperclip size={14} />
                   Files

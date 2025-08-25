@@ -214,7 +214,7 @@ pulse-slow: /* Slow pulse for emphasis */
 
 ### IconActionButton
 ```tsx
-import { MessageCircle, Ban, EyeOff } from 'lucide-react';
+import { MessageCircle, Ban } from 'lucide-react';
 
 // Primary action button
 <IconActionButton
@@ -223,15 +223,6 @@ import { MessageCircle, Ban, EyeOff } from 'lucide-react';
   onClick={() => console.log('Message clicked')}
   variant="primary"
   size="large"
-/>
-
-// Secondary action button
-<IconActionButton
-  Icon={EyeOff}
-  label="Hide user"
-  onClick={() => console.log('Hide clicked')}
-  variant="secondary"
-  size="medium"
 />
 
 // Danger action button

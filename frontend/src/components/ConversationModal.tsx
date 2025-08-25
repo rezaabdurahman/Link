@@ -86,6 +86,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         chatWebSocket.disconnect();
       };
     }
+    // Return undefined cleanup for cases where the effect doesn't run
+    return undefined;
   }, [isOpen, chat, initialMessage, token]);
 
   // Load conversation messages from API

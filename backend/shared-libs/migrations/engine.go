@@ -559,6 +559,11 @@ func (m *MigrationEngine) calculateChecksum(filePath string) (string, error) {
 	return fmt.Sprintf("%x", len(content)), nil
 }
 
+// GetDB returns the database connection
+func (m *MigrationEngine) GetDB() *gorm.DB {
+	return m.db
+}
+
 // VerifyIntegrity checks if applied migrations match their files
 func (m *MigrationEngine) VerifyIntegrity() error {
 	m.logger.Println("Verifying migration integrity...")

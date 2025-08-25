@@ -86,6 +86,218 @@ services:
       timeout: 10s
       retries: 3
 
+  feature-svc:
+    image: link-app/feature-svc:${IMAGE_TAG:-latest}
+    container_name: link_feature_svc
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "65534:65534"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_SSL_MODE: require
+      PORT: 8086
+      METRICS_PORT: 9096
+      REDIS_HOST: redis
+      REDIS_PORT: 6380  # TLS port
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: 1
+      REDIS_USE_TLS: "true"
+      ENVIRONMENT: production
+      GIN_MODE: release
+      # Performance tuning
+      DB_MAX_OPEN_CONNS: 25
+      DB_MAX_IDLE_CONNS: 5
+      DB_CONN_MAX_LIFETIME: 5m
+      # Rate limiting
+      RATE_LIMIT_REQUESTS_PER_MINUTE: 1000
+      RATE_LIMIT_BURST: 100
+      # Circuit breaker
+      CIRCUIT_BREAKER_MAX_FAILURES: 3
+      CIRCUIT_BREAKER_RESET_TIMEOUT: 30s
+    ports:
+      - "8086:8086"
+      - "9096:9096"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - link_internal
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    volumes:
+      - /tmp:/tmp:rw,noexec,nosuid
+      - redis_tls:/tls:ro
+    read_only: true
+    tmpfs:
+      - /app/cache:noexec,nosuid,size=100m
+
+  # Migration Services
+  migrate-feature-svc:
+    build:
+      context: ./backend/feature-svc
+      dockerfile: Dockerfile
+    container_name: link_migrate_feature_svc
+    security_opt:
+      - no-new-privileges:true
+    user: "65534:65534"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_SSL_MODE: require
+    depends_on:
+      - postgres
+    networks:
+      - link_internal
+    volumes:
+      - ./backend/feature-svc/migrations:/migrations:ro
+    command: ["sh", "-c", "cd /migrations && for f in *.up.sql; do psql postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSL_MODE} -f $$f; done"]
+    restart: "no"
+
+  migrate-user-svc:
+    build:
+      context: ./backend/shared-libs/migrations
+      dockerfile: Dockerfile
+    container_name: link_migrate_user_svc
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSLMODE=require
+    command: ["-service=user-svc", "-action=up", "-yes"]
+    volumes:
+      - ./backend/user-svc/migrations:/root/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - link_internal
+    restart: "no"
+
+  migrate-chat-svc:
+    build:
+      context: ./backend/shared-libs/migrations
+      dockerfile: Dockerfile
+    container_name: link_migrate_chat_svc
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSLMODE=require
+    command: ["-service=chat-svc", "-action=up", "-yes"]
+    volumes:
+      - ./backend/chat-svc/migrations:/root/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - link_internal
+    restart: "no"
+
+  migrate-ai-svc:
+    build:
+      context: ./backend/shared-libs/migrations
+      dockerfile: Dockerfile
+    container_name: link_migrate_ai_svc
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSLMODE=require
+    command: ["-service=ai-svc", "-action=up", "-yes"]
+    volumes:
+      - ./backend/ai-svc/migrations:/root/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - link_internal
+    restart: "no"
+
+  migrate-discovery-svc:
+    build:
+      context: ./backend/shared-libs/migrations
+      dockerfile: Dockerfile
+    container_name: link_migrate_discovery_svc
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSLMODE=require
+    command: ["-service=discovery-svc", "-action=up", "-yes"]
+    volumes:
+      - ./backend/discovery-svc/migrations:/root/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - link_internal
+    restart: "no"
+
+  migrate-search-svc:
+    build:
+      context: ./backend/shared-libs/migrations
+      dockerfile: Dockerfile
+    container_name: link_migrate_search_svc
+    security_opt:
+      - no-new-privileges:true
+    user: 1001:1001
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSLMODE=require
+    command: ["-service=search-svc", "-action=up", "-yes"]
+    volumes:
+      - ./backend/search-svc/migrations:/root/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - link_internal
+    restart: "no"
+
   # Backend Services with security hardening
   api-gateway:
     build:
@@ -133,11 +345,28 @@ services:
       
       # CORS
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      
+      # Feature service configuration
+      - FEATURE_SVC_URL=http://feature-svc:8086
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      feature-svc:
+        condition: service_healthy
+      migrate-user-svc:
+        condition: service_completed_successfully
+      migrate-chat-svc:
+        condition: service_completed_successfully
+      migrate-ai-svc:
+        condition: service_completed_successfully
+      migrate-discovery-svc:
+        condition: service_completed_successfully
+      migrate-search-svc:
+        condition: service_completed_successfully
+      migrate-feature-svc:
+        condition: service_completed_successfully
     networks:
       - link_internal
       - link_external
@@ -199,6 +428,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate-user-svc:
+        condition: service_completed_successfully
     networks:
       - link_internal
     volumes:

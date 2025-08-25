@@ -110,9 +110,10 @@ Link/
 ├── backend/
 │   ├── api-gateway/          # API Gateway service
 │   ├── user-svc/             # User management service
-│   ├── location-svc/         # Location service (planned)
-│   ├── chat-svc/             # Chat service (planned)
-│   ├── discovery-svc/        # Discovery service (partial)
+│   ├── chat-svc/             # Chat service
+│   ├── ai-svc/               # AI service
+│   ├── discovery-svc/        # Discovery service
+│   ├── search-svc/           # Search service
 │   └── docker-compose.yml    # Backend services orchestration
 ├── frontend/
 │   ├── src/
@@ -124,8 +125,56 @@ Link/
 │   │   └── utils/            # Utility functions
 │   ├── .env.local            # Local development configuration
 │   └── package.json
+├── docs/
+│   ├── getting-started/      # Setup and configuration guides
+│   ├── architecture/         # System design and ADRs
+│   ├── deployment/           # Deployment guides
+│   ├── security/             # Security documentation
+│   ├── observability/        # Monitoring and logging
+│   ├── api/                  # API documentation
+│   └── operations/           # Operational procedures
+├── k8s/                      # Kubernetes manifests
+├── monitoring/               # Monitoring stack configuration
+├── terraform/                # Infrastructure as code
 └── README.md
 ```
+
+## 📚 Documentation
+
+Comprehensive documentation is organized in the [`docs/`](./docs/) directory:
+
+### 🚀 Getting Started
+- [Quick Start Guide](./docs/getting-started/quick-start.md) - Get up and running quickly
+- [Local Development](./docs/getting-started/local-development.md) - Development environment setup
+- [Configuration Guide](./docs/getting-started/configuration.md) - Environment and service configuration
+
+### 🏗️ Architecture
+- [System Overview](./docs/architecture/overview.md) - High-level architecture and design decisions  
+- [Service Discovery](./docs/architecture/service-discovery.md) - Load balancing and service mesh
+- [ADRs](./docs/architecture/adr/) - Architecture Decision Records
+
+### 🚀 Deployment
+- [Deployment Overview](./docs/deployment/overview.md) - Comprehensive deployment guide
+- [Docker Compose](./docs/deployment/docker-compose.md) - Local development deployment
+- [Kubernetes](./docs/deployment/kubernetes.md) - Production Kubernetes deployment
+- [CI/CD Pipeline](./docs/deployment/ci-cd.md) - Continuous integration and deployment
+
+### 🔐 Security
+- [Security Overview](./docs/security/overview.md) - Security architecture and best practices
+- [Authentication](./docs/security/authentication.md) - JWT authentication and authorization
+- [Database Security](./docs/security/database.md) - Database isolation and encryption
+- [Security Testing](./docs/security/testing.md) - Security testing procedures
+
+### 📊 Observability
+- [Monitoring Overview](./docs/observability/overview.md) - Comprehensive monitoring and observability
+- [Metrics](./docs/observability/metrics.md) - Application and infrastructure metrics
+- [Logging](./docs/observability/logging.md) - Structured logging and log aggregation
+- [Alerting](./docs/observability/alerting.md) - Alert configuration and incident management
+
+### 🔧 Operations
+- [Troubleshooting Guide](./docs/operations/troubleshooting.md) - Common issues and solutions
+- [Database Operations](./docs/operations/database.md) - Database management and maintenance
+- [Backup & Recovery](./docs/operations/backup-recovery.md) - Data backup and disaster recovery
 
 ## 🎨 Design System
 

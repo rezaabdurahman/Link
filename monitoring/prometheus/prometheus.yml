@@ -21,6 +21,60 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
+  # CloudNativePG PostgreSQL Cluster
+  - job_name: 'postgres-cluster'
+    kubernetes_sd_configs:
+    - role: pod
+      namespaces:
+        names:
+        - link-services
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_label_postgresql_cnpg_io_cluster]
+      action: keep
+      regex: postgres-cluster
+    - source_labels: [__meta_kubernetes_pod_container_port_number]
+      action: keep
+      regex: 9187
+    - source_labels: [__meta_kubernetes_pod_name]
+      target_label: pod
+    - source_labels: [__meta_kubernetes_pod_label_postgresql_cnpg_io_instanceRole]
+      target_label: role
+    - source_labels: [__meta_kubernetes_pod_label_postgresql_cnpg_io_cluster]
+      target_label: cluster
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # CloudNativePG Operator
+  - job_name: 'cnpg-operator'
+    kubernetes_sd_configs:
+    - role: service
+      namespaces:
+        names:
+        - cnpg-system
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_service_name]
+      action: keep
+      regex: cnpg-controller-manager-metrics-service
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # PgBouncer Connection Pooler
+  - job_name: 'pgbouncer'
+    kubernetes_sd_configs:
+    - role: service
+      namespaces:
+        names:
+        - link-services
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_service_name]
+      action: keep
+      regex: pgbouncer-service
+    - source_labels: [__meta_kubernetes_service_port_name]
+      action: keep
+      regex: metrics
+    scrape_interval: 30s
+    metrics_path: /metrics
+
   # API Gateway
   - job_name: 'api-gateway'
     static_configs:

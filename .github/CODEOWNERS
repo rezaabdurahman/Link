@@ -1,0 +1,71 @@
+# Code Owners for Link App
+# These users/teams will be automatically requested for review when PRs modify these paths
+
+# Global fallback - requires at least one admin approval
+* @RezaAbdurahman
+
+# Infrastructure and deployment
+/terraform/ @RezaAbdurahman
+/k8s/ @RezaAbdurahman
+/scripts/ @RezaAbdurahman
+/.github/workflows/ @RezaAbdurahman
+/docker-compose*.yml @RezaAbdurahman
+/Dockerfile* @RezaAbdurahman
+
+# Backend services - require approval
+/backend/ @RezaAbdurahman
+/backend/user-svc/ @RezaAbdurahman
+/backend/chat-svc/ @RezaAbdurahman
+/backend/ai-svc/ @RezaAbdurahman
+/backend/api-gateway/ @RezaAbdurahman
+/backend/discovery-svc/ @RezaAbdurahman
+/backend/search-svc/ @RezaAbdurahman
+/backend/shared-libs/ @RezaAbdurahman
+
+# Database and migrations - require extra scrutiny
+**/migrations/ @RezaAbdurahman
+**/models/ @RezaAbdurahman
+
+# Frontend - require approval
+/frontend/ @RezaAbdurahman
+/frontend/src/components/ @RezaAbdurahman
+/frontend/src/pages/ @RezaAbdurahman
+/frontend/src/services/ @RezaAbdurahman
+
+# Configuration and secrets - require security review
+**/*config* @RezaAbdurahman
+**/*.env* @RezaAbdurahman
+**/secret* @RezaAbdurahman
+
+# Security-sensitive files
+/backend/user-svc/internal/auth/ @RezaAbdurahman
+/backend/user-svc/internal/middleware/ @RezaAbdurahman
+**/rbac** @RezaAbdurahman
+**/service-account** @RezaAbdurahman
+
+# Documentation
+*.md @RezaAbdurahman
+/docs/ @RezaAbdurahman
+
+# Root configuration files
+/package.json @RezaAbdurahman
+/go.mod @RezaAbdurahman
+/go.sum @RezaAbdurahman
+/.gitignore @RezaAbdurahman
+/README.md @RezaAbdurahman
+
+# CI/CD and automation
+/.github/ @RezaAbdurahman
+/scripts/setup-service-accounts.sh @RezaAbdurahman
+/scripts/bootstrap-cicd.sh @RezaAbdurahman
+
+# Monitoring and observability
+/monitoring/ @RezaAbdurahman
+/grafana/ @RezaAbdurahman
+/prometheus/ @RezaAbdurahman
+
+# Production-critical files requiring extra care
+/k8s/helm/*/values-production.yaml @RezaAbdurahman
+/terraform/environments/production/ @RezaAbdurahman
+/.github/workflows/master-pipeline.yml @RezaAbdurahman
+/.github/workflows/progressive-deployment.yml @RezaAbdurahman

@@ -1,0 +1,503 @@
+---
+# ArgoCD Application for Prometheus Monitoring Stack
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-stack
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: prometheus-stack
+    app.kubernetes.io/part-of: link-monitoring
+    app.kubernetes.io/component: metrics
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 51.0.3
+    helm:
+      values: |
+        prometheus:
+          prometheusSpec:
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: fast-ssd
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 50Gi
+            retention: 30d
+            additionalScrapeConfigs:
+            - job_name: 'link-services'
+              kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names:
+                  - link-services
+              relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                action: keep
+                regex: true
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                action: replace
+                target_label: __metrics_path__
+                regex: (.+)
+        
+        grafana:
+          adminPassword: admin123  # Change this in production
+          persistence:
+            enabled: true
+            size: 10Gi
+          dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+              - name: 'link-dashboards'
+                orgId: 1
+                folder: 'Link App'
+                type: file
+                disableDeletion: false
+                editable: true
+                options:
+                  path: /var/lib/grafana/dashboards/link
+          
+          additionalDataSources:
+          - name: Loki
+            type: loki
+            url: http://loki:3100
+          - name: Jaeger
+            type: jaeger
+            url: http://jaeger-query:16686
+        
+        alertmanager:
+          config:
+            global:
+              smtp_smarthost: 'localhost:587'
+              smtp_from: 'alerts@linkapp.com'
+            route:
+              group_by: ['alertname']
+              group_wait: 10s
+              group_interval: 10s
+              repeat_interval: 1h
+              receiver: 'web.hook'
+            receivers:
+            - name: 'web.hook'
+              webhook_configs:
+              - url: 'http://alertmanager-webhook:5000/'
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  
+  info:
+  - name: 'Stack Components'
+    value: 'Prometheus + Grafana + AlertManager'
+  - name: 'Data Retention'
+    value: '30 days metrics + 10GB storage'
+
+---
+# ArgoCD Application for Loki Logging Stack
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki-stack
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: loki-stack
+    app.kubernetes.io/part-of: link-monitoring
+    app.kubernetes.io/component: logging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: loki-stack
+    targetRevision: 2.9.11
+    helm:
+      values: |
+        loki:
+          config:
+            limits_config:
+              retention_period: 168h  # 7 days
+              ingestion_rate_mb: 16
+              ingestion_burst_size_mb: 24
+            storage_config:
+              boltdb_shipper:
+                active_index_directory: /loki/boltdb-shipper-active
+                cache_location: /loki/boltdb-shipper-cache
+                shared_store: filesystem
+              filesystem:
+                directory: /loki/chunks
+          persistence:
+            enabled: true
+            size: 100Gi
+        
+        promtail:
+          config:
+            clients:
+            - url: http://loki:3100/loki/api/v1/push
+            scrapeConfigs:
+            - job_name: kubernetes-pods
+              kubernetes_sd_configs:
+              - role: pod
+              relabel_configs:
+              - source_labels:
+                - __meta_kubernetes_pod_controller_name
+                regex: ([0-9a-z-.]+?)(-[0-9a-f]{8,10})?
+                action: replace
+                target_label: __tmp_controller_name
+              - source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_name
+                - __meta_kubernetes_pod_label_app
+                - __tmp_controller_name
+                - __meta_kubernetes_pod_name
+                regex: ^;*([^;]+)(;.*)?$
+                action: replace
+                target_label: app
+              - source_labels:
+                - __meta_kubernetes_pod_label_app_kubernetes_io_component
+                - __meta_kubernetes_pod_label_component
+                regex: ^;*([^;]+)(;.*)?$
+                action: replace
+                target_label: component
+              pipeline_stages:
+              - docker: {}
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  
+  info:
+  - name: 'Components'
+    value: 'Loki + Promtail log aggregation'
+  - name: 'Retention'
+    value: '7 days + 100GB storage'
+
+---
+# ArgoCD Application for Jaeger Tracing
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jaeger-tracing
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: jaeger-tracing
+    app.kubernetes.io/part-of: link-monitoring
+    app.kubernetes.io/component: tracing
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  
+  source:
+    repoURL: https://jaegertracing.github.io/helm-charts
+    chart: jaeger
+    targetRevision: 0.71.11
+    helm:
+      values: |
+        provisionDataStore:
+          cassandra: false
+          elasticsearch: true
+        
+        elasticsearch:
+          replicas: 1
+          minimumMasterNodes: 1
+          persistence:
+            enabled: true
+            size: 30Gi
+        
+        query:
+          service:
+            type: ClusterIP
+          ingress:
+            enabled: false
+        
+        collector:
+          service:
+            grpc:
+              port: 14250
+            http:
+              port: 14268
+            zipkin:
+              port: 9411
+        
+        agent:
+          daemonset:
+            enabled: true
+          service:
+            zipkinThriftPort: 5775
+            compactPort: 6831
+            binaryPort: 6832
+            samplingPort: 5778
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  
+  info:
+  - name: 'Purpose'
+    value: 'Distributed tracing for microservices'
+  - name: 'Storage'
+    value: 'Elasticsearch backend'
+
+---
+# ArgoCD Application for Custom Dashboards
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: custom-dashboards
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: custom-dashboards
+    app.kubernetes.io/part-of: link-monitoring
+    app.kubernetes.io/component: dashboards
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"  # After Prometheus is ready
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: monitoring/grafana/dashboards
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m
+  
+  info:
+  - name: 'Dashboards'
+    value: 'Custom Link app performance & business metrics'
+  - name: 'Count'
+    value: '6 dashboards (Frontend, Backend, Database, SLOs)'
+
+---
+# ArgoCD Application for Alert Rules
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alert-rules
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: alert-rules
+    app.kubernetes.io/part-of: link-monitoring
+    app.kubernetes.io/component: alerting
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"  # After Prometheus is ready
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/RezaAbdurahman/Link.git
+    targetRevision: HEAD
+    path: monitoring/prometheus/rules
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m
+  
+  info:
+  - name: 'Alert Rules'
+    value: 'Custom alerting for Link services & infrastructure'
+  - name: 'Categories'
+    value: 'SLO, Database, Service Health, Frontend UX'
+
+---
+# ArgoCD AppProject for Monitoring Stack
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: link-monitoring
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: link-monitoring
+    app.kubernetes.io/part-of: link-platform
+spec:
+  description: Link observability and monitoring stack
+  
+  sourceRepos:
+  - 'https://github.com/RezaAbdurahman/Link.git'
+  - 'https://prometheus-community.github.io/helm-charts'
+  - 'https://grafana.github.io/helm-charts'
+  - 'https://jaegertracing.github.io/helm-charts'
+  
+  destinations:
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  - namespace: kube-system
+    server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: admissionregistration.k8s.io
+    kind: ValidatingAdmissionWebhook
+  - group: admissionregistration.k8s.io
+    kind: MutatingAdmissionWebhook
+  - group: storage.k8s.io
+    kind: StorageClass
+  
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: Secret
+  - group: ''
+    kind: ConfigMap
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: ServiceAccount
+  - group: ''
+    kind: PersistentVolumeClaim
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: StatefulSet
+  - group: apps
+    kind: DaemonSet
+  - group: apps
+    kind: ReplicaSet
+  - group: policy
+    kind: PodDisruptionBudget
+  - group: batch
+    kind: Job
+  - group: batch
+    kind: CronJob
+  - group: networking.k8s.io
+    kind: Ingress
+  - group: networking.k8s.io
+    kind: NetworkPolicy
+  - group: monitoring.coreos.com
+    kind: Prometheus
+  - group: monitoring.coreos.com
+    kind: ServiceMonitor
+  - group: monitoring.coreos.com
+    kind: PrometheusRule
+  - group: monitoring.coreos.com
+    kind: Alertmanager
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+  
+  roles:
+  - name: monitoring-admin
+    description: Full access to monitoring stack
+    policies:
+    - p, proj:link-monitoring:monitoring-admin, applications, *, link-monitoring/*, allow
+    groups:
+    - link-sre-team
+    - link-platform-team
+  
+  - name: monitoring-operator
+    description: Operational access to monitoring (sync, restart)
+    policies:
+    - p, proj:link-monitoring:monitoring-operator, applications, get, link-monitoring/*, allow
+    - p, proj:link-monitoring:monitoring-operator, applications, sync, link-monitoring/*, allow
+    - p, proj:link-monitoring:monitoring-operator, applications, action/restart, link-monitoring/*, allow
+    groups:
+    - link-dev-team
+  
+  - name: monitoring-readonly
+    description: Read-only access to monitoring
+    policies:
+    - p, proj:link-monitoring:monitoring-readonly, applications, get, link-monitoring/*, allow
+    groups:
+    - link-dev-team
+    - link-qa-team

@@ -23,23 +23,18 @@ func NewRoomMemberRepository(db *pgxpool.Pool) RoomMemberRepository {
 
 // AddMember adds a member to a room
 func (r *roomMemberRepository) AddMember(ctx context.Context, member *model.RoomMember) error {
-	// Generate UUID if not provided
-	if member.ID == uuid.Nil {
-		member.ID = uuid.New()
-	}
-	
 	// Set join timestamp if not provided
 	if member.JoinedAt.IsZero() {
 		member.JoinedAt = time.Now()
 	}
 	
 	query := `
-		INSERT INTO room_members (id, room_id, user_id, role, joined_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
+		VALUES ($1, $2, $3)
 	`
 	
 	_, err := r.db.Exec(ctx, query,
-		member.ID, member.RoomID, member.UserID, member.Role, member.JoinedAt,
+		member.RoomID, member.UserID, member.JoinedAt,
 	)
 	
 	if err != nil {
@@ -49,32 +44,39 @@ func (r *roomMemberRepository) AddMember(ctx context.Context, member *model.Room
 	return nil
 }
 
-// RemoveMember removes a member from a room (soft delete)
+// RemoveMember removes a member from a room (hard delete in new schema)
 func (r *roomMemberRepository) RemoveMember(ctx context.Context, roomID, userID uuid.UUID) error {
 	query := `
-		UPDATE room_members 
-		SET left_at = $3
-		WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL
+		DELETE FROM conversation_participants 
+		WHERE conversation_id = $1 AND user_id = $2
 	`
 	
-	result, err := r.db.Exec(ctx, query, roomID, userID, time.Now())
+	result, err := r.db.Exec(ctx, query, roomID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
 	}
 	
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("member not found or already removed")
+		return fmt.Errorf("member not found")
 	}
 	
 	return nil
 }
 
-// GetRoomMembers returns all active members of a room
+// GetRoomMembers returns all members of a room
 func (r *roomMemberRepository) GetRoomMembers(ctx context.Context, roomID uuid.UUID) ([]*model.RoomMember, error) {
+	// First get the conversation creator to determine roles
+	var creatorID uuid.UUID
+	creatorQuery := `SELECT creator_id FROM conversations WHERE id = $1`
+	err := r.db.QueryRow(context.Background(), creatorQuery, roomID).Scan(&creatorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation creator: %w", err)
+	}
+	
 	query := `
-		SELECT id, room_id, user_id, role, joined_at, left_at
-		FROM room_members
-		WHERE room_id = $1 AND left_at IS NULL
+		SELECT conversation_id, user_id, joined_at
+		FROM conversation_participants
+		WHERE conversation_id = $1
 		ORDER BY joined_at ASC
 	`
 	
@@ -88,12 +90,23 @@ func (r *roomMemberRepository) GetRoomMembers(ctx context.Context, roomID uuid.U
 	for rows.Next() {
 		member := &model.RoomMember{}
 		err := rows.Scan(
-			&member.ID, &member.RoomID, &member.UserID,
-			&member.Role, &member.JoinedAt, &member.LeftAt,
+			&member.RoomID, &member.UserID, &member.JoinedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan room member: %w", err)
 		}
+		
+		// Set compatibility fields
+		member.ID = uuid.New() // Generate ID for compatibility
+		member.LeftAt = nil    // No soft delete in new schema
+		
+		// Determine role based on creator status
+		if member.UserID == creatorID {
+			member.Role = model.MemberRoleOwner
+		} else {
+			member.Role = model.MemberRoleMember
+		}
+		
 		members = append(members, member)
 	}
 	
@@ -104,11 +117,11 @@ func (r *roomMemberRepository) GetRoomMembers(ctx context.Context, roomID uuid.U
 	return members, nil
 }
 
-// IsUserMember checks if a user is an active member of a room
+// IsUserMember checks if a user is a member of a conversation
 func (r *roomMemberRepository) IsUserMember(ctx context.Context, roomID, userID uuid.UUID) (bool, error) {
 	query := `
-		SELECT 1 FROM room_members 
-		WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL
+		SELECT 1 FROM conversation_participants 
+		WHERE conversation_id = $1 AND user_id = $2
 	`
 	
 	var exists int
@@ -123,22 +136,9 @@ func (r *roomMemberRepository) IsUserMember(ctx context.Context, roomID, userID 
 	return true, nil
 }
 
-// UpdateMemberRole updates a member's role in a room
+// UpdateMemberRole updates a member's role (Note: roles not stored in new schema)
 func (r *roomMemberRepository) UpdateMemberRole(ctx context.Context, roomID, userID uuid.UUID, role model.MemberRole) error {
-	query := `
-		UPDATE room_members 
-		SET role = $3
-		WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL
-	`
-	
-	result, err := r.db.Exec(ctx, query, roomID, userID, role)
-	if err != nil {
-		return fmt.Errorf("failed to update member role: %w", err)
-	}
-	
-	if result.RowsAffected() == 0 {
-		return fmt.Errorf("member not found")
-	}
-	
-	return nil
+	// In the new normalized schema, roles are determined by creator status
+	// This is a no-op for compatibility but we could log or handle differently
+	return fmt.Errorf("role updates not supported in normalized schema - roles are determined by creator status")
 }

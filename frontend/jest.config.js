@@ -28,14 +28,33 @@ module.exports = {
     '!src/**/__tests__/**'
   ],
   
-  // Coverage thresholds - temporarily lowered while building test suite
-  // TODO: Increase back to 60% once more tests are added
+  // Coverage thresholds - enforcing minimum quality standards
   coverageThreshold: {
     global: {
-      branches: 5, // Lowered for CI - will increase as we add more tests
-      functions: 5,
-      lines: 5, 
-      statements: 5
+      branches: 60,
+      functions: 60,
+      lines: 60, 
+      statements: 60
+    },
+    // More lenient thresholds for specific directories
+    './src/components/': {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70
+    },
+    './src/services/': {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    },
+    // Allow lower coverage for pages (integration tested differently)
+    './src/pages/': {
+      branches: 40,
+      functions: 40,
+      lines: 40,
+      statements: 40
     }
   },
   

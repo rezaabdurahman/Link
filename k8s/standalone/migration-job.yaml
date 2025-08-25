@@ -1,0 +1,462 @@
+{{- if .Values.migration.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: migration-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration
+data:
+  migrate.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    echo "🚀 Starting database migrations for Link services"
+    echo "Migration mode: ${MIGRATION_MODE:-safe}"
+    echo "Environment: ${ENVIRONMENT:-production}"
+    
+    # Services to migrate in dependency order
+    SERVICES=(
+      "user-svc"
+      "chat-svc"
+      "discovery-svc" 
+      "ai-svc"
+      "search-svc"
+      {{- if .Values.services.featureSvc.enabled }}
+      "feature-svc"
+      {{- end }}
+    )
+    
+    # Migration paths
+    MIGRATION_BASE_PATH="${MIGRATION_BASE_PATH:-/migrations}"
+    MIGRATE_CMD="${MIGRATE_CMD:-/app/migrate}"
+    
+    # Build migration command based on mode
+    build_migrate_cmd() {
+      local service=$1
+      local cmd="$MIGRATE_CMD -service=$service -yes"
+      
+      case "${MIGRATION_MODE:-safe}" in
+        "safe"|"zero-downtime")
+          cmd="$cmd -action=safe-up -zero-downtime"
+          ;;
+        "standard")
+          cmd="$cmd -action=up"
+          ;;
+        "verify")
+          cmd="$cmd -action=verify"
+          ;;
+        "status")
+          cmd="$cmd -action=status"
+          ;;
+        *)
+          echo "❌ Unknown migration mode: ${MIGRATION_MODE}"
+          exit 1
+          ;;
+      esac
+      
+      if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        cmd="$cmd -dry-run"
+      fi
+      
+      echo "$cmd"
+    }
+    
+    # Pre-migration health checks
+    run_pre_checks() {
+      echo "🔍 Running pre-migration health checks..."
+      
+      # Check database connectivity
+      if ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"; then
+        echo "❌ Database connectivity check failed"
+        return 1
+      fi
+      
+      # Check database disk space (warn if < 20% free)
+      disk_usage=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT ROUND((pg_database_size('$DB_NAME')::float / pg_size_pretty(pg_database_size('$DB_NAME'))::float) * 100, 2)")
+      echo "📊 Database size check: $disk_usage"
+      
+      # Check for active connections
+      active_conns=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND datname = '$DB_NAME'")
+      echo "🔗 Active connections: $active_conns"
+      
+      if [[ $active_conns -gt 100 ]]; then
+        echo "⚠️  High number of active connections detected. Consider running during low-traffic period."
+      fi
+      
+      echo "✅ Pre-migration checks completed"
+    }
+    
+    # Post-migration verification
+    run_post_checks() {
+      echo "🔍 Running post-migration verification..."
+      
+      # Verify all tables exist and basic integrity
+      for service in "${SERVICES[@]}"; do
+        migration_path="$MIGRATION_BASE_PATH/$service"
+        if [[ -d "$migration_path" ]]; then
+          echo "🔍 Verifying $service schema integrity..."
+          if ! build_migrate_cmd "$service" | sed 's/-action=[^ ]*/-action=verify/' | eval "$(cat)" 2>/dev/null; then
+            echo "⚠️  Schema verification failed for $service"
+          fi
+        fi
+      done
+      
+      echo "✅ Post-migration verification completed"
+    }
+    
+    # Run pre-checks
+    if [[ "${SKIP_PRE_CHECKS:-false}" != "true" ]]; then
+      run_pre_checks
+    fi
+    
+    # Run migrations for each service
+    for service in "${SERVICES[@]}"; do
+      echo ""
+      echo "📦 Processing service: $service"
+      echo "================================="
+      
+      # Check if migrations exist for this service
+      migration_path="$MIGRATION_BASE_PATH/$service"
+      if [[ ! -d "$migration_path" ]]; then
+        echo "⚠️  No migrations found for $service at $migration_path, skipping"
+        continue
+      fi
+      
+      # Build and execute migration command
+      migrate_cmd=$(build_migrate_cmd "$service")
+      echo "🔧 Command: $migrate_cmd"
+      
+      if eval "$migrate_cmd"; then
+        echo "✅ Successfully migrated $service"
+      else
+        echo "❌ Failed to migrate $service"
+        if [[ "${CONTINUE_ON_ERROR:-false}" != "true" ]]; then
+          echo "🛑 Stopping migration process due to error"
+          exit 1
+        else
+          echo "⚠️  Continuing despite error (CONTINUE_ON_ERROR=true)"
+        fi
+      fi
+    done
+    
+    # Run post-checks
+    if [[ "${SKIP_POST_CHECKS:-false}" != "true" ]]; then
+      run_post_checks
+    fi
+    
+    echo ""
+    echo "🎉 Migration process completed successfully!"
+    echo "Final status check:"
+    echo "==================="
+    
+    # Final status check for all services
+    for service in "${SERVICES[@]}"; do
+      migration_path="$MIGRATION_BASE_PATH/$service"
+      if [[ -d "$migration_path" ]]; then
+        echo ""
+        echo "📋 Status for $service:"
+        build_migrate_cmd "$service" | sed 's/-action=[^ ]*/-action=status/' | eval "$(cat)"
+      fi
+    done
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "link-app.fullname" . }}-migration
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+    {{- with .Values.migration.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished | default 300 }}
+  backoffLimit: {{ .Values.migration.backoffLimit | default 3 }}
+  {{- if .Values.migration.suspend }}
+  suspend: true
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "link-app.selectorLabels" . | nindent 8 }}
+        component: migration
+      annotations:
+        {{- include "link-app.linkerdAnnotations" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "link-app.serviceAccountName" . }}-migration
+      {{- include "link-app.podSecurityContext" . | nindent 6 }}
+      containers:
+      - name: migration
+        image: {{ include "link-app.migrationImage" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/bin/bash", "/scripts/migrate.sh"]
+        env:
+        - name: MIGRATION_MODE
+          value: {{ .Values.migration.mode | default "safe" | quote }}
+        - name: ENVIRONMENT
+          value: {{ .Values.global.environment | default "production" | quote }}
+        - name: DRY_RUN
+          value: {{ .Values.migration.dryRun | default "false" | quote }}
+        - name: CONTINUE_ON_ERROR
+          value: {{ .Values.migration.continueOnError | default "false" | quote }}
+        - name: SKIP_PRE_CHECKS
+          value: {{ .Values.migration.skipPreChecks | default "false" | quote }}
+        - name: SKIP_POST_CHECKS
+          value: {{ .Values.migration.skipPostChecks | default "false" | quote }}
+        - name: MIGRATION_BASE_PATH
+          value: "/migrations"
+        {{- include "link-app.databaseEnv" . | nindent 8 }}
+        {{- with .Values.migration.extraEnv }}
+        {{- range $key, $value := . }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- end }}
+        {{- include "link-app.resources" (dict "service" .Values.migration "root" .) | nindent 8 }}
+        {{- include "link-app.securityContext" . | nindent 8 }}
+        volumeMounts:
+        - name: migration-script
+          mountPath: /scripts
+          readOnly: true
+        - name: migration-data
+          mountPath: /migrations
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        {{- with .Values.migration.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+      - name: migration-script
+        configMap:
+          name: migration-config
+          defaultMode: 0755
+      - name: migration-data
+        configMap:
+          name: {{ include "link-app.fullname" . }}-migration-data
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.migration.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- include "link-app.nodeSelector" . | nindent 6 }}
+      {{- include "link-app.tolerations" . | nindent 6 }}
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "link-app.serviceAccountName" . }}-migration
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: false
+
+{{- if .Values.migration.createConfigMap }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "link-app.fullname" . }}-migration-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration-data
+data:
+  {{- range $service, $migrations := .Values.migration.sql }}
+  {{- range $filename, $content := $migrations }}
+  {{ $service }}-{{ $filename }}: |
+{{ $content | indent 4 }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.migration.rollback.enabled }}
+---
+apiVersion: batch/v1
+kind: Job  
+metadata:
+  name: {{ include "link-app.fullname" . }}-migration-rollback
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration-rollback
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  suspend: {{ .Values.migration.rollback.suspend | default true }}
+  ttlSecondsAfterFinished: {{ .Values.migration.rollback.ttlSecondsAfterFinished | default 86400 }}
+  backoffLimit: {{ .Values.migration.rollback.backoffLimit | default 1 }}
+  template:
+    metadata:
+      labels:
+        {{- include "link-app.selectorLabels" . | nindent 8 }}
+        component: migration-rollback
+      annotations:
+        {{- include "link-app.linkerdAnnotations" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "link-app.serviceAccountName" . }}-migration
+      {{- include "link-app.podSecurityContext" . | nindent 6 }}
+      containers:
+      - name: migration-rollback
+        image: {{ include "link-app.migrationImage" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          echo "🔄 Emergency rollback job ready"
+          echo "This job is suspended by default for safety"
+          echo "To execute rollback, run:"
+          echo "kubectl patch job {{ include "link-app.fullname" . }}-migration-rollback -n {{ .Release.Namespace }} -p '{\"spec\":{\"suspend\":false}}'"
+          echo ""
+          echo "⚠️  WARNING: This will rollback the latest migration for ALL services"
+          echo "Make sure you understand the impact before proceeding"
+          {{- if .Values.migration.rollback.executeRollback }}
+          echo ""
+          echo "🚨 EXECUTING ROLLBACK - This was explicitly enabled"
+          /app/migrate -service=all -action=down -yes
+          {{- else }}
+          sleep 30
+          exit 0
+          {{- end }}
+        env:
+        - name: MIGRATION_MODE
+          value: "rollback"
+        - name: ENVIRONMENT
+          value: {{ .Values.global.environment | default "production" | quote }}
+        {{- include "link-app.databaseEnv" . | nindent 8 }}
+        {{- include "link-app.resources" (dict "service" .Values.migration.rollback "root" .) | nindent 8 }}
+        {{- include "link-app.securityContext" . | nindent 8 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      {{- include "link-app.nodeSelector" . | nindent 6 }}
+      {{- include "link-app.tolerations" . | nindent 6 }}
+{{- end }}
+
+{{- if .Values.migration.monitoring.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "link-app.fullname" . }}-migration-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration-metrics
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    {{- include "link-app.selectorLabels" . | nindent 4 }}
+    component: migration-monitor
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "link-app.fullname" . }}-migration-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration-monitor
+spec:
+  replicas: {{ .Values.migration.monitoring.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "link-app.selectorLabels" . | nindent 6 }}
+      component: migration-monitor
+  template:
+    metadata:
+      labels:
+        {{- include "link-app.selectorLabels" . | nindent 8 }}
+        component: migration-monitor
+    spec:
+      serviceAccountName: {{ include "link-app.serviceAccountName" . }}-migration
+      {{- include "link-app.podSecurityContext" . | nindent 6 }}
+      containers:
+      - name: monitor
+        image: {{ include "link-app.migrationMonitorImage" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: metrics
+          containerPort: 8080
+        env:
+        {{- include "link-app.databaseEnv" . | nindent 8 }}
+        - name: METRICS_PORT
+          value: "8080"
+        - name: CHECK_INTERVAL
+          value: {{ .Values.migration.monitoring.checkInterval | default "60s" | quote }}
+        {{- include "link-app.resources" (dict "service" .Values.migration.monitoring "root" .) | nindent 8 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        {{- include "link-app.securityContext" . | nindent 8 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      {{- include "link-app.nodeSelector" . | nindent 6 }}
+      {{- include "link-app.tolerations" . | nindent 6 }}
+
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "link-app.fullname" . }}-migration-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "link-app.labels" . | nindent 4 }}
+    component: migration-metrics
+spec:
+  selector:
+    matchLabels:
+      {{- include "link-app.selectorLabels" . | nindent 6 }}
+      component: migration-metrics
+  endpoints:
+  - port: metrics
+    interval: {{ .Values.monitoring.serviceMonitor.interval | default "30s" }}
+    path: /metrics
+    scheme: http
+{{- end }}
+
+{{- end }}
+
+{{- end }}

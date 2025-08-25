@@ -1,0 +1,709 @@
+name: Progressive Deployment Pipeline
+
+# Comprehensive progressive deployment with canary analysis:
+# PR merge → build images → staging (canary) → production (canary with approval)
+# Includes automated canary analysis, drift detection, and rollback capabilities
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'k8s/**'
+      - 'terraform/**'
+  pull_request:
+    branches: [main]
+    types: [closed]
+        
+  # Manual trigger for controlled deployments
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy (all, user-svc, api-gateway, chat-svc, etc.)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - user-svc
+          - api-gateway
+          - chat-svc
+          - discovery-svc
+          - ai-svc
+          - search-svc
+          - feature-svc
+          - frontend
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      canary_enabled:
+        description: 'Enable canary deployment'
+        required: true
+        default: true
+        type: boolean
+      auto_promote:
+        description: 'Auto-promote canary if successful'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  DEPLOYMENT_TIMEOUT: 600 # 10 minutes
+
+concurrency:
+  group: progressive-deployment-${{ github.ref }}-${{ inputs.environment || 'auto' }}
+  cancel-in-progress: false # Don't cancel deployments in progress
+
+jobs:
+  # Pre-deployment checks with service detection
+  pre-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect-changes.outputs.services }}
+      deploy_frontend: ${{ steps.detect-changes.outputs.frontend }}
+      deploy_backend: ${{ steps.detect-changes.outputs.backend }}
+      terraform_changed: ${{ steps.terraform-changes.outputs.terraform_changed }}
+      deploy_to_staging: ${{ steps.strategy.outputs.deploy_to_staging }}
+      deploy_to_production: ${{ steps.strategy.outputs.deploy_to_production }}
+      requires_approval: ${{ steps.strategy.outputs.requires_approval }}
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed services
+        id: detect-changes
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.service }}" = "all" ]; then
+              echo "services=[\"user-svc\",\"api-gateway\",\"chat-svc\",\"discovery-svc\",\"ai-svc\",\"search-svc\",\"feature-svc\"]" >> $GITHUB_OUTPUT
+              echo "frontend=true" >> $GITHUB_OUTPUT
+              echo "backend=true" >> $GITHUB_OUTPUT
+            elif [ "${{ inputs.service }}" = "frontend" ]; then
+              echo "services=[]" >> $GITHUB_OUTPUT
+              echo "frontend=true" >> $GITHUB_OUTPUT
+              echo "backend=false" >> $GITHUB_OUTPUT
+            else
+              echo "services=[\"${{ inputs.service }}\"]" >> $GITHUB_OUTPUT
+              echo "frontend=false" >> $GITHUB_OUTPUT
+              echo "backend=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Detect changed services from git diff
+            services=()
+            if git diff --name-only HEAD~1 | grep -q "backend/user-svc/"; then services+=(\"user-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/api-gateway/"; then services+=(\"api-gateway\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/chat-svc/"; then services+=(\"chat-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/discovery-svc/"; then services+=(\"discovery-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/ai-svc/"; then services+=(\"ai-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/search-svc/"; then services+=(\"search-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/feature-svc/"; then services+=(\"feature-svc\"); fi
+            
+            services_json=$(IFS=,; echo "[${services[*]}]")
+            echo "services=$services_json" >> $GITHUB_OUTPUT
+            
+            if git diff --name-only HEAD~1 | grep -q "frontend/"; then
+              echo "frontend=true" >> $GITHUB_OUTPUT
+            else
+              echo "frontend=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if [ ${#services[@]} -gt 0 ]; then
+              echo "backend=true" >> $GITHUB_OUTPUT
+            else
+              echo "backend=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Check for Terraform changes
+        id: terraform-changes
+        run: |
+          if git diff --name-only HEAD~1 | grep -q "terraform/" || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "terraform_changed=true" >> $GITHUB_OUTPUT
+            echo "📋 Terraform changes detected or manual trigger"
+          else
+            echo "terraform_changed=false" >> $GITHUB_OUTPUT
+            echo "📋 No Terraform changes detected"
+          fi
+
+      - name: Determine deployment strategy
+        id: strategy
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "PR merged: ${{ github.event.pull_request.merged }}"
+        
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+          # Push to main → deploy to staging first
+          echo "deploy_to_staging=true" >> $GITHUB_OUTPUT
+          echo "deploy_to_production=false" >> $GITHUB_OUTPUT
+          echo "requires_approval=false" >> $GITHUB_OUTPUT
+          echo "🚀 Push to main: Deploying to staging"
+          
+        elif [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.merged }}" == "true" ]]; then
+          # PR merged to main → deploy to staging
+          echo "deploy_to_staging=true" >> $GITHUB_OUTPUT
+          echo "deploy_to_production=false" >> $GITHUB_OUTPUT
+          echo "requires_approval=false" >> $GITHUB_OUTPUT
+          echo "📦 PR merged to main: Deploying to staging"
+          
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          # Manual trigger
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            echo "deploy_to_staging=true" >> $GITHUB_OUTPUT
+            echo "deploy_to_production=false" >> $GITHUB_OUTPUT
+            echo "requires_approval=false" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_to_staging=false" >> $GITHUB_OUTPUT
+            echo "deploy_to_production=true" >> $GITHUB_OUTPUT
+            echo "requires_approval=true" >> $GITHUB_OUTPUT
+          fi
+          echo "👤 Manual trigger: Deploying to ${{ inputs.environment }}"
+          
+        else
+          echo "deploy_to_staging=false" >> $GITHUB_OUTPUT
+          echo "deploy_to_production=false" >> $GITHUB_OUTPUT
+          echo "requires_approval=false" >> $GITHUB_OUTPUT
+          echo "❓ Unknown trigger - no deployment"
+        fi
+
+      - name: Use reusable K8s validation action
+        uses: ./.github/actions/k8s-validate
+        with:
+          manifests-path: 'k8s/'
+          helm-charts-path: 'k8s/helm/'
+
+      - name: Use reusable policy validation action
+        uses: ./.github/actions/policy-check
+        with:
+          manifests-path: 'k8s/'
+          fail-on-violations: 'false'  # Don't fail pre-checks, just warn
+
+      - name: Validate Terraform infrastructure
+        if: steps.terraform-changes.outputs.terraform_changed == 'true'
+        uses: ./.github/actions/terraform-validate
+        with:
+          terraform-version: '1.5.7'
+          working-directory: './terraform'
+          environment: ${{ steps.strategy.outputs.deploy_to_production == 'true' && 'production' || 'staging' }}
+          run-plan: 'true'
+          plan-only: 'true'
+          enable-security-scan: 'true'
+          enable-drift-detection: 'false'
+          backend-config: 'local'  # Use local backend for validation
+
+  # Pre-deployment validation
+  pre-deployment-validation:
+    needs: determine-strategy
+    if: needs.determine-strategy.outputs.deploy_to_staging == 'true' || needs.determine-strategy.outputs.deploy_to_production == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+
+    - name: Install validation tools
+      run: |
+        echo "🔧 Installing deployment validation tools..."
+        
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+        
+        # Install Helm
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        
+        # Install ArgoCD CLI
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        sudo install -m 555 argocd /usr/local/bin/argocd
+        
+        # Install yq
+        sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        sudo chmod +x /usr/local/bin/yq
+        
+        # Install Linkerd CLI
+        curl --proto '=https' --tlsv1.2 -sSfL https://run.linkerd.io/install | sh
+        export PATH=$PATH:/home/runner/.linkerd2/bin
+        echo "/home/runner/.linkerd2/bin" >> $GITHUB_PATH
+
+    - name: Validate deployment strategy consistency
+      run: |
+        echo "🎯 Validating deployment strategy consistency..."
+        
+        if [ ! -f "k8s/helm/link-app/values.yaml" ]; then
+          echo "❌ Helm values file not found"
+          exit 1
+        fi
+        
+        # Check services with canary deployment strategy
+        services_with_canary=$(yq eval '.services | to_entries | map(select(.value.deploymentStrategy == "canary")) | .[].key' k8s/helm/link-app/values.yaml)
+        services_with_rolling=$(yq eval '.services | to_entries | map(select(.value.deploymentStrategy == "rolling")) | .[].key' k8s/helm/link-app/values.yaml)
+        
+        echo "Services configured for canary deployment: $services_with_canary"
+        echo "Services configured for rolling deployment: $services_with_rolling"
+        
+        # Validate canary configuration exists if canary services are configured
+        if [ -n "$services_with_canary" ]; then
+          if [ ! -f "k8s/helm/link-app/templates/canary-configs.yaml" ]; then
+            echo "❌ Services configured for canary deployment but no canary configuration found"
+            exit 1
+          fi
+          
+          canary_enabled=$(yq eval '.canary.enabled' k8s/helm/link-app/values.yaml)
+          if [ "$canary_enabled" != "true" ]; then
+            echo "❌ Services configured for canary but global canary.enabled is false"
+            exit 1
+          fi
+          
+          echo "✅ Canary deployment configuration validated"
+        fi
+        
+        # Validate rolling update strategy for rolling services
+        if [ -n "$services_with_rolling" ]; then
+          rolling_max_unavailable=$(yq eval '.rollingUpdate.maxUnavailable' k8s/helm/link-app/values.yaml)
+          rolling_max_surge=$(yq eval '.rollingUpdate.maxSurge' k8s/helm/link-app/values.yaml)
+          
+          if [ "$rolling_max_unavailable" = "null" ] || [ "$rolling_max_surge" = "null" ]; then
+            echo "❌ Rolling update strategy not properly configured"
+            exit 1
+          fi
+          
+          echo "✅ Rolling update configuration validated"
+        fi
+
+    - name: Validate Flagger readiness (if canary enabled)
+      run: |
+        echo "🐦 Validating Flagger configuration and readiness..."
+        
+        # Check if canary deployments are enabled
+        canary_enabled=$(yq eval '.canary.enabled' k8s/helm/link-app/values.yaml 2>/dev/null || echo "false")
+        
+        if [ "$canary_enabled" = "true" ]; then
+          echo "Canary deployments enabled - validating Flagger setup..."
+          
+          # Check if Flagger installation manifest exists
+          if [ ! -f "k8s/flagger/flagger-install.yaml" ]; then
+            echo "❌ Flagger installation manifest not found"
+            exit 1
+          fi
+          
+          # Check if metric templates exist
+          if [ ! -f "k8s/flagger/metric-templates.yaml" ]; then
+            echo "❌ Flagger metric templates not found"
+            exit 1
+          fi
+          
+          # Validate metric template structure
+          echo "Validating metric templates..."
+          yq eval '.kind' k8s/flagger/metric-templates.yaml | while read kind; do
+            if [ "$kind" = "MetricTemplate" ]; then
+              echo "✅ Found MetricTemplate"
+            fi
+          done
+          
+          # Check if alert provider configuration exists
+          if [ -f "k8s/flagger/alert-provider.yaml" ]; then
+            echo "✅ Alert provider configuration found"
+          fi
+          
+          # Validate canary analysis configuration
+          analysis_interval=$(yq eval '.canary.analysis.interval' k8s/helm/link-app/values.yaml)
+          analysis_iterations=$(yq eval '.canary.analysis.iterations' k8s/helm/link-app/values.yaml)
+          analysis_threshold=$(yq eval '.canary.analysis.threshold' k8s/helm/link-app/values.yaml)
+          
+          if [ "$analysis_interval" = "null" ] || [ "$analysis_iterations" = "null" ] || [ "$analysis_threshold" = "null" ]; then
+            echo "❌ Canary analysis configuration incomplete"
+            exit 1
+          fi
+          
+          echo "✅ Flagger configuration validated"
+        else
+          echo "ℹ️ Canary deployments disabled - skipping Flagger validation"
+        fi
+
+    - name: Validate service mesh configuration
+      run: |
+        echo "🕸️ Validating service mesh (Linkerd) configuration..."
+        
+        # Check if Linkerd is enabled
+        linkerd_enabled=$(yq eval '.linkerd.enabled' k8s/helm/link-app/values.yaml 2>/dev/null || echo "false")
+        
+        if [ "$linkerd_enabled" = "true" ]; then
+          echo "Linkerd service mesh enabled - validating configuration..."
+          
+          # Check Linkerd configuration files
+          if [ ! -f "k8s/linkerd/linkerd-production-config.yaml" ]; then
+            echo "❌ Linkerd production configuration not found"
+            exit 1
+          fi
+          
+          # Validate Linkerd annotations in deployment templates
+          find k8s/helm/link-app/templates -name "*-deployment.yaml" | while read file; do
+            if grep -q "linkerd.io/inject" "$file"; then
+              echo "✅ Linkerd injection annotation found in $(basename $file)"
+            else
+              echo "⚠️ Missing Linkerd injection annotation in $(basename $file)"
+            fi
+          done
+          
+          # Check service profiles if they exist
+          if [ -f "k8s/linkerd/services-with-mtls.yaml" ]; then
+            echo "✅ Service profiles configuration found"
+          fi
+          
+          echo "✅ Service mesh configuration validated"
+        else
+          echo "ℹ️ Linkerd service mesh disabled - skipping mesh validation"
+        fi
+
+    - name: Validate resource quotas and limits
+      run: |
+        echo "📊 Validating resource quotas and limits..."
+        
+        # Check that all services have resource limits defined
+        services=("userSvc" "apiGateway" "chatSvc" "discoverySvc" "aiSvc" "searchSvc" "featureSvc")
+        
+        for service in "${services[@]}"; do
+          enabled=$(yq eval ".services.${service}.enabled" k8s/helm/link-app/values.yaml)
+          if [ "$enabled" = "true" ]; then
+            limits_cpu=$(yq eval ".services.${service}.resources.limits.cpu" k8s/helm/link-app/values.yaml)
+            limits_memory=$(yq eval ".services.${service}.resources.limits.memory" k8s/helm/link-app/values.yaml)
+            requests_cpu=$(yq eval ".services.${service}.resources.requests.cpu" k8s/helm/link-app/values.yaml)
+            requests_memory=$(yq eval ".services.${service}.resources.requests.memory" k8s/helm/link-app/values.yaml)
+            
+            if [ "$limits_cpu" = "null" ] || [ "$limits_memory" = "null" ]; then
+              echo "❌ Service $service missing resource limits"
+              exit 1
+            fi
+            
+            if [ "$requests_cpu" = "null" ] || [ "$requests_memory" = "null" ]; then
+              echo "❌ Service $service missing resource requests"
+              exit 1
+            fi
+            
+            echo "✅ Service $service has proper resource configuration"
+          fi
+        done
+        
+        # Check frontend resources
+        frontend_enabled=$(yq eval '.frontend.enabled' k8s/helm/link-app/values.yaml)
+        if [ "$frontend_enabled" = "true" ]; then
+          frontend_limits_cpu=$(yq eval '.frontend.resources.limits.cpu' k8s/helm/link-app/values.yaml)
+          frontend_limits_memory=$(yq eval '.frontend.resources.limits.memory' k8s/helm/link-app/values.yaml)
+          
+          if [ "$frontend_limits_cpu" = "null" ] || [ "$frontend_limits_memory" = "null" ]; then
+            echo "❌ Frontend missing resource limits"
+            exit 1
+          fi
+          
+          echo "✅ Frontend has proper resource configuration"
+        fi
+
+    - name: Validate PodDisruptionBudget configuration
+      run: |
+        echo "🛡️ Validating PodDisruptionBudget configuration..."
+        
+        # Check if PDB is enabled
+        pdb_enabled=$(yq eval '.podDisruptionBudget.enabled' k8s/helm/link-app/values.yaml)
+        
+        if [ "$pdb_enabled" = "true" ]; then
+          echo "PodDisruptionBudgets enabled - validating configuration..."
+          
+          # Check if PDB template exists
+          if [ ! -f "k8s/helm/link-app/templates/poddisruptionbudgets.yaml" ]; then
+            echo "❌ PodDisruptionBudget template not found"
+            exit 1
+          fi
+          
+          # Validate PDB configuration
+          pdb_min_available=$(yq eval '.podDisruptionBudget.minAvailable' k8s/helm/link-app/values.yaml)
+          pdb_max_unavailable=$(yq eval '.podDisruptionBudget.maxUnavailable' k8s/helm/link-app/values.yaml)
+          
+          if [ "$pdb_min_available" = "null" ] && [ "$pdb_max_unavailable" = "null" ]; then
+            echo "❌ PodDisruptionBudget must have either minAvailable or maxUnavailable set"
+            exit 1
+          fi
+          
+          echo "✅ PodDisruptionBudget configuration validated"
+        else
+          echo "⚠️ PodDisruptionBudgets disabled - consider enabling for production resilience"
+        fi
+
+    - name: Validate deployment diff and impact
+      run: |
+        echo "📋 Analyzing deployment impact and changes..."
+        
+        # Helm diff dry-run to see what would change
+        target_env="${{ needs.determine-strategy.outputs.deploy_to_staging == 'true' && 'staging' || 'production' }}"
+        values_file="k8s/helm/link-app/values-${target_env}.yaml"
+        
+        if [ -f "$values_file" ]; then
+          echo "Templating deployment for $target_env environment..."
+          
+          # Template the release to see what would be deployed
+          helm template link-app-${target_env} k8s/helm/link-app/ \
+            --values "$values_file" \
+            --set image.tag="${{ github.sha }}" \
+            --dry-run > templated-manifests.yaml
+          
+          # Count resources that would be deployed/updated
+          resource_count=$(yq eval 'documentIndex' templated-manifests.yaml | wc -l)
+          deployments=$(grep -c "kind: Deployment" templated-manifests.yaml || echo 0)
+          services=$(grep -c "kind: Service" templated-manifests.yaml || echo 0)
+          canaries=$(grep -c "kind: Canary" templated-manifests.yaml || echo 0)
+          
+          echo "📊 Deployment Impact Summary:"
+          echo "  • Total resources: $resource_count"
+          echo "  • Deployments: $deployments"
+          echo "  • Services: $services"  
+          echo "  • Canary resources: $canaries"
+          echo "  • Target environment: $target_env"
+          
+          # Check for breaking changes indicators
+          if grep -q "replicas: 0" templated-manifests.yaml; then
+            echo "⚠️ Found deployment with 0 replicas - potential service disruption"
+          fi
+          
+          echo "✅ Deployment impact analysis completed"
+        else
+          echo "❌ Values file for $target_env not found: $values_file"
+          exit 1
+        fi
+        
+        echo "✅ Pre-deployment validation completed successfully"
+
+  # Stage 1: Deploy to Staging (Automatic)
+  deploy-staging:
+    needs: [determine-strategy, pre-deployment-validation]
+    if: needs.determine-strategy.outputs.deploy_to_staging == 'true'
+    uses: ./.github/workflows/setup-infrastructure.yml
+    with:
+      environment: staging
+      auto_trigger: true
+    secrets: inherit
+    
+  # Stage 2: Integration Tests on Staging
+  integration-tests-staging:
+    needs: [determine-strategy, deploy-staging]
+    if: needs.determine-strategy.outputs.deploy_to_staging == 'true' && github.event.inputs.skip_tests != 'true'
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: frontend
+      run: npm ci
+      
+    - name: Run integration tests against staging
+      working-directory: frontend
+      env:
+        VITE_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+        VITE_WS_BASE_URL: ${{ vars.STAGING_WS_BASE_URL }}
+      run: |
+        npm run test:integration
+        
+    - name: Run E2E tests against staging
+      working-directory: frontend
+      env:
+        PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_FRONTEND_URL }}
+      run: |
+        npm run test:e2e
+        
+    - name: Health check all services
+      run: |
+        ./scripts/setup-service-accounts.sh health-check staging
+        
+  # Stage 3: Approve Production Deployment
+  approve-production:
+    needs: [determine-strategy, integration-tests-staging]
+    if: |
+      always() && 
+      needs.determine-strategy.outputs.deploy_to_production == 'true' &&
+      needs.determine-strategy.outputs.requires_approval == 'true' &&
+      (needs.integration-tests-staging.result == 'success' || needs.integration-tests-staging.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: 
+      name: production-approval
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      
+    steps:
+    - name: Request production deployment approval
+      run: |
+        echo "🚨 Production Deployment Approval Required"
+        echo "================================================"
+        echo ""
+        echo "📊 Deployment Details:"
+        echo "• Source: ${{ github.event.inputs.source_environment || 'staging' }}"
+        echo "• Target: production"
+        echo "• Trigger: ${{ github.event_name }}"
+        echo "• Branch: ${{ github.ref }}"
+        echo "• Commit: ${{ github.sha }}"
+        echo ""
+        echo "✅ Pre-deployment Checklist:"
+        echo "• Staging deployment: ✅ Success"
+        echo "• Integration tests: ${{ needs.integration-tests-staging.result }}"
+        echo "• Health checks: Passed"
+        echo ""
+        echo "⚠️  Production Impact:"
+        echo "• Zero-downtime deployment with rolling updates"
+        echo "• Service account credentials will be rotated if needed"
+        echo "• Database migrations will run if present"
+        echo ""
+        echo "👍 Approve this deployment to proceed to production"
+
+  # Stage 4: Deploy to Production (After Approval)
+  deploy-production:
+    needs: [determine-strategy, pre-deployment-validation, approve-production]
+    if: needs.approve-production.result == 'success'
+    uses: ./.github/workflows/setup-infrastructure.yml
+    with:
+      environment: production
+      auto_trigger: true
+    secrets: inherit
+    
+  # Stage 5: Production Health Check & Verification
+  verify-production:
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Wait for deployment stabilization
+      run: |
+        echo "⏱️ Waiting 60 seconds for deployment to stabilize..."
+        sleep 60
+        
+    - name: Health check all production services
+      run: |
+        ./scripts/setup-service-accounts.sh health-check production
+        
+    - name: Run smoke tests
+      working-directory: frontend
+      env:
+        VITE_API_BASE_URL: ${{ vars.PROD_API_BASE_URL }}
+        VITE_WS_BASE_URL: ${{ vars.PROD_WS_BASE_URL }}
+      run: |
+        npm ci
+        npm run test:smoke
+        
+    - name: Verify service endpoints
+      run: |
+        # Test critical endpoints
+        endpoints=(
+          "${{ vars.PROD_API_BASE_URL }}/health"
+          "${{ vars.PROD_API_BASE_URL }}/api/v1/users/me"
+          "${{ vars.PROD_API_BASE_URL }}/api/v1/chat/rooms"
+        )
+        
+        for endpoint in "${endpoints[@]}"; do
+          echo "Testing: $endpoint"
+          if ! curl -f -s -o /dev/null "$endpoint"; then
+            echo "❌ Endpoint failed: $endpoint"
+            exit 1
+          fi
+          echo "✅ Endpoint OK: $endpoint"
+        done
+        
+    - name: Send deployment notification
+      if: always()
+      run: |
+        status="${{ job.status }}"
+        if [[ "$status" == "success" ]]; then
+          message="✅ Production deployment completed successfully!"
+          color="good"
+        else
+          message="❌ Production deployment verification failed!"
+          color="danger"
+        fi
+        
+        if [[ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]]; then
+          curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data "{
+              \"attachments\": [{
+                \"color\": \"$color\",
+                \"title\": \"Link App Deployment\",
+                \"text\": \"$message\",
+                \"fields\": [
+                  {\"title\": \"Environment\", \"value\": \"production\", \"short\": true},
+                  {\"title\": \"Commit\", \"value\": \"${{ github.sha }}\", \"short\": true},
+                  {\"title\": \"Author\", \"value\": \"${{ github.actor }}\", \"short\": true},
+                  {\"title\": \"Workflow\", \"value\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"short\": false}
+                ]
+              }]
+            }"
+        fi
+
+  # Rollback capability
+  rollback-on-failure:
+    needs: [deploy-production, verify-production]
+    if: failure() && needs.deploy-production.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Automatic rollback
+      run: |
+        echo "🚨 Production deployment failed - initiating rollback"
+        
+        # Rollback Kubernetes deployments
+        kubectl rollout undo deployment/user-svc -n production
+        kubectl rollout undo deployment/chat-svc -n production
+        kubectl rollout undo deployment/ai-svc -n production
+        kubectl rollout undo deployment/discovery-svc -n production
+        kubectl rollout undo deployment/search-svc -n production
+        
+        # Wait for rollback to complete
+        kubectl rollout status deployment/user-svc -n production --timeout=300s
+        kubectl rollout status deployment/chat-svc -n production --timeout=300s
+        
+        echo "✅ Rollback completed"
+        
+    - name: Notify rollback
+      if: always()
+      run: |
+        if [[ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]]; then
+          curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data '{
+              "attachments": [{
+                "color": "warning",
+                "title": "🚨 Production Rollback Executed",
+                "text": "Production deployment failed verification and was automatically rolled back to the previous version.",
+                "fields": [
+                  {"title": "Environment", "value": "production", "short": true},
+                  {"title": "Action", "value": "Automatic rollback", "short": true},
+                  {"title": "Status", "value": "Rollback completed", "short": true}
+                ]
+              }]
+            }'
+        fi

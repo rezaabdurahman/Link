@@ -316,3 +316,8 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  # Build cache volumes for faster local development
+  go_mod_cache:
+  go_build_cache:
+  node_modules_cache:
+  vite_cache:
