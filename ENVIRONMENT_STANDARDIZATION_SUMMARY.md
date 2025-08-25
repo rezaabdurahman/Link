@@ -6,11 +6,11 @@ Successfully standardized environment configurations across the entire Link proj
 ## ✅ Completed Changes
 
 ### 1. **Standardized Environment Naming Convention**
-- **5 Standard Environments**: `local`, `test`, `staging`, `production`, `demo`
-- **Eliminated Overlapping**: Removed `preview` (merged with staging), clarified `local` vs `development`
+- **5 Standard Environments**: `development`, `test`, `staging`, `production`, `demo`
+- **Eliminated Overlapping**: Removed `preview` (merged with staging), clarified naming to avoid Vite conflicts
 - **Consistent Variables**:
-  - Frontend: `VITE_APP_MODE` (local|test|staging|production|demo)
-  - Backend: `APP_ENV` (local|test|staging|production|demo)
+  - Frontend: `VITE_APP_MODE` (development|test|staging|production|demo)
+  - Backend: `APP_ENV` (development|test|staging|production|demo)
   - Build: `NODE_ENV` (development|production|test) - for optimization only
 
 ### 2. **Created Missing Configuration Files**
@@ -33,11 +33,11 @@ Successfully standardized environment configurations across the entire Link proj
 - ✅ **Frontend `package.json`** updated with consistent environment modes:
   ```json
   {
-    "dev": "vite --mode local",
-    "dev:local": "vite --mode local", 
+    "dev": "vite --mode development",
+    "dev:local": "vite --mode development", 
     "dev:staging": "vite --mode staging",
     "dev:demo": "vite --mode demo",
-    "build:local": "npm run type-check && vite build --mode local",
+    "build:development": "npm run type-check && vite build --mode development",
     "build:test": "vite build --mode test",
     "build:staging": "npm run type-check && vite build --mode staging",
     "build:production": "npm run type-check && vite build --mode production",
