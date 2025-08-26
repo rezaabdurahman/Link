@@ -206,8 +206,6 @@ func (p *ProxyHandler) HealthHandler(c *gin.Context) {
 		"chat-svc":      serviceConfig.ChatService,
 		"ai-svc":        serviceConfig.AIService,
 		"discovery-svc": serviceConfig.DiscoveryService,
-		"stories-svc":   serviceConfig.StoriesService,
-		"opportunities-svc": serviceConfig.OpportunitiesService,
 	}
 
 	overallHealthy := true

@@ -1,0 +1,424 @@
+# Cost Optimization Analysis Dashboard for Link Application
+# Provides comprehensive cost monitoring and optimization recommendations
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cost-analysis-dashboard
+  namespace: monitoring
+  labels:
+    app: grafana
+    component: cost-optimization
+data:
+  cost-optimization-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Cost Optimization Analysis",
+        "description": "Comprehensive cost monitoring and optimization analysis for Link infrastructure",
+        "tags": ["cost", "optimization", "finops", "aws"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "5m",
+        "schemaVersion": 39,
+        "version": 1,
+        "time": {
+          "from": "now-7d",
+          "to": "now"
+        },
+        "timepicker": {
+          "refresh_intervals": ["5m", "15m", "30m", "1h", "4h", "12h", "1d"],
+          "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+        },
+        "templating": {
+          "list": [
+            {
+              "name": "environment",
+              "type": "query",
+              "query": "label_values(kube_pod_info, namespace)",
+              "refresh": 1,
+              "current": {
+                "selected": false,
+                "text": "link-services",
+                "value": "link-services"
+              },
+              "options": [],
+              "includeAll": false,
+              "multi": false
+            },
+            {
+              "name": "service",
+              "type": "query", 
+              "query": "label_values(kube_pod_info{namespace=\"$environment\"}, pod)",
+              "refresh": 1,
+              "current": {
+                "selected": true,
+                "text": "All",
+                "value": "$__all"
+              },
+              "options": [],
+              "includeAll": true,
+              "multi": true
+            }
+          ]
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "💰 Monthly Cost Overview",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(aws_cost_daily{service=~\"EC2|EKS|RDS|S3|CloudWatch\"}) * 30",
+                "legendFormat": "Estimated Monthly Cost",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=~\"EC2|EKS|RDS|S3|CloudWatch\"}[7d])) * 4.3",
+                "legendFormat": "Current Trajectory",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "currencyUSD",
+                "decimals": 0,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 5000},
+                    {"color": "orange", "value": 10000},
+                    {"color": "red", "value": 15000}
+                  ]
+                },
+                "displayName": "${__field.labels.__name__}"
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"],
+                "fields": ""
+              },
+              "orientation": "horizontal",
+              "textMode": "value_and_name",
+              "colorMode": "background",
+              "graphMode": "area"
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "📊 Cost by Service Category",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "sum by (service) (increase(aws_cost_daily[7d]))",
+                "legendFormat": "{{ service }}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "currencyUSD",
+                "custom": {
+                  "hideFrom": {
+                    "tooltip": false,
+                    "vis": false,
+                    "legend": false
+                  }
+                }
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"],
+                "fields": ""
+              },
+              "pieType": "pie",
+              "tooltip": {"mode": "single"},
+              "legend": {
+                "displayMode": "visible",
+                "placement": "right",
+                "values": ["value", "percent"]
+              },
+              "displayLabels": ["name", "percent"]
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "⚡ Resource Utilization vs Cost",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "avg(rate(container_cpu_usage_seconds_total{namespace=\"$environment\"}[5m])) * 100",
+                "legendFormat": "CPU Utilization %",
+                "refId": "A"
+              },
+              {
+                "expr": "avg(container_memory_usage_bytes{namespace=\"$environment\"} / container_spec_memory_limit_bytes{namespace=\"$environment\"}) * 100",
+                "legendFormat": "Memory Utilization %",
+                "refId": "B"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"EC2\"}[1d]))",
+                "legendFormat": "Daily EC2 Cost ($)",
+                "refId": "C"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100
+              },
+              "overrides": [
+                {
+                  "matcher": {"id": "byRegexp", "options": ".*Cost.*"},
+                  "properties": [
+                    {"id": "unit", "value": "currencyUSD"},
+                    {"id": "custom.axisPlacement", "value": "right"},
+                    {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": ["lastNotNull", "max", "min"]
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "🔍 Cost Efficiency Metrics",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"EC2\"}[1d])) / sum(rate(container_cpu_usage_seconds_total{namespace=\"$environment\"}[1d]))",
+                "legendFormat": "Cost per CPU Core-Hour",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"RDS\"}[1d])) / sum(increase(postgresql_total_queries[1d]))",
+                "legendFormat": "Cost per Database Query",
+                "refId": "B"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"S3\"}[1d])) / sum(increase(s3_requests_total[1d]))",
+                "legendFormat": "Cost per Storage Request",
+                "refId": "C"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "currencyUSD",
+                "decimals": 4,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 0.01},
+                    {"color": "red", "value": 0.05}
+                  ]
+                }
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"],
+                "fields": ""
+              },
+              "orientation": "horizontal",
+              "colorMode": "background"
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "📈 Daily Cost Trend",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"EC2\"}[1d]))",
+                "legendFormat": "EC2 Daily Cost",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"RDS\"}[1d]))",
+                "legendFormat": "RDS Daily Cost",
+                "refId": "B"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"S3\"}[1d]))",
+                "legendFormat": "S3 Daily Cost",
+                "refId": "C"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"CloudWatch\"}[1d]))",
+                "legendFormat": "CloudWatch Daily Cost",
+                "refId": "D"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "currencyUSD",
+                "min": 0
+              }
+            },
+            "options": {
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": ["lastNotNull", "max", "mean"]
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "🎯 Cost Optimization Opportunities",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "label_replace(avg by (pod) (container_memory_usage_bytes{namespace=\"$environment\"} / container_spec_memory_limit_bytes{namespace=\"$environment\"}) < 0.5, \"optimization\", \"Over-provisioned Memory\", \"pod\", \".*\")",
+                "legendFormat": "",
+                "refId": "A",
+                "format": "table"
+              },
+              {
+                "expr": "label_replace(avg by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$environment\"}[5m])) < 0.2, \"optimization\", \"Over-provisioned CPU\", \"pod\", \".*\")",
+                "legendFormat": "",
+                "refId": "B", 
+                "format": "table"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "displayMode": "color-background",
+                  "filterable": true
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {"id": "byName", "options": "optimization"},
+                  "properties": [
+                    {
+                      "id": "mappings",
+                      "value": [
+                        {"options": {"Over-provisioned Memory": {"color": "orange", "index": 0}}, "type": "value"},
+                        {"options": {"Over-provisioned CPU": {"color": "yellow", "index": 1}}, "type": "value"}
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "transformations": [
+              {
+                "id": "organize",
+                "options": {
+                  "excludeByName": {
+                    "__name__": true,
+                    "Time": true
+                  },
+                  "renameByName": {
+                    "pod": "Service/Pod",
+                    "Value": "Utilization %",
+                    "optimization": "Optimization Opportunity"
+                  }
+                }
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+          },
+          {
+            "id": 7,
+            "title": "💾 Storage Cost Analysis",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum by (persistentvolume) (kube_persistentvolume_capacity_bytes) / 1024 / 1024 / 1024",
+                "legendFormat": "{{ persistentvolume }} Storage (GB)",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"EBS\"}[1d]))",
+                "legendFormat": "Daily EBS Cost",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "decbytes",
+                "min": 0
+              },
+              "overrides": [
+                {
+                  "matcher": {"id": "byRegexp", "options": ".*Cost.*"},
+                  "properties": [
+                    {"id": "unit", "value": "currencyUSD"},
+                    {"id": "custom.axisPlacement", "value": "right"}
+                  ]
+                }
+              ]
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+          },
+          {
+            "id": 8,
+            "title": "🌐 Network Cost Breakdown",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"DataTransfer-Out\"}[1d]))",
+                "legendFormat": "Data Transfer Out",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"DataTransfer-In\"}[1d]))",
+                "legendFormat": "Data Transfer In", 
+                "refId": "B"
+              },
+              {
+                "expr": "sum(increase(aws_cost_daily{service=\"LoadBalancer\"}[1d]))",
+                "legendFormat": "Load Balancer",
+                "refId": "C"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "currencyUSD",
+                "decimals": 2
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"],
+                "fields": ""
+              },
+              "orientation": "horizontal",
+              "textMode": "value_and_name"
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+          },
+          {
+            "id": 9,
+            "title": "📋 Cost Optimization Recommendations",
+            "type": "text",
+            "gridPos": {"h": 12, "w": 24, "x": 0, "y": 40},
+            "options": {
+              "content": "## 🎯 Current Optimization Opportunities\n\n### High Impact (>$500/month savings)\n- **Right-size EC2 instances**: Identify over-provisioned CPU/memory\n- **Reserved Instance coverage**: Convert On-Demand to Reserved Instances\n- **Unused EBS volumes**: Remove unattached storage volumes\n\n### Medium Impact ($100-500/month savings)  \n- **Database optimization**: Right-size RDS instances based on utilization\n- **S3 storage classes**: Move infrequently accessed data to IA/Glacier\n- **CloudWatch log retention**: Reduce log retention periods\n\n### Low Impact (<$100/month savings)\n- **Elastic IP optimization**: Release unused Elastic IPs\n- **NAT Gateway consolidation**: Reduce number of NAT Gateways\n- **Load balancer optimization**: Combine low-traffic load balancers\n\n### Monitoring & Alerting\n- **Cost anomaly detection**: Alert on unexpected cost spikes >20%\n- **Budget alerts**: Set up monthly budget notifications\n- **Resource tagging**: Improve cost allocation and tracking\n\n### Next Actions\n1. Review over-provisioned resources weekly\n2. Implement auto-scaling for variable workloads  \n3. Schedule regular cost optimization reviews\n4. Set up automated resource cleanup jobs",
+              "mode": "markdown"
+            }
+          }
+        ]
+      }
+    }

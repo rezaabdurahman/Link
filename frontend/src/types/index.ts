@@ -25,6 +25,7 @@ export interface User {
   lastSeen: Date;
   broadcast?: string;
   profileType: 'public' | 'private';
+  privacy_settings?: PrivacySettings; // Privacy settings for profile detail modal
 }
 
 export interface Message {

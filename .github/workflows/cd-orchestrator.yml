@@ -148,13 +148,210 @@ jobs:
         echo "  Requires approval: $requires_approval"
 
   # ================================================================
-  # STAGE 1: INFRASTRUCTURE DEPLOYMENT
+  # STAGE 1: PRE-DEPLOYMENT VALIDATION
+  # ================================================================
+  
+  secrets-validation:
+    name: 🔐 Validate Production Secrets
+    needs: [deployment-strategy]
+    if: needs.deployment-strategy.outputs.environment != 'development'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.deployment-strategy.outputs.environment }}
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: us-west-2
+        role-session-name: GitHubActions-SecretsValidation
+        
+    - name: Validate Database Secrets
+      run: |
+        echo "🔍 Validating database secrets..."
+        SECRET_NAME="link-app/database/postgres"
+        
+        if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --region us-west-2 >/dev/null 2>&1; then
+          echo "✅ Database secrets found"
+          
+          # Validate secret structure (without exposing values)
+          SECRET_KEYS=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --region us-west-2 --query 'SecretString' --output text | jq -r 'keys | join(",")')
+          REQUIRED_KEYS="linkuser_password,user_service_password,chat_service_password,discovery_service_password,search_service_password,ai_service_password,streaming_replica_password"
+          
+          echo "Secret contains keys: $SECRET_KEYS"
+          
+          # Basic validation that required keys exist
+          for key in $(echo $REQUIRED_KEYS | tr ',' ' '); do
+            if ! echo "$SECRET_KEYS" | grep -q "$key"; then
+              echo "❌ Missing required key: $key"
+              exit 1
+            fi
+          done
+          
+          echo "✅ Database secret structure validated"
+        else
+          echo "❌ Database secrets not found!"
+          echo "Run: ./scripts/setup-database-secrets.sh ${{ needs.deployment-strategy.outputs.environment }}"
+          exit 1
+        fi
+        
+    - name: Validate Sentry Configuration
+      run: |
+        echo "🔍 Validating Sentry configuration..."
+        SECRET_NAME="link-app/observability/sentry"
+        
+        if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --region us-west-2 >/dev/null 2>&1; then
+          echo "✅ Sentry secrets found"
+          
+          # Validate DSN format (basic check without exposing full DSN)
+          BACKEND_DSN=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --region us-west-2 --query 'SecretString' --output text | jq -r '.backend_dsn')
+          FRONTEND_DSN=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --region us-west-2 --query 'SecretString' --output text | jq -r '.frontend_dsn')
+          
+          if [[ "$BACKEND_DSN" == "PLACEHOLDER_NEEDS_REAL_DSN" ]] || [[ "$FRONTEND_DSN" == "PLACEHOLDER_NEEDS_REAL_DSN" ]]; then
+            echo "⚠️  Placeholder DSNs detected - Sentry error tracking will not work!"
+            echo "Update with real DSNs: ./scripts/setup-sentry-secrets.sh ${{ needs.deployment-strategy.outputs.environment }}"
+            if [[ "${{ needs.deployment-strategy.outputs.environment }}" == "production" ]]; then
+              echo "❌ Production deployment cannot proceed with placeholder DSNs"
+              exit 1
+            fi
+          elif [[ "$BACKEND_DSN" =~ ^https://.*@.*\.ingest\.sentry\.io/[0-9]+$ ]] && [[ "$FRONTEND_DSN" =~ ^https://.*@.*\.ingest\.sentry\.io/[0-9]+$ ]]; then
+            echo "✅ Sentry DSN format validated"
+          else
+            echo "❌ Invalid Sentry DSN format"
+            exit 1
+          fi
+        else
+          echo "⚠️  Sentry secrets not found - error tracking will be disabled"
+          if [[ "${{ needs.deployment-strategy.outputs.environment }}" == "production" ]]; then
+            echo "❌ Production deployment requires Sentry configuration"
+            exit 1
+          fi
+        fi
+        
+    - name: Secrets Summary
+      run: |
+        echo "## 🔐 Secrets Validation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "Environment: **${{ needs.deployment-strategy.outputs.environment }}**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Database secrets validated" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Sentry configuration validated" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Ready for deployment! 🚀" >> $GITHUB_STEP_SUMMARY
+
+  # ================================================================
+  # STAGE 1.5: PRE-DEPLOYMENT LOAD TESTING
+  # ================================================================
+
+  pre-deployment-load-test:
+    name: 🚀 Pre-Deployment Load Testing
+    runs-on: ubuntu-latest
+    needs: [deployment-strategy, secrets-validation]
+    if: |
+      needs.deployment-strategy.outputs.should_deploy == 'true' && 
+      needs.deployment-strategy.outputs.environment != 'development' &&
+      inputs.skip_tests != true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup K6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6 jq
+
+      - name: Run Smoke Tests
+        env:
+          TARGET_ENV: ${{ needs.deployment-strategy.outputs.environment }}
+          SCENARIO: smoke
+        run: |
+          echo "Running smoke tests against ${{ needs.deployment-strategy.outputs.environment }}"
+          
+          # Set environment-specific URLs
+          if [[ "${{ needs.deployment-strategy.outputs.environment }}" == "staging" ]]; then
+            export BASE_URL="https://api-staging.link-app.com"
+            export FRONTEND_URL="https://staging.link-app.com"
+          elif [[ "${{ needs.deployment-strategy.outputs.environment }}" == "production" ]]; then
+            export BASE_URL="https://api.link-app.com"
+            export FRONTEND_URL="https://link-app.com"
+          fi
+          
+          # Create results directory
+          mkdir -p load-test-results
+          
+          # Run smoke tests to verify environment is ready
+          k6 run \
+            --env TARGET_ENV="${TARGET_ENV}" \
+            --env SCENARIO="smoke" \
+            --summary-export="load-test-results/smoke-results.json" \
+            tests/load/performance-baseline-test.js
+          
+          echo "✅ Smoke tests completed"
+
+      - name: Validate Load Test Results
+        run: |
+          if [[ -f "load-test-results/smoke-results.json" ]]; then
+            # Extract key metrics
+            echo "📊 Load Test Results Summary:"
+            
+            # Check HTTP request failure rate
+            failure_rate=$(jq -r '.metrics.http_req_failed.rate // 0' load-test-results/smoke-results.json)
+            if (( $(echo "$failure_rate > 0.05" | bc -l) )); then
+              echo "❌ High failure rate detected: ${failure_rate}"
+              echo "Environment may not be ready for deployment"
+              exit 1
+            fi
+            
+            # Check response times
+            p95_latency=$(jq -r '.metrics.http_req_duration.p95 // 0' load-test-results/smoke-results.json)
+            echo "📈 P95 Response Time: ${p95_latency}ms"
+            
+            # Check SLO compliance if available
+            if jq -e '.metrics.slo_api_availability' load-test-results/smoke-results.json >/dev/null; then
+              availability=$(jq -r '.metrics.slo_api_availability.rate // 0' load-test-results/smoke-results.json)
+              echo "📊 API Availability: $(echo "$availability * 100" | bc -l)%"
+              
+              if (( $(echo "$availability < 0.95" | bc -l) )); then
+                echo "❌ API availability below threshold"
+                exit 1
+              fi
+            fi
+            
+            echo "✅ Load test validation passed"
+          else
+            echo "❌ Load test results file not found"
+            exit 1
+          fi
+
+      - name: Upload Load Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-deployment-load-test-results-${{ needs.deployment-strategy.outputs.environment }}
+          path: load-test-results/
+          retention-days: 30
+
+  # ================================================================
+  # STAGE 2: INFRASTRUCTURE DEPLOYMENT
   # ================================================================
   
   infrastructure-setup:
     name: 🏗️ Infrastructure Setup
-    needs: deployment-strategy
-    if: needs.deployment-strategy.outputs.deploy_infrastructure == 'true'
+    needs: [deployment-strategy, secrets-validation, pre-deployment-load-test]
+    if: |
+      always() &&
+      needs.deployment-strategy.outputs.deploy_infrastructure == 'true' &&
+      (needs.secrets-validation.result == 'success' || needs.secrets-validation.result == 'skipped') &&
+      (needs.pre-deployment-load-test.result == 'success' || needs.pre-deployment-load-test.result == 'skipped')
     uses: ./.github/workflows/setup-infrastructure.yml
     with:
       environment: ${{ needs.deployment-strategy.outputs.environment }}
@@ -250,13 +447,107 @@ jobs:
   # ================================================================
   # STAGE 4: POST-DEPLOYMENT VALIDATION
   # ================================================================
-  
+
+  post-deployment-load-test:
+    name: 🧪 Post-Deployment Load Testing  
+    runs-on: ubuntu-latest
+    needs: [deployment-strategy, application-deployment]
+    if: |
+      needs.deployment-strategy.outputs.should_deploy == 'true' &&
+      needs.application-deployment.result == 'success' &&
+      inputs.skip_tests != true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup K6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6 jq
+
+      - name: Run Post-Deployment Load Tests
+        env:
+          TARGET_ENV: ${{ needs.deployment-strategy.outputs.environment }}
+          SCENARIO: ${{ needs.deployment-strategy.outputs.environment == 'production' && 'load' || 'stress' }}
+        run: |
+          echo "Running post-deployment validation load tests"
+          
+          # Set environment URLs
+          if [[ "${{ needs.deployment-strategy.outputs.environment }}" == "staging" ]]; then
+            export BASE_URL="https://api-staging.link-app.com" 
+            export FRONTEND_URL="https://staging.link-app.com"
+          elif [[ "${{ needs.deployment-strategy.outputs.environment }}" == "production" ]]; then
+            export BASE_URL="https://api.link-app.com"
+            export FRONTEND_URL="https://link-app.com"
+          fi
+          
+          mkdir -p post-deployment-results
+          
+          # Run load tests to validate deployment
+          k6 run \
+            --env TARGET_ENV="${TARGET_ENV}" \
+            --env SCENARIO="${SCENARIO}" \
+            --summary-export="post-deployment-results/validation-results.json" \
+            tests/load/performance-baseline-test.js
+
+      - name: Validate Performance Results
+        run: |
+          if [[ ! -f "post-deployment-results/validation-results.json" ]]; then
+            echo "❌ Load test results not found"
+            exit 1
+          fi
+          
+          echo "📊 Post-Deployment Performance Validation"
+          
+          # Check critical metrics
+          failure_rate=$(jq -r '.metrics.http_req_failed.rate // 0' post-deployment-results/validation-results.json)
+          availability=$(jq -r '.metrics.slo_api_availability.rate // 0' post-deployment-results/validation-results.json)
+          p95_latency=$(jq -r '.metrics.http_req_duration.p95 // 0' post-deployment-results/validation-results.json)
+          
+          echo "  - HTTP Failure Rate: $(echo "$failure_rate * 100" | bc -l)%"
+          echo "  - API Availability: $(echo "$availability * 100" | bc -l)%"
+          echo "  - P95 Response Time: ${p95_latency}ms"
+          
+          # Set environment-specific thresholds
+          if [[ "${{ needs.deployment-strategy.outputs.environment }}" == "production" ]]; then
+            max_failure_rate="0.001"  # 0.1% for production
+            min_availability="0.999"  # 99.9% for production
+          else
+            max_failure_rate="0.02"   # 2% for staging
+            min_availability="0.99"   # 99% for staging  
+          fi
+          
+          # Validate against thresholds
+          if (( $(echo "$failure_rate > $max_failure_rate" | bc -l) )); then
+            echo "❌ Failure rate too high: ${failure_rate} > ${max_failure_rate}"
+            exit 1
+          fi
+          
+          if (( $(echo "$availability < $min_availability" | bc -l) )); then
+            echo "❌ Availability too low: ${availability} < ${min_availability}"
+            exit 1
+          fi
+          
+          echo "✅ Post-deployment validation passed"
+
+      - name: Upload Validation Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-deployment-validation-${{ needs.deployment-strategy.outputs.environment }}
+          path: post-deployment-results/
+          retention-days: 30
+
   deployment-validation:
     name: ✅ Deployment Validation
-    needs: [deployment-strategy, application-deployment]
+    needs: [deployment-strategy, application-deployment, post-deployment-load-test]
     if: |
       always() &&
       needs.application-deployment.result == 'success' &&
+      (needs.post-deployment-load-test.result == 'success' || needs.post-deployment-load-test.result == 'skipped') &&
       github.event.inputs.skip_tests != 'true'
     uses: ./.github/workflows/validation.yml
     with:

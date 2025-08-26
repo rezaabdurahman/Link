@@ -10,5 +10,5 @@ func CompressionMiddleware() gin.HandlerFunc {
 	config := performance.GetDefaultCompressionConfig()
 	compressionHandler := performance.CompressionMiddleware(config)
 	
-	return gin.WrapH(compressionHandler(nil)).(gin.HandlerFunc)
+	return gin.WrapH(compressionHandler(nil))
 }

@@ -1,0 +1,40 @@
+# Development Environment Configuration
+# Used for local development with real backend services
+
+# Application Mode
+VITE_APP_MODE=development
+
+# Authentication
+VITE_REQUIRE_AUTH=false
+VITE_AUTO_LOGIN=true
+VITE_MOCK_USER=true
+
+# Development Features
+VITE_SHOW_DEMO_BANNER=true
+VITE_SEED_DEMO_DATA=true
+
+# Enable Mock Service Worker for development
+VITE_ENABLE_MOCKING=true
+
+# Local API Configuration
+VITE_API_BASE_URL=http://localhost:8080
+
+# Development Sentry (optional - leave empty to disable)
+VITE_SENTRY_DSN=
+VITE_SENTRY_ENVIRONMENT=development
+VITE_APP_VERSION=1.0.0-dev
+
+# Development Analytics (disabled for local)
+VITE_ENABLE_PERFORMANCE_TRACKING=false
+VITE_ENABLE_ERROR_TRACKING=false
+VITE_ENABLE_USER_JOURNEY_TRACKING=false
+
+# Debug Features
+VITE_DEBUG_MODE=true
+VITE_MOCK_DELAY_MS=500
+
+# App Store Links (dev placeholders)
+VITE_APP_STORE_URL=https://apps.apple.com/app/link/id[YOUR_APP_ID]
+VITE_SUPPORT_EMAIL=dev@link-app.com
+VITE_PRIVACY_POLICY_URL=https://link-app.com/privacy
+VITE_TERMS_URL=https://link-app.com/terms

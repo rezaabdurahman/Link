@@ -33,13 +33,13 @@ func main() {
 	defer sharedConfig.CloseSecrets()
 
 	// Initialize Sentry for error reporting
-	if err := sentry.Init(); err != nil {
+	if err := sentry.InitSentry(); err != nil {
 		log.Printf("Failed to initialize Sentry: %v", err)
 		// Continue running even if Sentry fails
 	}
 
 	// Initialize OpenTelemetry tracing
-	err := tracing.Init("discovery-svc", "http://localhost:4318/v1/traces")
+	_, err := tracing.InitTracing("discovery-svc")
 	if err != nil {
 		log.Printf("Failed to initialize tracing: %v", err)
 	} else {
@@ -104,8 +104,8 @@ func main() {
 	}
 
 	// Global middleware
-	router.Use(sentry.Middleware()) // Add Sentry middleware early
-	router.Use(tracing.Middleware()) // Add distributed tracing middleware
+	router.Use(sentry.GinSentryMiddleware()) // Add Sentry middleware early
+	router.Use(tracing.GinMiddleware("discovery-svc")) // Add distributed tracing middleware
 	router.Use(middleware.PrometheusMiddleware()) // Add Prometheus metrics collection
 	
 	// Middleware for CORS (if needed)

@@ -1,0 +1,176 @@
+# =================================================================
+# Staging Environment Monitoring Stack Overrides
+# =================================================================
+# Usage: docker-compose -f docker-compose.monitoring.yml -f docker-compose.staging.yml up -d
+# 
+# Staging overrides (between local and production):
+# - Some ports exposed for debugging
+# - Moderate resource limits
+# - Medium retention periods
+# - Security similar to production but more permissive
+# =================================================================
+
+version: '3.8'
+
+services:
+  prometheus:
+    ports:
+      - "9090:9090" # Exposed for staging debugging
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--storage.tsdb.retention.time=30d' # Medium retention for staging
+    environment:
+      - PROMETHEUS_RETENTION=30d
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    restart: unless-stopped
+
+  grafana:
+    ports:
+      - "3001:3000" # Exposed for staging access
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-staging_admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_ROOT_URL=https://grafana-staging.yourdomain.com
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    restart: unless-stopped
+
+  loki:
+    ports:
+      - "3100:3100" # Exposed for staging debugging
+    command: -config.file=/etc/loki/staging-config.yaml
+    environment:
+      - LOKI_RETENTION=14d
+    volumes:
+      - loki_data:/loki
+      - ./monitoring/loki/staging-config.yaml:/etc/loki/staging-config.yaml:ro
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    restart: unless-stopped
+
+  promtail:
+    ports:
+      - "9080:9080"
+    volumes:
+      - ./monitoring/promtail-staging.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log:/var/log:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: unless-stopped
+
+  jaeger:
+    ports:
+      - "16686:16686"  # Jaeger UI exposed for staging
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=info
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    restart: unless-stopped
+
+  alertmanager:
+    ports:
+      - "9093:9093" # Exposed for staging testing
+    environment:
+      - AM_EXTERNAL_URL=https://alertmanager-staging.yourdomain.com
+    volumes:
+      - ./monitoring/alertmanager/staging-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    restart: unless-stopped
+
+  # System exporters with moderate resource limits
+  node-exporter:
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
+
+  cadvisor:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    restart: unless-stopped
+
+  blackbox-exporter:
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
+
+  redis-exporter:
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
+
+  postgres-exporter:
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=prefer
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
+    name: link_staging_network

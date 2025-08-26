@@ -1,0 +1,307 @@
+# Prometheus Synthetic Monitoring Configuration
+# Defines targets for proactive monitoring of critical user journeys
+
+# This file should be included in prometheus.yml scrape_configs
+
+scrape_configs:
+  # Blackbox exporter metrics (self-monitoring)
+  - job_name: 'blackbox-exporter'
+    static_configs:
+      - targets: ['blackbox-exporter:9115']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    
+  # Critical API Endpoints - High frequency monitoring
+  - job_name: 'synthetic-api-critical'
+    metrics_path: /probe
+    params:
+      module: [api_health_check]
+    static_configs:
+      - targets:
+        # API Gateway health checks
+        - https://api.link-app.com/health
+        - https://api.link-app.com/version
+        - https://api.link-app.com/metrics
+        # Core service health endpoints
+        - https://api.link-app.com/users/health
+        - https://api.link-app.com/chat/health  
+        - https://api.link-app.com/discovery/health
+        - https://api.link-app.com/search/health
+        - https://api.link-app.com/ai/health
+        - https://api.link-app.com/features/health
+        labels:
+          environment: 'production'
+          monitor_type: 'api_health'
+          criticality: 'critical'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 30s
+    scrape_timeout: 15s
+
+  # User Journey Monitoring - Registration Flow
+  - job_name: 'synthetic-journey-registration'
+    metrics_path: /probe
+    params:
+      module: [auth_endpoint_check]
+    static_configs:
+      - targets:
+        - https://api.link-app.com/auth/register
+        - https://api.link-app.com/auth/login
+        - https://api.link-app.com/auth/verify-email
+        labels:
+          environment: 'production'
+          monitor_type: 'user_journey'
+          journey: 'registration'
+          criticality: 'high'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target] 
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 60s
+    scrape_timeout: 20s
+
+  # User Journey Monitoring - Chat Flow
+  - job_name: 'synthetic-journey-chat'
+    metrics_path: /probe
+    params:
+      module: [websocket_check]
+    static_configs:
+      - targets:
+        - wss://api.link-app.com/chat/ws
+        labels:
+          environment: 'production'
+          monitor_type: 'user_journey'
+          journey: 'chat'
+          criticality: 'high'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 60s
+    scrape_timeout: 15s
+
+  # Frontend Application Monitoring
+  - job_name: 'synthetic-frontend'
+    metrics_path: /probe
+    params:
+      module: [frontend_spa_check]
+    static_configs:
+      - targets:
+        - https://link-app.com
+        - https://link-app.com/login
+        - https://link-app.com/register
+        - https://link-app.com/discovery
+        - https://link-app.com/chat
+        labels:
+          environment: 'production'
+          monitor_type: 'frontend'
+          criticality: 'high'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 120s
+    scrape_timeout: 30s
+
+  # SSL Certificate Monitoring
+  - job_name: 'synthetic-ssl-certificates'
+    metrics_path: /probe
+    params:
+      module: [tls_check]
+    static_configs:
+      - targets:
+        - link-app.com:443
+        - api.link-app.com:443
+        - assets.link-app.com:443
+        labels:
+          environment: 'production'
+          monitor_type: 'ssl_certificate'
+          criticality: 'medium'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 300s  # 5 minutes
+    scrape_timeout: 10s
+
+  # DNS Resolution Monitoring
+  - job_name: 'synthetic-dns'
+    metrics_path: /probe
+    params:
+      module: [dns_check]
+    static_configs:
+      - targets:
+        - link-app.com
+        - api.link-app.com
+        - assets.link-app.com
+        labels:
+          environment: 'production'
+          monitor_type: 'dns'
+          criticality: 'medium'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+  # Third-party Dependencies Monitoring
+  - job_name: 'synthetic-dependencies'
+    metrics_path: /probe
+    params:
+      module: [http_2xx_ssl]
+    static_configs:
+      - targets:
+        # OpenAI API (for AI service)
+        - https://api.openai.com/v1/models
+        # Sentry (for error tracking)
+        - https://sentry.io/api/0/
+        labels:
+          environment: 'production'
+          monitor_type: 'third_party'
+          criticality: 'medium'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 300s  # 5 minutes
+    scrape_timeout: 15s
+
+  # Infrastructure Endpoints (staging/internal)
+  - job_name: 'synthetic-infrastructure'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        # Monitoring infrastructure
+        - http://prometheus:9090/-/healthy
+        - http://grafana:3000/api/health
+        - http://alertmanager:9093/-/healthy
+        labels:
+          environment: 'production'
+          monitor_type: 'infrastructure'
+          criticality: 'low'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+---
+# ServiceMonitor for Prometheus Operator (if using)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: blackbox-exporter
+  namespace: link-monitoring
+  labels:
+    app: blackbox-exporter
+spec:
+  selector:
+    matchLabels:
+      app: blackbox-exporter
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /metrics
+
+---
+# Probe resources for Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: link-api-health
+  namespace: link-monitoring
+  labels:
+    app: synthetic-monitoring
+spec:
+  prober:
+    url: blackbox-exporter:9115
+    path: /probe
+  module: api_health_check
+  targets:
+    staticConfig:
+      static:
+      - https://api.link-app.com/health
+      labels:
+        environment: production
+        monitor_type: api_health
+        criticality: critical
+  interval: 30s
+  scrapeTimeout: 15s
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe  
+metadata:
+  name: link-frontend-health
+  namespace: link-monitoring
+  labels:
+    app: synthetic-monitoring
+spec:
+  prober:
+    url: blackbox-exporter:9115
+    path: /probe
+  module: frontend_spa_check
+  targets:
+    staticConfig:
+      static:
+      - https://link-app.com
+      labels:
+        environment: production
+        monitor_type: frontend
+        criticality: high
+  interval: 120s
+  scrapeTimeout: 30s
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: link-websocket-health
+  namespace: link-monitoring
+  labels:
+    app: synthetic-monitoring
+spec:
+  prober:
+    url: blackbox-exporter:9115
+    path: /probe
+  module: websocket_check
+  targets:
+    staticConfig:
+      static:
+      - wss://api.link-app.com/chat/ws
+      labels:
+        environment: production
+        monitor_type: websocket
+        criticality: high
+  interval: 60s
+  scrapeTimeout: 15s

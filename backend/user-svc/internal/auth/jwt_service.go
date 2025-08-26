@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"

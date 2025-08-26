@@ -1,0 +1,345 @@
+# Cost Optimization Prometheus Recording Rules
+# Calculates cost efficiency metrics and identifies optimization opportunities
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cost-optimization-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: cost-optimization
+spec:
+  groups:
+  - name: cost.efficiency.rules
+    interval: 300s  # 5 minute evaluation interval
+    rules:
+    
+    # Cost per resource utilization metrics
+    - record: cost:cpu_efficiency_ratio
+      expr: |
+        (
+          sum(rate(container_cpu_usage_seconds_total{namespace="link-services"}[5m])) by (pod) /
+          sum(container_spec_cpu_cores{namespace="link-services"}) by (pod)
+        ) * 100
+      labels:
+        optimization_type: "cpu_efficiency"
+    
+    - record: cost:memory_efficiency_ratio  
+      expr: |
+        (
+          sum(container_memory_working_set_bytes{namespace="link-services"}) by (pod) /
+          sum(container_spec_memory_limit_bytes{namespace="link-services"}) by (pod)
+        ) * 100
+      labels:
+        optimization_type: "memory_efficiency"
+    
+    # Resource waste detection
+    - record: cost:cpu_waste_indicator
+      expr: |
+        (
+          (sum(container_spec_cpu_cores{namespace="link-services"}) by (pod) - 
+           sum(rate(container_cpu_usage_seconds_total{namespace="link-services"}[5m])) by (pod)) /
+          sum(container_spec_cpu_cores{namespace="link-services"}) by (pod)
+        ) * 100
+      labels:
+        waste_type: "cpu_overprovisioned"
+    
+    - record: cost:memory_waste_indicator
+      expr: |
+        (
+          (sum(container_spec_memory_limit_bytes{namespace="link-services"}) by (pod) - 
+           sum(container_memory_working_set_bytes{namespace="link-services"}) by (pod)) /
+          sum(container_spec_memory_limit_bytes{namespace="link-services"}) by (pod)
+        ) * 100
+      labels:
+        waste_type: "memory_overprovisioned"
+    
+    # Storage utilization efficiency
+    - record: cost:storage_efficiency_ratio
+      expr: |
+        (
+          sum(kubelet_volume_stats_used_bytes{namespace="link-services"}) by (persistentvolume) /
+          sum(kubelet_volume_stats_capacity_bytes{namespace="link-services"}) by (persistentvolume)
+        ) * 100
+      labels:
+        optimization_type: "storage_efficiency"
+    
+    # Network efficiency metrics
+    - record: cost:network_utilization_rate
+      expr: |
+        sum(rate(container_network_transmit_bytes_total{namespace="link-services"}[5m])) +
+        sum(rate(container_network_receive_bytes_total{namespace="link-services"}[5m]))
+      labels:
+        metric_type: "network_throughput"
+    
+    # Database efficiency metrics
+    - record: cost:database_connection_efficiency
+      expr: |
+        (
+          sum(pg_stat_database_numbackends) /
+          sum(pg_settings_max_connections)
+        ) * 100
+      labels:
+        optimization_type: "database_connections"
+    
+    - record: cost:database_query_efficiency
+      expr: |
+        sum(rate(pg_stat_database_xact_commit[5m])) + 
+        sum(rate(pg_stat_database_xact_rollback[5m]))
+      labels:
+        metric_type: "database_transactions"
+    
+    # Service-specific cost efficiency
+    - record: cost:service_request_per_cpu
+      expr: |
+        sum(rate(http_requests_total{namespace="link-services"}[5m])) by (service) /
+        sum(rate(container_cpu_usage_seconds_total{namespace="link-services"}[5m])) by (service)
+      labels:
+        efficiency_type: "requests_per_cpu"
+    
+    - record: cost:service_throughput_per_memory
+      expr: |
+        sum(rate(http_requests_total{namespace="link-services"}[5m])) by (service) /
+        (sum(container_memory_working_set_bytes{namespace="link-services"}) by (service) / 1024 / 1024 / 1024)
+      labels:
+        efficiency_type: "requests_per_gb_memory"
+
+  - name: cost.optimization.alerts
+    interval: 60s
+    rules:
+    
+    # High waste detection alerts
+    - alert: HighCPUWaste
+      expr: cost:cpu_waste_indicator > 80
+      for: 30m
+      labels:
+        severity: warning
+        optimization_priority: high
+        potential_savings: high
+      annotations:
+        summary: "Pod {{ $labels.pod }} has high CPU waste ({{ $value }}% unused)"
+        description: |
+          Pod {{ $labels.pod }} is using only {{ printf "%.1f" (100 - $value) }}% of allocated CPU.
+          Consider reducing CPU requests/limits to optimize costs.
+          Potential monthly savings: ~${{ printf "%.0f" ($value * 0.05) }}
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/cpu-rightsizing"
+        dashboard_url: "https://grafana.link-app.com/d/cost-optimization"
+    
+    - alert: HighMemoryWaste
+      expr: cost:memory_waste_indicator > 70
+      for: 30m
+      labels:
+        severity: warning
+        optimization_priority: high
+        potential_savings: medium
+      annotations:
+        summary: "Pod {{ $labels.pod }} has high memory waste ({{ $value }}% unused)"
+        description: |
+          Pod {{ $labels.pod }} is using only {{ printf "%.1f" (100 - $value) }}% of allocated memory.
+          Consider reducing memory requests/limits to optimize costs.
+          Current waste: {{ printf "%.0f" ($value) }}%
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/memory-rightsizing"
+    
+    # Storage optimization alerts
+    - alert: UnderutilizedStorage
+      expr: cost:storage_efficiency_ratio < 30
+      for: 2h
+      labels:
+        severity: info
+        optimization_priority: medium
+        potential_savings: medium
+      annotations:
+        summary: "Storage volume {{ $labels.persistentvolume }} is underutilized ({{ $value }}% used)"
+        description: |
+          Persistent volume {{ $labels.persistentvolume }} is only {{ printf "%.1f" $value }}% utilized.
+          Consider reducing volume size or investigating if the data is necessary.
+          Current utilization: {{ printf "%.1f" $value }}%
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/storage-optimization"
+    
+    # Database connection efficiency  
+    - alert: LowDatabaseConnectionEfficiency
+      expr: cost:database_connection_efficiency < 20
+      for: 15m
+      labels:
+        severity: info
+        optimization_priority: medium
+        potential_savings: medium
+      annotations:
+        summary: "Database connection pool underutilized ({{ $value }}% used)"
+        description: |
+          Database connections are only {{ printf "%.1f" $value }}% utilized.
+          Consider reducing max_connections setting to save memory and potentially downsize instance.
+          Current utilization: {{ printf "%.1f" $value }}%
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/database-optimization"
+    
+    # Service efficiency alerts
+    - alert: LowServiceEfficiency
+      expr: cost:service_request_per_cpu < 10
+      for: 1h
+      labels:
+        severity: info
+        optimization_priority: low
+        potential_savings: low
+      annotations:
+        summary: "Service {{ $labels.service }} has low CPU efficiency ({{ $value }} req/cpu/sec)"
+        description: |
+          Service {{ $labels.service }} is processing {{ printf "%.1f" $value }} requests per CPU core per second.
+          This may indicate over-provisioning or performance issues.
+          Consider investigating performance bottlenecks or reducing resources.
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/service-efficiency"
+
+  - name: cost.budgets.alerts  
+    interval: 3600s  # Hourly evaluation
+    rules:
+    
+    # Monthly cost tracking (simulated - replace with actual cost metrics)
+    - record: cost:estimated_monthly_total
+      expr: |
+        (
+          sum(increase(aws_billing_estimated_charges{currency="USD"}[1d])) * 30
+        ) or 
+        (
+          # Fallback calculation if AWS billing metrics not available
+          (sum(kube_node_info) * 150) +  # Approximate EC2 costs
+          (sum(kube_persistentvolume_capacity_bytes) / 1024 / 1024 / 1024 * 0.10) +  # Storage costs
+          (sum(pg_stat_database_numbackends) * 50)  # Database costs
+        )
+    
+    - alert: MonthlyBudgetExceeded
+      expr: cost:estimated_monthly_total > 10000
+      for: 1h
+      labels:
+        severity: critical
+        budget_type: monthly_limit
+        financial_impact: high
+      annotations:
+        summary: "Monthly cost budget exceeded: ${{ $value }}"
+        description: |
+          Current monthly cost trajectory is ${{ printf "%.0f" $value }}, exceeding the $10,000 budget.
+          Immediate cost optimization review required.
+          
+          Top recommendations:
+          1. Review and right-size over-provisioned resources
+          2. Consider Reserved Instance purchases for predictable workloads
+          3. Implement automated resource cleanup
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/budget-exceeded"
+        dashboard_url: "https://grafana.link-app.com/d/cost-optimization"
+    
+    - alert: CostAnomalyDetected
+      expr: |
+        (
+          cost:estimated_monthly_total - 
+          cost:estimated_monthly_total offset 7d
+        ) / cost:estimated_monthly_total offset 7d * 100 > 25
+      for: 2h  
+      labels:
+        severity: warning
+        anomaly_type: cost_spike
+        financial_impact: medium
+      annotations:
+        summary: "Unusual cost increase detected: {{ $value }}% above last week"
+        description: |
+          Monthly cost estimate has increased by {{ printf "%.1f" $value }}% compared to last week.
+          Current estimate: ${{ printf "%.0f" (query "cost:estimated_monthly_total" | first | value) }}
+          Last week: ${{ printf "%.0f" (query "cost:estimated_monthly_total offset 7d" | first | value) }}
+          
+          Investigate potential causes:
+          - New resource deployments
+          - Increased usage patterns
+          - Resource scaling events
+          - Data transfer spikes
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/cost-anomaly"
+
+  - name: cost.rightsizing.recommendations
+    interval: 86400s  # Daily evaluation for recommendations
+    rules:
+    
+    # CPU right-sizing recommendations
+    - record: cost:cpu_rightsizing_recommendation
+      expr: |
+        (
+          quantile_over_time(0.95, 
+            sum(rate(container_cpu_usage_seconds_total{namespace="link-services"}[5m])) by (pod)[7d:]
+          ) * 1.2  # Add 20% buffer
+        )
+      labels:
+        recommendation_type: "cpu_rightsizing"
+        confidence: "high"
+        
+    - record: cost:memory_rightsizing_recommendation  
+      expr: |
+        (
+          quantile_over_time(0.95, 
+            sum(container_memory_working_set_bytes{namespace="link-services"}) by (pod)[7d:]
+          ) * 1.3  # Add 30% buffer
+        )
+      labels:
+        recommendation_type: "memory_rightsizing"
+        confidence: "high"
+    
+    # Potential savings calculations
+    - record: cost:potential_cpu_savings
+      expr: |
+        (
+          sum(container_spec_cpu_cores{namespace="link-services"}) by (pod) -
+          cost:cpu_rightsizing_recommendation
+        ) * 50  # Approximate cost per CPU core per month
+      labels:
+        savings_type: "cpu_optimization"
+        
+    - record: cost:potential_memory_savings
+      expr: |
+        (
+          (sum(container_spec_memory_limit_bytes{namespace="link-services"}) by (pod) -
+           cost:memory_rightsizing_recommendation) / 1024 / 1024 / 1024
+        ) * 5  # Approximate cost per GB memory per month
+      labels:
+        savings_type: "memory_optimization"
+    
+    # Storage optimization recommendations
+    - record: cost:storage_cleanup_recommendation
+      expr: |
+        sum(kubelet_volume_stats_capacity_bytes{namespace="link-services"}) by (persistentvolume) -
+        quantile_over_time(0.95, 
+          sum(kubelet_volume_stats_used_bytes{namespace="link-services"}) by (persistentvolume)[30d:]
+        ) * 1.5  # Add 50% buffer
+      labels:
+        recommendation_type: "storage_cleanup"
+        confidence: "medium"
+
+  - name: cost.trend.analysis
+    interval: 86400s  # Daily trend analysis
+    rules:
+    
+    # Weekly cost trend
+    - record: cost:weekly_trend_percentage
+      expr: |
+        (
+          (avg_over_time(cost:estimated_monthly_total[7d]) - 
+           avg_over_time(cost:estimated_monthly_total[14d] offset 7d)) /
+          avg_over_time(cost:estimated_monthly_total[14d] offset 7d)
+        ) * 100
+      labels:
+        trend_type: "weekly_change"
+        
+    # Resource growth trend  
+    - record: cost:resource_growth_trend
+      expr: |
+        (
+          (sum(kube_pod_info{namespace="link-services"}) - 
+           sum(kube_pod_info{namespace="link-services"} offset 7d)) /
+          sum(kube_pod_info{namespace="link-services"} offset 7d)
+        ) * 100
+      labels:
+        trend_type: "resource_growth"
+    
+    # Efficiency trend
+    - record: cost:efficiency_trend
+      expr: |
+        (
+          avg(cost:cpu_efficiency_ratio) - 
+          avg(cost:cpu_efficiency_ratio offset 7d)
+        )
+      labels:
+        trend_type: "efficiency_change"

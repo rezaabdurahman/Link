@@ -21,9 +21,6 @@ const (
 	RequestTypeKey     = "x-request-type"
 	
 	// User context metadata keys (for user requests)
-	UserIDKey    = "x-user-id"
-	UserEmailKey = "x-user-email"
-	UserNameKey  = "x-user-name"
 	UserRolesKey = "x-user-roles"
 )
 

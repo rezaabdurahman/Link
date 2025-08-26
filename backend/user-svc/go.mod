@@ -15,6 +15,8 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/link-app/backend/proto/common v0.0.0
 	github.com/link-app/backend/proto/user v0.0.0
+	github.com/link-app/shared-libs v0.0.0
+	github.com/link-app/shared-libs/config v0.0.0
 	github.com/prometheus/client_golang v1.23.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.37.0
@@ -99,4 +101,6 @@ exclude github.com/ugorji/go v1.1.4
 replace (
 	github.com/link-app/backend/proto/common => ../proto/common
 	github.com/link-app/backend/proto/user => ../proto/user
+	github.com/link-app/shared-libs => ../shared-libs
+	github.com/link-app/shared-libs/config => ../shared-libs/config
 )

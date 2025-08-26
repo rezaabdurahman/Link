@@ -1,0 +1,408 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Link Frontend - Performance & Web Vitals",
+    "tags": ["frontend", "performance", "web-vitals", "rum"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "5m",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(frontend_page_load_total, environment)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*",
+          "current": {
+            "value": "All",
+            "text": "All"
+          }
+        },
+        {
+          "name": "page",
+          "type": "query",
+          "query": "label_values(frontend_page_load_total{environment=~\"$environment\"}, page)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "changes(frontend_app_info[1h])",
+          "iconColor": "green",
+          "lineColor": "green",
+          "titleFormat": "Frontend Deployment",
+          "textFormat": "Version: {{version}}"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Frontend Performance Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(rate(frontend_page_load_total[5m]))",
+            "legendFormat": "Page Loads/min",
+            "refId": "A"
+          },
+          {
+            "expr": "avg(frontend_web_vitals_lcp{environment=~\"$environment\", page=~\"$page\"})",
+            "legendFormat": "Avg LCP (ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "avg(frontend_web_vitals_cls{environment=~\"$environment\", page=~\"$page\"})",
+            "legendFormat": "Avg CLS",
+            "refId": "C"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_api_request_duration_bucket[5m]))",
+            "legendFormat": "API P95 (ms)",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 2000},
+                {"color": "red", "value": 4000}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Core Web Vitals - Largest Contentful Paint (LCP)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(frontend_web_vitals_lcp_bucket{environment=~\"$environment\", page=~\"$page\"}[5m]))",
+            "legendFormat": "P50 LCP",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.75, rate(frontend_web_vitals_lcp_bucket{environment=~\"$environment\", page=~\"$page\"}[5m]))",
+            "legendFormat": "P75 LCP",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_web_vitals_lcp_bucket{environment=~\"$environment\", page=~\"$page\"}[5m]))",
+            "legendFormat": "P95 LCP",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 2500},
+                {"color": "red", "value": 4000}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
+      },
+      {
+        "id": 3,
+        "title": "Core Web Vitals - Cumulative Layout Shift (CLS)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(frontend_web_vitals_cls_bucket{environment=~\"$environment\", page=~\"$page\"}[5m]))",
+            "legendFormat": "P50 CLS",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.75, rate(frontend_web_vitals_cls_bucket{environment=~\"$environment\", page=~\"$page\"}[5m]))",
+            "legendFormat": "P75 CLS",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_web_vitals_cls_bucket{environment=~\"$environment\", page=~\"$page\"}[5m]))",
+            "legendFormat": "P95 CLS",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "decimals": 3,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 0.25}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+      },
+      {
+        "id": 4,
+        "title": "First Contentful Paint (FCP) by Page",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_web_vitals_fcp_bucket{environment=~\"$environment\"}[5m])) by (page)",
+            "legendFormat": "{{page}} P95 FCP",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1800},
+                {"color": "red", "value": 3000}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+      },
+      {
+        "id": 5,
+        "title": "First Input Delay (FID)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_web_vitals_fid_bucket{environment=~\"$environment\", page=~\"$page\"}[5m]))",
+            "legendFormat": "P95 FID",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 300}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+      },
+      {
+        "id": 6,
+        "title": "API Request Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(frontend_api_request_duration_bucket{environment=~\"$environment\"}[5m])) by (endpoint)",
+            "legendFormat": "{{endpoint}} P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_api_request_duration_bucket{environment=~\"$environment\"}[5m])) by (endpoint)",
+            "legendFormat": "{{endpoint}} P95",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1000},
+                {"color": "red", "value": 2000}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
+      },
+      {
+        "id": 7,
+        "title": "API Error Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(frontend_api_request_total{environment=~\"$environment\", status=~\"4..|5..\"}[5m]) / rate(frontend_api_request_total{environment=~\"$environment\"}[5m]) * 100",
+            "legendFormat": "Error Rate %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
+      },
+      {
+        "id": 8,
+        "title": "User Journey Performance",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(frontend_user_journey_duration_bucket{environment=~\"$environment\"}[5m])) by (journey)",
+            "legendFormat": "{{journey}} P95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 5000},
+                {"color": "red", "value": 10000}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30}
+      },
+      {
+        "id": 9,
+        "title": "Feature Usage Frequency",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(frontend_feature_usage_total{environment=~\"$environment\"}[5m]) by (feature)",
+            "legendFormat": "{{feature}} usage/sec",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30}
+      },
+      {
+        "id": 10,
+        "title": "JavaScript Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(frontend_javascript_errors_total{environment=~\"$environment\"}[5m]) * 60",
+            "legendFormat": "JS Errors/min",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 38}
+      },
+      {
+        "id": 11,
+        "title": "Bundle Size Metrics",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "frontend_bundle_size_bytes{environment=~\"$environment\"}",
+            "legendFormat": "Bundle Size",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1048576},
+                {"color": "red", "value": 2097152}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 38}
+      },
+      {
+        "id": 12,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "frontend_memory_used_bytes{environment=~\"$environment\"}",
+            "legendFormat": "Memory Used",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 38}
+      },
+      {
+        "id": 13,
+        "title": "Session Duration Distribution",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "rate(frontend_session_duration_bucket{environment=~\"$environment\"}[5m])",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 38}
+      }
+    ]
+  }
+}

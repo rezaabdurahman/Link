@@ -1,0 +1,243 @@
+groups:
+  - name: feature_flags
+    rules:
+      # Service Health Alerts
+      - alert: FeatureServiceDown
+        expr: up{job="feature-svc"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: feature-svc
+          team: platform
+        annotations:
+          summary: "Feature service is down"
+          description: "The feature service has been down for more than 1 minute"
+          runbook_url: "https://link-app.com/runbooks/feature-service-down"
+          
+      - alert: FeatureServiceUnhealthy
+        expr: feature_service_health_status < 1
+        for: 2m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          component: "{{ $labels.component }}"
+        annotations:
+          summary: "Feature service component unhealthy"
+          description: "Feature service component {{ $labels.component }} has been unhealthy for more than 2 minutes"
+          runbook_url: "https://link-app.com/runbooks/feature-service-unhealthy"
+
+      # Performance Alerts
+      - alert: FeatureFlagHighLatency
+        expr: histogram_quantile(0.95, rate(feature_flag_evaluation_duration_seconds_bucket[5m])) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+        annotations:
+          summary: "Feature flag evaluation latency is high"
+          description: "95th percentile latency for feature flag evaluations is {{ $value }}s, which is above the 500ms threshold"
+          runbook_url: "https://link-app.com/runbooks/feature-high-latency"
+
+      - alert: FeatureFlagVeryHighLatency
+        expr: histogram_quantile(0.95, rate(feature_flag_evaluation_duration_seconds_bucket[5m])) > 2
+        for: 1m
+        labels:
+          severity: critical
+          service: feature-svc
+          team: platform
+        annotations:
+          summary: "Feature flag evaluation latency is very high"
+          description: "95th percentile latency for feature flag evaluations is {{ $value }}s, which is critically high"
+          runbook_url: "https://link-app.com/runbooks/feature-high-latency"
+
+      - alert: ExperimentHighLatency
+        expr: histogram_quantile(0.95, rate(experiment_evaluation_duration_seconds_bucket[5m])) > 1
+        for: 3m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+        annotations:
+          summary: "Experiment evaluation latency is high"
+          description: "95th percentile latency for experiment evaluations is {{ $value }}s, which is above the 1s threshold"
+          runbook_url: "https://link-app.com/runbooks/experiment-high-latency"
+
+      # Error Rate Alerts
+      - alert: FeatureFlagHighErrorRate
+        expr: rate(feature_flag_evaluation_errors_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          flag_key: "{{ $labels.flag_key }}"
+          error_type: "{{ $labels.error_type }}"
+        annotations:
+          summary: "High error rate for feature flag evaluations"
+          description: "Feature flag {{ $labels.flag_key }} is experiencing {{ $value }} errors/sec for {{ $labels.error_type }}"
+          runbook_url: "https://link-app.com/runbooks/feature-high-errors"
+
+      - alert: FeatureFlagVeryHighErrorRate
+        expr: rate(feature_flag_evaluation_errors_total[5m]) > 20
+        for: 1m
+        labels:
+          severity: critical
+          service: feature-svc
+          team: platform
+          flag_key: "{{ $labels.flag_key }}"
+          error_type: "{{ $labels.error_type }}"
+        annotations:
+          summary: "Very high error rate for feature flag evaluations"
+          description: "Feature flag {{ $labels.flag_key }} is experiencing {{ $value }} errors/sec for {{ $labels.error_type }}"
+          runbook_url: "https://link-app.com/runbooks/feature-high-errors"
+
+      # Cache Performance Alerts
+      - alert: FeatureCacheLowHitRate
+        expr: (rate(feature_cache_hits_total[5m]) / (rate(feature_cache_hits_total[5m]) + rate(feature_cache_misses_total[5m]))) * 100 < 80
+        for: 5m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          cache_type: "{{ $labels.cache_type }}"
+        annotations:
+          summary: "Feature cache hit rate is low"
+          description: "Cache hit rate for {{ $labels.cache_type }} is {{ $value }}%, which is below the 80% threshold"
+          runbook_url: "https://link-app.com/runbooks/feature-low-cache-hit-rate"
+
+      - alert: FeatureCacheVeryLowHitRate
+        expr: (rate(feature_cache_hits_total[5m]) / (rate(feature_cache_hits_total[5m]) + rate(feature_cache_misses_total[5m]))) * 100 < 50
+        for: 2m
+        labels:
+          severity: critical
+          service: feature-svc
+          team: platform
+          cache_type: "{{ $labels.cache_type }}"
+        annotations:
+          summary: "Feature cache hit rate is very low"
+          description: "Cache hit rate for {{ $labels.cache_type }} is {{ $value }}%, which is critically low"
+          runbook_url: "https://link-app.com/runbooks/feature-low-cache-hit-rate"
+
+      # Database Performance Alerts
+      - alert: FeatureDatabaseHighLatency
+        expr: histogram_quantile(0.95, rate(feature_database_operation_duration_seconds_bucket[5m])) > 1
+        for: 3m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          operation: "{{ $labels.operation }}"
+          table: "{{ $labels.table }}"
+        annotations:
+          summary: "Feature database operation latency is high"
+          description: "95th percentile latency for {{ $labels.operation }} on {{ $labels.table }} is {{ $value }}s"
+          runbook_url: "https://link-app.com/runbooks/feature-database-high-latency"
+
+      - alert: FeatureDatabaseErrors
+        expr: rate(feature_database_operations_total{status="error"}[5m]) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          operation: "{{ $labels.operation }}"
+          table: "{{ $labels.table }}"
+        annotations:
+          summary: "Feature database operation errors"
+          description: "Database {{ $labels.operation }} operations on {{ $labels.table }} are experiencing {{ $value }} errors/sec"
+          runbook_url: "https://link-app.com/runbooks/feature-database-errors"
+
+      # Circuit Breaker Alerts
+      - alert: FeatureCircuitBreakerOpen
+        expr: feature_circuit_breaker_status > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          component: "{{ $labels.component }}"
+        annotations:
+          summary: "Feature service circuit breaker is open"
+          description: "Circuit breaker for {{ $labels.component }} is open (status: {{ $value }})"
+          runbook_url: "https://link-app.com/runbooks/feature-circuit-breaker-open"
+
+      - alert: FeatureCircuitBreakerFrequentTrips
+        expr: rate(feature_circuit_breaker_trips_total[10m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          component: "{{ $labels.component }}"
+        annotations:
+          summary: "Feature service circuit breaker tripping frequently"
+          description: "Circuit breaker for {{ $labels.component }} is tripping {{ $value }} times per second"
+          runbook_url: "https://link-app.com/runbooks/feature-circuit-breaker-trips"
+
+      # Rate Limiting Alerts
+      - alert: FeatureRateLimitExceeded
+        expr: rate(feature_rate_limit_exceeded_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+          endpoint: "{{ $labels.endpoint }}"
+        annotations:
+          summary: "Feature service rate limit frequently exceeded"
+          description: "Rate limit for {{ $labels.endpoint }} is being exceeded {{ $value }} times per second"
+          runbook_url: "https://link-app.com/runbooks/feature-rate-limit-exceeded"
+
+      # Business Logic Alerts
+      - alert: ExperimentLowParticipation
+        expr: rate(experiment_evaluations_total{in_experiment="true"}[1h]) < 10
+        for: 10m
+        labels:
+          severity: info
+          service: feature-svc
+          team: product
+          experiment: "{{ $labels.experiment_key }}"
+        annotations:
+          summary: "Experiment has low participation"
+          description: "Experiment {{ $labels.experiment_key }} has only {{ $value }} participants per second over the last hour"
+          runbook_url: "https://link-app.com/runbooks/experiment-low-participation"
+
+      - alert: ExperimentNoConversions
+        expr: rate(experiment_conversions_total[2h]) == 0 and rate(experiment_evaluations_total{in_experiment="true"}[2h]) > 0
+        for: 30m
+        labels:
+          severity: info
+          service: feature-svc
+          team: product
+          experiment: "{{ $labels.experiment_key }}"
+        annotations:
+          summary: "Experiment has no conversions"
+          description: "Experiment {{ $labels.experiment_key }} has participants but no conversions in the last 2 hours"
+          runbook_url: "https://link-app.com/runbooks/experiment-no-conversions"
+
+      # Resource Usage Alerts
+      - alert: FeatureServiceHighMemoryUsage
+        expr: (container_memory_usage_bytes{container="feature-svc"} / container_spec_memory_limit_bytes{container="feature-svc"}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+        annotations:
+          summary: "Feature service memory usage is high"
+          description: "Feature service memory usage is {{ $value }}%, which is above the 80% threshold"
+          runbook_url: "https://link-app.com/runbooks/feature-high-memory"
+
+      - alert: FeatureServiceHighCPUUsage
+        expr: (rate(container_cpu_usage_seconds_total{container="feature-svc"}[5m]) / container_spec_cpu_quota{container="feature-svc"} * container_spec_cpu_period{container="feature-svc"}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: feature-svc
+          team: platform
+        annotations:
+          summary: "Feature service CPU usage is high"
+          description: "Feature service CPU usage is {{ $value }}%, which is above the 80% threshold"
+          runbook_url: "https://link-app.com/runbooks/feature-high-cpu"

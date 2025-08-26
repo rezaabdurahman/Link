@@ -40,10 +40,6 @@ type ProfileService interface {
 	RemoveFriend(userID, friendID uuid.UUID) error
 	SearchUsers(query string, userID uuid.UUID, page, limit int) ([]models.PublicUser, error)
 	
-	// Hidden users management
-	GetHiddenUsers(userID uuid.UUID) ([]uuid.UUID, error)
-	HideUser(userID, userToHide uuid.UUID) error
-	UnhideUser(userID, userToUnhide uuid.UUID) error
 }
 
 // OnboardingService interface defines onboarding operations
@@ -163,15 +159,3 @@ func (s *unifiedUserService) GetPreferences(ctx context.Context, userID uuid.UUI
 	return s.onboardingService.GetPreferences(ctx, userID)
 }
 
-// Hidden users methods - delegate to profile service
-func (s *unifiedUserService) GetHiddenUsers(userID uuid.UUID) ([]uuid.UUID, error) {
-	return s.profileService.GetHiddenUsers(userID)
-}
-
-func (s *unifiedUserService) HideUser(userID, userToHide uuid.UUID) error {
-	return s.profileService.HideUser(userID, userToHide)
-}
-
-func (s *unifiedUserService) UnhideUser(userID, userToUnhide uuid.UUID) error {
-	return s.profileService.UnhideUser(userID, userToUnhide)
-}

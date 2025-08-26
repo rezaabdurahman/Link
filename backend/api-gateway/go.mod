@@ -11,6 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/link-app/shared-libs v0.0.0
+	github.com/link-app/shared-libs/versioning v0.0.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/redis/go-redis/v9 v9.12.1
 	go.opentelemetry.io/otel v1.37.0
@@ -22,6 +23,7 @@ require (
 )
 
 replace github.com/link-app/shared-libs => ../shared-libs
+replace github.com/link-app/shared-libs/versioning => ../shared-libs/versioning
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

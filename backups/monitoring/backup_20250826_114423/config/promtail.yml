@@ -1,0 +1,184 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape Docker container logs
+  - job_name: containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: containerlogs
+          __path__: /var/lib/docker/containers/*/*log
+
+    # Pipeline stages to process structured JSON logs
+    pipeline_stages:
+      # Parse JSON logs
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            timestamp: time
+            service: 
+            user_id: user_id
+            user_email: user_email
+            request_id: request_id
+            method: method
+            url: url
+            status: status
+            duration: duration
+            remote_addr: remote_addr
+
+      # Extract container information from file path
+      - regex:
+          expression: '/var/lib/docker/containers/(?P<container_id>[^/]+)/.*'
+          
+      # Add labels based on extracted data
+      - labels:
+          level:
+          service:
+          user_id:
+          method:
+          status:
+          container_id:
+
+      # Set timestamp from log entry if available
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+            - '2006-01-02T15:04:05.999999999Z07:00'
+            - '2006-01-02T15:04:05Z07:00'
+
+      # Template for output formatting
+      - template:
+          source: output
+          template: '{{ .msg }}'
+
+      # Set log level
+      - template:
+          source: level
+          template: '{{ if .level }}{{ .level }}{{ else }}info{{ end }}'
+
+  # Scrape system logs
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          __path__: /var/log/syslog
+
+  # Scrape application-specific logs (if any direct file logging)
+  - job_name: application-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: application
+          __path__: /var/log/*.log
+
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            time: time
+            service: service
+
+      - labels:
+          level:
+          service:
+
+      - timestamp:
+          source: time
+          format: RFC3339
+
+  # Scrape Docker service logs with better container detection
+  - job_name: docker-services
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["logging=promtail"]
+
+    relabel_configs:
+      # Use container name as instance
+      - source_labels: ['__meta_docker_container_name']
+        target_label: 'instance'
+        regex: '/(.*)'
+        replacement: '${1}'
+        
+      # Use container label for service name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+        
+      # Use container label for environment
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'environment'
+        
+      # Set log path to container log file
+      - source_labels: ['__meta_docker_container_id']
+        target_label: '__path__'
+        replacement: '/var/lib/docker/containers/${1}/*log'
+
+    pipeline_stages:
+      # Remove ANSI color codes
+      - regex:
+          expression: '\x1b\[[0-9;]*m'
+          replace: ''
+
+      # Parse JSON logs from applications
+      - match:
+          selector: '{service=~"ai-svc|chat-svc|api-gateway|search-svc"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  msg: msg
+                  time: time
+                  user_id: user_id
+                  user_email: user_email
+                  request_id: request_id
+                  method: method
+                  url: url
+                  status: status
+                  duration: duration
+                  remote_addr: remote_addr
+                  service: service
+
+            - labels:
+                level:
+                user_id:
+                method:
+                status:
+
+            - timestamp:
+                source: time
+                format: RFC3339Nano
+                fallback_formats:
+                  - RFC3339
+                  - '2006-01-02T15:04:05.999999999Z07:00'
+
+      # Parse standard Docker logs for non-JSON services  
+      - match:
+          selector: '{service!~"ai-svc|chat-svc|api-gateway|search-svc"}'
+          stages:
+            - regex:
+                expression: '^(?P<timestamp>\S+)\s+(?P<level>\w+)\s+(?P<msg>.*)'
+            
+            - labels:
+                level:
+                
+            - timestamp:
+                source: timestamp
+                format: '2006-01-02T15:04:05.999999999Z'

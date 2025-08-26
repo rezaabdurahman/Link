@@ -1,0 +1,420 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Backup & Disaster Recovery Monitoring",
+    "tags": ["backup", "disaster-recovery", "infrastructure"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Backup Status Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "backup:success_rate_5m",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.95},
+                {"color": "green", "value": 0.99}
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Last Successful Backup",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "time() - postgres_backup_last_success_timestamp",
+            "legendFormat": "PostgreSQL",
+            "refId": "A"
+          },
+          {
+            "expr": "time() - redis_backup_last_success_timestamp", 
+            "legendFormat": "Redis",
+            "refId": "B"
+          },
+          {
+            "expr": "time() - qdrant_backup_last_success_timestamp",
+            "legendFormat": "Qdrant", 
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 3600},
+                {"color": "red", "value": 86400}
+              ]
+            },
+            "unit": "dtdurations"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Backup Size Trends",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "postgres_backup_size_bytes",
+            "legendFormat": "PostgreSQL - {{database}}",
+            "refId": "A"
+          },
+          {
+            "expr": "redis_backup_size_bytes",
+            "legendFormat": "Redis - {{node}}",
+            "refId": "B"
+          },
+          {
+            "expr": "qdrant_backup_size_bytes",
+            "legendFormat": "Qdrant - {{collection}}",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Backup Duration",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "backup_duration_seconds",
+            "legendFormat": "{{service}} - {{backup_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "backup:duration_p99_1h",
+            "legendFormat": "P99 Duration (1h)",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "s"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Backup Errors",
+        "type": "timeseries", 
+        "targets": [
+          {
+            "expr": "rate(backup_errors_total[5m])",
+            "legendFormat": "{{service}} Errors",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "S3 Storage Usage",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "s3_bucket_size_bytes{bucket=~\".*backup.*\"}",
+            "legendFormat": "{{bucket}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "bytes"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "Cross-Region Replication Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "s3_replication_enabled",
+            "legendFormat": "Replication Enabled",
+            "refId": "A"
+          },
+          {
+            "expr": "s3_replication_failed_total",
+            "legendFormat": "Failed Replications",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 8,
+        "title": "WAL Archive Status",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(postgres_wal_files_archived_total[5m])",
+            "legendFormat": "WAL Files Archived/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(postgres_wal_archive_errors_total[5m])",
+            "legendFormat": "WAL Archive Errors/sec",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      },
+      {
+        "id": 9,
+        "title": "Recovery Point Objective (RPO)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "time() - postgres_backup_last_success_timestamp",
+            "legendFormat": "PostgreSQL RPO",
+            "refId": "A"
+          },
+          {
+            "expr": "time() - redis_backup_last_success_timestamp",
+            "legendFormat": "Redis RPO", 
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 3600},
+                {"color": "red", "value": 14400}
+              ]
+            },
+            "unit": "dtdurations"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      },
+      {
+        "id": 10,
+        "title": "Backup Storage Cost Trend",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "increase(s3_storage_cost_usd[30d])",
+            "legendFormat": "30-day Cost Increase",
+            "refId": "A"
+          },
+          {
+            "expr": "s3:storage_cost_per_gb_30d",
+            "legendFormat": "Cost per GB",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40}
+      },
+      {
+        "id": 11,
+        "title": "Backup Integrity Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "backup_integrity_check_success",
+            "legendFormat": "{{service}} - {{backup_type}}",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "0": {"text": "❌ Failed"},
+                  "1": {"text": "✅ Passed"}
+                }
+              }
+            ]
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48}
+      },
+      {
+        "id": 12,
+        "title": "Recovery Test Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "time() - backup_recovery_test_last_success_timestamp",
+            "legendFormat": "Days Since Last Recovery Test",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1209600},
+                {"color": "red", "value": 2592000}
+              ]
+            },
+            "unit": "dtdurationdays"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48}
+      },
+      {
+        "id": 13,
+        "title": "Backup Schedule Compliance",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "backup_scheduled_vs_actual_count",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 56}
+      },
+      {
+        "id": 14,
+        "title": "Active Alerts",
+        "type": "alertlist",
+        "targets": [],
+        "options": {
+          "showOptions": "current",
+          "alertName": ".*backup.*"
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 64}
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "Backup Events",
+          "datasource": "Prometheus",
+          "expr": "backup_completed_timestamp",
+          "textFormat": "{{service}} backup completed",
+          "iconColor": "green"
+        },
+        {
+          "name": "Backup Failures", 
+          "datasource": "Prometheus",
+          "expr": "backup_failed_timestamp",
+          "textFormat": "{{service}} backup failed: {{error}}",
+          "iconColor": "red"
+        }
+      ]
+    },
+    "variables": [
+      {
+        "name": "service",
+        "type": "query",
+        "query": "label_values(backup_size_bytes, service)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*"
+      },
+      {
+        "name": "environment",
+        "type": "query", 
+        "query": "label_values(backup_size_bytes, environment)",
+        "refresh": 1,
+        "includeAll": false
+      }
+    ]
+  }
+}
