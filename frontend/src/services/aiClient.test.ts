@@ -90,7 +90,7 @@ describe('aiClient utilities', () => {
       
       expect(result).toBe('AI generated summary');
       expect(mockApiClient.get).toHaveBeenCalledWith(
-        '/api/v1/ai/conversations/test-id/summary?max_length=100'
+        '/ai/conversations/test-id/summary?max_length=100'
       );
     });
 

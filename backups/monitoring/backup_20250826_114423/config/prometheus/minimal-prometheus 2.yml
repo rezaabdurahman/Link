@@ -1,0 +1,64 @@
+# Prometheus Configuration for Minimal Profile
+# Optimized for minimal resource usage - core services only
+# Reduced scrape frequency and disabled heavy targets
+
+global:
+  scrape_interval: 30s      # Increased from 15s to reduce load
+  evaluation_interval: 30s  # Increased from 15s
+  external_labels:
+    monitor: 'link-monitor-minimal'
+
+# Disable alertmanager in minimal profile
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Minimal rule files
+rule_files:
+  - "/etc/prometheus/rules/critical.yml"  # Only critical alerts
+
+scrape_configs:
+  # Prometheus itself (self-monitoring)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 60s    # Reduced frequency
+
+  # Core Backend Services Only
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-svc:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Minimal uptime monitoring - API Gateway only
+  - job_name: 'uptime-check'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://api-gateway:8080/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: localhost:9090  # Use Prometheus itself for basic checks
+
+# Note: Disabled components to reduce resource usage:
+# - Database exporters (postgres, redis)
+# - System exporters (node-exporter, cadvisor)  
+# - Individual service monitoring (chat, ai, discovery, search)
+# - Complex uptime monitoring (blackbox-exporter)
+# - CloudNativePG monitoring (K8s specific)

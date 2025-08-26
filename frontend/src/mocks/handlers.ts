@@ -431,8 +431,8 @@ mockFriendships.set('demo-user-1:demo-user-3', {
 
 // Chat handlers
 export const chatHandlers = [
-  // GET /api/v1/chat/conversations - Get user's conversations
-  http.get('*/api/v1/chat/conversations', ({ request }) => {
+  // GET /chat/conversations - Get user's conversations
+  http.get('*/chat/conversations', ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -470,8 +470,8 @@ export const chatHandlers = [
     return HttpResponse.json(response, { status: 200 });
   }),
 
-  // POST /api/v1/chat/conversations - Create new conversation
-  http.post('*/api/v1/chat/conversations', async ({ request }) => {
+  // POST /chat/conversations - Create new conversation
+  http.post('*/chat/conversations', async ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -524,8 +524,8 @@ export const chatHandlers = [
     }
   }),
 
-  // GET /api/v1/chat/conversations/:conversationId/messages - Get conversation messages
-  http.get('*/api/v1/chat/conversations/:conversationId/messages', ({ params, request }) => {
+  // GET /chat/conversations/:conversationId/messages - Get conversation messages
+  http.get('*/chat/conversations/:conversationId/messages', ({ params, request }) => {
     const userId = extractUserId(request);
     const { conversationId } = params;
     
@@ -586,8 +586,8 @@ export const chatHandlers = [
     return HttpResponse.json(response, { status: 200 });
   }),
 
-  // POST /api/v1/chat/messages - Send a message
-  http.post('*/api/v1/chat/messages', async ({ request }) => {
+  // POST /chat/messages - Send a message
+  http.post('*/chat/messages', async ({ request }) => {
     const userId = extractUserId(request);
     
     if (!userId) {

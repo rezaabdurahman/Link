@@ -1,0 +1,407 @@
+# Performance Baseline Metrics and Alerting Rules
+# Establishes performance thresholds and monitors critical application metrics
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: performance-baseline-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: performance-monitoring
+    tier: baseline
+spec:
+  groups:
+  - name: performance.baseline.sli
+    interval: 30s
+    rules:
+    
+    # Service Level Indicators (SLIs) for performance baselines
+    - record: perf:http_request_duration_95p
+      expr: |
+        histogram_quantile(0.95, 
+          sum(rate(http_request_duration_seconds_bucket{namespace="link-services"}[5m])) by (service, method, le)
+        )
+      labels:
+        sli_type: "latency"
+        percentile: "95"
+        
+    - record: perf:http_request_duration_99p
+      expr: |
+        histogram_quantile(0.99, 
+          sum(rate(http_request_duration_seconds_bucket{namespace="link-services"}[5m])) by (service, method, le)
+        )
+      labels:
+        sli_type: "latency"
+        percentile: "99"
+        
+    # Request rate metrics
+    - record: perf:http_requests_per_second
+      expr: |
+        sum(rate(http_requests_total{namespace="link-services"}[5m])) by (service, method)
+      labels:
+        sli_type: "throughput"
+        
+    # Error rate metrics
+    - record: perf:http_error_rate
+      expr: |
+        (sum(rate(http_requests_total{namespace="link-services", status=~"5.."}[5m])) by (service) /
+         sum(rate(http_requests_total{namespace="link-services"}[5m])) by (service)) * 100
+      labels:
+        sli_type: "availability"
+        
+    # Database performance baselines
+    - record: perf:database_query_duration_95p
+      expr: |
+        histogram_quantile(0.95, 
+          sum(rate(pg_stat_statements_mean_exec_time_bucket[5m])) by (datname, le)
+        )
+      labels:
+        sli_type: "database_latency"
+        percentile: "95"
+        
+    - record: perf:database_connections_utilization
+      expr: |
+        (sum(pg_stat_database_numbackends) by (datname) /
+         sum(pg_settings_max_connections) by (datname)) * 100
+      labels:
+        sli_type: "database_utilization"
+        
+    # CPU and Memory performance baselines
+    - record: perf:cpu_utilization_avg
+      expr: |
+        avg(rate(container_cpu_usage_seconds_total{namespace="link-services"}[5m])) by (pod, service) * 100
+      labels:
+        sli_type: "resource_utilization"
+        resource: "cpu"
+        
+    - record: perf:memory_utilization_avg
+      expr: |
+        avg(container_memory_working_set_bytes{namespace="link-services"} / 
+            container_spec_memory_limit_bytes{namespace="link-services"}) by (pod, service) * 100
+      labels:
+        sli_type: "resource_utilization"
+        resource: "memory"
+
+  - name: performance.baseline.alerts
+    interval: 60s
+    rules:
+    
+    # Critical Performance Degradation (P95 > 2 seconds)
+    - alert: HighLatencyDetected
+      expr: perf:http_request_duration_95p > 2.0
+      for: 2m
+      labels:
+        severity: critical
+        performance_impact: high
+        slo_violation: "true"
+        team: platform
+      annotations:
+        summary: "🚨 High latency detected: {{ $labels.service }}.{{ $labels.method }} P95 = {{ printf \"%.3f\" $value }}s"
+        description: |
+          Service {{ $labels.service }} method {{ $labels.method }} is experiencing high latency.
+          
+          **Performance Impact:**
+          - Current P95 latency: {{ printf "%.3f" $value }}s
+          - Baseline target: <500ms
+          - Performance degradation: {{ printf "%.1f" (($value - 0.5) / 0.5 * 100) }}%
+          
+          **Immediate Actions:**
+          1. Check service health and resource utilization
+          2. Review recent deployments or configuration changes
+          3. Analyze database query performance
+          4. Check for external service dependencies
+          
+          **Impact Assessment:**
+          - User experience degradation likely
+          - SLO violation in progress
+          - May affect user retention and satisfaction
+        runbook_url: "https://runbooks.link-app.com/performance/high-latency-response"
+        dashboard_url: "https://grafana.link-app.com/d/performance-baseline"
+        
+    # Warning Performance Degradation (P95 > 1 second)
+    - alert: ModerateLatencyIncrease
+      expr: perf:http_request_duration_95p > 1.0 and perf:http_request_duration_95p <= 2.0
+      for: 5m
+      labels:
+        severity: warning
+        performance_impact: medium
+        slo_violation: "false"
+        team: platform
+      annotations:
+        summary: "⚠️ Moderate latency increase: {{ $labels.service }}.{{ $labels.method }} P95 = {{ printf \"%.3f\" $value }}s"
+        description: |
+          Service {{ $labels.service }} method {{ $labels.method }} showing elevated latency.
+          
+          **Performance Metrics:**
+          - Current P95 latency: {{ printf "%.3f" $value }}s
+          - Baseline target: <500ms
+          - Still within SLO but approaching threshold
+          
+          **Investigation Steps:**
+          1. Monitor for further degradation
+          2. Check resource utilization trends
+          3. Review application logs for errors
+          4. Validate database performance
+        runbook_url: "https://runbooks.link-app.com/performance/latency-investigation"
+        
+    # Extremely High Latency (P99 > 5 seconds)
+    - alert: ExtremeLatencyDetected
+      expr: perf:http_request_duration_99p > 5.0
+      for: 1m
+      labels:
+        severity: critical
+        performance_impact: extreme
+        slo_violation: "true"
+        team: platform
+        escalation: "immediate"
+      annotations:
+        summary: "🚨🚨 EXTREME latency: {{ $labels.service }}.{{ $labels.method }} P99 = {{ printf \"%.3f\" $value }}s"
+        description: |
+          CRITICAL: Service {{ $labels.service }} experiencing extreme latency that severely impacts users.
+          
+          **Critical Metrics:**
+          - Current P99 latency: {{ printf "%.3f" $value }}s
+          - This affects 1% of users with {{ printf "%.3f" $value }}s delays
+          - Immediate investigation required
+          
+          **Escalation Required:**
+          - Page on-call engineer immediately
+          - Consider service degradation announcement
+          - Prepare for potential rollback
+        priority: "P0"
+        
+    # High Error Rate Alert
+    - alert: HighErrorRate
+      expr: perf:http_error_rate > 5.0
+      for: 2m
+      labels:
+        severity: critical
+        performance_impact: high
+        slo_violation: "true"
+        team: platform
+      annotations:
+        summary: "🚨 High error rate: {{ $labels.service }} = {{ printf \"%.2f\" $value }}%"
+        description: |
+          Service {{ $labels.service }} is experiencing a high error rate.
+          
+          **Error Metrics:**
+          - Current error rate: {{ printf "%.2f" $value }}%
+          - SLO target: <1%
+          - Critical threshold exceeded
+          
+          **Immediate Actions:**
+          1. Check service logs for error patterns
+          2. Verify database connectivity
+          3. Review recent deployments
+          4. Check external dependencies
+          
+          **Impact Assessment:**
+          - {{ printf "%.0f" ($value) }}% of requests failing
+          - User experience severely impacted
+          - Revenue impact likely
+        runbook_url: "https://runbooks.link-app.com/performance/high-error-rate"
+        
+    # Database Performance Degradation
+    - alert: DatabasePerformanceDegradation
+      expr: perf:database_query_duration_95p > 1.0
+      for: 3m
+      labels:
+        severity: warning
+        performance_impact: medium
+        component: database
+        team: platform
+      annotations:
+        summary: "💾 Database performance degradation: {{ $labels.datname }} P95 = {{ printf \"%.3f\" $value }}s"
+        description: |
+          Database {{ $labels.datname }} showing elevated query latency.
+          
+          **Database Metrics:**
+          - Query P95 latency: {{ printf "%.3f" $value }}s
+          - Target: <250ms
+          - Performance impact on dependent services likely
+          
+          **Investigation Steps:**
+          1. Check for slow queries in pg_stat_statements
+          2. Review connection pool utilization
+          3. Analyze table locks and blocking queries
+          4. Check disk I/O and memory usage
+        runbook_url: "https://runbooks.link-app.com/database/performance-issues"
+        
+    # Resource Utilization Alerts
+    - alert: HighCPUUtilization
+      expr: perf:cpu_utilization_avg > 80
+      for: 5m
+      labels:
+        severity: warning
+        performance_impact: medium
+        resource_type: cpu
+        team: platform
+      annotations:
+        summary: "🔥 High CPU utilization: {{ $labels.service }} pod {{ $labels.pod }} = {{ printf \"%.1f\" $value }}%"
+        description: |
+          Pod {{ $labels.pod }} in service {{ $labels.service }} showing high CPU usage.
+          
+          **Resource Metrics:**
+          - Current CPU utilization: {{ printf "%.1f" $value }}%
+          - Threshold: 80%
+          - May impact response times
+          
+          **Actions:**
+          1. Check for CPU-intensive processes
+          2. Review scaling configuration
+          3. Consider pod scaling or resource increases
+          4. Monitor for performance impact
+        runbook_url: "https://runbooks.link-app.com/performance/resource-optimization"
+        
+    - alert: HighMemoryUtilization
+      expr: perf:memory_utilization_avg > 85
+      for: 5m
+      labels:
+        severity: warning
+        performance_impact: medium
+        resource_type: memory
+        team: platform
+      annotations:
+        summary: "🧠 High memory utilization: {{ $labels.service }} pod {{ $labels.pod }} = {{ printf \"%.1f\" $value }}%"
+        description: |
+          Pod {{ $labels.pod }} in service {{ $labels.service }} showing high memory usage.
+          
+          **Resource Metrics:**
+          - Current memory utilization: {{ printf "%.1f" $value }}%
+          - Threshold: 85%
+          - Risk of OOM kills
+          
+          **Actions:**
+          1. Check for memory leaks
+          2. Review memory allocation patterns  
+          3. Consider pod restart or scaling
+          4. Monitor garbage collection metrics
+        runbook_url: "https://runbooks.link-app.com/performance/memory-management"
+
+  - name: performance.trend.analysis
+    interval: 300s  # 5 minutes
+    rules:
+    
+    # Performance trend analysis
+    - record: perf:latency_trend_hourly
+      expr: |
+        (avg_over_time(perf:http_request_duration_95p[1h]) - 
+         avg_over_time(perf:http_request_duration_95p[1h] offset 24h)) /
+        avg_over_time(perf:http_request_duration_95p[1h] offset 24h) * 100
+      labels:
+        trend_type: "latency_change_24h"
+        
+    - record: perf:throughput_trend_hourly
+      expr: |
+        (avg_over_time(perf:http_requests_per_second[1h]) - 
+         avg_over_time(perf:http_requests_per_second[1h] offset 24h)) /
+        avg_over_time(perf:http_requests_per_second[1h] offset 24h) * 100
+      labels:
+        trend_type: "throughput_change_24h"
+        
+    # Performance degradation trend alerts
+    - alert: PerformanceTrendDegradation
+      expr: perf:latency_trend_hourly > 25
+      for: 30m
+      labels:
+        severity: warning
+        trend_type: degradation
+        performance_impact: medium
+        team: platform
+      annotations:
+        summary: "📉 Performance trend degradation: {{ $labels.service }} latency increased {{ printf \"%.1f\" $value }}% vs yesterday"
+        description: |
+          Service {{ $labels.service }} showing concerning performance trend.
+          
+          **Trend Analysis:**
+          - 24h latency increase: {{ printf "%.1f" $value }}%
+          - Gradual degradation detected
+          - May indicate systemic issues
+          
+          **Investigation Areas:**
+          1. Data growth impacting queries
+          2. Gradual memory leaks
+          3. Infrastructure capacity issues
+          4. Code performance regressions
+        runbook_url: "https://runbooks.link-app.com/performance/trend-analysis"
+
+  - name: performance.slo.monitoring
+    interval: 60s
+    rules:
+    
+    # SLO compliance tracking
+    - record: slo:availability_7d
+      expr: |
+        (1 - (sum(rate(http_requests_total{namespace="link-services", status=~"5.."}[7d])) /
+              sum(rate(http_requests_total{namespace="link-services"}[7d])))) * 100
+      labels:
+        slo_type: "availability"
+        timeframe: "7d"
+        target: "99.9"
+        
+    - record: slo:latency_compliance_7d
+      expr: |
+        (sum(rate(http_request_duration_seconds_bucket{namespace="link-services", le="0.5"}[7d])) /
+         sum(rate(http_request_duration_seconds_count{namespace="link-services"}[7d]))) * 100
+      labels:
+        slo_type: "latency"
+        timeframe: "7d"
+        target: "95"
+        threshold: "500ms"
+        
+    # SLO violation alerts
+    - alert: AvailabilitySLOViolation
+      expr: slo:availability_7d < 99.9
+      for: 5m
+      labels:
+        severity: critical
+        slo_type: availability
+        violation_type: sustained
+        team: platform
+      annotations:
+        summary: "🎯 Availability SLO violation: {{ printf \"%.3f\" $value }}% (target: 99.9%)"
+        description: |
+          7-day availability SLO is below target.
+          
+          **SLO Status:**
+          - Current 7-day availability: {{ printf "%.3f" $value }}%
+          - SLO target: 99.9%
+          - Violation margin: {{ printf "%.3f" (99.9 - $value) }}%
+          
+          **Impact:**
+          - Customer SLA at risk
+          - Service credits may apply
+          - Reputation impact
+          
+          **Required Actions:**
+          1. Immediate incident response
+          2. Root cause analysis
+          3. Service improvement plan
+          4. Customer communication if needed
+        runbook_url: "https://runbooks.link-app.com/slo/availability-violation"
+        escalation_required: "true"
+        
+    - alert: LatencySLOViolation
+      expr: slo:latency_compliance_7d < 95
+      for: 10m
+      labels:
+        severity: warning
+        slo_type: latency
+        violation_type: sustained
+        team: platform
+      annotations:
+        summary: "🎯 Latency SLO violation: {{ printf \"%.1f\" $value }}% requests <500ms (target: 95%)"
+        description: |
+          7-day latency SLO is below target.
+          
+          **SLO Status:**
+          - Requests served <500ms: {{ printf "%.1f" $value }}%
+          - SLO target: 95%
+          - Violation margin: {{ printf "%.1f" (95 - $value) }}%
+          
+          **Performance Impact:**
+          - User experience degraded
+          - Potential churn risk
+          - Performance optimization needed
+        runbook_url: "https://runbooks.link-app.com/slo/latency-violation"

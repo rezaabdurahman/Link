@@ -56,9 +56,9 @@ export const API_ENDPOINTS = {
   
   // Chat endpoints
   CHAT: {
-    conversations: '/api/v1/chat/conversations',
-    messages: '/api/v1/chat/messages',
-    sendMessage: '/api/v1/chat/send',
+    conversations: '/chat/conversations',
+    messages: '/chat/messages',
+    sendMessage: '/chat/send',
   },
   
   // Friends endpoints

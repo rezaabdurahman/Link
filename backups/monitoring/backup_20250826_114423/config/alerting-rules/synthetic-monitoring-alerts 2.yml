@@ -1,0 +1,313 @@
+# Synthetic Monitoring Alerting Rules
+# Proactive alerts for critical user journey failures and endpoint outages
+
+groups:
+- name: synthetic_critical_alerts
+  interval: 30s
+  rules:
+  
+  # Critical API endpoint down
+  - alert: CriticalAPIEndpointDown
+    expr: |
+      probe_success{job="synthetic-api-critical",criticality="critical"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      category: synthetic_monitoring
+      impact: user_facing
+      component: api
+    annotations:
+      summary: "Critical API endpoint {{ $labels.instance }} is down"
+      description: |
+        The critical API endpoint {{ $labels.instance }} has been failing synthetic checks for 2+ minutes.
+        This may indicate a service outage affecting users.
+        
+        Current status: {{ $value }}
+        Endpoint: {{ $labels.instance }}
+        Check type: {{ $labels.monitor_type }}
+      runbook_url: "https://runbooks.link-app.com/synthetic/api-endpoint-down"
+      dashboard_url: "https://grafana.link-app.com/d/synthetic-monitoring"
+      escalation: "page-immediately"
+
+  # Frontend application completely down
+  - alert: FrontendApplicationDown
+    expr: |
+      probe_success{job="synthetic-frontend",instance="https://link-app.com"} == 0
+    for: 3m
+    labels:
+      severity: critical
+      category: synthetic_monitoring
+      impact: user_facing
+      component: frontend
+    annotations:
+      summary: "Frontend application is completely down"
+      description: |
+        The main frontend application at https://link-app.com is failing synthetic checks.
+        Users cannot access the application.
+        
+        Duration: {{ $labels.alertname }} for {{ $activeFor }}
+      runbook_url: "https://runbooks.link-app.com/synthetic/frontend-down"
+      escalation: "page-immediately"
+
+  # WebSocket connectivity failure
+  - alert: WebSocketConnectivityFailure
+    expr: |
+      probe_success{job="synthetic-journey-chat",monitor_type="user_journey"} == 0
+    for: 5m
+    labels:
+      severity: high
+      category: synthetic_monitoring
+      impact: feature_degradation
+      component: chat
+    annotations:
+      summary: "WebSocket connectivity failing for chat service"
+      description: |
+        WebSocket connections for real-time chat are failing synthetic checks.
+        Chat functionality may be impacted for users.
+        
+        WebSocket endpoint: {{ $labels.instance }}
+        Failing for: {{ $activeFor }}
+      runbook_url: "https://runbooks.link-app.com/synthetic/websocket-failure"
+
+- name: synthetic_user_journey_alerts
+  interval: 60s
+  rules:
+  
+  # User registration journey degraded
+  - alert: UserRegistrationJourneyDegraded
+    expr: |
+      avg_over_time(probe_success{job="synthetic-journey-registration"}[10m]) < 0.9
+    for: 5m
+    labels:
+      severity: high
+      category: synthetic_monitoring
+      impact: user_registration
+      journey: registration
+    annotations:
+      summary: "User registration journey success rate below 90%"
+      description: |
+        The user registration journey has a success rate of {{ $value | humanizePercentage }} over the last 10 minutes.
+        This indicates issues with the signup/login flow.
+        
+        Affected endpoints:
+        {{- range query "probe_success{job=\"synthetic-journey-registration\"} == 0" }}
+        - {{ .Labels.instance }}
+        {{- end }}
+      runbook_url: "https://runbooks.link-app.com/synthetic/registration-journey"
+
+  # Multiple frontend pages failing
+  - alert: MultipleFrontendPagesFailing
+    expr: |
+      count(probe_success{job="synthetic-frontend"} == 0) >= 2
+    for: 3m
+    labels:
+      severity: high
+      category: synthetic_monitoring
+      impact: user_experience
+      component: frontend
+    annotations:
+      summary: "Multiple frontend pages are failing ({{ $value }} pages down)"
+      description: |
+        {{ $value }} frontend pages are currently failing synthetic checks:
+        {{- range query "probe_success{job=\"synthetic-frontend\"} == 0" }}
+        - {{ .Labels.instance }}
+        {{- end }}
+        
+        This may indicate a broader frontend infrastructure issue.
+      runbook_url: "https://runbooks.link-app.com/synthetic/multiple-pages-down"
+
+- name: synthetic_performance_alerts
+  interval: 60s  
+  rules:
+  
+  # High response time for critical endpoints
+  - alert: CriticalEndpointHighLatency
+    expr: |
+      probe_duration_seconds{job="synthetic-api-critical",criticality="critical"} > 2
+    for: 5m
+    labels:
+      severity: medium
+      category: synthetic_monitoring
+      impact: performance
+      component: api
+    annotations:
+      summary: "Critical endpoint {{ $labels.instance }} has high latency"
+      description: |
+        Critical API endpoint {{ $labels.instance }} is responding slowly.
+        Current response time: {{ $value | humanizeDuration }}
+        SLA target: < 200ms for critical endpoints
+        
+        This may indicate performance degradation affecting user experience.
+      runbook_url: "https://runbooks.link-app.com/synthetic/high-latency"
+
+  # Frontend load time degraded
+  - alert: FrontendLoadTimeDegraded
+    expr: |
+      probe_duration_seconds{job="synthetic-frontend"} > 5
+    for: 10m
+    labels:
+      severity: medium
+      category: synthetic_monitoring
+      impact: user_experience
+      component: frontend
+    annotations:
+      summary: "Frontend page {{ $labels.instance }} load time degraded"
+      description: |
+        Frontend page load time is {{ $value | humanizeDuration }}, exceeding 5 second threshold.
+        This may impact user experience and conversion rates.
+        
+        Page: {{ $labels.instance }}
+        Target: < 2 seconds for good user experience
+      runbook_url: "https://runbooks.link-app.com/synthetic/frontend-performance"
+
+- name: synthetic_ssl_certificate_alerts
+  interval: 300s  # Check every 5 minutes
+  rules:
+  
+  # SSL certificate expiring soon
+  - alert: SSLCertificateExpiringSoon
+    expr: |
+      (probe_ssl_earliest_cert_expiry{job="synthetic-ssl-certificates"} - time()) / 86400 < 30
+    for: 1h
+    labels:
+      severity: high
+      category: synthetic_monitoring
+      impact: security
+      component: ssl_certificate
+    annotations:
+      summary: "SSL certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+      description: |
+        SSL certificate for {{ $labels.instance }} will expire in less than 30 days.
+        Certificate expiry: {{ $labels.instance | query "probe_ssl_earliest_cert_expiry" | first | value | unixEpochToTime }}
+        
+        Action required: Renew SSL certificate before expiration.
+      runbook_url: "https://runbooks.link-app.com/ssl/certificate-renewal"
+
+  # SSL certificate expired
+  - alert: SSLCertificateExpired
+    expr: |
+      probe_ssl_earliest_cert_expiry{job="synthetic-ssl-certificates"} < time()
+    for: 1m
+    labels:
+      severity: critical
+      category: synthetic_monitoring  
+      impact: security
+      component: ssl_certificate
+    annotations:
+      summary: "🚨 SSL certificate for {{ $labels.instance }} has EXPIRED"
+      description: |
+        SSL certificate for {{ $labels.instance }} has expired.
+        Users will see security warnings and may not be able to access the site.
+        
+        IMMEDIATE ACTION REQUIRED: Renew and deploy new SSL certificate.
+      runbook_url: "https://runbooks.link-app.com/ssl/certificate-expired"
+      escalation: "page-immediately"
+
+- name: synthetic_dns_alerts
+  interval: 60s
+  rules:
+  
+  # DNS resolution failure
+  - alert: DNSResolutionFailure
+    expr: |
+      probe_success{job="synthetic-dns"} == 0
+    for: 3m
+    labels:
+      severity: high
+      category: synthetic_monitoring
+      impact: accessibility
+      component: dns
+    annotations:
+      summary: "DNS resolution failing for {{ $labels.instance }}"
+      description: |
+        DNS resolution is failing for domain {{ $labels.instance }}.
+        Users may not be able to access the application.
+        
+        This could indicate DNS provider issues or configuration problems.
+      runbook_url: "https://runbooks.link-app.com/dns/resolution-failure"
+
+- name: synthetic_third_party_alerts
+  interval: 300s  # Check every 5 minutes
+  rules:
+  
+  # Third-party service degradation
+  - alert: ThirdPartyServiceDegraded
+    expr: |
+      probe_success{job="synthetic-dependencies"} == 0
+    for: 10m
+    labels:
+      severity: medium
+      category: synthetic_monitoring
+      impact: feature_degradation
+      component: third_party
+    annotations:
+      summary: "Third-party service {{ $labels.instance }} is unreachable"
+      description: |
+        Third-party service {{ $labels.instance }} has been unreachable for 10+ minutes.
+        This may impact dependent features:
+        
+        - OpenAI API: AI conversation summarization
+        - Sentry: Error tracking and monitoring
+        
+        Monitor for user-facing impact and consider fallback mechanisms.
+      runbook_url: "https://runbooks.link-app.com/third-party/service-degraded"
+
+- name: synthetic_trend_alerts  
+  interval: 300s
+  rules:
+  
+  # Overall synthetic monitoring success rate trending down
+  - alert: SyntheticMonitoringSuccessRateTrendingDown
+    expr: |
+      (
+        avg_over_time(avg(probe_success{criticality="critical"})[1h]) <
+        avg_over_time(avg(probe_success{criticality="critical"})[24h]) - 0.05
+      ) and (
+        avg_over_time(avg(probe_success{criticality="critical"})[1h]) < 0.95
+      )
+    for: 30m
+    labels:
+      severity: medium
+      category: synthetic_monitoring
+      impact: reliability_trend
+      component: overall
+    annotations:
+      summary: "Synthetic monitoring success rate trending downward"
+      description: |
+        Overall synthetic monitoring success rate is trending down over the past hour.
+        
+        1-hour average: {{ query "avg_over_time(avg(probe_success{criticality=\"critical\"})[1h])" | first | value | humanizePercentage }}
+        24-hour average: {{ query "avg_over_time(avg(probe_success{criticality=\"critical\"})[24h])" | first | value | humanizePercentage }}
+        
+        This may indicate broader reliability issues requiring investigation.
+      runbook_url: "https://runbooks.link-app.com/synthetic/reliability-trends"
+
+# Composite alerts - Multiple systems affected
+- name: synthetic_composite_alerts
+  interval: 60s
+  rules:
+  
+  # Major outage detected (multiple critical systems down)
+  - alert: MajorOutageDetected
+    expr: |
+      count(probe_success{criticality="critical"} == 0) >= 3
+    for: 2m
+    labels:
+      severity: critical
+      category: synthetic_monitoring
+      impact: major_outage
+      component: multiple
+    annotations:
+      summary: "🚨 MAJOR OUTAGE: Multiple critical systems failing ({{ $value }} systems down)"
+      description: |
+        {{ $value }} critical systems are currently failing synthetic monitoring checks:
+        
+        Failing systems:
+        {{- range query "probe_success{criticality=\"critical\"} == 0" }}
+        - {{ .Labels.instance }} ({{ .Labels.monitor_type }})
+        {{- end }}
+        
+        This indicates a major outage requiring immediate attention.
+      runbook_url: "https://runbooks.link-app.com/incident-response/major-outage"
+      escalation: "page-all-on-call"
+      incident_severity: "sev1"

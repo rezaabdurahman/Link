@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, MessageCircle, MapPin, Users, Ban, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Megaphone, Shield } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Megaphone, Shield } from 'lucide-react';
 import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
 import { CheckIn } from '../types/checkin';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
 import BlockButton from './BlockButton';
-import IconActionButton from './IconActionButton';
 import CheckInModal from './CheckInModal';
 import { useFriendRequests } from '../hooks/useFriendRequests';
-import { getUserProfile, UserProfileResponse, getProfileErrorMessage, blockUser, getBlockingErrorMessage } from '../services/userClient';
-import ConfirmationModal from './ConfirmationModal';
+import { getUserProfile, UserProfileResponse, getProfileErrorMessage } from '../services/userClient';
 import { useMontage } from '../hooks/useMontage';
 import MontageCarousel from './MontageCarousel';
 import { motion } from 'framer-motion';
 import { getUserBroadcast, PublicBroadcastResponse, getBroadcastErrorMessage, isBroadcastError } from '../services/broadcastClient';
 import { getDisplayName, getInitials } from '../utils/nameHelpers';
+import { getOrCreateDirectConversation, conversationToDirectChat } from '../services/chatClient';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProfileDetailModalProps {
   userId: string;
@@ -161,13 +161,13 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   showMontageByDefault: _showMontageByDefault = false,
   isEditing: _isEditing = false
 }): JSX.Element => {
+  const { user: currentUser } = useAuth();
   const [user, setUser] = useState<User | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [showBlockConfirmation, setShowBlockConfirmation] = useState<boolean>(false);
-  const [blockingLoading, setBlockingLoading] = useState<boolean>(false);
-  const [blockingError, setBlockingError] = useState<string | undefined>(undefined);
+  const [isLookingUpConversation, setIsLookingUpConversation] = useState<boolean>(false);
+  const [conversationLookupError, setConversationLookupError] = useState<string | undefined>(undefined);
   const [selectedMontageInterest, setSelectedMontageInterest] = useState<string | undefined>(undefined);
   
   // Check-ins state (only for own profile view)
@@ -330,34 +330,56 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     }
   };
 
-  const handleBlockUser = (): void => {
-    setShowBlockConfirmation(true);
-  };
-
-  const confirmBlockUser = async (): Promise<void> => {
-    if (!user) return;
+  
+  // Track active conversation lookups to prevent race conditions
+  const activeLookups = useRef<Set<string>>(new Set());
+  
+  // Handle message button click with conversation lookup
+  const handleMessageButtonClick = async (): Promise<void> => {
+    if (!user || activeLookups.current.has(user.id) || isLookingUpConversation) return;
     
-    setBlockingLoading(true);
-    setBlockingError(undefined);
+    activeLookups.current.add(user.id);
+    
+    setIsLookingUpConversation(true);
+    setConversationLookupError(undefined);
     
     try {
-      await blockUser(user.id);
-      if (onBlock) {
-        onBlock(user.id);
+      // Get existing conversation or create new one
+      const conversation = await getOrCreateDirectConversation(user.id);
+      
+      if (conversation) {
+        // Convert conversation to Chat format with explicit parameters
+        const chatFromConversation = conversationToDirectChat(
+          conversation,
+          currentUser?.id, // Current user ID to filter out from participants
+          {
+            isFriend: isFriend, // Real friendship status
+            priority: 1 // Default priority
+          }
+        );
+        setChatData(chatFromConversation);
+      } else {
+        // Fallback: create new conversation chat object if API failed
+        setChatData(createChatFromUser(user));
       }
-      onClose(); // Close the modal after blocking
-    } catch (err: any) {
-      console.error('Failed to block user:', err);
-      setBlockingError(getBlockingErrorMessage(err.error || err));
+      
+      // Open the conversation modal
+      setIsChatOpen(true);
+      
+    } catch (error: any) {
+      console.error('Failed to get or create conversation:', error);
+      setConversationLookupError(
+        error?.message || 'Unable to load conversation. Please try again.'
+      );
+      
+      // Still allow opening modal with new conversation as fallback
+      setChatData(createChatFromUser(user));
+      setIsChatOpen(true);
+      
     } finally {
-      setBlockingLoading(false);
-      setShowBlockConfirmation(false);
+      setIsLookingUpConversation(false);
+      activeLookups.current.delete(user.id);
     }
-  };
-
-  const cancelBlockUser = (): void => {
-    setShowBlockConfirmation(false);
-    setBlockingError(undefined);
   };
 
   // Handle montage item click - open existing check-in detail modal
@@ -378,25 +400,44 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     }
   };
 
-  // Create a Chat object for ConversationModal (only when user is available)
-  const chatData: Chat | null = user ? {
-    id: `chat-${user.id}`,
-    participantId: user.id,
-    participantName: user.profileType === 'public' ? getDisplayName(user) : 'Private Profile',
-    participantAvatar: user.profilePicture || '',
-    lastMessage: {
-      id: 'last-msg',
-      senderId: user.id,
-      receiverId: 'current-user',
-      content: "Hey there! 👋",
-      timestamp: new Date(Date.now() - 300000),
-      type: 'text'
-    },
-    unreadCount: 0,
-    conversationSummary: 'Recent conversation',
-    priority: 1,
-    messages: []
-  } : null;
+  // State for managing conversation data
+  const [chatData, setChatData] = useState<Chat | null>(null);
+  
+  // Helper function to create chat data from user
+  const createChatFromUser = (user: User, existingConversation?: any): Chat => {
+    return {
+      id: existingConversation?.id || undefined, // Use real ID if available, undefined for new conversations
+      participantId: user.id,
+      participantName: (() => {
+        // For public profiles, always show name
+        if (user.profileType === 'public') {
+          return getDisplayName(user);
+        }
+        
+        // For private profiles, check if we have name data (respects privacy settings and friend status)
+        if (user.first_name && user.first_name.trim() !== '') {
+          return getDisplayName(user);
+        }
+        
+        // Fallback to "Private Profile" when name is restricted
+        return 'Private Profile';
+      })(),
+      participantAvatar: user.profilePicture || '',
+      lastMessage: existingConversation?.lastMessage || {
+        id: 'placeholder-msg',
+        senderId: user.id,
+        receiverId: 'current-user',
+        content: "Hey there! 👋",
+        timestamp: new Date(Date.now() - 300000),
+        type: 'text'
+      },
+      unreadCount: existingConversation?.unreadCount || 0,
+      conversationSummary: existingConversation?.conversationSummary || 'Recent conversation',
+      priority: 1,
+      messages: existingConversation?.messages || [],
+      isFriend: isFriend // Use the real friendship status
+    };
+  };
 
   // We'll need the original profile response to get social links and photos
   const [profileResponse, setProfileResponse] = useState<UserProfileResponse | undefined>(undefined);
@@ -468,21 +509,12 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           
           {user && !loading && !error && (
             <>
-              {/* Profile Title & Block Button - Only show for other users */}
+              {/* Profile Title - Only show for other users */}
               {mode !== 'own' && (
                 <div className="flex justify-between items-center px-4 pt-0 pb-1">
                   <h2 className="text-xl font-bold m-0 text-gradient-aqua">
                     Profile
                   </h2>
-                  {onBlock && (
-                    <IconActionButton
-                      Icon={Ban}
-                      label="Block user"
-                      onClick={handleBlockUser}
-                      variant="secondary"
-                      size="small"
-                    />
-                  )}
                 </div>
               )}
 
@@ -600,11 +632,16 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   {/* Action Buttons - Now inline with profile */}
                   <div className="flex gap-1.5">
                     <button
-                      onClick={() => setIsChatOpen(true)}
-                      className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 flex items-center justify-center gap-1 text-xs min-w-0"
+                      onClick={handleMessageButtonClick}
+                      disabled={isLookingUpConversation}
+                      className={`bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 flex items-center justify-center gap-1 text-xs min-w-0 ${isLookingUpConversation ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      <MessageCircle size={12} />
-                      Message
+                      {isLookingUpConversation ? (
+                        <div className="animate-spin rounded-full h-3 w-3 border border-gray-600 border-t-transparent" />
+                      ) : (
+                        <MessageCircle size={12} />
+                      )}
+                      {isLookingUpConversation ? 'Loading...' : 'Message'}
                     </button>
                     <FriendButton
                       userId={user.id}
@@ -618,6 +655,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                         size="small"
                         variant="default"
                         className="bg-red-500 hover:bg-red-600 text-white py-1.5 px-2 rounded-md transition-colors duration-200 text-xs min-w-0"
+                        onBlock={onBlock}
                       />
                     )}
                   </div>
@@ -996,26 +1034,23 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       {chatData && (
         <ConversationModal
           isOpen={isChatOpen}
-          onClose={() => setIsChatOpen(false)}
+          onClose={() => {
+            setIsChatOpen(false);
+            setConversationLookupError(undefined);
+          }}
           chat={chatData}
           onAddFriend={() => handleFriendAction('send', true)}
           isFriend={isFriend}
         />
       )}
       
-      {/* Block Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showBlockConfirmation}
-        onClose={cancelBlockUser}
-        onConfirm={confirmBlockUser}
-        title="Block User"
-        message={user ? `Are you sure you want to block ${getDisplayName(user)}? This will prevent both of you from seeing each other's profiles and messaging each other.` : "Are you sure you want to block this user?"}
-        confirmText="Block"
-        cancelText="Cancel"
-        confirmButtonClass="bg-red-500 hover:bg-red-600 text-white"
-        loading={blockingLoading}
-        error={blockingError}
-      />
+      {/* Conversation Lookup Error */}
+      {conversationLookupError && (
+        <div className="fixed bottom-4 left-4 right-4 bg-red-500 text-white p-3 rounded-lg shadow-lg z-50">
+          <p className="text-sm font-medium">Failed to load conversation</p>
+          <p className="text-xs opacity-90">{conversationLookupError}</p>
+        </div>
+      )}
       
       {/* Check-In Modal */}
       {mode === 'own' && (

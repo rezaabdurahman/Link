@@ -8,8 +8,8 @@ import { apiClient } from './authClient';
 
 // API endpoints
 const AI_ENDPOINTS = {
-  conversationSummary: (conversationId: string) => `/api/v1/ai/conversations/${conversationId}/summary`,
-  generateSummary: '/api/v1/ai/summary/generate',
+  conversationSummary: (conversationId: string) => `/ai/conversations/${conversationId}/summary`,
+  generateSummary: '/ai/summary/generate',
 } as const;
 
 // Request/Response types

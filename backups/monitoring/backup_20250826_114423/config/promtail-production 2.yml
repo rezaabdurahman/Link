@@ -1,0 +1,181 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 1048576
+
+scrape_configs:
+  # Production container logs with comprehensive parsing
+  - job_name: production-containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: containerlogs
+          environment: production
+          __path__: /var/lib/docker/containers/*/*log
+
+    pipeline_stages:
+      # Production log parsing with error handling
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            timestamp: time
+            service: service
+            user_id: user_id
+            user_email: user_email
+            request_id: request_id
+            method: method
+            url: url
+            status: status
+            duration: duration
+            remote_addr: remote_addr
+            error: error
+            stack_trace: stack_trace
+            trace_id: trace_id
+            span_id: span_id
+
+      # Extract container metadata
+      - regex:
+          expression: '/var/lib/docker/containers/(?P<container_id>[^/]+)/.*'
+          
+      # Production-specific labeling
+      - labels:
+          level:
+          service:
+          environment: production
+          container_id:
+          request_id:
+          trace_id:
+          span_id:
+
+      # Enhanced timestamp handling for production
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+            - '2006-01-02T15:04:05.999999999Z07:00'
+            - '2006-01-02T15:04:05Z07:00'
+            - '2006/01/02 15:04:05'
+
+      # Production log formatting with PII protection
+      - template:
+          source: output
+          template: >-
+            {{ if .error }}[{{ .level | upper }}] {{ .service }}: {{ .error }}
+            {{ if .stack_trace }}
+            Stack: {{ .stack_trace }}
+            {{ end }}
+            {{ else }}{{ .msg }}{{ end }}
+            {{ if .request_id }} | req={{ .request_id }}{{ end }}
+            {{ if .trace_id }} | trace={{ .trace_id }}{{ end }}
+
+      # Filter out sensitive information in production
+      - replace:
+          expression: '(password|token|secret|key)=[^\\s]*'
+          replace: '${1}=***'
+
+  # Kubernetes logs (if running on K8s)
+  - job_name: production-kubernetes
+    kubernetes_sd_configs:
+      - role: pod
+    
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: __host__
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+      - replacement: /var/log/containers/*$1*.log
+        separator: ""
+        source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+        target_label: __path__
+
+    pipeline_stages:
+      # Kubernetes-specific log processing
+      - cri: {}
+      
+      # Add production environment label
+      - static_labels:
+          environment: production
+          
+      # Extract service information from labels
+      - labelallow:
+          - pod
+          - namespace
+          - container
+          - environment
+
+  # System logs for production monitoring
+  - job_name: production-syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          environment: production
+          __path__: /var/log/syslog
+
+    pipeline_stages:
+      # System log parsing
+      - regex:
+          expression: '^(?P<timestamp>\S+ \S+ \S+) (?P<hostname>\S+) (?P<service>\S+): (?P<message>.*)'
+      
+      - labels:
+          service:
+          environment: production
+          
+      - timestamp:
+          source: timestamp
+          format: 'Jan 02 15:04:05'
+
+  # Application-specific logs with enhanced security
+  - job_name: production-applications
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: application
+          environment: production
+          __path__: /var/log/link-app/*.log
+
+    pipeline_stages:
+      # Application log parsing with security filters
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            time: time
+            service: service
+            user_id: user_id
+            request_id: request_id
+            
+      # Security: Anonymize user data in production logs
+      - replace:
+          expression: '(user_id":")([^"]*)'
+          replace: '${1}***'
+          
+      - replace:
+          expression: '(email":")([^"]*)'
+          replace: '${1}***'
+
+      - labels:
+          level:
+          service:
+          environment: production
+
+      - timestamp:
+          source: time
+          format: RFC3339

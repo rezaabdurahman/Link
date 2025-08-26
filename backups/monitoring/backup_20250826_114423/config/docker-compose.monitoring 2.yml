@@ -1,0 +1,302 @@
+# Tiered Monitoring Stack - Minimal by Default
+# 
+# Default (no profile):     Prometheus + Grafana (minimal monitoring)
+# --profile standard:       + Loki + Jaeger + Exporters (balanced)
+# --profile full:           + All components (complete observability)
+# 
+# Usage:
+#   docker compose up                        # Minimal (default)
+#   docker compose --profile standard up     # Standard 
+#   docker compose --profile full up         # Full monitoring
+
+services:
+  # Prometheus - Metrics collection
+  # Core component - runs by default
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: link_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-7d}'  # Dynamic retention
+    networks:
+      - monitoring
+      - link-network
+    env_file:
+      - .env.profiles
+    # Runs by default - minimal monitoring core
+
+  # Grafana - Visualization and dashboards  
+  # Core component - runs by default
+  grafana:
+    image: grafana/grafana:latest
+    container_name: link_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    env_file:
+      - .env.profiles
+    # Runs by default - minimal monitoring core
+
+  # Node Exporter - System metrics
+  # Disabled in minimal profile to reduce overhead
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: link_node_exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_NODE_EXPORTER_ENABLED
+
+  # cAdvisor - Container metrics
+  # Resource intensive - disabled in minimal profile
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: link_cadvisor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    networks:
+      - monitoring
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_CADVISOR_ENABLED
+
+  # AlertManager - Alert handling
+  # Disabled in minimal profile - not needed for basic monitoring
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: link_alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_ALERTMANAGER_ENABLED
+
+  # Redis Exporter - Redis metrics
+  # Disabled in minimal profile to reduce complexity
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: link_redis_exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - monitoring
+      - link-network
+    # Note: Redis service should be running externally
+    # Start backend services first: cd ../backend && docker compose up -d
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_REDIS_EXPORTER_ENABLED
+
+  # Postgres Exporter - PostgreSQL metrics  
+  # Disabled in minimal profile to reduce complexity
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: link_postgres_exporter
+    restart: unless-stopped
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://link_user:link_pass@postgres:5432/link_app?sslmode=disable
+    networks:
+      - monitoring
+      - link-network
+    # Note: Postgres service should be running externally
+    # Start backend services first: cd ../backend && docker compose up -d
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_POSTGRES_EXPORTER_ENABLED
+
+  # Uptime monitoring with Blackbox Exporter
+  # Optional component - mainly for production uptime monitoring
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: link_blackbox_exporter
+    restart: unless-stopped
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks:
+      - monitoring
+      - link-network
+    env_file:
+      - .env.profiles
+    profiles:
+      - full
+      - custom  # Conditional based on CUSTOM_BLACKBOX_EXPORTER_ENABLED
+
+  # Jaeger - Distributed tracing
+  # Resource intensive - disabled in minimal profile
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: link_jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger collector HTTP
+      - "14250:14250"  # Jaeger collector gRPC
+      - "6831:6831/udp"  # Jaeger agent UDP (compact)
+      - "6832:6832/udp"  # Jaeger agent UDP (binary)
+      - "4317:4317"     # OTLP receiver gRPC
+      - "4318:4318"     # OTLP receiver HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=9411
+      - SAMPLING_STRATEGIES_TYPE=adaptive
+      - SAMPLING_DEFAULT_STRATEGY_MAX_TRACES_PER_SECOND=${JAEGER_SAMPLING:-100}
+    networks:
+      - monitoring
+      - link-network
+    volumes:
+      - jaeger_data:/tmp
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_JAEGER_ENABLED
+
+  # Loki - Log aggregation
+  # Disabled in minimal profile - high storage usage
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: link_loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+      - ./monitoring/loki:/etc/loki:ro
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_LOKI_ENABLED
+
+  # Promtail - Log shipping agent
+  # Disabled in minimal profile - requires Loki
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: link_promtail
+    restart: unless-stopped
+    ports:
+      - "9080:9080"
+    volumes:
+      - ./monitoring/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log:/var/log:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring
+      - link-network
+    depends_on:
+      - loki
+    env_file:
+      - .env.profiles
+    profiles:
+      - standard
+      - full
+      - custom  # Conditional based on CUSTOM_PROMTAIL_ENABLED
+
+networks:
+  monitoring:
+    name: link_monitoring
+    driver: bridge
+  link-network:
+    external: true
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  jaeger_data:
+    driver: local
+  loki_data:
+    driver: local

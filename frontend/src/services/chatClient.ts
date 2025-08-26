@@ -11,9 +11,9 @@ const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 
 // API endpoints
 const CHAT_ENDPOINTS = {
-  conversations: '/api/v1/chat/conversations',
-  messages: '/api/v1/chat/messages',
-  conversationMessages: (id: string) => `/api/v1/chat/conversations/${id}/messages`,
+  conversations: '/chat/conversations',
+  messages: '/chat/messages',
+  conversationMessages: (id: string) => `/chat/conversations/${id}/messages`,
   websocket: (conversationId: string, token: string) => `${WS_BASE_URL}/ws/chat/${conversationId}?token=${token}`,
 } as const;
 
@@ -120,6 +120,7 @@ export async function getConversations(options?: {
   return apiClient.get<ConversationsResponse>(endpoint);
 }
 
+
 /**
  * Create a new conversation
  * @param request - Conversation creation data
@@ -127,6 +128,41 @@ export async function getConversations(options?: {
  */
 export async function createConversation(request: CreateConversationRequest): Promise<Conversation> {
   return apiClient.post<Conversation>(CHAT_ENDPOINTS.conversations, request);
+}
+
+/**
+ * Get or create a direct conversation with a specific user
+ * This leverages the backend's "find or create" logic in CreateDirectConversation
+ * If a conversation already exists, it returns that. If not, it creates a new one.
+ * @param participantId - The ID of the other participant
+ * @returns Promise resolving to the conversation (existing or newly created)
+ */
+export async function getOrCreateDirectConversation(participantId: string): Promise<Conversation | null> {
+  try {
+    // The backend's CreateDirectConversation is actually "find or create"
+    // It will return existing conversation if one exists, or create new one if not
+    // This is perfect for our use case and much more efficient than searching
+    const conversation = await createConversation({
+      type: 'direct',
+      participant_ids: [participantId]
+    });
+    
+    return conversation;
+  } catch (error) {
+    console.error('Failed to find/create direct conversation:', error);
+    return null; // Return null on error to allow fallback handling
+  }
+}
+
+// Backward compatibility aliases
+export const findDirectConversation = getOrCreateDirectConversation;
+
+/**
+ * Backward compatibility wrapper for conversationToDirectChat
+ * @deprecated Use conversationToDirectChat() instead for better type safety
+ */
+export function conversationToChat(conversation: Conversation): Chat {
+  return conversationToDirectChat(conversation);
 }
 
 /**
@@ -349,20 +385,49 @@ export const chatWebSocket = new ChatWebSocketClient();
 import type { Chat, Message } from '../types';
 
 /**
- * Convert API Conversation to UI Chat type
+ * Convert a backend Conversation (typically direct) to frontend Chat UI model
+ * 
+ * This handles the transformation between API data structure and UI component props:
+ * - Extracts the "other participant" from participants array (excluding current user)
+ * - Converts snake_case API fields to camelCase UI fields
+ * - Adds UI-specific properties like priority and friendship status
+ * - Provides sensible defaults for missing data
+ * 
+ * @param conversation - Backend conversation from API
+ * @param currentUserId - ID of current user (to filter out from participants)
+ * @param options - Additional UI-specific data (isFriend, priority)
+ * @returns Chat object optimized for UI components
  */
-export function conversationToChat(conversation: Conversation): Chat {
-  const participant = conversation.participants[0]; // For direct chats, get the other participant
+export function conversationToDirectChat(
+  conversation: Conversation, 
+  currentUserId?: string,
+  options?: {
+    isFriend?: boolean;
+    priority?: number;
+  }
+): Chat {
+  // For direct conversations, we need to find the "other" participant (not current user)
+  let otherParticipant: ConversationParticipant | undefined;
+  
+  if (currentUserId) {
+    // Find the participant who is NOT the current user
+    otherParticipant = conversation.participants.find(p => p.id !== currentUserId);
+  }
+  
+  // Fallback: if we can't determine current user, use first participant
+  if (!otherParticipant && conversation.participants.length > 0) {
+    otherParticipant = conversation.participants[0];
+  }
   
   return {
     id: conversation.id,
-    participantId: participant?.id || '',
-    participantName: participant?.name || conversation.name || 'Unknown',
-    participantAvatar: participant?.avatar || '',
+    participantId: otherParticipant?.id || '',
+    participantName: otherParticipant?.name || conversation.name || 'Unknown',
+    participantAvatar: otherParticipant?.avatar || '',
     lastMessage: conversation.last_message ? {
       id: conversation.last_message.id,
       senderId: conversation.last_message.sender_id,
-      receiverId: '', // Will be filled by the UI
+      receiverId: '', // Will be filled by the UI context
       content: conversation.last_message.content,
       timestamp: new Date(conversation.last_message.created_at),
       type: conversation.last_message.message_type as Message['type'],
@@ -376,8 +441,8 @@ export function conversationToChat(conversation: Conversation): Chat {
     },
     unreadCount: conversation.unread_count,
     conversationSummary: conversation.description || '',
-    priority: 1, // Will be calculated by UI
-    isFriend: true, // Assume existing conversations are with friends
+    priority: options?.priority || 1, // Default priority, can be overridden
+    isFriend: options?.isFriend ?? true, // Default to true for existing conversations
   };
 }
 

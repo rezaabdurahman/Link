@@ -1,0 +1,300 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape Docker container logs with comprehensive data sanitization
+  - job_name: secure-containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: secure_containerlogs
+          __path__: /var/lib/docker/containers/*/*log
+
+    # Advanced pipeline stages for data sanitization
+    pipeline_stages:
+      # Parse JSON logs
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            timestamp: time
+            service: service
+            user_id: user_id
+            user_email: user_email
+            request_id: request_id
+            method: method
+            url: url
+            status: status
+            duration: duration
+            remote_addr: remote_addr
+
+      # Extract container information from file path
+      - regex:
+          expression: '/var/lib/docker/containers/(?P<container_id>[^/]+)/.*'
+          
+      # === DATA SANITIZATION STAGES ===
+      
+      # 1. SANITIZE EMAIL ADDRESSES (preserve domain for debugging)
+      - replace:
+          expression: '([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+          source: user_email
+          replace: 'user_${1|sha256sum|substr:0:8}@${2}'
+          
+      - replace:
+          expression: '([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+          source: msg
+          replace: 'user_${1|sha256sum|substr:0:8}@${2}'
+
+      # 2. SANITIZE IP ADDRESSES
+      - replace:
+          expression: '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
+          source: remote_addr
+          replace: '[IP_HASH_${0|sha256sum|substr:0:8}]'
+          
+      - replace:
+          expression: '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
+          source: msg
+          replace: '[IP_HASH_${0|sha256sum|substr:0:8}]'
+
+      # 3. SANITIZE USER IDs
+      - template:
+          source: user_id_hash
+          template: '{{ if .user_id }}[USER_ID_HASH_{{ .user_id | sha256sum | substr 0 8 }}]{{ else }}{{ .user_id }}{{ end }}'
+          
+      # Replace original user_id with hash
+      - template:
+          source: user_id
+          template: '{{ .user_id_hash }}'
+
+      # 4. SANITIZE PHONE NUMBERS
+      - replace:
+          expression: '\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'
+          source: msg
+          replace: '[PHONE_REDACTED]'
+
+      # 5. SANITIZE CREDIT CARD NUMBERS
+      - replace:
+          expression: '\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b'
+          source: msg
+          replace: '[CC_REDACTED]'
+
+      # 6. SANITIZE SSN
+      - replace:
+          expression: '\b\d{3}-\d{2}-\d{4}\b'
+          source: msg
+          replace: '[SSN_REDACTED]'
+
+      # 7. SANITIZE PASSWORDS AND SECRETS
+      - replace:
+          expression: '(?i)(password|passwd|pwd|secret|token|key|bearer)[\s:=]+\S+'
+          source: msg
+          replace: '${1}=[CREDENTIAL_REDACTED]'
+
+      # 8. SANITIZE API KEYS
+      - replace:
+          expression: '(?i)(api[_-]?key|apikey)[\s:=]+[a-zA-Z0-9_-]+'
+          source: msg
+          replace: '${1}=[APIKEY_REDACTED]'
+
+      # 9. SANITIZE AUTHORIZATION HEADERS
+      - replace:
+          expression: '(?i)(authorization|bearer):\s*[a-zA-Z0-9_.-]+'
+          source: msg
+          replace: '${1}: [TOKEN_REDACTED]'
+
+      # 10. SANITIZE LONG TOKENS/HASHES (20+ chars)
+      - replace:
+          expression: '\b[a-zA-Z0-9_-]{20,}\b'
+          source: msg
+          replace: '[TOKEN_REDACTED]'
+
+      # 11. SANITIZE QUERY PARAMETERS (might contain sensitive data)
+      - replace:
+          expression: '(\?)([^&\s]+)(&[^&\s]+)*'
+          source: url
+          replace: '${1}[QUERY_SANITIZED]'
+
+      # === LABEL ASSIGNMENT (after sanitization) ===
+      - labels:
+          level:
+          service:
+          user_id: # Now contains hash
+          method:
+          status:
+          container_id:
+          # Add security classification
+          data_sanitized: 'true'
+
+      # === TIMESTAMP HANDLING ===
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+            - '2006-01-02T15:04:05.999999999Z07:00'
+            - '2006-01-02T15:04:05Z07:00'
+
+      # === OUTPUT FORMATTING ===
+      - template:
+          source: output
+          template: '{{ .msg }}'
+
+      # === RATE LIMITING (prevent log spam) ===
+      - limit:
+          rate: 1000
+          burst: 2000
+          by_label_value:
+            - service
+            - level
+
+  # Secure system logs scraping
+  - job_name: secure-syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: secure_syslog
+          __path__: /var/log/syslog
+          data_sanitized: 'true'
+
+    pipeline_stages:
+      # Basic sanitization for system logs
+      - replace:
+          expression: '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
+          replace: '[IP_REDACTED]'
+      
+      - replace:
+          expression: '([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+          replace: '[EMAIL_REDACTED]@${2}'
+
+  # Docker service discovery with enhanced security
+  - job_name: secure-docker-services
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["logging=promtail"]
+
+    relabel_configs:
+      # Use container name as instance
+      - source_labels: ['__meta_docker_container_name']
+        target_label: 'instance'
+        regex: '/(.+)'
+        replacement: '${1}'
+        
+      # Use container service label
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+        
+      # Use container environment label
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'environment'
+        
+      # Set log path
+      - source_labels: ['__meta_docker_container_id']
+        target_label: '__path__'
+        replacement: '/var/lib/docker/containers/${1}/*log'
+
+      # Add security metadata
+      - replacement: 'docker_discovery'
+        target_label: 'discovery_method'
+      - replacement: 'true'
+        target_label: 'data_sanitized'
+
+    pipeline_stages:
+      # Remove ANSI color codes (potential obfuscation vector)
+      - regex:
+          expression: '\x1b\[[0-9;]*m'
+          replace: ''
+
+      # Service-specific parsing with sanitization
+      - match:
+          selector: '{service=~"api-gateway|user-svc|chat-svc|discovery-svc|search-svc"}'
+          stages:
+            # Parse application JSON logs
+            - json:
+                expressions:
+                  level: level
+                  msg: msg
+                  time: time
+                  user_id: user_id
+                  user_email: user_email
+                  request_id: request_id
+                  method: method
+                  url: url
+                  status: status
+                  duration: duration
+                  remote_addr: remote_addr
+                  service: service
+
+            # Apply comprehensive sanitization (same as above)
+            - replace:
+                expression: '([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+                source: user_email
+                replace: 'user_${1|sha256sum|substr:0:8}@${2}'
+
+            - replace:
+                expression: '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
+                source: remote_addr
+                replace: '[IP_HASH_${0|sha256sum|substr:0:8}]'
+
+            - template:
+                source: user_id_hash
+                template: '{{ if .user_id }}[USER_ID_HASH_{{ .user_id | sha256sum | substr 0 8 }}]{{ else }}{{ .user_id }}{{ end }}'
+
+            - replace:
+                expression: '(?i)(password|passwd|pwd|secret|token|key|bearer)[\s:=]+\S+'
+                source: msg
+                replace: '${1}=[CREDENTIAL_REDACTED]'
+
+            # Use sanitized values for labels
+            - labels:
+                level:
+                method:
+                status:
+                user_id: user_id_hash
+
+            - timestamp:
+                source: time
+                format: RFC3339Nano
+
+      # Parse non-JSON service logs
+      - match:
+          selector: '{service!~"api-gateway|user-svc|chat-svc|discovery-svc|search-svc"}'
+          stages:
+            # Basic log parsing
+            - regex:
+                expression: '^(?P<timestamp>\S+)\s+(?P<level>\w+)\s+(?P<msg>.*)'
+            
+            # Basic sanitization
+            - replace:
+                expression: '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
+                source: msg
+                replace: '[IP_REDACTED]'
+                
+            - replace:
+                expression: '([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+                source: msg
+                replace: '[EMAIL_REDACTED]@${2}'
+                
+            - labels:
+                level:
+                
+            - timestamp:
+                source: timestamp
+                format: '2006-01-02T15:04:05.999999999Z'
+
+# Global limits for security
+limits_config:
+  readline_rate: 10000
+  readline_burst: 20000
+  max_streams: 10000
