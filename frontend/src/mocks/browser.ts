@@ -70,7 +70,7 @@ export const startMockWorker = async () => {
       console.log('📡 MSW: Registered handlers count:', handlers.length);
       console.log('📡 MSW: Intercepting API calls for:', {
         'Auth': '/auth/login, /auth/register, /auth/me, /auth/refresh, /auth/logout',
-        'Chat': '/api/v1/chat/conversations, /api/v1/chat/messages',
+        'Chat': '/chat/conversations, /chat/messages',
         'Users': '/users/profile/me, /users/profile/:id',
         'Friends': '/friends/status, /friends/requests',
         'Onboarding': '/onboarding/status, /onboarding/start, /onboarding/step',

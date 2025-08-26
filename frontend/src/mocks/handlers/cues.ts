@@ -91,7 +91,7 @@ const findMatches = (newCue: MockCue) => {
 };
 
 export const cueHandlers = [
-  // GET /api/v1/cues - Get current user's cue
+  // GET /cues - Get current user's cue
   http.get(`${API_CONFIG.BASE_URL}/cues`, () => {
     console.log('📝 MSW: Get current user cue request received');
 
@@ -103,7 +103,7 @@ export const cueHandlers = [
     );
   }),
 
-  // POST /api/v1/cues - Create a new cue
+  // POST /cues - Create a new cue
   http.post(`${API_CONFIG.BASE_URL}/cues`, async ({ request }) => {
     const userId = request.headers.get('X-User-ID');
     if (!userId) {
@@ -159,7 +159,7 @@ export const cueHandlers = [
     return HttpResponse.json(newCue, { status: 201 });
   }),
 
-  // PUT /api/v1/cues - Update existing cue
+  // PUT /cues - Update existing cue
   http.put(`${API_CONFIG.BASE_URL}/cues`, async ({ request }) => {
     const userId = request.headers.get('X-User-ID');
     if (!userId) {
@@ -192,7 +192,7 @@ export const cueHandlers = [
     return HttpResponse.json(existingCue);
   }),
 
-  // DELETE /api/v1/cues - Delete current user's cue
+  // DELETE /cues - Delete current user's cue
   http.delete(`${API_CONFIG.BASE_URL}/cues`, ({ request }) => {
     const userId = request.headers.get('X-User-ID');
     if (!userId) {
@@ -216,7 +216,7 @@ export const cueHandlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
-  // GET /api/v1/cues/matches - Get user's cue matches
+  // GET /cues/matches - Get user's cue matches
   http.get(`${API_CONFIG.BASE_URL}/cues/matches`, () => {
     console.log('📝 MSW: Get cue matches request received');
 
@@ -228,7 +228,7 @@ export const cueHandlers = [
     });
   }),
 
-  // POST /api/v1/cues/matches/:matchId/viewed - Mark match as viewed
+  // POST /cues/matches/:matchId/viewed - Mark match as viewed
   http.post(`${API_CONFIG.BASE_URL}/cues/matches/:matchId/viewed`, ({ request, params }) => {
     const userId = request.headers.get('X-User-ID');
     const { matchId } = params;
@@ -264,7 +264,7 @@ export const cueHandlers = [
     return HttpResponse.json({ message: 'Match marked as viewed' });
   }),
 
-  // GET /api/v1/cues/matches/check/:userId - Check if user has match with another user
+  // GET /cues/matches/check/:userId - Check if user has match with another user
   http.get(`${API_CONFIG.BASE_URL}/cues/matches/check/:userId`, ({ request, params }) => {
     const currentUserId = request.headers.get('X-User-ID');
     const { userId: otherUserId } = params;

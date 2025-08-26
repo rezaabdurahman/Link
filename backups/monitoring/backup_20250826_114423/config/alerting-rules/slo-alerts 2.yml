@@ -1,0 +1,274 @@
+# SLO-based Alerting Rules
+# Multi-window, multi-burn-rate alerting following Google SRE practices
+# This prevents alert fatigue while ensuring fast response to critical issues
+
+groups:
+- name: slo_alerts_critical
+  interval: 30s
+  rules:
+  
+  # API Gateway Critical SLO Alerts
+  - alert: APIGatewaySLOErrorBudgetBurnRateCritical
+    expr: |
+      slo:api_gateway_error_budget_burn_rate_1h > 14.4
+      and
+      slo:api_gateway_error_budget_burn_rate_1h offset 1h > 14.4
+    for: 2m
+    labels:
+      severity: critical
+      service: api-gateway
+      slo_type: availability
+      burn_rate: critical
+      impact: high
+    annotations:
+      summary: "API Gateway SLO error budget burning critically fast"
+      description: |
+        The API Gateway availability SLO error budget is burning at {{ $value }}x the acceptable rate.
+        At this rate, the monthly error budget will be exhausted in {{ div 30 $value | printf "%.1f" }} days.
+        Current availability: {{ query "slo:api_gateway_availability_5m" | first | value | printf "%.2f" }}%
+        Target: 99.9%
+      runbook_url: "https://runbooks.link-app.com/slo/api-gateway-availability"
+      dashboard_url: "https://grafana.link-app.com/d/slo-api-gateway"
+      
+  - alert: APIGatewayLatencySLOBurnRateCritical  
+    expr: |
+      slo:api_gateway_latency_budget_burn_rate_1h > 14.4
+      and  
+      slo:api_gateway_latency_budget_burn_rate_1h offset 1h > 14.4
+    for: 2m
+    labels:
+      severity: critical
+      service: api-gateway
+      slo_type: latency
+      burn_rate: critical
+      impact: high
+    annotations:
+      summary: "API Gateway latency SLO error budget burning critically fast"
+      description: |
+        The API Gateway latency SLO error budget is burning at {{ $value }}x the acceptable rate.
+        Current P95 latency: {{ query "slo:api_gateway_latency_p95_5m" | first | value | printf "%.0f" }}ms
+        Target: <200ms for 95% of requests
+      runbook_url: "https://runbooks.link-app.com/slo/api-gateway-latency"
+
+  # User Service Critical SLO Alerts
+  - alert: UserServiceSLOErrorBudgetBurnRateCritical
+    expr: |
+      (1 - slo:user_service_availability_5m / 100) * 24 * 30 / 0.001 > 14.4
+    for: 2m
+    labels:
+      severity: critical
+      service: user-service
+      slo_type: availability
+      burn_rate: critical
+      impact: high
+    annotations:
+      summary: "User Service SLO error budget burning critically fast"
+      description: |
+        The User Service availability is {{ query "slo:user_service_availability_5m" | first | value | printf "%.2f" }}%
+        This is burning error budget at {{ $value }}x the acceptable rate.
+      runbook_url: "https://runbooks.link-app.com/slo/user-service-availability"
+
+  # Chat Service Critical SLO Alerts
+  - alert: ChatServiceWebSocketSLOBurnRateCritical
+    expr: |
+      (1 - slo:chat_service_websocket_stability_5m / 100) * 24 * 30 / 0.05 > 14.4
+    for: 2m
+    labels:
+      severity: critical
+      service: chat-service
+      slo_type: websocket_stability
+      burn_rate: critical
+      impact: high
+    annotations:
+      summary: "Chat Service WebSocket stability SLO burning critically fast"
+      description: |
+        WebSocket connection stability: {{ query "slo:chat_service_websocket_stability_5m" | first | value | printf "%.1f" }}%
+        Target: 95% stable connections
+
+- name: slo_alerts_high
+  interval: 1m
+  rules:
+  
+  # High burn rate alerts (6 hour lookback)
+  - alert: APIGatewaySLOErrorBudgetBurnRateHigh
+    expr: |
+      slo:api_gateway_error_budget_burn_rate_1h > 6
+      and
+      avg_over_time(slo:api_gateway_error_budget_burn_rate_1h[6h]) > 6
+    for: 15m
+    labels:
+      severity: high
+      service: api-gateway
+      slo_type: availability
+      burn_rate: high
+      impact: medium
+    annotations:
+      summary: "API Gateway SLO error budget burning at high rate"
+      description: |
+        Error budget burn rate: {{ $value }}x (sustained over 6h)
+        Estimated time to exhaustion: {{ div 30 $value | printf "%.1f" }} days
+      runbook_url: "https://runbooks.link-app.com/slo/api-gateway-availability"
+
+  - alert: UserRegistrationJourneySLOBurnRateHigh
+    expr: |
+      (1 - slo:user_registration_success_rate_5m / 100) * 24 * 30 / 0.05 > 6
+    for: 15m  
+    labels:
+      severity: high
+      service: user-service
+      slo_type: journey
+      journey: user_registration
+      burn_rate: high
+      impact: medium
+    annotations:
+      summary: "User registration journey SLO degraded"
+      description: |
+        User registration success rate: {{ query "slo:user_registration_success_rate_5m" | first | value | printf "%.1f" }}%
+        Target: 95% successful registrations
+
+- name: slo_alerts_medium  
+  interval: 5m
+  rules:
+  
+  # Medium burn rate alerts (3 day lookback)
+  - alert: ServiceSLOErrorBudgetBurnRateMedium
+    expr: |
+      (
+        slo:api_gateway_error_budget_burn_rate_1h > 1
+        or
+        (1 - slo:user_service_availability_5m / 100) * 24 * 30 / 0.001 > 1  
+        or
+        (1 - slo:chat_service_availability_5m / 100) * 24 * 30 / 0.001 > 1
+      )
+      and
+      (
+        avg_over_time(slo:api_gateway_error_budget_burn_rate_1h[3d]) > 1
+        or  
+        avg_over_time((1 - slo:user_service_availability_5m / 100) * 24 * 30 / 0.001[3d]) > 1
+        or
+        avg_over_time((1 - slo:chat_service_availability_5m / 100) * 24 * 30 / 0.001[3d]) > 1
+      )
+    for: 1h
+    labels:
+      severity: medium
+      slo_type: availability
+      burn_rate: medium
+      impact: low
+    annotations:
+      summary: "Service SLO error budget burning at medium rate"
+      description: |
+        One or more services are consuming error budget faster than sustainable.
+        This is a early warning - investigate to prevent future critical alerts.
+      runbook_url: "https://runbooks.link-app.com/slo/medium-burn-rate-investigation"
+
+- name: slo_alerts_low
+  interval: 30m  
+  rules:
+  
+  # Low burn rate alerts (6 day lookback) - Early warnings
+  - alert: ServiceSLOErrorBudgetBurnRateLow
+    expr: |
+      avg_over_time(slo:api_gateway_error_budget_burn_rate_1h[6d]) > 0.25
+      or
+      avg_over_time((1 - slo:user_service_availability_5m / 100) * 24 * 30 / 0.001[6d]) > 0.25
+    for: 6h
+    labels:  
+      severity: low
+      slo_type: availability
+      burn_rate: low
+      impact: planning
+    annotations:
+      summary: "Service SLO trending towards budget exhaustion"
+      description: |
+        Error budget consumption is trending upward over 6 days.
+        Consider investigating root causes during business hours.
+      runbook_url: "https://runbooks.link-app.com/slo/trend-analysis"
+
+# SLO Budget Exhaustion Warnings
+- name: slo_budget_exhaustion
+  interval: 1h
+  rules:
+  
+  - alert: SLOErrorBudgetAlmostExhausted
+    expr: |
+      (
+        # Calculate remaining error budget percentage
+        (1 - (1 - slo:api_gateway_availability_5m / 100) * 24 * 30 / 0.001 * 
+         (30 - vector(days_in_month())) / 30) < 0.1
+      )
+    for: 1h
+    labels:
+      severity: high
+      slo_type: budget_exhaustion
+      impact: high
+    annotations:
+      summary: "SLO error budget almost exhausted for this month"
+      description: |
+        Less than 10% of monthly error budget remains.
+        Extreme caution required for deployments and changes.
+      runbook_url: "https://runbooks.link-app.com/slo/budget-exhaustion"
+      
+  - alert: SLOErrorBudgetExhausted  
+    expr: |
+      (
+        # Error budget completely consumed
+        (1 - (1 - slo:api_gateway_availability_5m / 100) * 24 * 30 / 0.001 * 
+         (30 - vector(days_in_month())) / 30) <= 0
+      )
+    for: 30m
+    labels:
+      severity: critical
+      slo_type: budget_exhausted
+      impact: critical
+    annotations:
+      summary: "🚨 SLO error budget exhausted for this month"
+      description: |
+        The monthly error budget has been completely consumed.
+        All non-critical deployments and changes must be halted.
+        Focus on reliability improvements only.
+      runbook_url: "https://runbooks.link-app.com/slo/budget-exhausted-response"
+
+# Composite Journey Alerts
+- name: slo_journey_alerts
+  interval: 2m
+  rules:
+  
+  - alert: CriticalUserJourneySLOBreach
+    expr: |
+      slo:user_registration_success_rate_5m < 95
+      or
+      slo:message_delivery_success_rate_5m < 99
+    for: 5m
+    labels:
+      severity: high
+      slo_type: user_journey
+      impact: user_experience
+    annotations:
+      summary: "Critical user journey SLO breached"
+      description: |
+        User journey success rates below SLO targets:
+        - Registration: {{ query "slo:user_registration_success_rate_5m" | first | value | printf "%.1f" }}% (target: 95%)
+        - Message delivery: {{ query "slo:message_delivery_success_rate_5m" | first | value | printf "%.1f" }}% (target: 99%)
+      runbook_url: "https://runbooks.link-app.com/slo/user-journey-degradation"
+
+# Long-term SLO Trend Alerts  
+- name: slo_trends
+  interval: 1d
+  rules:
+  
+  - alert: SLOTrendDeteriorating
+    expr: |
+      # 7-day moving average worse than 14-day average
+      avg_over_time(slo:api_gateway_availability_5m[7d]) < 
+      avg_over_time(slo:api_gateway_availability_5m[14d]) - 0.1
+    for: 2d
+    labels:
+      severity: low
+      slo_type: trend_analysis
+      impact: planning
+    annotations:
+      summary: "Service SLO trending downward over 7 days"
+      description: |
+        7-day average availability worse than 14-day average.
+        Consider capacity planning or reliability improvements.
+      runbook_url: "https://runbooks.link-app.com/slo/capacity-planning"

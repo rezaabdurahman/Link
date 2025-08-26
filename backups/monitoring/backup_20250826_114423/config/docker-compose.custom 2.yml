@@ -1,0 +1,51 @@
+# Custom monitoring profile override
+# This file is used to conditionally enable services based on environment variables
+# Usage: docker compose -f docker-compose.monitoring.yml -f docker-compose.custom.yml --profile custom up
+
+version: '3.8'
+
+services:
+  # Node Exporter - conditionally enabled based on CUSTOM_NODE_EXPORTER_ENABLED
+  node-exporter:
+    profiles:
+      - ${CUSTOM_NODE_EXPORTER_ENABLED:-false}
+    
+  # cAdvisor - conditionally enabled based on CUSTOM_CADVISOR_ENABLED  
+  cadvisor:
+    profiles:
+      - ${CUSTOM_CADVISOR_ENABLED:-false}
+    
+  # Loki - conditionally enabled based on CUSTOM_LOKI_ENABLED
+  loki:
+    profiles:
+      - ${CUSTOM_LOKI_ENABLED:-false}
+    
+  # Promtail - conditionally enabled based on CUSTOM_PROMTAIL_ENABLED
+  promtail:
+    profiles:
+      - ${CUSTOM_PROMTAIL_ENABLED:-false}
+    
+  # Jaeger - conditionally enabled based on CUSTOM_JAEGER_ENABLED
+  jaeger:
+    profiles:
+      - ${CUSTOM_JAEGER_ENABLED:-false}
+    
+  # AlertManager - conditionally enabled based on CUSTOM_ALERTMANAGER_ENABLED
+  alertmanager:
+    profiles:
+      - ${CUSTOM_ALERTMANAGER_ENABLED:-false}
+    
+  # Redis Exporter - conditionally enabled based on CUSTOM_REDIS_EXPORTER_ENABLED
+  redis-exporter:
+    profiles:
+      - ${CUSTOM_REDIS_EXPORTER_ENABLED:-false}
+    
+  # Postgres Exporter - conditionally enabled based on CUSTOM_POSTGRES_EXPORTER_ENABLED
+  postgres-exporter:
+    profiles:
+      - ${CUSTOM_POSTGRES_EXPORTER_ENABLED:-false}
+    
+  # Blackbox Exporter - conditionally enabled based on CUSTOM_BLACKBOX_EXPORTER_ENABLED
+  blackbox-exporter:
+    profiles:
+      - ${CUSTOM_BLACKBOX_EXPORTER_ENABLED:-false}

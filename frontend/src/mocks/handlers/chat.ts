@@ -41,7 +41,7 @@ const convertChatToConversation = (chat: typeof chats[0]): Conversation => {
 };
 
 export const handlers = [
-  // GET /api/v1/chat/conversations - Get user's conversations
+  // GET /chat/conversations - Get user's conversations
   http.get(buildApiUrl(API_ENDPOINTS.CHAT.conversations), ({ request }) => {
     const userId = extractUserId(request);
     
@@ -68,7 +68,7 @@ export const handlers = [
     return createSuccessResponse(response);
   }),
 
-  // POST /api/v1/chat/conversations - Create new conversation
+  // POST /chat/conversations - Create new conversation
   http.post(buildApiUrl(API_ENDPOINTS.CHAT.conversations), async ({ request }) => {
     const userId = extractUserId(request);
     
@@ -108,8 +108,8 @@ export const handlers = [
     }
   }),
 
-  // GET /api/v1/chat/conversations/:conversationId/messages - Get conversation messages
-  http.get(buildApiUrl('/api/v1/chat/conversations/:conversationId/messages'), ({ params, request }) => {
+  // GET /chat/conversations/:conversationId/messages - Get conversation messages
+  http.get(buildApiUrl('/chat/conversations/:conversationId/messages'), ({ params, request }) => {
     const userId = extractUserId(request);
     const { conversationId } = params;
     
@@ -159,7 +159,7 @@ export const handlers = [
     return createSuccessResponse(response);
   }),
 
-  // POST /api/v1/chat/messages - Send a message
+  // POST /chat/messages - Send a message
   http.post(buildApiUrl(API_ENDPOINTS.CHAT.messages), async ({ request }) => {
     const userId = extractUserId(request);
     

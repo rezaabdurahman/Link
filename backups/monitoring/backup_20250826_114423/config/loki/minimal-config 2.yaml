@@ -1,0 +1,73 @@
+# Loki Configuration for Minimal Profile
+# Optimized for minimal resource usage and cost reduction
+# Retention: 1 day, reduced cache, basic features only
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
+# Minimal caching to reduce memory usage
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 25  # Reduced from 100MB
+        ttl: 24h
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+# Aggressive retention policy for cost reduction
+limits_config:
+  retention_period: 24h      # 1 day retention (was 7 days)
+  ingestion_rate_mb: 2       # Reduced from 4MB
+  ingestion_burst_size_mb: 4 # Reduced from 6MB
+  max_concurrent_tail_requests: 5
+  max_query_parallelism: 16
+  max_streams_per_user: 5000  # Reduced from 10000
+
+# Basic compactor settings
+compactor:
+  working_directory: /loki/compactor
+  shared_store: filesystem
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+
+# Disable ruler to save resources
+ruler:
+  enable_api: false
+
+# Disable analytics
+analytics:
+  reporting_enabled: false
+
+# Basic memberlist config
+memberlist:
+  abort_if_cluster_join_fails: false
+  bind_port: 7946
+  join_members:
+  - loki:7946

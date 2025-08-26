@@ -1,0 +1,113 @@
+# Prometheus Configuration for Standard Profile
+# Balanced monitoring - all services with reasonable scrape intervals
+# Excludes some K8s-specific and optional components
+
+global:
+  scrape_interval: 20s      # Slightly increased from 15s
+  evaluation_interval: 20s  # Balanced evaluation
+  external_labels:
+    monitor: 'link-monitor-standard'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Standard rule files
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Backend Services
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-svc:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 20s
+
+  - job_name: 'chat-service'
+    static_configs:
+      - targets: ['chat-svc:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 20s
+
+  - job_name: 'ai-service'
+    static_configs:
+      - targets: ['ai-svc:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 15s
+
+  - job_name: 'discovery-service'
+    static_configs:
+      - targets: ['discovery-svc:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 20s
+
+  - job_name: 'search-service'
+    static_configs:
+      - targets: ['search-svc:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 20s
+
+  # Infrastructure Services (enabled in standard)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # System Metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 20s
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 20s
+
+  # Essential uptime monitoring
+  - job_name: 'service-uptime'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://api-gateway:8080/health
+        - http://user-svc:8080/health
+        - http://chat-svc:8080/health
+        - http://discovery-svc:8080/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+# Note: Disabled components for cost optimization:
+# - Complex K8s monitoring (CloudNativePG operator)
+# - PgBouncer monitoring (if not essential)
+# - Frontend monitoring (if metrics not available)

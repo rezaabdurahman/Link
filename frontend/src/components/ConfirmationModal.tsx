@@ -66,16 +66,16 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
               <AlertTriangle size={18} className="text-red-600" />
             </div>
-            <h2 className="text-xl font-semibold text-white">
+            <h2 className="text-xl font-semibold text-gray-900">
               {title}
             </h2>
           </div>
           <button
             onClick={handleCancel}
             disabled={loading}
-            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors duration-200 flex items-center justify-center disabled:opacity-50"
+            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 flex items-center justify-center disabled:opacity-50"
           >
-            <X size={16} className="text-white" />
+            <X size={16} className="text-gray-600" />
           </button>
         </div>
 
