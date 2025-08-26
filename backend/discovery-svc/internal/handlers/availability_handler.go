@@ -215,7 +215,7 @@ func (h *AvailabilityHandler) HandleHeartbeat(c *gin.Context) {
 // BrowseAvailableUsers gets a list of available users with full profile data for discovery
 func (h *AvailabilityHandler) BrowseAvailableUsers(c *gin.Context) {
 	// Verify the requesting user is authenticated
-	currentUserID, exists := c.Get("user_id")
+	_, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":   "Authentication required",

@@ -1,0 +1,157 @@
+# Link Frontend - Environment Template
+# Copy this file to create environment-specific configurations:
+# - .env.local (local development, gitignored)
+# - .env.test (testing)
+# - .env.staging (staging deployment)
+# - .env.production (production deployment)
+# - .env.demo (demo/showcase mode)
+
+# =============================================================================
+# REQUIRED VARIABLES - Must be set in all environments
+# =============================================================================
+
+# Application Mode - determines overall app behavior
+# Values: development | test | staging | production | demo
+VITE_APP_MODE=development
+
+# API Configuration
+# Development: http://localhost:8080
+# Staging: https://staging-api.link-app.com
+# Production: https://api.link-app.com
+VITE_API_BASE_URL=http://localhost:8080
+
+# =============================================================================
+# AUTHENTICATION CONFIGURATION
+# =============================================================================
+
+# Whether authentication is required
+# development/demo: false | test: false | staging/production: true
+VITE_REQUIRE_AUTH=true
+
+# Auto-login for development/demo
+# development/demo: true | test/staging/production: false
+VITE_AUTO_LOGIN=false
+
+# Use mock user instead of real authentication
+# development/demo/test: true | staging/production: false
+VITE_MOCK_USER=false
+
+# =============================================================================
+# DEVELOPMENT & DEMO FEATURES
+# =============================================================================
+
+# Show demo banner at top of app
+# development/demo: true | test/staging/production: false
+VITE_SHOW_DEMO_BANNER=true
+
+# Demo banner text (only used when banner is enabled)
+VITE_DEMO_BANNER_TEXT=🚀 Demo Mode - This is a preview version for feedback
+
+# Seed demo data on app start
+# development/demo: true | test/staging/production: false
+VITE_SEED_DEMO_DATA=true
+
+# =============================================================================
+# MOCK SERVICE WORKER (MSW)
+# =============================================================================
+
+# Enable Mock Service Worker for API mocking
+# development/demo/test: true | staging/production: false
+VITE_ENABLE_MOCKING=true
+
+# =============================================================================
+# ERROR REPORTING & OBSERVABILITY
+# =============================================================================
+
+# Sentry DSN for error reporting
+# Get your DSN from https://sentry.io/settings/projects/
+# development/test: leave empty to disable | staging/production: set real DSN
+VITE_SENTRY_DSN=https://your-project-dsn@o000000.ingest.sentry.io/0000000
+
+# Environment name for Sentry
+# Should match VITE_APP_MODE
+VITE_SENTRY_ENVIRONMENT=development
+
+# Application version for tracking
+VITE_APP_VERSION=1.0.0
+
+# =============================================================================
+# ANALYTICS & TRACKING
+# =============================================================================
+
+# Enable performance tracking
+# development: false | test: false | staging/production: true
+VITE_ENABLE_PERFORMANCE_TRACKING=true
+
+# Enable error tracking
+# development: false | test: false | staging/production: true
+VITE_ENABLE_ERROR_TRACKING=true
+
+# Enable user journey tracking
+# development: false | test: false | staging/production: true
+VITE_ENABLE_USER_JOURNEY_TRACKING=false
+
+# =============================================================================
+# OPTIONAL METRICS EXPORT
+# =============================================================================
+
+# Custom metrics export URL (leave empty to disable)
+# VITE_METRICS_EXPORT_URL=https://metrics.linkapp.com/api/v1/write
+
+# Metrics export interval in milliseconds
+# VITE_METRICS_EXPORT_INTERVAL=30000
+
+# =============================================================================
+# APP STORE & LEGAL LINKS
+# =============================================================================
+
+# iOS App Store URL
+# development/staging: TestFlight URL | production: App Store URL
+VITE_APP_STORE_URL=https://apps.apple.com/app/link/id[YOUR_APP_ID]
+
+# Support email address
+VITE_SUPPORT_EMAIL=support@link-app.com
+
+# Privacy policy URL
+VITE_PRIVACY_POLICY_URL=https://link-app.com/privacy
+
+# Terms of service URL
+VITE_TERMS_URL=https://link-app.com/terms
+
+# =============================================================================
+# DEBUG & DEVELOPMENT ONLY
+# =============================================================================
+
+# Enable debug mode (development only)
+# VITE_DEBUG_MODE=true
+
+# Mock API delay in milliseconds (development/demo only)
+# VITE_MOCK_DELAY_MS=1000
+
+# =============================================================================
+# ENVIRONMENT-SPECIFIC EXAMPLES
+# =============================================================================
+
+# Example .env.development (local development):
+# VITE_APP_MODE=development
+# VITE_REQUIRE_AUTH=false
+# VITE_AUTO_LOGIN=true
+# VITE_MOCK_USER=true
+# VITE_ENABLE_MOCKING=true
+# VITE_SHOW_DEMO_BANNER=true
+# VITE_SEED_DEMO_DATA=true
+# VITE_SENTRY_DSN=
+# VITE_DEBUG_MODE=true
+
+# Example .env.production:
+# VITE_APP_MODE=production
+# VITE_REQUIRE_AUTH=true
+# VITE_AUTO_LOGIN=false
+# VITE_MOCK_USER=false
+# VITE_ENABLE_MOCKING=false
+# VITE_SHOW_DEMO_BANNER=false
+# VITE_SEED_DEMO_DATA=false
+# VITE_API_BASE_URL=https://api.link-app.com
+# VITE_SENTRY_DSN=https://real-production-dsn@sentry.io/project
+# VITE_ENABLE_PERFORMANCE_TRACKING=true
+# VITE_ENABLE_ERROR_TRACKING=true

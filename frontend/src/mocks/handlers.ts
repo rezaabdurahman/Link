@@ -1,16 +1,10 @@
 import { http, HttpResponse } from 'msw';
 import { BroadcastResponse } from '../services/broadcastClient';
-import { AvailabilityResponse, PublicAvailabilityResponse, AvailableUsersResponse, HeartbeatResponse } from '../services/availabilityClient';
+import { AvailabilityResponse } from '../services/availabilityClient';
 import {
   OnboardingStatusResponse,
-  StartOnboardingResponse,
-  UpdateStepResponse,
-  CompleteOnboardingResponse,
-  SkipOnboardingResponse,
-  SkipStepResponse,
-  ProfileUpdateResponse,
-  OnboardingStepType,
-  OnboardingStatusType
+  OnboardingStatusType,
+  OnboardingStepType
 } from '../services/onboardingClient';
 import {
   ConversationsResponse,
@@ -20,7 +14,7 @@ import {
   MessagesResponse,
   CreateConversationRequest
 } from '../services/chatClient';
-import { currentUser, nearbyUsers, chats } from '../data/mockData';
+import { nearbyUsers, chats } from '../data/mockData';
 import { UnifiedSearchRequest, UnifiedSearchResponse } from '../services/unifiedSearchClient';
 
 // Helper to generate UUID
@@ -102,7 +96,7 @@ export const searchHandlers = [
   http.post('http://localhost:8080/search', async ({ request }) => {
     console.log('🔍 MSW: Handler matched for localhost:8080/search');
     try {
-      const searchRequest: UnifiedSearchRequest = await request.json();
+      const searchRequest = await request.json() as UnifiedSearchRequest;
       console.log('🔍 MSW: Received search request:', searchRequest);
       
       // Filter nearbyUsers based on search criteria
@@ -143,14 +137,13 @@ export const searchHandlers = [
       
       const response: UnifiedSearchResponse = {
         users: paginatedUsers,
+        total: filteredUsers.length,
+        hasMore: offset + limit < filteredUsers.length,
+        scope: searchRequest.scope,
+        query: searchRequest.query,
         metadata: {
-          total: filteredUsers.length,
-          count: paginatedUsers.length,
-          limit: limit,
-          offset: offset,
           searchTime: Math.floor(Math.random() * 50) + 10, // Mock search time 10-60ms
-          query: searchRequest.query,
-          scope: searchRequest.scope,
+          source: 'database' as const,
         }
       };
       
@@ -172,7 +165,7 @@ export const searchHandlers = [
   http.post('*/search', async ({ request }) => {
     console.log('🔍 MSW: Handler matched for */search fallback');
     try {
-      const searchRequest: UnifiedSearchRequest = await request.json();
+      const searchRequest = await request.json() as UnifiedSearchRequest;
       console.log('🔍 MSW: Received search request:', searchRequest);
       
       // Filter nearbyUsers based on search criteria
@@ -213,14 +206,13 @@ export const searchHandlers = [
       
       const response: UnifiedSearchResponse = {
         users: paginatedUsers,
+        total: filteredUsers.length,
+        hasMore: offset + limit < filteredUsers.length,
+        scope: searchRequest.scope,
+        query: searchRequest.query,
         metadata: {
-          total: filteredUsers.length,
-          count: paginatedUsers.length,
-          limit: limit,
-          offset: offset,
           searchTime: Math.floor(Math.random() * 50) + 10, // Mock search time 10-60ms
-          query: searchRequest.query,
-          scope: searchRequest.scope,
+          source: 'database' as const,
         }
       };
       
@@ -380,9 +372,6 @@ export const broadcastHandlers = [
 
 // Helper function to convert UI Chat to API Conversation
 const convertChatToConversation = (chat: typeof chats[0]): Conversation => {
-  // Find the participant user from nearbyUsers
-  const participant = nearbyUsers.find(user => user.id === chat.participantId);
-  
   const conversationParticipant: ConversationParticipant = {
     id: chat.participantId,
     name: chat.participantName,
@@ -514,7 +503,7 @@ export const chatHandlers = [
         created_by: userId,
         participants: [{
           id: participantId,
-          name: participant?.name || 'Unknown User',
+          name: participant ? `${participant.first_name} ${participant.last_name || ''}`.trim() : 'Unknown User',
           avatar: participant?.profilePicture,
         }],
         unread_count: 0,
@@ -1176,8 +1165,8 @@ export const onboardingHandlers = [
     }
 
     try {
-      const body = await request.json() as { initial_step?: string };
-      const initialStep = body.initial_step || 'profile_picture';
+      const body = await request.json() as { initial_step?: OnboardingStepType };
+      const initialStep: OnboardingStepType = body.initial_step || 'profile_picture';
       
       const onboardingStatus = {
         user_id: userId,
@@ -1224,7 +1213,7 @@ export const onboardingHandlers = [
     }
 
     try {
-      const body = await request.json() as { step: string; data: Record<string, any> };
+      const body = await request.json() as { step: OnboardingStepType; data: Record<string, any> };
       
       if (!body.step) {
         return HttpResponse.json(
@@ -1252,12 +1241,12 @@ export const onboardingHandlers = [
       }
       
       // Add step to completed steps if not already there
-      if (!onboardingStatus.completed_steps.includes(body.step as any)) {
-        onboardingStatus.completed_steps.push(body.step as any);
+      if (!onboardingStatus.completed_steps.includes(body.step)) {
+        onboardingStatus.completed_steps.push(body.step);
       }
       
       // Determine next step
-      const stepOrder = [
+      const stepOrder: OnboardingStepType[] = [
         'profile_picture',
         'bio', 
         'interests',
@@ -1270,7 +1259,7 @@ export const onboardingHandlers = [
       const currentIndex = stepOrder.indexOf(body.step);
       const nextStep = currentIndex < stepOrder.length - 1 ? stepOrder[currentIndex + 1] : null;
       
-      onboardingStatus.current_step = nextStep;
+      onboardingStatus.current_step = nextStep || undefined;
       onboardingStatus.updated_at = now();
       
       // If this is the last step, mark as completed
@@ -1426,7 +1415,7 @@ export const onboardingHandlers = [
     }
 
     try {
-      const body = await request.json() as { step: string };
+      const body = await request.json() as { step: OnboardingStepType };
       
       if (!body.step) {
         return HttpResponse.json(
@@ -1453,7 +1442,7 @@ export const onboardingHandlers = [
       }
       
       // Determine next step after skipping current one
-      const stepOrder = [
+      const stepOrder: OnboardingStepType[] = [
         'profile_picture',
         'bio', 
         'interests',
@@ -1466,7 +1455,7 @@ export const onboardingHandlers = [
       const currentIndex = stepOrder.indexOf(body.step);
       const nextStep = currentIndex < stepOrder.length - 1 ? stepOrder[currentIndex + 1] : null;
       
-      onboardingStatus.current_step = nextStep;
+      onboardingStatus.current_step = nextStep || undefined;
       onboardingStatus.updated_at = now();
       
       // If this was the last step, mark as completed
@@ -1744,10 +1733,10 @@ export const userHandlers = [
     // Convert User type to UserProfileResponse format matching backend
     const profileResponse = {
       id: user.id,
-      email: `${user.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-      username: user.name.toLowerCase().replace(/\s+/g, '_'),
-      first_name: user.name.split(' ')[0],
-      last_name: user.name.split(' ').slice(1).join(' ') || 'User',
+      email: `${user.first_name.toLowerCase()}.${(user.last_name || '').toLowerCase()}@example.com`,
+      username: `${user.first_name.toLowerCase()}_${(user.last_name || '').toLowerCase()}`,
+      first_name: user.first_name,
+      last_name: user.last_name || 'User',
       bio: user.bio,
       profile_picture: user.profilePicture || null,
       location: user.location ? `${user.location.proximityMiles} miles away` : null,
@@ -1758,7 +1747,7 @@ export const userHandlers = [
       // New backend fields matching updated API
       age: user.profileType === 'public' ? user.age : undefined, // Respect privacy settings
       interests: user.interests || [], // Real interests from mock data
-      social_links: generateMockSocialLinks(user.name, user.profileType), // Mock social links
+      social_links: generateMockSocialLinks(`${user.first_name} ${user.last_name || ''}`.trim(), user.profileType), // Mock social links
       additional_photos: generateMockAdditionalPhotos(user.profileType, user.profilePicture || null), // Mock photos
       privacy_settings: {
         show_age: user.profileType === 'public',

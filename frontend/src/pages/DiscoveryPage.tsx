@@ -7,6 +7,7 @@ import ProfileDetailModal from '../components/ProfileDetailModal';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import AddCuesModal from '../components/AddCuesModal';
 import { useCue } from '../contexts/CueContext';
+import { useAuth } from '../contexts/AuthContext';
 import AddBroadcastModal from '../components/AddBroadcastModal';
 import CheckInModal from '../components/CheckInModal';
 import CheckInSnackbar from '../components/CheckInSnackbar';
@@ -26,61 +27,74 @@ import {
   UserWithLikelihood 
 } from '../services/clickLikelihoodClient';
 import { getDisplayName, getFullName } from '../utils/nameHelpers';
+import { useUIStore } from '../stores/uiStore';
+import { useDiscoveryStore } from '../stores/discoveryStore';
+import { getMyProfile } from '../services/userClient';
+import { getCurrentUserAvailability } from '../services/availabilityClient';
 
 const DiscoveryPage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
   const friendRequestsBadgeCount = usePendingReceivedRequestsCount();
+  const { isAuthenticated, isInitialized } = useAuth();
 
-  // User state management
+  // User state management - environment aware
   const [currentUser, setCurrentUser] = useState<User>(initialCurrentUser);
-  const [isAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
+  const [isAvailable, setIsAvailable] = useState<boolean>(false);
+  const [isUserLoading, setIsUserLoading] = useState<boolean>(true);
   
-  // UI state management  
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isAddCuesModalOpen, setIsAddCuesModalOpen] = useState<boolean>(false);
-  const [isAddBroadcastModalOpen, setIsAddBroadcastModalOpen] = useState<boolean>(false);
-  const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' }>({ 
-    isVisible: false, 
-    message: '', 
-    type: 'success' 
-  });
-  const [showFeedAnimation, setShowFeedAnimation] = useState<boolean>(false);
-  const [isGridView, setIsGridView] = useState<boolean>(true);
+  // Zustand stores
+  const {
+    toast,
+    showToast,
+    hideToast,
+    modals,
+    openModal,
+    closeModal,
+    isGridView,
+    toggleGridView,
+    showFeedAnimation,
+    setShowFeedAnimation,
+  } = useUIStore();
   
-  // Loading state for broadcast operations
-  const [isBroadcastSubmitting, setIsBroadcastSubmitting] = useState<boolean>(false);
+  const {
+    searchQuery,
+    searchResults,
+    isSearching,
+    hasSearched,
+    searchError,
+    activeFilters,
+    isBroadcastSubmitting,
+    setSearchQuery,
+    setSearchResults,
+    setSearching,
+    setHasSearched,
+    setSearchError,
+    setActiveFilters,
+    setBroadcastSubmitting,
+    clearSearch: clearSearchStore,
+  } = useDiscoveryStore();
   
-
-  // Search and filter state
-  const [searchResults, setSearchResults] = useState<User[]>([]);
-  const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [hasSearched, setHasSearched] = useState<boolean>(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [activeFilters, setActiveFilters] = useState<{
-    distance?: number;
-    interests: string[];
-  }>({ interests: [] });
-  // Available interests for future filter functionality
-  // const [availableInterests] = useState<string[]>([
-  //   'Art', 'Music', 'Travel', 'Food', 'Fitness', 'Technology',
-  //   'Books', 'Movies', 'Gaming', 'Photography', 'Nature', 'Business'
-  // ]);
-
   // Check-in modal state
-  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState<boolean>(false);
   const [showCheckInSnackbar, setShowCheckInSnackbar] = useState<boolean>(false);
   const [lastCheckInText, setLastCheckInText] = useState<string>('');
+  
+
 
   // Search functionality - NEW unified search implementation  
   const performSearch = useCallback(async (isUserInitiated: boolean = true): Promise<void> => {
     if (isSearching) return; // Prevent multiple concurrent searches
+    
+    // Check authentication before proceeding
+    if (!isInitialized || !isAuthenticated) {
+      console.warn('🔍 Search skipped:', { isInitialized, isAuthenticated });
+      return;
+    }
 
-    setIsSearching(true);
+    setSearching(true);
     setSearchError(null);
 
     try {
-      // Use the new unified search with 'discovery' scope
+      // Use the unified search API
       const searchRequest: UnifiedSearchRequest = {
         query: searchQuery.trim() || undefined,
         scope: 'discovery', // Search for discoverable users
@@ -96,23 +110,26 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
       const response = await unifiedSearch(searchRequest);
       
-      const filteredResults = response.users;
-      
-      setSearchResults(filteredResults);
+      // Set search results
+      setSearchResults(response.users);
       setHasSearched(true);
 
       // Show success message if query was provided
       if (searchQuery.trim()) {
-        showToast(`Found ${filteredResults.length} user${filteredResults.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`, 'success');
+        showToast(`Found ${response.users.length} user${response.users.length !== 1 ? 's' : ''} • ${response.metadata?.searchTime || 0}ms`, 'success');
       }
       
       // Log metadata for debugging
       if (response.metadata) {
-        console.log('Search metadata:', response.metadata);
+        console.log(`🔍 Search completed in ${response.metadata.searchTime}ms via ${response.metadata.source}`);
       }
       
     } catch (error) {
-      console.error('Search failed:', error);
+      console.error('🔴 SEARCH ERROR DETAILS:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
       
       let errorMessage = 'Search failed. Please try again.';
       if (isUnifiedSearchError(error)) {
@@ -125,9 +142,72 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         showToast(errorMessage, 'error');
       }
     } finally {
-      setIsSearching(false);
+      setSearching(false);
     }
-  }, [searchQuery, activeFilters.distance, activeFilters.interests, isSearching]);
+  }, [searchQuery, activeFilters.distance, activeFilters.interests, isSearching, setSearchResults, setHasSearched, setSearchError, setSearching, showToast, isInitialized, isAuthenticated]);
+
+  // Load user profile
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      if (isUserLoading && isInitialized && isAuthenticated) {
+        try {
+          // Load user profile
+          const profile = await getMyProfile();
+          // Convert UserProfileResponse to User type
+          const userProfile: User = {
+            id: profile.id,
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            age: profile.age || 0,
+            bio: profile.bio || '',
+            interests: profile.interests || [],
+            location: {
+              lat: 0,
+              lng: 0,
+              proximityMiles: 5
+            },
+            profilePicture: profile.profile_picture || undefined,
+            profileMedia: undefined,
+            privacy_settings: profile.privacy_settings,
+            // Discovery-specific fields
+            isAvailable: false, // Will be set separately
+            mutualFriends: [],
+            connectionPriority: 'regular' as const,
+            lastSeen: new Date(),
+            profileType: 'public' as const
+          };
+          setCurrentUser(userProfile);
+          
+          // Load availability from API
+          const availabilityStatus = await getCurrentUserAvailability();
+          setIsAvailable(availabilityStatus.is_available);
+          
+        } catch (error) {
+          console.error('Failed to load user profile:', error);
+          // In production, we might want to redirect to login or show error
+        } finally {
+          setIsUserLoading(false);
+        }
+      }
+    };
+
+    loadUserProfile();
+  }, [isUserLoading, isInitialized, isAuthenticated]);
+
+  // Reset search state and initialize UI on mount
+  useEffect(() => {
+    console.log('🟡 MOUNT EFFECT:', { isAvailable, showFeedAnimation });
+    
+    setHasSearched(false);
+    setSearchError(null);
+    setSearchResults([]);
+    
+    // Immediately show animation if available on mount
+    if (isAvailable) {
+      console.log('🟡 Setting showFeedAnimation to true');
+      setShowFeedAnimation(true);
+    }
+  }, [setHasSearched, setSearchResults, setSearchError, isAvailable, setShowFeedAnimation]);
 
   // Handle initial animation state if user is already available
   useEffect(() => {
@@ -137,7 +217,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         setShowFeedAnimation(true);
       }, 100);
     }
-  }, [isAvailable, showFeedAnimation]);
+  }, [isAvailable, setShowFeedAnimation]);
 
   // Auto-search when filters change (only if we've already searched once)
   useEffect(() => {
@@ -155,11 +235,22 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
   // Effect to load initial users when available
   useEffect(() => {
-    if (isAvailable && !hasSearched && searchResults.length === 0 && !isSearching) {
+    console.log('🟡 SEARCH TRIGGER CHECK:', {
+      isAvailable,
+      hasSearched,
+      searchResultsLength: searchResults.length,
+      isSearching,
+      isInitialized,
+      isAuthenticated,
+      shouldTrigger: isAvailable && !hasSearched && searchResults.length === 0 && !isSearching && isInitialized && isAuthenticated
+    });
+    
+    if (isAvailable && !hasSearched && searchResults.length === 0 && !isSearching && isInitialized && isAuthenticated) {
+      console.log('🟡 TRIGGERING SEARCH');
       // Auto-perform initial search when becoming available to populate discovery feed
       performSearch(false); // Pass false to indicate this is not user-initiated
     }
-  }, [isAvailable, hasSearched, searchResults.length, isSearching, performSearch]);
+  }, [isAvailable, hasSearched, searchResults.length, isSearching, performSearch, isInitialized, isAuthenticated]);
 
 
   // Determine which users to display: search results only (we always use real client data)
@@ -193,42 +284,27 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
 
   const toggleViewMode = (): void => {
-    setIsGridView(!isGridView);
+    toggleGridView();
   };
   
   const handleCloseToast = (): void => {
-    setToast(prev => ({ ...prev, isVisible: false }));
-  };
-
-  // Helper function to show toast with proper state management
-  const showToast = (message: string, type: 'success' | 'error'): void => {
-    // First hide any existing toast to prevent animation conflicts
-    setToast(prev => ({ ...prev, isVisible: false }));
-    
-    // Small delay to ensure the previous toast animation completes
-    setTimeout(() => {
-      setToast({
-        isVisible: true,
-        message,
-        type
-      });
-    }, 50);
+    hideToast();
   };
 
   const handleUserClick = (user: User): void => {
-    setSelectedUserId(user.id);
+    openModal('isProfileDetailModalOpen', user.id);
   };
 
   const handleCloseProfile = (): void => {
-    setSelectedUserId(null);
+    closeModal('isProfileDetailModalOpen');
   };
 
   const handleOpenAddCues = (): void => {
-    setIsAddCuesModalOpen(true);
+    openModal('isAddCuesModalOpen');
   };
 
   const handleCloseAddCues = (): void => {
-    setIsAddCuesModalOpen(false);
+    closeModal('isAddCuesModalOpen');
   };
 
   const { createCue, hasActiveCue } = useCue();
@@ -236,7 +312,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   const handleSubmitCue = async (cue: string): Promise<void> => {
     try {
       await createCue({ message: cue });
-      setIsAddCuesModalOpen(false);
+      closeModal('isAddCuesModalOpen');
       // Show success toast
       showToast('Social cue created successfully!', 'success');
     } catch (error) {
@@ -246,17 +322,17 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   };
 
   const handleOpenAddBroadcast = (): void => {
-    setIsAddBroadcastModalOpen(true);
+    openModal('isAddBroadcastModalOpen');
   };
 
   const handleCloseAddBroadcast = (): void => {
-    setIsAddBroadcastModalOpen(false);
+    closeModal('isAddBroadcastModalOpen');
   };
 
   const handleSubmitBroadcast = async (broadcast: string): Promise<void> => {
     if (isBroadcastSubmitting) return; // Prevent multiple submissions
     
-    setIsBroadcastSubmitting(true);
+    setBroadcastSubmitting(true);
     
     // Store original broadcast for rollback on failure
     const originalBroadcast = currentUser.broadcast;
@@ -271,7 +347,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     showToast('Broadcast updated successfully!', 'success');
     
     // Close modal immediately for better UX
-    setIsAddBroadcastModalOpen(false);
+    closeModal('isAddBroadcastModalOpen');
     
     try {
       // Determine whether to create or update broadcast
@@ -297,7 +373,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       const errorMessage = 'Failed to update broadcast. Please try again.';
       showToast(errorMessage, 'error');
     } finally {
-      setIsBroadcastSubmitting(false);
+      setBroadcastSubmitting(false);
     }
   };
 
@@ -308,16 +384,14 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
   // Filter management
   const handleDistanceFilterChange = (distance: number | undefined): void => {
-    setActiveFilters(prev => ({ ...prev, distance }));
+    setActiveFilters({ distance });
   };
 
   const handleInterestToggle = (interest: string): void => {
-    setActiveFilters(prev => ({
-      ...prev,
-      interests: prev.interests.includes(interest)
-        ? prev.interests.filter(i => i !== interest)
-        : [...prev.interests, interest]
-    }));
+    const newInterests = activeFilters.interests.includes(interest)
+      ? activeFilters.interests.filter(i => i !== interest)
+      : [...activeFilters.interests, interest];
+    setActiveFilters({ interests: newInterests });
   };
 
   const clearFilters = (): void => {
@@ -325,20 +399,16 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
   };
 
   const clearSearch = (): void => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setHasSearched(false);
-    setSearchError(null);
-    clearFilters();
+    clearSearchStore();
   };
 
   // Check-in handlers
   const handleOpenCheckIn = (): void => {
-    setIsCheckInModalOpen(true);
+    openModal('isCheckInModalOpen');
   };
 
   const handleCloseCheckIn = (): void => {
-    setIsCheckInModalOpen(false);
+    closeModal('isCheckInModalOpen');
   };
 
   const handleCheckInSubmit = async (checkInData: { text: string; mediaAttachments: any[]; fileAttachments: any[]; voiceNote: any; locationAttachment: any; tags: any[] }): Promise<void> => {
@@ -353,7 +423,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       setLastCheckInText(checkInData.text || 'Check-in shared successfully!');
       
       // Close modal and show success snackbar
-      setIsCheckInModalOpen(false);
+      closeModal('isCheckInModalOpen');
       setShowCheckInSnackbar(true);
       
       console.log('Check-in created successfully:', newCheckIn);
@@ -531,8 +601,21 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
               </p>
             </div>
           )}
-        {/* Users Display - Feed or Grid View */}
-        {isAvailable ? (
+        {/* Loading State for User Profile in Production */}
+        {isUserLoading ? (
+          <div className="max-w-sm mx-auto">
+            <div className="flex flex-col items-center justify-center py-16 mb-6 px-5">
+              <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                <div className="w-8 h-8 border-2 border-aqua border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading your profile...</h3>
+              <p className="text-sm text-gray-500 text-center px-6">
+                Getting your information ready
+              </p>
+            </div>
+          </div>
+        ) : /* Users Display - Feed or Grid View */
+        isAvailable ? (
           <div className={isGridView ? 'max-w-sm mx-auto px-4' : 'flex flex-col'}>
             {/* Loading State with Skeleton */}
             {isSearching && (
@@ -703,9 +786,9 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       </div>
 
       {/* Profile Detail Modal */}
-      {selectedUserId && (
+      {modals.selectedUserId && (
         <ProfileDetailModal
-          userId={selectedUserId}
+          userId={modals.selectedUserId}
           onClose={handleCloseProfile}
           mode="other"
         />
@@ -714,7 +797,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       {/* Add Cues Modal - Feature Flagged */}
       {isFeatureEnabled('DISCOVERY_CUES') && (
         <AddCuesModal
-          isOpen={isAddCuesModalOpen}
+          isOpen={modals.isAddCuesModalOpen}
           onClose={handleCloseAddCues}
           onSubmit={handleSubmitCue}
         />
@@ -723,7 +806,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
       {/* Add Broadcast Modal - Feature Flagged */}
       {isFeatureEnabled('DISCOVERY_BROADCAST') && (
         <AddBroadcastModal
-          isOpen={isAddBroadcastModalOpen}
+          isOpen={modals.isAddBroadcastModalOpen}
           onClose={handleCloseAddBroadcast}
           onSubmit={handleSubmitBroadcast}
           isSubmitting={isBroadcastSubmitting}
@@ -733,7 +816,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
       {/* Check-in Modal */}
       <CheckInModal
-        isOpen={isCheckInModalOpen}
+        isOpen={modals.isCheckInModalOpen}
         onClose={handleCloseCheckIn}
         onSubmit={handleCheckInSubmit}
       />

@@ -192,13 +192,19 @@ func RateLimitByRole(limits map[string]int) gin.HandlerFunc {
 		}
 
 		// Apply rate limit based on highest priority role
-		if HasRole(c, "community_moderator") {
-			c.Set("rate_limit", limits["community_moderator"])
-		} else if HasRole(c, "premium_user") {
-			c.Set("rate_limit", limits["premium_user"])
-		} else {
-			c.Set("rate_limit", limits["user"])
+		highestRole := "user"
+		for _, role := range roles {
+			switch role {
+			case "community_moderator":
+				highestRole = "community_moderator"
+				break
+			case "premium_user":
+				if highestRole == "user" {
+					highestRole = "premium_user"
+				}
+			}
 		}
+		c.Set("rate_limit", limits[highestRole])
 
 		c.Next()
 	}

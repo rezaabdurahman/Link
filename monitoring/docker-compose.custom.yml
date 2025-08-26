@@ -1,0 +1,10 @@
+# Custom monitoring profile override
+# This approach doesn't work well with Docker Compose profiles
+# Instead, use the main monitoring script for custom configurations
+# 
+# Usage: ./scripts/monitoring-control.sh configure
+# Then:  ./scripts/monitoring-control.sh custom
+
+# This file is kept for reference but the custom functionality 
+# is now handled by the monitoring-control.sh script which 
+# dynamically manages service inclusion based on environment variables

@@ -1,0 +1,374 @@
+# Cost Optimization Alerting Rules
+# Proactive alerts for cost anomalies and optimization opportunities
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cost-optimization-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: cost-optimization
+    severity-level: financial
+spec:
+  groups:
+  - name: cost.budget.alerts
+    interval: 3600s  # Hourly evaluation
+    rules:
+    
+    - alert: MonthlyBudgetThresholdExceeded
+      expr: |
+        (
+          sum(increase(aws_billing_estimated_charges{currency="USD"}[1d])) * 
+          (31 - day_of_month())
+        ) > 10000
+      for: 2h
+      labels:
+        severity: critical
+        alert_type: budget_exceeded
+        financial_impact: high
+        team: finops
+      annotations:
+        summary: "🚨 Monthly budget threshold exceeded: ${{ $value }}"
+        description: |
+          Current monthly cost projection (${{ printf "%.0f" $value }}) exceeds the $10,000 budget.
+          
+          **Immediate Actions Required:**
+          1. Review current month spend breakdown
+          2. Identify cost anomalies or spikes
+          3. Implement emergency cost controls if needed
+          4. Notify finance and engineering leadership
+          
+          **Current Status:**
+          - Projected monthly cost: ${{ printf "%.0f" $value }}
+          - Budget limit: $10,000
+          - Overage: ${{ printf "%.0f" ($value - 10000) }}
+          - Days remaining: {{ 31 - day_of_month() }}
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/budget-exceeded"
+        dashboard_url: "https://grafana.link-app.com/d/cost-optimization"
+        slack_channel: "#cost-alerts"
+    
+    - alert: CostAnomalyDetected
+      expr: |
+        (
+          sum(increase(aws_billing_estimated_charges{currency="USD"}[1d])) -
+          avg_over_time(sum(increase(aws_billing_estimated_charges{currency="USD"}[1d]))[7d:1d])
+        ) / avg_over_time(sum(increase(aws_billing_estimated_charges{currency="USD"}[1d]))[7d:1d]) * 100 > 30
+      for: 4h
+      labels:
+        severity: warning
+        alert_type: cost_anomaly
+        financial_impact: medium
+        team: devops
+      annotations:
+        summary: "📈 Unusual cost increase detected: {{ printf \"%.1f\" $value }}% above 7-day average"
+        description: |
+          Daily costs have increased significantly compared to recent patterns.
+          
+          **Details:**
+          - Current daily cost: ${{ printf "%.0f" (query "sum(increase(aws_billing_estimated_charges{currency=\"USD\"}[1d]))" | first | value) }}
+          - 7-day average: ${{ printf "%.0f" (query "avg_over_time(sum(increase(aws_billing_estimated_charges{currency=\"USD\"}[1d]))[7d:1d])" | first | value) }}
+          - Increase: {{ printf "%.1f" $value }}%
+          
+          **Investigation Steps:**
+          1. Check for new resource deployments
+          2. Review data transfer costs
+          3. Analyze compute usage spikes
+          4. Verify no unauthorized resource creation
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/cost-anomaly"
+        dashboard_url: "https://grafana.link-app.com/d/cost-optimization"
+
+  - name: cost.waste.alerts
+    interval: 1800s  # 30 minute evaluation
+    rules:
+    
+    - alert: HighResourceWasteDetected
+      expr: |
+        (
+          (sum(container_spec_cpu_cores{namespace="link-services"}) - 
+           sum(rate(container_cpu_usage_seconds_total{namespace="link-services"}[1h]))) /
+          sum(container_spec_cpu_cores{namespace="link-services"})
+        ) * 100 > 60
+      for: 2h
+      labels:
+        severity: warning
+        alert_type: resource_waste
+        financial_impact: medium
+        optimization_priority: high
+        team: platform
+      annotations:
+        summary: "⚠️ High CPU resource waste detected: {{ printf \"%.1f\" $value }}% unused capacity"
+        description: |
+          Significant CPU over-provisioning detected across the cluster.
+          
+          **Resource Waste Details:**
+          - Total allocated CPU: {{ printf "%.1f" (query "sum(container_spec_cpu_cores{namespace=\"link-services\"})" | first | value) }} cores
+          - Average CPU usage: {{ printf "%.1f" (query "sum(rate(container_cpu_usage_seconds_total{namespace=\"link-services\"}[1h]))" | first | value) }} cores  
+          - Waste percentage: {{ printf "%.1f" $value }}%
+          - Estimated monthly waste: ${{ printf "%.0f" ($value * 0.02 * 50) }}
+          
+          **Optimization Actions:**
+          1. Review resource requests for over-provisioned services
+          2. Implement Vertical Pod Autoscaler (VPA)
+          3. Consider downsizing instance types
+          4. Monitor after changes to ensure performance is maintained
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/cpu-rightsizing"
+        dashboard_url: "https://grafana.link-app.com/d/resource-utilization"
+    
+    - alert: UnderutilizedDatabase
+      expr: |
+        (
+          sum(pg_stat_database_numbackends) / 
+          sum(pg_settings_max_connections)
+        ) * 100 < 15
+      for: 6h
+      labels:
+        severity: info
+        alert_type: database_underutilization
+        financial_impact: medium
+        optimization_priority: medium
+        team: platform
+      annotations:
+        summary: "💾 Database connection pool underutilized: {{ printf \"%.1f\" $value }}% usage"
+        description: |
+          Database connection pool utilization is consistently low, indicating potential over-provisioning.
+          
+          **Database Utilization:**
+          - Active connections: {{ printf "%.0f" (query "sum(pg_stat_database_numbackends)" | first | value) }}
+          - Max connections: {{ printf "%.0f" (query "sum(pg_settings_max_connections)" | first | value) }}
+          - Utilization: {{ printf "%.1f" $value }}%
+          
+          **Optimization Opportunities:**
+          1. Consider reducing max_connections setting
+          2. Analyze if smaller instance type is sufficient
+          3. Review connection pooling configuration
+          4. Potential monthly savings: $50-200
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/database-optimization"
+    
+    - alert: UnusedPersistentVolumes
+      expr: |
+        count(
+          kube_persistentvolume_info{namespace="link-services"} 
+          unless on(persistentvolume) 
+          kube_persistentvolumeclaim_info{namespace="link-services"}
+        ) > 0
+      for: 24h
+      labels:
+        severity: info
+        alert_type: unused_storage
+        financial_impact: low
+        optimization_priority: low
+        team: platform
+      annotations:
+        summary: "💿 {{ $value }} unused persistent volumes detected"
+        description: |
+          Persistent volumes exist that are not bound to any claims, indicating unused storage.
+          
+          **Storage Waste Details:**
+          - Unused volumes: {{ printf "%.0f" $value }}
+          - Estimated monthly cost: ${{ printf "%.0f" ($value * 20 * 0.10) }}
+          
+          **Cleanup Actions:**
+          1. Verify volumes are truly unused
+          2. Backup any important data
+          3. Delete unused volumes
+          4. Review storage provisioning processes
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/storage-cleanup"
+
+  - name: cost.efficiency.alerts
+    interval: 3600s  # Hourly evaluation
+    rules:
+    
+    - alert: LowCostEfficiencyRatio
+      expr: |
+        (
+          sum(rate(http_requests_total{namespace="link-services"}[1h])) / 
+          (sum(rate(container_cpu_usage_seconds_total{namespace="link-services"}[1h])) + 0.01)
+        ) < 50
+      for: 4h
+      labels:
+        severity: info
+        alert_type: efficiency_decline
+        financial_impact: medium
+        optimization_priority: medium
+        team: platform
+      annotations:
+        summary: "📉 Cost efficiency ratio declined: {{ printf \"%.1f\" $value }} requests per CPU core/hour"
+        description: |
+          The ratio of requests served per CPU resource has decreased, indicating declining cost efficiency.
+          
+          **Efficiency Metrics:**
+          - Requests per CPU core/hour: {{ printf "%.1f" $value }}
+          - Target efficiency: >50 requests per CPU core/hour
+          - Performance trend: Declining
+          
+          **Investigation Areas:**
+          1. Application performance degradation
+          2. Increased CPU usage per request
+          3. Inefficient code or queries
+          4. Resource contention issues
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/efficiency-analysis"
+    
+    - alert: HighStorageCostPerRequest
+      expr: |
+        (
+          sum(increase(aws_billing_estimated_charges{service="EBS",currency="USD"}[1d])) /
+          sum(increase(http_requests_total{namespace="link-services"}[1d]))
+        ) * 1000 > 0.5
+      for: 6h
+      labels:
+        severity: info
+        alert_type: storage_efficiency
+        financial_impact: low
+        optimization_priority: low
+        team: platform
+      annotations:
+        summary: "💾 High storage cost per request: ${{ printf \"%.3f\" $value }} per 1K requests"
+        description: |
+          Storage costs per request have increased, indicating potential inefficiency.
+          
+          **Storage Efficiency:**
+          - Cost per 1K requests: ${{ printf "%.3f" $value }}
+          - Target: <$0.5 per 1K requests
+          
+          **Optimization Areas:**
+          1. Review data retention policies
+          2. Implement data lifecycle management
+          3. Consider cheaper storage tiers for old data
+          4. Optimize database storage usage
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/storage-efficiency"
+
+  - name: cost.reserved.instance.alerts
+    interval: 86400s  # Daily evaluation
+    rules:
+    
+    - alert: ReservedInstanceOpportunity
+      expr: |
+        avg_over_time(
+          sum(kube_node_info{node=~".*m5.large.*"})[30d:1d]
+        ) > 2
+      for: 1d
+      labels:
+        severity: info
+        alert_type: reserved_instance_opportunity
+        financial_impact: high
+        optimization_priority: high
+        team: finops
+      annotations:
+        summary: "💰 Reserved Instance opportunity: {{ printf \"%.0f\" $value }} consistent instances"
+        description: |
+          Consistent usage of {{ printf "%.0f" $value }} instances over 30 days indicates Reserved Instance opportunity.
+          
+          **Savings Opportunity:**
+          - Consistent instances: {{ printf "%.0f" $value }}
+          - Estimated monthly savings: ${{ printf "%.0f" ($value * 50 * 0.3) }}
+          - Annual savings: ${{ printf "%.0f" ($value * 50 * 0.3 * 12) }}
+          
+          **Next Steps:**
+          1. Analyze usage patterns for predictability
+          2. Calculate exact savings with Reserved Instance pricing
+          3. Consider 1-year vs 3-year commitments
+          4. Purchase Reserved Instances for stable workloads
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/reserved-instances"
+        dashboard_url: "https://grafana.link-app.com/d/reserved-instance-analysis"
+
+  - name: cost.trend.alerts
+    interval: 86400s  # Daily evaluation
+    rules:
+    
+    - alert: UnsustainableCostGrowthTrend
+      expr: |
+        (
+          (avg_over_time(sum(increase(aws_billing_estimated_charges{currency="USD"}[1d]))[7d:1d]) - 
+           avg_over_time(sum(increase(aws_billing_estimated_charges{currency="USD"}[1d]))[30d:1d])) /
+          avg_over_time(sum(increase(aws_billing_estimated_charges{currency="USD"}[1d]))[30d:1d])
+        ) * 100 > 15
+      for: 2d
+      labels:
+        severity: warning
+        alert_type: unsustainable_growth
+        financial_impact: high
+        optimization_priority: high
+        team: leadership
+      annotations:
+        summary: "📈 Unsustainable cost growth trend: {{ printf \"%.1f\" $value }}% increase"
+        description: |
+          Cost growth rate over the past week significantly exceeds the 30-day average.
+          
+          **Growth Analysis:**
+          - 7-day average daily cost: ${{ printf "%.0f" (query "avg_over_time(sum(increase(aws_billing_estimated_charges{currency=\"USD\"}[1d]))[7d:1d])" | first | value) }}
+          - 30-day average daily cost: ${{ printf "%.0f" (query "avg_over_time(sum(increase(aws_billing_estimated_charges{currency=\"USD\"}[1d]))[30d:1d])" | first | value) }}
+          - Growth rate: {{ printf "%.1f" $value }}%
+          
+          **Strategic Actions Required:**
+          1. Executive review of cost trajectory
+          2. Immediate optimization initiatives
+          3. Capacity planning review
+          4. Budget adjustment considerations
+          
+          **If sustained, quarterly costs will increase by ${{ printf "%.0f" ($value * 0.01 * 3000) }}**
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/growth-trend-analysis"
+        dashboard_url: "https://grafana.link-app.com/d/cost-trends"
+
+  - name: cost.optimization.reminders  
+    interval: 604800s  # Weekly evaluation
+    rules:
+    
+    - alert: WeeklyCostOptimizationReview
+      expr: |
+        vector(1)
+      for: 1h
+      labels:
+        severity: info
+        alert_type: scheduled_review
+        financial_impact: ongoing
+        team: platform
+      annotations:
+        summary: "📋 Weekly cost optimization review due"
+        description: |
+          Time for the weekly cost optimization review meeting.
+          
+          **Review Agenda:**
+          1. Review weekly cost trends and anomalies
+          2. Assess resource utilization efficiency
+          3. Progress on optimization initiatives
+          4. New optimization opportunities identified
+          5. Update cost forecasts and budgets
+          
+          **Preparation Checklist:**
+          - [ ] Run cost optimization analyzer
+          - [ ] Review high-resource-waste alerts
+          - [ ] Check Reserved Instance utilization
+          - [ ] Analyze new optimization opportunities
+          - [ ] Prepare cost trend presentation
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/weekly-review"
+        dashboard_url: "https://grafana.link-app.com/d/cost-optimization"
+        
+    - alert: MonthlyBudgetPlanningReminder
+      expr: |
+        day_of_month() == 25
+      for: 1h
+      labels:
+        severity: info
+        alert_type: budget_planning
+        financial_impact: high
+        team: finops
+      annotations:
+        summary: "💼 Monthly budget planning reminder"
+        description: |
+          Time to review current month performance and plan next month's budget.
+          
+          **Budget Planning Tasks:**
+          1. Analyze current month actual vs budget
+          2. Forecast final month-end costs
+          3. Plan next month's budget based on trends
+          4. Review and approve any budget adjustments
+          5. Plan optimization initiatives for next month
+          
+          **Key Metrics to Review:**
+          - Month-to-date spend vs budget
+          - Cost per user/request trends
+          - Resource utilization efficiency
+          - Optimization savings achieved
+        runbook_url: "https://runbooks.link-app.com/cost-optimization/budget-planning"
+        dashboard_url: "https://grafana.link-app.com/d/budget-analysis"

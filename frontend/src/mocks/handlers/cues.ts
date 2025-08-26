@@ -1,6 +1,5 @@
 import { http, HttpResponse } from 'msw';
 import { API_CONFIG } from '../../config/appConstants';
-import { extractUserId } from '../utils/mockHelpers';
 
 // Mock cue storage
 interface MockCue {
@@ -93,9 +92,8 @@ const findMatches = (newCue: MockCue) => {
 
 export const cueHandlers = [
   // GET /api/v1/cues - Get current user's cue
-  http.get(`${API_CONFIG.BASE_URL}/cues`, ({ request }) => {
+  http.get(`${API_CONFIG.BASE_URL}/cues`, () => {
     console.log('📝 MSW: Get current user cue request received');
-    const userId = extractUserId(request);
 
     // For demo mode, return no active cue (404 is normal)
     console.log('📝 MSW: No active cue for demo user - returning 404');
@@ -219,9 +217,8 @@ export const cueHandlers = [
   }),
 
   // GET /api/v1/cues/matches - Get user's cue matches
-  http.get(`${API_CONFIG.BASE_URL}/cues/matches`, ({ request }) => {
+  http.get(`${API_CONFIG.BASE_URL}/cues/matches`, () => {
     console.log('📝 MSW: Get cue matches request received');
-    const userId = extractUserId(request);
 
     // For demo mode, return empty matches array
     console.log('📝 MSW: Returning empty cue matches for demo');

@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	sharedconfig "github.com/link-app/shared-libs/config"
 )
 
 // JWTConfig holds JWT configuration
@@ -23,14 +24,14 @@ type JWTConfig struct {
 // GetJWTConfig returns JWT configuration from environment variables
 func GetJWTConfig() *JWTConfig {
 	return &JWTConfig{
-		Secret:           getEnv("JWT_SECRET", "your-secret-key-change-this-in-production"),
+		Secret:           sharedconfig.GetJWTSecret(),
 		AccessTokenTTL:   time.Hour,                            // 1 hour for access tokens
 		RefreshTokenTTL:  time.Hour * 24 * 30,                 // 30 days for refresh tokens
-		Issuer:           getEnv("JWT_ISSUER", "user-svc"),
-		CookieName:       getEnv("JWT_COOKIE_NAME", "link_auth"),
-		CookieSecure:     getEnv("ENVIRONMENT", "development") == "production",
+		Issuer:           sharedconfig.GetEnv("JWT_ISSUER", "user-svc"),
+		CookieName:       sharedconfig.GetEnv("JWT_COOKIE_NAME", "link_auth"),
+		CookieSecure:     sharedconfig.GetEnv("ENVIRONMENT", "development") == "production",
 		CookieHTTPOnly:   true,
-		CookieSameSite:   getEnv("JWT_COOKIE_SAMESITE", "strict"),
+		CookieSameSite:   sharedconfig.GetEnv("JWT_COOKIE_SAMESITE", "strict"),
 	}
 }
 

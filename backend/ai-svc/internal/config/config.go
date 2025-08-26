@@ -1,8 +1,6 @@
 package config
 
 import (
-	"os"
-	"strconv"
 	"time"
 	
 	sharedConfig "github.com/link-app/shared-libs/config"

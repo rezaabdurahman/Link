@@ -1,0 +1,388 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Service Level Objectives (SLO) Dashboard",
+    "description": "Monitor SLIs, SLOs, and error budgets for Link application",
+    "tags": ["slo", "sli", "error-budget", "link"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(up, job)",
+          "current": {
+            "value": "All",
+            "text": "All"
+          },
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "title": "SLO Overview",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sli:api_availability:rate5m",
+            "legendFormat": "API Availability",
+            "refId": "A"
+          },
+          {
+            "expr": "sli:api_latency:p95_5m",
+            "legendFormat": "API Latency P95 (ms)",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99.0},
+                {"color": "green", "value": 99.9}
+              ]
+            }
+          }
+        },
+        "options": {
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "background"
+        }
+      },
+      {
+        "title": "API Availability SLI",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "sli:api_availability:rate5m",
+            "legendFormat": "Availability %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 99,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99.9},
+                {"color": "green", "value": 99.95}
+              ]
+            }
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "single"},
+          "legend": {"displayMode": "table"}
+        }
+      },
+      {
+        "title": "API Latency SLI (P95)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "sli:api_latency:p95_5m",
+            "legendFormat": "P95 Latency",
+            "refId": "A"
+          },
+          {
+            "expr": "sli:api_latency:p99_5m",
+            "legendFormat": "P99 Latency",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 150},
+                {"color": "red", "value": 200}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Error Budget Status",
+        "type": "bargauge",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "slo:api_availability:error_budget_remaining",
+            "legendFormat": "Availability Error Budget",
+            "refId": "A"
+          },
+          {
+            "expr": "slo:api_latency:error_budget_remaining",
+            "legendFormat": "Latency Error Budget",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 25},
+                {"color": "green", "value": 75}
+              ]
+            }
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "title": "Service-Specific Availability",
+        "type": "timeseries",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "sli:service_availability:rate5m{service=\"$service\"}",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 95,
+            "max": 100
+          }
+        }
+      },
+      {
+        "title": "Chat Message Delivery SLI",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 18},
+        "targets": [
+          {
+            "expr": "sli:chat_delivery:rate5m",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99},
+                {"color": "green", "value": 99.5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Search Success Rate SLI",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 18},
+        "targets": [
+          {
+            "expr": "sli:search_success:rate5m",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 98},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "AI Service Success Rate SLI",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 18},
+        "targets": [
+          {
+            "expr": "sli:ai_success:rate5m",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 95},
+                {"color": "green", "value": 98}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Database Success Rate SLI",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 18},
+        "targets": [
+          {
+            "expr": "sli:database_success:rate5m",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99.8},
+                {"color": "green", "value": 99.9}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "SLO Burn Rate Analysis",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
+        "targets": [
+          {
+            "expr": "rate(sli:api_availability:rate5m[1h]) * -100",
+            "legendFormat": "Availability Burn Rate (1h)",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(sli:api_availability:rate5m[6h]) * -100",
+            "legendFormat": "Availability Burn Rate (6h)",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(sli:api_latency:p95_5m[1h])",
+            "legendFormat": "Latency Burn Rate (1h)",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "multi"},
+          "legend": {"displayMode": "table", "placement": "bottom"}
+        }
+      },
+      {
+        "title": "Current SLO Status",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 30},
+        "targets": [
+          {
+            "expr": "sli:api_availability:rate5m",
+            "format": "table",
+            "legendFormat": "API Availability",
+            "refId": "A"
+          },
+          {
+            "expr": "sli:api_latency:p95_5m",
+            "format": "table", 
+            "legendFormat": "API Latency P95",
+            "refId": "B"
+          },
+          {
+            "expr": "sli:chat_delivery:rate5m",
+            "format": "table",
+            "legendFormat": "Chat Delivery",
+            "refId": "C"
+          },
+          {
+            "expr": "sli:search_success:rate5m",
+            "format": "table",
+            "legendFormat": "Search Success",
+            "refId": "D"
+          },
+          {
+            "expr": "sli:ai_success:rate5m",
+            "format": "table",
+            "legendFormat": "AI Service Success",
+            "refId": "E"
+          },
+          {
+            "expr": "sli:database_success:rate5m",
+            "format": "table",
+            "legendFormat": "Database Success",
+            "refId": "F"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "center",
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 95},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        },
+        "options": {
+          "showHeader": true
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {
+                "Value": "Current Value (%)"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "SLO Breaches",
+          "datasource": "Prometheus",
+          "expr": "ALERTS{alertname=~\"SLO.*\"}",
+          "titleFormat": "{{alertname}}",
+          "textFormat": "{{annotations.summary}}",
+          "iconColor": "red"
+        }
+      ]
+    }
+  }
+}

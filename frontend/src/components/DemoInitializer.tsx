@@ -11,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
  * when the app is running in demo mode
  */
 const DemoInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isInitialized, refresh } = useAuth();
+  const { user, isInitialized } = useAuth();
   const [demoSetupAttempted, setDemoSetupAttempted] = useState(false);
 
   useEffect(() => {

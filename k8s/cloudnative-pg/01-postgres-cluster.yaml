@@ -96,12 +96,12 @@ spec:
       database: linkdb
       owner: linkuser
       secret:
-        name: postgres-cluster-credentials
+        name: postgres-admin-passwords
       dataChecksums: true
       encoding: UTF8
       localeCType: C
       localeCollate: C
-      postInitTemplateSQL:
+      postInitSQL:
         - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
         - ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
         - CREATE DATABASE user_service_db OWNER linkuser;
@@ -109,13 +109,15 @@ spec:
         - CREATE DATABASE discovery_service_db OWNER linkuser;
         - CREATE DATABASE search_service_db OWNER linkuser;
         - CREATE DATABASE ai_service_db OWNER linkuser;
+        - CREATE DATABASE feature_service_db OWNER linkuser;
         
-        # Create service-specific users
-        - CREATE USER user_service_user WITH ENCRYPTED PASSWORD 'user_svc_pass_change_me';
-        - CREATE USER chat_service_user WITH ENCRYPTED PASSWORD 'chat_svc_pass_change_me';
-        - CREATE USER discovery_service_user WITH ENCRYPTED PASSWORD 'discovery_svc_pass_change_me';
-        - CREATE USER search_service_user WITH ENCRYPTED PASSWORD 'search_svc_pass_change_me';
-        - CREATE USER ai_service_user WITH ENCRYPTED PASSWORD 'ai_svc_pass_change_me';
+        # Create service-specific users (passwords will be set by secure job)
+        - CREATE USER user_service_user;
+        - CREATE USER chat_service_user;
+        - CREATE USER discovery_service_user;
+        - CREATE USER search_service_user;
+        - CREATE USER ai_service_user;
+        - CREATE USER feature_service_user;
         
         # Grant database permissions
         - GRANT ALL PRIVILEGES ON DATABASE user_service_db TO user_service_user;
@@ -123,9 +125,10 @@ spec:
         - GRANT ALL PRIVILEGES ON DATABASE discovery_service_db TO discovery_service_user;
         - GRANT ALL PRIVILEGES ON DATABASE search_service_db TO search_service_user;
         - GRANT ALL PRIVILEGES ON DATABASE ai_service_db TO ai_service_user;
+        - GRANT ALL PRIVILEGES ON DATABASE feature_service_db TO feature_service_user;
         
-        # Create replication user
-        - CREATE USER streaming_replica WITH REPLICATION ENCRYPTED PASSWORD 'repl_pass_change_me';
+        # Create replication user (password will be set by secure job)
+        - CREATE USER streaming_replica WITH REPLICATION;
 
   # Storage configuration
   storage:

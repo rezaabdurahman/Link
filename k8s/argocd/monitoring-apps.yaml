@@ -1,5 +1,6 @@
 ---
 # ArgoCD Application for Prometheus Monitoring Stack
+# Supports environment-based activation via MONITORING_PROFILE
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -9,10 +10,12 @@ metadata:
     app.kubernetes.io/name: prometheus-stack
     app.kubernetes.io/part-of: link-monitoring
     app.kubernetes.io/component: metrics
+    monitoring.link.com/profile: "${MONITORING_PROFILE:-standard}"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    monitoring.link.com/cost-tier: "core"
 spec:
   project: default
   
@@ -31,8 +34,17 @@ spec:
                   accessModes: ["ReadWriteOnce"]
                   resources:
                     requests:
-                      storage: 50Gi
-            retention: 30d
+                      # Dynamic storage allocation based on profile
+                      storage: "${PROMETHEUS_STORAGE:-20Gi}"
+            # Dynamic retention based on profile
+            retention: "${PROMETHEUS_RETENTION:-7d}"
+            resources:
+              requests:
+                memory: "${PROMETHEUS_MEMORY:-2Gi}"
+                cpu: "${PROMETHEUS_CPU:-500m}"
+              limits:
+                memory: "${PROMETHEUS_MEMORY_LIMIT:-4Gi}"
+                cpu: "${PROMETHEUS_CPU_LIMIT:-2000m}"
             additionalScrapeConfigs:
             - job_name: 'link-services'
               kubernetes_sd_configs:
@@ -50,10 +62,17 @@ spec:
                 regex: (.+)
         
         grafana:
-          adminPassword: admin123  # Change this in production
+          adminPassword: "${GRAFANA_ADMIN_PASSWORD:-admin123}"
           persistence:
             enabled: true
-            size: 10Gi
+            size: "${GRAFANA_STORAGE:-10Gi}"
+          resources:
+            requests:
+              memory: "${GRAFANA_MEMORY:-512Mi}"
+              cpu: "${GRAFANA_CPU:-250m}"
+            limits:
+              memory: "${GRAFANA_MEMORY_LIMIT:-1Gi}"
+              cpu: "${GRAFANA_CPU_LIMIT:-500m}"
           dashboardProviders:
             dashboardproviders.yaml:
               apiVersion: 1
@@ -124,6 +143,7 @@ spec:
 
 ---
 # ArgoCD Application for Loki Logging Stack
+# Conditionally enabled based on ENABLE_LOKI environment variable
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -133,10 +153,14 @@ metadata:
     app.kubernetes.io/name: loki-stack
     app.kubernetes.io/part-of: link-monitoring
     app.kubernetes.io/component: logging
+    monitoring.link.com/profile: "${MONITORING_PROFILE:-standard}"
+    monitoring.link.com/conditional: "true"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    monitoring.link.com/cost-tier: "optional"
+    monitoring.link.com/enable-condition: "LOKI_ENABLED=true"
 spec:
   project: default
   
@@ -149,9 +173,17 @@ spec:
         loki:
           config:
             limits_config:
-              retention_period: 168h  # 7 days
-              ingestion_rate_mb: 16
-              ingestion_burst_size_mb: 24
+              # Dynamic retention based on profile
+              retention_period: "${LOKI_RETENTION:-72h}"  # 3 days default
+              ingestion_rate_mb: "${LOKI_INGESTION_RATE:-8}"  # Reduced from 16
+              ingestion_burst_size_mb: "${LOKI_BURST_SIZE:-12}"  # Reduced from 24
+          resources:
+            requests:
+              memory: "${LOKI_MEMORY:-1Gi}"
+              cpu: "${LOKI_CPU:-500m}"
+            limits:
+              memory: "${LOKI_MEMORY_LIMIT:-2Gi}"
+              cpu: "${LOKI_CPU_LIMIT:-1000m}"
             storage_config:
               boltdb_shipper:
                 active_index_directory: /loki/boltdb-shipper-active
@@ -161,7 +193,7 @@ spec:
                 directory: /loki/chunks
           persistence:
             enabled: true
-            size: 100Gi
+            size: "${LOKI_STORAGE:-30Gi}"  # Reduced from 100Gi
         
         promtail:
           config:
@@ -220,6 +252,7 @@ spec:
 
 ---
 # ArgoCD Application for Jaeger Tracing
+# Conditionally enabled based on ENABLE_JAEGER environment variable
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -229,10 +262,14 @@ metadata:
     app.kubernetes.io/name: jaeger-tracing
     app.kubernetes.io/part-of: link-monitoring
     app.kubernetes.io/component: tracing
+    monitoring.link.com/profile: "${MONITORING_PROFILE:-standard}"
+    monitoring.link.com/conditional: "true"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    monitoring.link.com/cost-tier: "expensive"
+    monitoring.link.com/enable-condition: "JAEGER_ENABLED=true"
 spec:
   project: default
   
@@ -251,7 +288,15 @@ spec:
           minimumMasterNodes: 1
           persistence:
             enabled: true
-            size: 30Gi
+            # Dynamic storage based on profile
+            size: "${JAEGER_STORAGE:-20Gi}"  # Reduced from 30Gi
+          resources:
+            requests:
+              memory: "${JAEGER_ES_MEMORY:-1Gi}"
+              cpu: "${JAEGER_ES_CPU:-500m}"
+            limits:
+              memory: "${JAEGER_ES_MEMORY_LIMIT:-2Gi}"
+              cpu: "${JAEGER_ES_CPU_LIMIT:-1000m}"
         
         query:
           service:

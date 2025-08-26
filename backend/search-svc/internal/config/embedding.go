@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/sashabaranov/go-openai"
+	sharedconfig "github.com/link-app/shared-libs/config"
 )
 
 // EmbeddingProvider interface allows for different embedding providers
@@ -24,7 +25,7 @@ type OpenAIEmbeddingProvider struct {
 
 // NewEmbeddingProvider creates a new embedding provider based on configuration
 func NewEmbeddingProvider() (EmbeddingProvider, error) {
-	providerType := getEnv("EMBEDDING_PROVIDER", "openai")
+	providerType := sharedconfig.GetEnv("EMBEDDING_PROVIDER", "openai")
 	
 	switch providerType {
 	case "openai":
@@ -42,7 +43,7 @@ func newOpenAIProvider() (*OpenAIEmbeddingProvider, error) {
 	}
 
 	client := openai.NewClient(apiKey)
-	model := getEnv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+	model := sharedconfig.GetEnv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
 	return &OpenAIEmbeddingProvider{
 		client: client,

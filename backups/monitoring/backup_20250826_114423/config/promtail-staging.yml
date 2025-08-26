@@ -1,0 +1,121 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Staging-specific log scraping with enhanced labels
+  - job_name: staging-containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: containerlogs
+          environment: staging
+          __path__: /var/lib/docker/containers/*/*log
+
+    pipeline_stages:
+      # Parse JSON logs from services
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            timestamp: time
+            service: service
+            user_id: user_id
+            request_id: request_id
+            method: method
+            url: url
+            status: status
+            duration: duration
+            remote_addr: remote_addr
+            error: error
+
+      # Extract container information
+      - regex:
+          expression: '/var/lib/docker/containers/(?P<container_id>[^/]+)/.*'
+          
+      # Add labels for staging environment
+      - labels:
+          level:
+          service:
+          environment: staging
+          container_id:
+          request_id:
+
+      # Enhanced timestamp parsing for staging
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+            - '2006-01-02T15:04:05.999999999Z07:00'
+            - '2006-01-02T15:04:05Z07:00'
+
+      # Template for better log formatting
+      - template:
+          source: output
+          template: '{{ if .error }}[ERROR] {{ .error }} | {{ end }}{{ .msg }}'
+
+  # Staging service-specific logs
+  - job_name: staging-services
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["environment=staging"]
+
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        target_label: 'instance'
+        regex: '/(.*)'
+        replacement: '${1}'
+        
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+        
+      - source_labels: ['__meta_docker_container_label_environment']
+        target_label: 'environment'
+        
+      - source_labels: ['__meta_docker_container_id']
+        target_label: '__path__'
+        replacement: '/var/lib/docker/containers/${1}/*log'
+
+    pipeline_stages:
+      # Service-specific parsing for staging
+      - match:
+          selector: '{service=~"api-gateway|user-svc|chat-svc|discovery-svc|search-svc|ai-svc"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  msg: msg
+                  time: time
+                  service: service
+                  user_id: user_id
+                  request_id: request_id
+                  method: method
+                  url: url
+                  status: status
+                  duration: duration
+                  trace_id: trace_id
+                  span_id: span_id
+
+            # Add staging-specific labels
+            - labels:
+                level:
+                service:
+                environment: staging
+                trace_id:
+                span_id:
+
+            # Link logs with traces (staging-specific URLs)
+            - template:
+                source: trace_url
+                template: 'https://jaeger-staging.yourdomain.com/trace/{{ .trace_id }}'

@@ -36,46 +36,24 @@ services:
       "-c", "log_min_duration_statement=1000",
       "-c", "shared_preload_libraries=pg_stat_statements",
       "-c", "password_encryption=scram-sha-256",
-      "-c", "max_connections=200",
-      "-c", "shared_buffers=256MB",
-      "-c", "effective_cache_size=1GB"
+      "-c", "max_connections=100",
+      "-c", "shared_buffers=128MB",
+      "-c", "effective_cache_size=512MB"
     ]
 
-  # API Gateway Redis (rate limiting, JWT sessions)
-  redis-gateway:
+  # Consolidated Redis (all services share with logical database separation)
+  redis:
     image: redis:6.2
     ports:
       - "6379:6379"
     volumes:
-      - redis_gateway_data:/data
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-
-  # User Service Redis (profiles, friends, user sessions)
-  redis-user:
-    image: redis:6.2
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_user_data:/data
-    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
-
-  # Chat Service Redis (messages, real-time data)
-  redis-chat:
-    image: redis:6.2
-    ports:
-      - "6381:6379"
-    volumes:
-      - redis_chat_data:/data
-    command: redis-server --maxmemory 1gb --maxmemory-policy allkeys-lru
-
-  # Discovery Service Redis (location data, nearby users)
-  redis-discovery:
-    image: redis:6.2
-    ports:
-      - "6382:6379"
-    volumes:
-      - redis_discovery_data:/data
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+      - redis_data:/data
+    command: redis-server --maxmemory 1gb --maxmemory-policy allkeys-lru --databases 16
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # LocalStack for local AWS services (KMS for PII encryption)
   localstack:
@@ -108,7 +86,7 @@ services:
       - ai-svc
       - search-svc
       - feature-svc
-      - redis-gateway
+      - redis
     environment:
       # K8s-native configuration (for local Docker, we simulate K8s service names)
       K8S_NAMESPACE: "default"
@@ -135,9 +113,10 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-linkpass}
       DB_NAME: linkdb
       DB_SSL_MODE: disable
-      REDIS_HOST: redis-gateway
+      REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
+      REDIS_DB: 0  # API Gateway database
       
       # Environment
       ENVIRONMENT: "development"
@@ -153,7 +132,7 @@ services:
       - "9090:9090"   # Metrics
     depends_on:
       - postgres
-      - redis-user
+      - redis
       - localstack
     env_file:
       - .env  # Shared infrastructure
@@ -163,8 +142,9 @@ services:
       PORT: 8081
       GRPC_PORT: 50051
       METRICS_PORT: 9090
-      REDIS_HOST: redis-user
+      REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_DB: 2  # User service database
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health/live"]
       interval: 10s
@@ -181,14 +161,15 @@ services:
       - "9092:9092"   # Metrics
     depends_on:
       - postgres
-      - redis-chat
+      - redis
     environment:
       DB_HOST: postgres
       PORT: 8082
       GRPC_PORT: 50053
       METRICS_PORT: 9092
-      REDIS_HOST: redis-chat
+      REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_DB: 3  # Chat service database
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/health/live"]
       interval: 10s
@@ -205,14 +186,15 @@ services:
       - "9091:9091"   # Metrics
     depends_on:
       - postgres
-      - redis-discovery
+      - redis
     environment:
       DB_HOST: postgres
       PORT: 8083
       GRPC_PORT: 50052
       METRICS_PORT: 9091
-      REDIS_HOST: redis-discovery
+      REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_DB: 4  # Discovery service database
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/health/live"]
       interval: 10s
@@ -274,7 +256,7 @@ services:
       - "9096:9096"   # Metrics
     depends_on:
       - postgres
-      - redis-gateway
+      - redis
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -284,7 +266,7 @@ services:
       DB_SSL_MODE: disable
       PORT: 8086
       METRICS_PORT: 9096
-      REDIS_HOST: redis-gateway
+      REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
       REDIS_DB: 1  # Use different Redis DB for features
@@ -298,9 +280,6 @@ services:
 
 volumes:
   postgres_data:
-  redis_gateway_data:
-  redis_user_data:
-  redis_chat_data:
-  redis_discovery_data:
+  redis_data:
   localstack_data:
 

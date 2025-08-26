@@ -138,7 +138,9 @@ func (s *authService) RegisterUser(req RegisterUserRequest) (*AuthResponse, erro
 	}
 
 	// Generate JWT token
-	token, err := s.jwtService.GenerateAccessToken(user.ID, user.Email, user.Username)
+	roles := []string{"user"} // Default role for all users
+	permissions := []string{} // Add user-specific permissions if needed
+	token, err := s.jwtService.GenerateAccessToken(user.ID, user.Email, user.Username, roles, permissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -192,7 +194,9 @@ func (s *authService) LoginUser(req LoginRequest) (*AuthResponse, *models.Sessio
 	}
 
 	// Generate JWT token
-	token, err := s.jwtService.GenerateAccessToken(user.ID, user.Email, user.Username)
+	roles := []string{"user"} // Default role for all users
+	permissions := []string{} // Add user-specific permissions if needed
+	token, err := s.jwtService.GenerateAccessToken(user.ID, user.Email, user.Username, roles, permissions)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -251,7 +255,9 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 	}
 
 	// Generate new access token
-	token, err := s.jwtService.GenerateAccessToken(user.ID, user.Email, user.Username)
+	roles := []string{"user"} // Default role for all users
+	permissions := []string{} // Add user-specific permissions if needed
+	token, err := s.jwtService.GenerateAccessToken(user.ID, user.Email, user.Username, roles, permissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}

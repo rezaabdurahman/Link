@@ -9,7 +9,7 @@ metadata:
     app: redis-cluster
 spec:
   serviceName: redis-cluster
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: redis-cluster
@@ -56,11 +56,11 @@ spec:
         - $(REDIS_PASSWORD)
         resources:
           requests:
-            memory: 512Mi
-            cpu: 100m
+            memory: 256Mi
+            cpu: 75m
           limits:
-            memory: 1Gi
-            cpu: 500m
+            memory: 512Mi
+            cpu: 250m
         livenessProbe:
           exec:
             command:
@@ -182,7 +182,7 @@ data:
     dbfilename dump.rdb
     
     # Memory Management
-    maxmemory 768mb
+    maxmemory 384mb
     maxmemory-policy allkeys-lru
     maxmemory-samples 5
     
@@ -263,7 +263,7 @@ spec:
               # Configuration
               BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
               BACKUP_NAME="redis-backup-${BACKUP_DATE}"
-              REDIS_HOSTS="redis-cluster-0.redis-cluster.link-services.svc.cluster.local redis-cluster-1.redis-cluster.link-services.svc.cluster.local redis-cluster-2.redis-cluster.link-services.svc.cluster.local"
+              REDIS_HOSTS="redis-cluster-0.redis-cluster.link-services.svc.cluster.local"
               BACKUP_BUCKET="${BACKUP_S3_BUCKET}"
               
               echo "Starting Redis backup: $BACKUP_NAME"
@@ -386,7 +386,7 @@ spec:
               {
                 "backup_name": "$BACKUP_NAME",
                 "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-                "redis_nodes": 3,
+                "redis_nodes": 1,
                 "successful_backups": $backup_count,
                 "total_size_bytes": $total_size,
                 "backup_type": "full",
@@ -415,14 +415,14 @@ spec:
                 done
               
               echo "Redis backup completed: $BACKUP_NAME"
-              echo "Successful backups: $backup_count/3"
+              echo "Successful backups: $backup_count/1"
               echo "Total size: $(($total_size / 1024)) KB"
               
-              if [ $backup_count -eq 3 ]; then
-                echo "✅ All Redis nodes backed up successfully"
+              if [ $backup_count -eq 1 ]; then
+                echo "✅ Redis node backed up successfully"
                 exit 0
               else
-                echo "❌ Some Redis backups failed"
+                echo "❌ Redis backup failed"
                 exit 1
               fi
               

@@ -1,0 +1,370 @@
+# Service Level Objectives (SLOs) Configuration
+# This file defines the SLOs for all Link application services
+# Based on Google SRE practices and production requirements
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: link-slo-config
+  namespace: link-services
+  labels:
+    app: monitoring
+    component: slo
+data:
+  slo-config.yaml: |
+    # Global SLO Configuration
+    global:
+      # Default SLI measurement window (rolling window)
+      measurement_window: "30d"
+      # Alerting burn rate thresholds
+      burn_rates:
+        critical: 14.4    # 2% of monthly error budget consumed in 1 hour
+        high: 6.0         # 5% of monthly error budget consumed in 6 hours  
+        medium: 1.0       # 10% of monthly error budget consumed in 3 days
+        low: 0.25         # 25% of monthly error budget consumed in 6 days
+      
+      # Default alert firing conditions
+      alerts:
+        critical:
+          lookback_window: "1h"
+          burn_rate_threshold: 14.4
+        high:
+          lookback_window: "6h" 
+          burn_rate_threshold: 6.0
+        medium:
+          lookback_window: "3d"
+          burn_rate_threshold: 1.0
+        low:
+          lookback_window: "6d"
+          burn_rate_threshold: 0.25
+
+    # Service-specific SLO definitions
+    services:
+      
+      # API Gateway - Critical entry point
+      api-gateway:
+        availability:
+          objective: 99.9%          # 43.2 minutes downtime per month
+          description: "API Gateway must be available for all incoming requests"
+          sli_query: |
+            sum(rate(http_requests_total{job="api-gateway",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="api-gateway"}[5m])) * 100
+          error_budget: 0.1%
+          
+        latency:
+          objective: 95%            # 95th percentile under 200ms
+          threshold: 200ms
+          description: "95% of requests must complete within 200ms"
+          sli_query: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) by (le)
+            ) * 1000
+          error_budget: 5%
+          
+        error_rate:
+          objective: 99.9%          # Less than 0.1% error rate
+          description: "Error rate must be below 0.1%"
+          sli_query: |
+            (sum(rate(http_requests_total{job="api-gateway",code=~"5.."}[5m])) /
+             sum(rate(http_requests_total{job="api-gateway"}[5m]))) * 100
+          error_budget: 0.1%
+
+      # User Service - Core user management
+      user-service:
+        availability:
+          objective: 99.9%
+          description: "User service availability for authentication and profile operations"
+          sli_query: |
+            sum(rate(http_requests_total{job="user-service",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="user-service"}[5m])) * 100
+          error_budget: 0.1%
+          
+        latency:
+          objective: 95%
+          threshold: 150ms
+          description: "User operations must be fast for good UX"
+          sli_query: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{job="user-service"}[5m])) by (le)
+            ) * 1000
+          error_budget: 5%
+
+      # Chat Service - Real-time communication
+      chat-service:
+        availability:
+          objective: 99.9%
+          description: "Chat service must be highly available for real-time communication"
+          sli_query: |
+            sum(rate(http_requests_total{job="chat-service",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="chat-service"}[5m])) * 100
+          error_budget: 0.1%
+          
+        latency:
+          objective: 90%            # More lenient for real-time features
+          threshold: 500ms
+          description: "Chat messages must be delivered quickly"
+          sli_query: |
+            histogram_quantile(0.90,
+              sum(rate(http_request_duration_seconds_bucket{job="chat-service"}[5m])) by (le)
+            ) * 1000
+          error_budget: 10%
+          
+        websocket_connections:
+          objective: 95%
+          description: "WebSocket connections must remain stable"
+          sli_query: |
+            sum(websocket_connections_active{job="chat-service"}) /
+            sum(websocket_connections_total{job="chat-service"}) * 100
+          error_budget: 5%
+
+      # Discovery Service - User matching
+      discovery-service:
+        availability:
+          objective: 99.5%          # Slightly more relaxed for non-critical features
+          description: "Discovery service availability for user matching"
+          sli_query: |
+            sum(rate(http_requests_total{job="discovery-service",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="discovery-service"}[5m])) * 100
+          error_budget: 0.5%
+          
+        latency:
+          objective: 90%
+          threshold: 1000ms        # Discovery can be slower
+          description: "User discovery and matching performance"
+          sli_query: |
+            histogram_quantile(0.90,
+              sum(rate(http_request_duration_seconds_bucket{job="discovery-service"}[5m])) by (le)
+            ) * 1000
+          error_budget: 10%
+
+      # Search Service - Search functionality
+      search-service:
+        availability:
+          objective: 99.5%
+          description: "Search service must be available for user search"
+          sli_query: |
+            sum(rate(http_requests_total{job="search-service",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="search-service"}[5m])) * 100
+          error_budget: 0.5%
+          
+        latency:
+          objective: 90%
+          threshold: 2000ms        # Search can take longer
+          description: "Search queries must complete in reasonable time"
+          sli_query: |
+            histogram_quantile(0.90,
+              sum(rate(http_request_duration_seconds_bucket{job="search-service"}[5m])) by (le)
+            ) * 1000
+          error_budget: 10%
+
+      # AI Service - AI-powered features  
+      ai-service:
+        availability:
+          objective: 99.0%          # AI services can be less critical
+          description: "AI service availability for conversation summarization"
+          sli_query: |
+            sum(rate(http_requests_total{job="ai-service",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="ai-service"}[5m])) * 100
+          error_budget: 1.0%
+          
+        latency:
+          objective: 90%
+          threshold: 5000ms        # AI processing can be slower
+          description: "AI operations processing time"
+          sli_query: |
+            histogram_quantile(0.90,
+              sum(rate(http_request_duration_seconds_bucket{job="ai-service"}[5m])) by (le)
+            ) * 1000
+          error_budget: 10%
+
+      # Feature Service - Feature flags
+      feature-service:
+        availability:
+          objective: 99.9%          # Critical for feature rollouts
+          description: "Feature service must be highly available"
+          sli_query: |
+            sum(rate(http_requests_total{job="feature-service",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="feature-service"}[5m])) * 100
+          error_budget: 0.1%
+          
+        latency:
+          objective: 95%
+          threshold: 100ms          # Must be very fast
+          description: "Feature flag lookups must be extremely fast"
+          sli_query: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{job="feature-service"}[5m])) by (le)
+            ) * 1000
+          error_budget: 5%
+
+      # Database - PostgreSQL cluster
+      postgresql:
+        availability:
+          objective: 99.9%
+          description: "Database cluster availability"
+          sli_query: |
+            sum(up{job="postgres-exporter"}) /
+            sum(count by (instance) (up{job="postgres-exporter"})) * 100
+          error_budget: 0.1%
+          
+        latency:
+          objective: 90%
+          threshold: 10ms           # Database queries should be fast
+          description: "Database query response time"
+          sli_query: |
+            histogram_quantile(0.90,
+              sum(rate(pg_stat_statements_mean_exec_time_seconds_bucket[5m])) by (le)
+            ) * 1000
+          error_budget: 10%
+
+    # Composite SLOs - End-to-end user journeys
+    journeys:
+      
+      user_registration:
+        name: "User Registration Journey"
+        description: "Complete user registration flow from signup to first login"
+        objective: 95%
+        steps:
+          - service: api-gateway
+            endpoint: "/auth/register"
+            weight: 0.2
+          - service: user-service  
+            endpoint: "/users"
+            weight: 0.3
+          - service: user-service
+            endpoint: "/auth/login"
+            weight: 0.3
+          - service: feature-service
+            endpoint: "/flags/user"
+            weight: 0.2
+        sli_query: |
+          min(
+            sum(rate(http_requests_total{job="api-gateway",handler="/auth/register",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="api-gateway",handler="/auth/register"}[5m])) * 100,
+            sum(rate(http_requests_total{job="user-service",handler="/users",method="POST",code!~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="user-service",handler="/users",method="POST"}[5m])) * 100
+          )
+        error_budget: 5%
+        
+      message_delivery:
+        name: "Message Delivery Journey"  
+        description: "End-to-end message delivery from send to receive"
+        objective: 99%
+        steps:
+          - service: chat-service
+            endpoint: "/messages"
+            weight: 0.4
+          - service: websocket
+            event: "message_sent"
+            weight: 0.3
+          - service: websocket
+            event: "message_received"  
+            weight: 0.3
+        sli_query: |
+          sum(rate(chat_messages_delivered_total[5m])) /
+          sum(rate(chat_messages_sent_total[5m])) * 100
+        error_budget: 1%
+
+    # SLO Burn Rate Calculations
+    burn_rate_calculations:
+      # These queries calculate how fast we're consuming error budget
+      availability_burn_rate: |
+        (1 - (
+          sum(rate(http_requests_total{code!~"5.."}[1h])) /
+          sum(rate(http_requests_total[1h]))
+        )) * 24 * 30 / (1 - ${availability_objective})
+        
+      latency_burn_rate: |
+        (1 - (
+          sum(rate(http_request_duration_seconds_bucket{le="${latency_threshold}"}[1h])) /
+          sum(rate(http_request_duration_seconds_bucket{le="+Inf"}[1h]))
+        )) * 24 * 30 / (1 - ${latency_objective})
+        
+      error_burn_rate: |
+        (sum(rate(http_requests_total{code=~"5.."}[1h])) /
+         sum(rate(http_requests_total[1h]))) * 24 * 30 / ${error_budget}
+
+---
+# SLO Recording Rules for Prometheus
+apiVersion: v1
+kind: ConfigMap  
+metadata:
+  name: slo-recording-rules
+  namespace: link-services
+  labels:
+    app: monitoring
+    component: slo-rules
+data:
+  slo_rules.yaml: |
+    groups:
+    - name: slo_recording_rules
+      interval: 30s
+      rules:
+      
+      # API Gateway SLO recordings
+      - record: slo:api_gateway_availability_5m
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",code!~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="api-gateway"}[5m])) * 100
+        
+      - record: slo:api_gateway_latency_p95_5m  
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) by (le)
+          ) * 1000
+          
+      - record: slo:api_gateway_error_rate_5m
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",code=~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="api-gateway"}[5m])) * 100
+          
+      # User Service SLO recordings  
+      - record: slo:user_service_availability_5m
+        expr: |
+          sum(rate(http_requests_total{job="user-service",code!~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="user-service"}[5m])) * 100
+          
+      - record: slo:user_service_latency_p95_5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="user-service"}[5m])) by (le)
+          ) * 1000
+          
+      # Chat Service SLO recordings
+      - record: slo:chat_service_availability_5m  
+        expr: |
+          sum(rate(http_requests_total{job="chat-service",code!~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="chat-service"}[5m])) * 100
+          
+      - record: slo:chat_service_websocket_stability_5m
+        expr: |
+          sum(websocket_connections_active{job="chat-service"}) /
+          sum(websocket_connections_total{job="chat-service"}) * 100
+          
+      # Error Budget Burn Rate calculations (critical for alerting)
+      - record: slo:api_gateway_error_budget_burn_rate_1h
+        expr: |
+          (1 - (
+            sum(rate(http_requests_total{job="api-gateway",code!~"5.."}[1h])) /
+            sum(rate(http_requests_total{job="api-gateway"}[1h]))
+          )) * 24 * 30 / 0.001  # 99.9% availability target
+          
+      - record: slo:api_gateway_latency_budget_burn_rate_1h
+        expr: |
+          (1 - (
+            sum(rate(http_request_duration_seconds_bucket{job="api-gateway",le="0.2"}[1h])) /
+            sum(rate(http_request_duration_seconds_bucket{job="api-gateway",le="+Inf"}[1h]))
+          )) * 24 * 30 / 0.05  # 95% latency target
+          
+      # Composite Journey SLOs
+      - record: slo:user_registration_success_rate_5m
+        expr: |
+          min(
+            slo:api_gateway_availability_5m,
+            slo:user_service_availability_5m
+          )
+          
+      - record: slo:message_delivery_success_rate_5m
+        expr: |
+          sum(rate(chat_messages_delivered_total[5m])) /
+          sum(rate(chat_messages_sent_total[5m])) * 100

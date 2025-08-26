@@ -1,0 +1,328 @@
+# Backup Monitoring and Alerting Rules
+
+groups:
+- name: backup.rules
+  interval: 30s
+  rules:
+  
+  # PostgreSQL Backup Monitoring
+  - alert: PostgreSQLBackupFailed
+    expr: |
+      (
+        time() - postgres_backup_last_success_timestamp > 86400
+      ) OR (
+        postgres_backup_errors_total > 0
+      )
+    for: 5m
+    labels:
+      severity: critical
+      service: postgres
+      component: backup
+      team: infrastructure
+    annotations:
+      summary: "PostgreSQL backup has failed"
+      description: |
+        PostgreSQL backup for {{ $labels.database }} has failed or hasn't run successfully in the last 24 hours.
+        Last successful backup: {{ $value | humanizeTimestamp }}
+        Error count: {{ $labels.error_count }}
+      runbook_url: "https://runbooks.link-app.com/backup/postgres-backup-failed"
+      dashboard_url: "https://grafana.link-app.com/d/backup-overview"
+
+  - alert: PostgreSQLBackupSizeAnomaly
+    expr: |
+      (
+        postgres_backup_size_bytes > postgres_backup_size_bytes offset 7d * 2
+      ) OR (
+        postgres_backup_size_bytes < postgres_backup_size_bytes offset 7d * 0.5
+      )
+    for: 15m
+    labels:
+      severity: warning
+      service: postgres
+      component: backup
+      team: infrastructure
+    annotations:
+      summary: "PostgreSQL backup size anomaly detected"
+      description: |
+        PostgreSQL backup size for {{ $labels.database }} has changed significantly:
+        Current size: {{ $value | humanizeBytes }}
+        Previous week size: {{ $labels.previous_size | humanizeBytes }}
+        This may indicate data corruption or missing data.
+      runbook_url: "https://runbooks.link-app.com/backup/backup-size-anomaly"
+
+  - alert: PostgreSQLWALArchivingFailed
+    expr: |
+      postgres_wal_archive_errors_total > 0
+    for: 2m
+    labels:
+      severity: critical
+      service: postgres
+      component: wal-archiving
+      team: infrastructure
+    annotations:
+      summary: "PostgreSQL WAL archiving has failed"
+      description: |
+        PostgreSQL WAL archiving has failed {{ $value }} times in the last period.
+        This will prevent point-in-time recovery beyond the current time.
+        Instance: {{ $labels.instance }}
+      runbook_url: "https://runbooks.link-app.com/backup/wal-archiving-failed"
+
+  # Redis Backup Monitoring  
+  - alert: RedisBackupFailed
+    expr: |
+      (
+        time() - redis_backup_last_success_timestamp > 21600
+      ) OR (
+        redis_backup_errors_total > 0
+      )
+    for: 5m
+    labels:
+      severity: critical
+      service: redis
+      component: backup
+      team: infrastructure
+    annotations:
+      summary: "Redis backup has failed"
+      description: |
+        Redis backup for {{ $labels.node }} has failed or hasn't run successfully in the last 6 hours.
+        Last successful backup: {{ $value | humanizeTimestamp }}
+        Node: {{ $labels.redis_node }}
+      runbook_url: "https://runbooks.link-app.com/backup/redis-backup-failed"
+
+  - alert: RedisPersistenceDisabled
+    expr: |
+      redis_config_appendonly == 0
+    for: 5m
+    labels:
+      severity: warning
+      service: redis
+      component: persistence
+      team: infrastructure
+    annotations:
+      summary: "Redis AOF persistence is disabled"
+      description: |
+        Redis AOF (Append Only File) persistence is disabled on {{ $labels.instance }}.
+        This means data loss may occur if Redis restarts.
+      runbook_url: "https://runbooks.link-app.com/redis/enable-persistence"
+
+  # Qdrant Backup Monitoring
+  - alert: QdrantBackupFailed
+    expr: |
+      (
+        time() - qdrant_backup_last_success_timestamp > 21600
+      ) OR (
+        qdrant_backup_errors_total > 0
+      )
+    for: 5m
+    labels:
+      severity: critical
+      service: qdrant
+      component: backup
+      team: infrastructure
+    annotations:
+      summary: "Qdrant backup has failed"
+      description: |
+        Qdrant backup has failed or hasn't run successfully in the last 6 hours.
+        Last successful backup: {{ $value | humanizeTimestamp }}
+        Collection: {{ $labels.collection }}
+      runbook_url: "https://runbooks.link-app.com/backup/qdrant-backup-failed"
+
+  # S3 Storage Monitoring
+  - alert: S3BackupStorageNearCapacity
+    expr: |
+      s3_bucket_size_bytes{bucket=~".*backup.*"} / s3_bucket_quota_bytes > 0.85
+    for: 10m
+    labels:
+      severity: warning
+      service: s3
+      component: storage
+      team: infrastructure
+    annotations:
+      summary: "S3 backup storage approaching capacity"
+      description: |
+        S3 backup bucket {{ $labels.bucket }} is {{ $value | humanizePercent }} full.
+        Current size: {{ $labels.size | humanizeBytes }}
+        Consider reviewing retention policies or increasing capacity.
+      runbook_url: "https://runbooks.link-app.com/s3/storage-capacity"
+
+  - alert: S3CrossRegionReplicationFailed
+    expr: |
+      s3_replication_failed_total > 0
+    for: 5m
+    labels:
+      severity: critical
+      service: s3
+      component: replication
+      team: infrastructure
+    annotations:
+      summary: "S3 cross-region replication has failed"
+      description: |
+        S3 cross-region replication has failed for bucket {{ $labels.bucket }}.
+        Failed replications: {{ $value }}
+        This impacts disaster recovery capabilities.
+      runbook_url: "https://runbooks.link-app.com/s3/replication-failed"
+
+  # Backup Integrity Monitoring
+  - alert: BackupIntegrityCheckFailed
+    expr: |
+      backup_integrity_check_success == 0
+    for: 5m
+    labels:
+      severity: critical
+      service: backup
+      component: integrity
+      team: infrastructure
+    annotations:
+      summary: "Backup integrity check has failed"
+      description: |
+        Backup integrity verification has failed for {{ $labels.backup_type }}.
+        Service: {{ $labels.service }}
+        Backup file: {{ $labels.backup_file }}
+        This may indicate backup corruption.
+      runbook_url: "https://runbooks.link-app.com/backup/integrity-check-failed"
+
+  # Backup Duration Monitoring
+  - alert: BackupTakingTooLong
+    expr: |
+      backup_duration_seconds > 3600
+    for: 0m
+    labels:
+      severity: warning
+      service: backup
+      component: performance
+      team: infrastructure
+    annotations:
+      summary: "Backup is taking too long to complete"
+      description: |
+        {{ $labels.backup_type }} backup for {{ $labels.service }} has been running for {{ $value | humanizeDuration }}.
+        Normal duration is typically under 1 hour.
+        Check for performance issues or large data growth.
+      runbook_url: "https://runbooks.link-app.com/backup/slow-backup"
+
+  # Backup Retention Monitoring
+  - alert: BackupRetentionViolation
+    expr: |
+      backup_oldest_age_days > 2555
+    for: 1h
+    labels:
+      severity: warning
+      service: backup
+      component: retention
+      team: infrastructure
+    annotations:
+      summary: "Backup retention policy violation"
+      description: |
+        Old backups detected that exceed retention policy:
+        Service: {{ $labels.service }}
+        Oldest backup age: {{ $value }} days
+        Maximum retention: 2555 days (7 years)
+      runbook_url: "https://runbooks.link-app.com/backup/retention-cleanup"
+
+  - alert: BackupMissing
+    expr: |
+      (backup_expected_count - backup_actual_count) > 0
+    for: 30m
+    labels:
+      severity: warning
+      service: backup
+      component: scheduling
+      team: infrastructure
+    annotations:
+      summary: "Expected backup is missing"
+      description: |
+        Missing {{ $value }} backup(s) for {{ $labels.service }}.
+        Expected: {{ $labels.expected_count }}
+        Actual: {{ $labels.actual_count }}
+        Check backup scheduling and job status.
+      runbook_url: "https://runbooks.link-app.com/backup/missing-backup"
+
+  # Recovery Testing Alerts
+  - alert: BackupRecoveryTestOverdue
+    expr: |
+      time() - backup_recovery_test_last_success_timestamp > 2592000  # 30 days
+    for: 1h
+    labels:
+      severity: warning
+      service: backup
+      component: recovery-testing
+      team: infrastructure
+    annotations:
+      summary: "Backup recovery test is overdue"
+      description: |
+        Backup recovery test for {{ $labels.service }} hasn't been performed in {{ $value | humanizeDuration }}.
+        Regular recovery testing is required to ensure backup reliability.
+        Schedule recovery test immediately.
+      runbook_url: "https://runbooks.link-app.com/backup/recovery-test-overdue"
+
+  # Cost Monitoring
+  - alert: BackupStorageCostHigh
+    expr: |
+      increase(s3_storage_cost_usd[30d]) > 500
+    for: 1h
+    labels:
+      severity: warning
+      service: backup
+      component: cost
+      team: infrastructure
+    annotations:
+      summary: "Backup storage cost is high"
+      description: |
+        S3 backup storage cost has increased by ${{ $value }} in the last 30 days.
+        Review lifecycle policies and retention settings to optimize costs.
+        Consider transitioning more data to cheaper storage classes.
+      runbook_url: "https://runbooks.link-app.com/backup/cost-optimization"
+
+  # Disaster Recovery Readiness
+  - alert: DisasterRecoveryNotReady
+    expr: |
+      (
+        postgres_backup_last_success_timestamp == 0
+      ) OR (
+        redis_backup_last_success_timestamp == 0
+      ) OR (
+        s3_replication_enabled == 0
+      )
+    for: 15m
+    labels:
+      severity: critical
+      service: backup
+      component: disaster-recovery
+      team: infrastructure
+    annotations:
+      summary: "Disaster recovery is not ready"
+      description: |
+        One or more components required for disaster recovery are not functioning:
+        - PostgreSQL backup status: {{ $labels.postgres_backup_status }}
+        - Redis backup status: {{ $labels.redis_backup_status }}
+        - S3 replication status: {{ $labels.s3_replication_status }}
+        Immediate attention required for business continuity.
+      runbook_url: "https://runbooks.link-app.com/disaster-recovery/not-ready"
+
+# Recording Rules for Backup Metrics
+- name: backup.recording.rules
+  interval: 60s
+  rules:
+  
+  - record: backup:success_rate_5m
+    expr: |
+      rate(backup_success_total[5m]) / (rate(backup_success_total[5m]) + rate(backup_errors_total[5m]))
+
+  - record: backup:duration_p99_1h
+    expr: |
+      histogram_quantile(0.99, rate(backup_duration_seconds_bucket[1h]))
+
+  - record: backup:size_growth_rate_7d
+    expr: |
+      rate(backup_size_bytes[7d])
+
+  - record: s3:storage_cost_per_gb_30d
+    expr: |
+      increase(s3_storage_cost_usd[30d]) / (s3_bucket_size_bytes / (1024^3))
+
+  - record: backup:rpo_compliance
+    expr: |
+      (time() - backup_last_success_timestamp) < 3600  # 1 hour RPO
+
+  - record: backup:rto_readiness
+    expr: |
+      backup_recovery_test_last_success_timestamp > (time() - 2592000)  # Last 30 days

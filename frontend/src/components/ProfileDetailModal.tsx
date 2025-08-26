@@ -67,7 +67,8 @@ const mapUserProfileToUser = (profile: UserProfileResponse, mode: 'own' | 'other
       (profile.mutual_friends ? Array(profile.mutual_friends).fill('').map(() => 'friend') : []) : [], // Convert count to array if allowed
     connectionPriority: 'regular' as const,
     lastSeen: shouldShowContent(profile, 'checkins', mode) ? new Date(profile.last_login_at || Date.now()) : new Date(),
-    profileType: profile.profile_visibility === 'public' ? 'public' as const : 'private' as const
+    profileType: profile.profile_visibility === 'public' ? 'public' as const : 'private' as const,
+    privacy_settings: profile.privacy_settings
   };
 };
 

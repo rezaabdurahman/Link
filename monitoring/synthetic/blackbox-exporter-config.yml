@@ -1,0 +1,437 @@
+# Blackbox Exporter Configuration for Synthetic Monitoring
+# Monitors critical user journeys and API endpoints proactively
+
+modules:
+  # HTTP 2xx checks for basic availability
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+      fail_if_ssl: false
+      preferred_ip_protocol: "ip4"
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Accept: "application/json"
+
+  # HTTPS checks with SSL validation
+  http_2xx_ssl:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+      fail_if_ssl: true
+      fail_if_not_ssl: true
+      preferred_ip_protocol: "ip4"
+      tls_config:
+        insecure_skip_verify: false
+        min_version: TLS12
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+
+  # API health checks with authentication
+  api_health_check:
+    prober: http
+    timeout: 15s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: false
+      fail_if_ssl: false
+      preferred_ip_protocol: "ip4"
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Accept: "application/json"
+        Content-Type: "application/json"
+
+  # Authentication endpoint check
+  auth_endpoint_check:
+    prober: http
+    timeout: 20s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 400, 401] # 400/401 are expected for invalid creds
+      method: POST
+      follow_redirects: false
+      fail_if_ssl: false
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Content-Type: "application/json"
+      body: |
+        {
+          "email": "synthetic-test@link-monitoring.internal",
+          "password": "invalid-test-password"
+        }
+
+  # User registration flow check
+  registration_flow_check:
+    prober: http
+    timeout: 30s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [400, 422] # Expect validation errors for test data
+      method: POST
+      follow_redirects: false
+      fail_if_ssl: false
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Content-Type: "application/json"
+      body: |
+        {
+          "email": "synthetic-test-{{random_string}}@link-monitoring.internal",
+          "password": "TestPassword123!",
+          "first_name": "Synthetic",
+          "last_name": "Monitor"
+        }
+
+  # Chat service WebSocket connectivity check
+  websocket_check:
+    prober: http
+    timeout: 15s
+    http:
+      valid_http_versions: ["HTTP/1.1"]
+      valid_status_codes: [101, 426] # WebSocket upgrade codes
+      method: GET
+      follow_redirects: false
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Connection: "Upgrade"
+        Upgrade: "websocket"
+        Sec-WebSocket-Version: "13"
+        Sec-WebSocket-Key: "dGVzdC1rZXk="
+
+  # Database connectivity check (via API)
+  database_connectivity_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: false
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Accept: "application/json"
+
+  # Feature flags service check
+  feature_flags_check:
+    prober: http
+    timeout: 5s  # Feature flags should be very fast
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 404] # 404 is acceptable for non-existent flags
+      method: GET
+      follow_redirects: false
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Accept: "application/json"
+
+  # Search functionality check
+  search_functionality_check:
+    prober: http
+    timeout: 25s  # Search can take longer
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 401] # 401 expected without auth
+      method: POST
+      follow_redirects: false
+      headers:
+        User-Agent: "Link-SyntheticMonitoring/1.0"
+        Content-Type: "application/json"
+      body: |
+        {
+          "query": "synthetic test search",
+          "scope": "all",
+          "filters": {
+            "interests": ["monitoring", "testing"]
+          }
+        }
+
+  # DNS resolution check
+  dns_check:
+    prober: dns
+    timeout: 10s
+    dns:
+      query_name: "api.link-app.com"
+      query_type: "A"
+      valid_rcodes: ["NOERROR"]
+      validate_answer_rrs:
+        fail_if_matches_regexp:
+          - ".*127\\.0\\.0\\.1.*"  # Fail if resolving to localhost
+        fail_if_not_matches_regexp:
+          - ".*"  # Must have some response
+
+  # ICMP ping check for network connectivity
+  icmp_check:
+    prober: icmp
+    timeout: 10s
+    icmp:
+      preferred_ip_protocol: "ip4"
+      source_ip_address: ""
+      payload_size: 64
+
+  # TCP connectivity check
+  tcp_check:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: "ip4"
+      source_ip_address: ""
+      tls: false
+
+  # TLS/SSL certificate validity check
+  tls_check:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: "ip4"
+      tls: true
+      tls_config:
+        insecure_skip_verify: false
+        min_version: TLS12
+
+  # Frontend application check (SPA)
+  frontend_spa_check:
+    prober: http
+    timeout: 30s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+      fail_if_not_ssl: true
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; Link-SyntheticMonitoring/1.0)"
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      fail_if_body_not_matches_regexp:
+        - ".*<div id=\"root\">.*"  # Ensure React app loaded
+        - ".*Link.*"  # App title should be present
+
+  # API rate limiting check
+  rate_limit_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 429] # 429 = rate limited (expected)
+      method: GET
+      follow_redirects: false
+      headers:
+        User-Agent: "Link-SyntheticMonitoring-RateLimit/1.0"
+        Accept: "application/json"
+        # Add rate limit testing headers
+        X-Forwarded-For: "192.0.2.1"  # Test IP
+
+---
+# Blackbox Exporter Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter
+  namespace: link-monitoring
+  labels:
+    app: blackbox-exporter
+    component: synthetic-monitoring
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: blackbox-exporter
+  template:
+    metadata:
+      labels:
+        app: blackbox-exporter
+        component: synthetic-monitoring
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: "50m"
+        config.linkerd.io/proxy-memory-request: "32Mi"
+    spec:
+      containers:
+      - name: blackbox-exporter
+        image: prom/blackbox-exporter:v0.24.0
+        ports:
+        - containerPort: 9115
+          name: http
+        args:
+          - --config.file=/config/blackbox.yml
+          - --log.level=info
+          - --web.listen-address=:9115
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9115
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9115
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: blackbox-exporter-config
+      serviceAccountName: blackbox-exporter
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+
+---
+# Service for Blackbox Exporter
+apiVersion: v1
+kind: Service
+metadata:
+  name: blackbox-exporter
+  namespace: link-monitoring
+  labels:
+    app: blackbox-exporter
+    component: synthetic-monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9115"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: blackbox-exporter
+  ports:
+  - port: 9115
+    targetPort: 9115
+    protocol: TCP
+    name: http
+  type: ClusterIP
+
+---
+# ServiceAccount for Blackbox Exporter
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: blackbox-exporter
+  namespace: link-monitoring
+  labels:
+    app: blackbox-exporter
+
+---
+# ConfigMap for Blackbox Exporter configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blackbox-exporter-config
+  namespace: link-monitoring
+  labels:
+    app: blackbox-exporter
+data:
+  blackbox.yml: |
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 10s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: [200]
+          method: GET
+          follow_redirects: true
+          fail_if_ssl: false
+          preferred_ip_protocol: "ip4"
+          headers:
+            User-Agent: "Link-SyntheticMonitoring/1.0"
+            Accept: "application/json"
+
+      http_2xx_ssl:
+        prober: http
+        timeout: 10s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: [200]
+          method: GET
+          follow_redirects: true
+          fail_if_ssl: true
+          fail_if_not_ssl: true
+          preferred_ip_protocol: "ip4"
+          tls_config:
+            insecure_skip_verify: false
+            min_version: TLS12
+          headers:
+            User-Agent: "Link-SyntheticMonitoring/1.0"
+
+      api_health_check:
+        prober: http
+        timeout: 15s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: [200]
+          method: GET
+          follow_redirects: false
+          fail_if_ssl: false
+          preferred_ip_protocol: "ip4"
+          headers:
+            User-Agent: "Link-SyntheticMonitoring/1.0"
+            Accept: "application/json"
+            Content-Type: "application/json"
+
+      websocket_check:
+        prober: http
+        timeout: 15s
+        http:
+          valid_http_versions: ["HTTP/1.1"]
+          valid_status_codes: [101, 426]
+          method: GET
+          follow_redirects: false
+          headers:
+            User-Agent: "Link-SyntheticMonitoring/1.0"
+            Connection: "Upgrade"
+            Upgrade: "websocket"
+            Sec-WebSocket-Version: "13"
+            Sec-WebSocket-Key: "dGVzdC1rZXk="
+
+      frontend_spa_check:
+        prober: http
+        timeout: 30s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: [200]
+          method: GET
+          follow_redirects: true
+          fail_if_not_ssl: true
+          headers:
+            User-Agent: "Mozilla/5.0 (compatible; Link-SyntheticMonitoring/1.0)"
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          fail_if_body_not_matches_regexp:
+            - ".*<div id=\"root\">.*"
+            - ".*Link.*"
+
+      dns_check:
+        prober: dns
+        timeout: 10s
+        dns:
+          query_name: "api.link-app.com"
+          query_type: "A"
+          valid_rcodes: ["NOERROR"]
+
+      icmp_check:
+        prober: icmp
+        timeout: 10s
+        icmp:
+          preferred_ip_protocol: "ip4"
+          source_ip_address: ""
+          payload_size: 64

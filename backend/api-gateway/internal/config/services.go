@@ -71,15 +71,7 @@ func RouteToService(path string) (ServiceEndpoint, error) {
 	}
 }
 
-// matchesPath checks if a path matches any of the given prefixes
-func matchesPath(path string, prefixes ...string) bool {
-	for _, prefix := range prefixes {
-		if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
-			return true
-		}
-	}
-	return false
-}
+// matchesPath function is defined in k8s_services.go
 
 // TransformPath transforms gateway paths to service paths
 func TransformPath(gatewayPath string) string {

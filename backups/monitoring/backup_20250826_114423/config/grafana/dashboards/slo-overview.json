@@ -1,0 +1,398 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Service Level Objectives (SLO) Overview",
+    "description": "Comprehensive SLO monitoring for Link application services",
+    "tags": ["slo", "reliability", "production"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "schemaVersion": 39,
+    "version": 1,
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"],
+      "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "refresh": 1,
+          "current": {
+            "selected": false,
+            "text": "production",
+            "value": "production"
+          },
+          "options": [],
+          "includeAll": false,
+          "multi": false
+        },
+        {
+          "name": "service",
+          "type": "query", 
+          "query": "label_values(http_requests_total{environment=\"$environment\"}, job)",
+          "refresh": 1,
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "enable": true,
+          "iconColor": "green",
+          "query": "ALERTS{alertname=\"DeploymentStarted\"}",
+          "textFormat": "Deployment: {{service}}"
+        },
+        {
+          "name": "SLO Violations",
+          "enable": true,
+          "iconColor": "red", 
+          "query": "ALERTS{alertname=~\".*SLO.*\", alertstate=\"firing\"}",
+          "textFormat": "SLO Alert: {{alertname}}"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "🎯 SLO Status Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "slo:api_gateway_availability_5m",
+            "legendFormat": "API Gateway Availability",
+            "refId": "A"
+          },
+          {
+            "expr": "slo:user_service_availability_5m", 
+            "legendFormat": "User Service Availability",
+            "refId": "B"
+          },
+          {
+            "expr": "slo:chat_service_availability_5m",
+            "legendFormat": "Chat Service Availability", 
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 95,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99},
+                {"color": "green", "value": 99.5}
+              ]
+            },
+            "mappings": [],
+            "displayName": "${__field.labels.job} Availability"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "horizontal",
+          "textMode": "auto",
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center"
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "⚡ Error Budget Burn Rates",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "slo:api_gateway_error_budget_burn_rate_1h",
+            "legendFormat": "API Gateway",
+            "refId": "A"
+          },
+          {
+            "expr": "(1 - slo:user_service_availability_5m / 100) * 24 * 30 / 0.001",
+            "legendFormat": "User Service",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 2,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "orange", "value": 6},
+                {"color": "red", "value": 14.4}
+              ]
+            },
+            "displayName": "${__field.labels.job} Burn Rate"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "horizontal",
+          "textMode": "value_and_name",
+          "colorMode": "background"
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "📊 SLO Compliance Trends (30 days)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "avg_over_time(slo:api_gateway_availability_5m[30d])",
+            "legendFormat": "API Gateway (Target: 99.9%)",
+            "refId": "A"
+          },
+          {
+            "expr": "avg_over_time(slo:user_service_availability_5m[30d])",
+            "legendFormat": "User Service (Target: 99.9%)",
+            "refId": "B"
+          },
+          {
+            "expr": "avg_over_time(slo:chat_service_availability_5m[30d])",
+            "legendFormat": "Chat Service (Target: 99.9%)",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 99,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 99},
+                {"color": "green", "value": 99.9}
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": ".*Target.*"},
+              "properties": [
+                {"id": "custom.drawStyle", "value": "line"},
+                {"id": "custom.lineStyle", "value": {"dash": [10, 10], "fill": "dash"}},
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": ["lastNotNull", "min", "max"]
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "🚨 Active SLO Alerts",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "ALERTS{alertname=~\".*SLO.*\", alertstate=\"firing\"}",
+            "legendFormat": "",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "color-background",
+              "filterable": true
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "severity"},
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"critical": {"color": "red", "index": 0}}, "type": "value"},
+                    {"options": {"high": {"color": "orange", "index": 1}}, "type": "value"},
+                    {"options": {"medium": {"color": "yellow", "index": 2}}, "type": "value"},
+                    {"options": {"low": {"color": "blue", "index": 3}}, "type": "value"}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "__name__": true,
+                "job": true,
+                "instance": true
+              },
+              "renameByName": {
+                "alertname": "Alert",
+                "service": "Service", 
+                "severity": "Severity",
+                "summary": "Description"
+              }
+            }
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "⏱️ Service Latency SLOs",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "slo:api_gateway_latency_p95_5m",
+            "legendFormat": "API Gateway P95 (Target: <200ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "slo:user_service_latency_p95_5m",
+            "legendFormat": "User Service P95 (Target: <150ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "200",
+            "legendFormat": "API Gateway Target",
+            "refId": "C"
+          },
+          {
+            "expr": "150", 
+            "legendFormat": "User Service Target",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "min": 0
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": ".*Target.*"},
+              "properties": [
+                {"id": "custom.drawStyle", "value": "line"},
+                {"id": "custom.lineStyle", "value": {"dash": [10, 10], "fill": "dash"}},
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 6,
+        "title": "🎭 User Journey Success Rates",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "slo:user_registration_success_rate_5m",
+            "legendFormat": "Registration Journey (Target: 95%)",
+            "refId": "A"
+          },
+          {
+            "expr": "slo:message_delivery_success_rate_5m",
+            "legendFormat": "Message Delivery (Target: 99%)",
+            "refId": "B"
+          },
+          {
+            "expr": "95",
+            "legendFormat": "Registration Target",
+            "refId": "C"
+          },
+          {
+            "expr": "99",
+            "legendFormat": "Message Target", 
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 90,
+            "max": 100
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "💸 Error Budget Remaining",
+        "type": "bargauge",
+        "targets": [
+          {
+            "expr": "100 - (1 - slo:api_gateway_availability_5m / 100) * 24 * 30 / 0.001 * (30 - vector(days_in_month())) / 30 * 100",
+            "legendFormat": "API Gateway",
+            "refId": "A"
+          },
+          {
+            "expr": "100 - (1 - slo:user_service_availability_5m / 100) * 24 * 30 / 0.001 * (30 - vector(days_in_month())) / 30 * 100",
+            "legendFormat": "User Service",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "orange", "value": 10},
+                {"color": "yellow", "value": 25},
+                {"color": "green", "value": 50}
+              ]
+            }
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32}
+      }
+    ]
+  }
+}
