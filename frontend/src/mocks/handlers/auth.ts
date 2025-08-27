@@ -31,7 +31,7 @@ const demoUser = {
 
 // Additional demo user for testing
 const janeUser = {
-  id: 'user-jane',
+  id: '17',
   email: 'jane@example.com',
   username: 'janesmith',
   first_name: 'Jane',
@@ -47,7 +47,7 @@ const janeUser = {
 
 // Store demo users
 mockUserProfiles.set('demo-user-1', demoUser);
-mockUserProfiles.set('user-jane', janeUser);
+mockUserProfiles.set('17', janeUser);
 
 // Store credentials for authentication
 mockUserCredentials.set('demo@example.com', {
@@ -59,7 +59,7 @@ mockUserCredentials.set('demo@example.com', {
 mockUserCredentials.set('jane@example.com', {
   email: 'jane@example.com', 
   password: 'jane123',
-  userId: 'user-jane'
+  userId: '17'
 });
 
 export const handlers = [
@@ -209,7 +209,7 @@ export const handlers = [
     if (!user) {
       // Return default demo user if none found
       const defaultUser: MeResponse = {
-        id: 'user-jane',
+        id: '17',
         email: 'jane@example.com',
         username: 'janesmith',
         first_name: 'Jane',

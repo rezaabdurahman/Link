@@ -15,6 +15,16 @@ const USER_ENDPOINTS = {
   blockedUsers: '/users/blocked',
 } as const;
 
+// Contact endpoints
+const CONTACT_ENDPOINTS = {
+  lookup: '/users/contacts/lookup',
+  addContact: '/users/contacts',
+  sendInvitation: '/users/invitations',
+  sentInvitations: '/users/invitations/sent',
+  acceptInvitation: '/users/invitations/accept',
+  invitationDetails: (code: string) => `/users/invitations/${code}`,
+} as const;
+
 // Friend request endpoints
 const FRIEND_ENDPOINTS = {
   sendRequest: '/users/friends/requests',
@@ -592,4 +602,318 @@ export async function updateProfile(updateData: UpdateProfileRequest): Promise<U
       code: 'INTERNAL_SERVER_ERROR',
     });
   }
+}
+
+// Contact Management Types and Functions
+
+// Contact lookup interfaces
+export interface ContactLookupRequest {
+  readonly identifier: string;
+  readonly type: 'email' | 'phone';
+}
+
+export interface ContactLookupResponse {
+  readonly found: boolean;
+  readonly user?: {
+    readonly id: string;
+    readonly username: string;
+    readonly first_name: string;
+    readonly last_name?: string;
+    readonly profile_picture?: string;
+  };
+}
+
+// Add contact interfaces
+export interface AddContactRequest {
+  readonly user_id: string;
+}
+
+// Send invitation interfaces
+export interface SendInvitationRequest {
+  readonly identifier: string;
+  readonly type: 'email' | 'phone';
+  readonly message?: string;
+}
+
+export interface SendInvitationResponse {
+  readonly message: string;
+  readonly invitation_id: string;
+}
+
+// Contact invitation interface
+export interface ContactInvitation {
+  readonly id: string;
+  readonly inviter_id: string;
+  readonly identifier: string;
+  readonly identifier_type: 'email' | 'phone';
+  readonly invitation_code: string;
+  readonly message?: string;
+  readonly status: 'pending' | 'sent' | 'accepted' | 'expired';
+  readonly sent_at?: string;
+  readonly accepted_at?: string;
+  readonly accepted_by_user_id?: string;
+  readonly expires_at: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface GetSentInvitationsResponse {
+  readonly invitations: ContactInvitation[];
+  readonly count: number;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+/**
+ * Look up a contact by email or phone number
+ * @param request - The lookup request containing identifier and type
+ * @returns Promise resolving to lookup response
+ * @throws AuthServiceError with detailed error information
+ */
+export async function lookupContact(request: ContactLookupRequest): Promise<ContactLookupResponse> {
+  try {
+    if (!request.identifier || !request.type) {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'Identifier and type are required for contact lookup',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    if (request.type !== 'email' && request.type !== 'phone') {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'Type must be either "email" or "phone"',
+        field: 'type',
+        code: 'INVALID_FORMAT',
+      });
+    }
+
+    const response = await apiClient.post<ContactLookupResponse>(
+      CONTACT_ENDPOINTS.lookup,
+      request
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to lookup contact due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Add an existing user as a contact (sends friend request)
+ * @param request - The add contact request containing user ID
+ * @returns Promise resolving when friend request is sent
+ * @throws AuthServiceError with detailed error information
+ */
+export async function addContact(request: AddContactRequest): Promise<{ message: string }> {
+  try {
+    if (!request.user_id) {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'User ID is required to add contact',
+        field: 'user_id',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    const response = await apiClient.post<{ message: string }>(
+      CONTACT_ENDPOINTS.addContact,
+      request
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to add contact due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Send an invitation to a non-existing user
+ * @param request - The invitation request containing identifier, type, and optional message
+ * @returns Promise resolving to invitation response
+ * @throws AuthServiceError with detailed error information
+ */
+export async function sendInvitation(request: SendInvitationRequest): Promise<SendInvitationResponse> {
+  try {
+    if (!request.identifier || !request.type) {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'Identifier and type are required to send invitation',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    if (request.type !== 'email' && request.type !== 'phone') {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'Type must be either "email" or "phone"',
+        field: 'type',
+        code: 'INVALID_FORMAT',
+      });
+    }
+
+    const response = await apiClient.post<SendInvitationResponse>(
+      CONTACT_ENDPOINTS.sendInvitation,
+      request
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to send invitation due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get sent invitations with pagination
+ * @param options - Optional pagination parameters
+ * @returns Promise resolving to sent invitations response
+ * @throws AuthServiceError with detailed error information
+ */
+export async function getSentInvitations(options?: { limit?: number; offset?: number }): Promise<GetSentInvitationsResponse> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    
+    const queryString = params.toString();
+    const endpoint = queryString ? `${CONTACT_ENDPOINTS.sentInvitations}?${queryString}` : CONTACT_ENDPOINTS.sentInvitations;
+    
+    const response = await apiClient.get<GetSentInvitationsResponse>(endpoint);
+    return response;
+    
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get sent invitations due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Accept an invitation
+ * @param invitationCode - The invitation code to accept
+ * @returns Promise resolving when invitation is accepted
+ * @throws AuthServiceError with detailed error information
+ */
+export async function acceptInvitation(invitationCode: string): Promise<{ message: string }> {
+  try {
+    if (!invitationCode) {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'Invitation code is required',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    const response = await apiClient.post<{ message: string }>(
+      CONTACT_ENDPOINTS.acceptInvitation,
+      { invitation_code: invitationCode }
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to accept invitation due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get invitation details by code (public endpoint)
+ * @param invitationCode - The invitation code to get details for
+ * @returns Promise resolving to invitation details
+ * @throws AuthServiceError with detailed error information
+ */
+export async function getInvitationDetails(invitationCode: string): Promise<any> {
+  try {
+    if (!invitationCode) {
+      throw new AuthServiceError({
+        type: 'VALIDATION_ERROR',
+        message: 'Invitation code is required',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+
+    const response = await apiClient.get<any>(
+      CONTACT_ENDPOINTS.invitationDetails(invitationCode)
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get invitation details due to an unexpected error',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Helper function to get user-friendly contact error messages
+ */
+export function getContactErrorMessage(error: ApiError): string {
+  // Use the message directly from the error, as the backend will provide user-friendly messages
+  const message = error.message?.toLowerCase() || '';
+  
+  if (message.includes('rate limit') || message.includes('limit reached')) {
+    return 'You have reached your invitation limit. Please try again later.';
+  }
+  if (message.includes('already friends')) {
+    return 'You are already friends with this user.';
+  }
+  if (message.includes('already sent')) {
+    return 'Friend request already sent to this user.';
+  }
+  if (message.includes('pending request')) {
+    return 'You have a pending friend request from this user.';
+  }
+  if (message.includes('invitation') && message.includes('already')) {
+    return 'Invitation already sent to this contact.';
+  }
+  if (message.includes('not found') || message.includes('expired')) {
+    return 'Invitation not found or has expired.';
+  }
+  
+  // Fall back to the original error message
+  return getErrorMessage(error);
 }

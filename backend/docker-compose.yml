@@ -164,6 +164,10 @@ services:
       - redis
     environment:
       DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-linkuser}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-linkpass}
+      DB_NAME: ${DB_NAME:-linkdb}
       PORT: 8082
       GRPC_PORT: 50053
       METRICS_PORT: 9092

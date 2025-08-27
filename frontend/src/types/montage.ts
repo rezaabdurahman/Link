@@ -45,7 +45,7 @@ export interface MontageMetadata {
  * Complete montage response from the API
  */
 export interface MontageResponse {
-  readonly type: 'general' | 'interest-based';
+  readonly type: 'general' | 'interest';
   readonly items: MontageItem[];
   readonly metadata: MontageMetadata;
   readonly user_id: string;

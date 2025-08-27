@@ -328,6 +328,25 @@ export const nearbyUsers: User[] = [
     connectionPriority: 'want-closer',
     lastSeen: new Date(Date.now() - 65 * 60 * 1000),
     profileType: 'public'
+  },
+  {
+    id: '17',
+    first_name: 'Jane',
+    last_name: 'Doe',
+    age: 26,
+    profilePicture: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
+    bio: 'Designer, coffee enthusiast, weekend hiker',
+    interests: ['design', 'coffee', 'hiking', 'photography'],
+    location: {
+      lat: 37.7749,
+      lng: -122.4194,
+      proximityMiles: 0.5
+    },
+    isAvailable: true,
+    mutualFriends: ['Sofia Martinez'],
+    connectionPriority: 'regular',
+    lastSeen: new Date(Date.now() - 10 * 60 * 1000),
+    profileType: 'public'
   }
 ];
 

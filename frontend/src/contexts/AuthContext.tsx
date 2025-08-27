@@ -225,30 +225,15 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
               // Ignore parsing errors
             }
             
-            // Use stored dev user data or create fallback
-            const authUser: AuthUser = devUser || {
-              id: 'dev-user',
-              email: 'dev@example.com',
-              username: 'devuser',
-              first_name: 'Dev',
-              last_name: 'User',
-              profile_picture: null,
-              email_verified: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              interests: [],
-              social_links: [],
-              additional_photos: [],
-              privacy_settings: {
-                show_age: true,
-                show_location: false,
-                show_mutual_friends: true,
-                show_name: true,
-                show_social_media: true,
-                show_montages: true,
-                show_checkins: true
-              }
-            };
+            // Use stored dev user data - no fallback needed since devAuth handles this
+            if (!devUser) {
+              console.warn('🔧 AuthContext: No dev user data found, clearing invalid token');
+              await secureTokenStorage.clearAll();
+              dispatch({ type: 'SET_INITIALIZED' });
+              return;
+            }
+            
+            const authUser: AuthUser = devUser;
 
             dispatch({
               type: 'AUTH_SUCCESS',

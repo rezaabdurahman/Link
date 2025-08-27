@@ -6,6 +6,7 @@ export const FEATURE_DEFAULTS = {
   discovery_cues: true,
   discovery_broadcast: true,
   discovery_grid_view: true,
+  enable_checkins: true, // Check-in functionality
   
   // New/experimental features - default to disabled for safety
   new_discovery_algorithm: false,
@@ -46,6 +47,7 @@ export const ENVIRONMENT_OVERRIDES = {
     ai_conversation_summary: true,
     new_discovery_algorithm: true,
     beta_mobile_app: true,
+    enable_checkins: true, // Ensure check-ins are enabled in dev
   },
   staging: {
     // Conservative approach in staging

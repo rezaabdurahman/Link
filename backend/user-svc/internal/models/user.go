@@ -558,3 +558,95 @@ func (u *User) IsModerator() bool {
 func (u *User) IsPremiumUser() bool {
 	return u.HasAnyRole("premium_user", "community_moderator")
 }
+
+// VerifyPassword verifies the provided password against the stored hash
+func (u *User) VerifyPassword(password string) (bool, error) {
+	// TODO: Implement proper password verification using bcrypt
+	// For now, this is a placeholder
+	return u.PasswordHash != "", nil
+}
+
+// UserResponse represents user data for API responses  
+type UserResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Email     string    `json:"email"`
+	Username  string    `json:"username"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// RefreshToken represents a refresh token for JWT authentication
+type RefreshToken struct {
+	ID                uuid.UUID              `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID            uuid.UUID              `json:"user_id" gorm:"type:uuid;not null;index"`
+	TokenHash         string                 `json:"-" gorm:"not null;uniqueIndex"`
+	ExpiresAt         time.Time              `json:"expires_at" gorm:"not null"`
+	FamilyID          uuid.UUID              `json:"family_id" gorm:"type:uuid;not null;index"`
+	Platform          string                 `json:"platform" gorm:"type:varchar(20);default:'web'"`
+	DeviceID          string                 `json:"device_id" gorm:"type:varchar(255)"`
+	DeviceName        string                 `json:"device_name" gorm:"type:varchar(255)"`
+	AppVersion        string                 `json:"app_version" gorm:"type:varchar(50)"`
+	OSVersion         string                 `json:"os_version" gorm:"type:varchar(50)"`
+	DeviceFingerprint string                 `json:"device_fingerprint" gorm:"type:varchar(255)"`
+	DeviceRegisteredAt *time.Time            `json:"device_registered_at"`
+	LastLocation      map[string]interface{} `json:"last_location" gorm:"type:jsonb"`
+	IsJailbroken      bool                   `json:"is_jailbroken" gorm:"default:false"`
+	IsEmulator        bool                   `json:"is_emulator" gorm:"default:false"`
+	BiometricEnabled  bool                   `json:"biometric_enabled" gorm:"default:false"`
+	RiskScore         float64                `json:"risk_score" gorm:"type:decimal(3,2);default:0.0"`
+	TrustLevel        string                 `json:"trust_level" gorm:"type:varchar(20);default:'new'"`
+	LastUsed          *time.Time             `json:"last_used"`
+	CreatedAt         time.Time              `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt         time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
+
+	// Relationships
+	User User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+}
+
+// DeviceSession represents a mobile device session
+type DeviceSession struct {
+	ID                uuid.UUID              `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID            uuid.UUID              `json:"user_id" gorm:"type:uuid;not null;index"`
+	DeviceID          string                 `json:"device_id" gorm:"type:varchar(255);not null"`
+	DeviceName        string                 `json:"device_name" gorm:"type:varchar(255);not null"`
+	Platform          string                 `json:"platform" gorm:"type:varchar(20);not null"`
+	DeviceFingerprint string                 `json:"device_fingerprint" gorm:"type:varchar(255);not null"`
+	AppVersion        string                 `json:"app_version" gorm:"type:varchar(50)"`
+	OSVersion         string                 `json:"os_version" gorm:"type:varchar(50)"`
+	FirstSeen         time.Time              `json:"first_seen" gorm:"autoCreateTime"`
+	LastSeen          time.Time              `json:"last_seen" gorm:"autoUpdateTime"`
+	LastIP            string                 `json:"last_ip" gorm:"type:inet"`
+	LastLocation      map[string]interface{} `json:"last_location" gorm:"type:jsonb"`
+	IsTrusted         bool                   `json:"is_trusted" gorm:"default:false"`
+	IsJailbroken      bool                   `json:"is_jailbroken" gorm:"default:false"`
+	IsEmulator        bool                   `json:"is_emulator" gorm:"default:false"`
+	BiometricEnabled  bool                   `json:"biometric_enabled" gorm:"default:false"`
+	DeviceInfo        map[string]interface{} `json:"device_info" gorm:"type:jsonb"`
+	SessionCount      int                    `json:"session_count" gorm:"default:1"`
+	RiskScore         float64                `json:"risk_score" gorm:"type:decimal(3,2);default:0.0"`
+	TrustEstablishedAt *time.Time            `json:"trust_established_at"`
+	CreatedAt         time.Time              `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt         time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
+
+	// Relationships
+	User User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+}
+
+// MobileSecurityEvent represents a mobile security event for audit and monitoring
+type MobileSecurityEvent struct {
+	ID           uuid.UUID              `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID       *uuid.UUID             `json:"user_id" gorm:"type:uuid;index"`
+	DeviceID     string                 `json:"device_id" gorm:"type:varchar(255)"`
+	EventType    string                 `json:"event_type" gorm:"type:varchar(50);not null"`
+	EventDetails map[string]interface{} `json:"event_details" gorm:"type:jsonb;not null"`
+	RiskScore    *float64               `json:"risk_score" gorm:"type:decimal(3,2)"`
+	IPAddress    string                 `json:"ip_address" gorm:"type:inet"`
+	UserAgent    string                 `json:"user_agent" gorm:"type:text"`
+	Location     map[string]interface{} `json:"location" gorm:"type:jsonb"`
+	CreatedAt    time.Time              `json:"created_at" gorm:"autoCreateTime"`
+
+	// Relationships
+	User *User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+}

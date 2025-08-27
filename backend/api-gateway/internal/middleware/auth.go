@@ -46,8 +46,14 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 			return
 		}
 
-		// Validate token
-		claims, err := jwtValidator.ValidateAccessToken(token)
+		// Detect platform for mobile-specific token validation
+		platform := c.GetHeader("X-Platform")
+		if platform == "" {
+			platform = "web" // Default to web if no platform specified
+		}
+
+		// Validate token with platform awareness
+		claims, err := jwtValidator.ValidateAccessTokenWithPlatform(token, platform)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":     "AUTHENTICATION_ERROR",
@@ -66,11 +72,22 @@ func AuthMiddleware(jwtValidator *config.JWTValidator, jwtConfig *config.JWTConf
 		c.Set("user_roles", claims.Roles)
 		c.Set("user_permissions", claims.Permissions)
 		c.Set("jwt_id", claims.ID)
+		c.Set("platform", platform)
 
 		// Set user context headers for downstream services
 		c.Header("X-User-ID", claims.UserID.String())
 		c.Header("X-User-Email", claims.Email)
 		c.Header("X-User-Name", claims.Username)
+		c.Header("X-Platform", platform)
+		
+		// Forward mobile-specific headers to downstream services
+		if deviceFingerprint := c.GetHeader("X-Device-Fingerprint"); deviceFingerprint != "" {
+			c.Header("X-Device-Fingerprint", deviceFingerprint)
+		}
+		if deviceID := c.GetHeader("X-Device-ID"); deviceID != "" {
+			c.Header("X-Device-ID", deviceID)
+		}
+		
 		// Convert roles and permissions to comma-separated strings for headers
 		if len(claims.Roles) > 0 {
 			c.Header("X-User-Roles", strings.Join(claims.Roles, ","))
@@ -110,7 +127,7 @@ func CORSMiddleware() gin.HandlerFunc {
 		}
 
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID, X-User-Email, X-User-Name, X-Requested-With")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID, X-User-Email, X-User-Name, X-Requested-With, X-Platform, X-Device-Fingerprint, X-Refresh-Token, X-Device-ID")
 		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Header("Access-Control-Max-Age", "86400") // 24 hours
 

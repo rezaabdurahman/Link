@@ -111,6 +111,48 @@ export const handlers = [
     if (!userId) {
       return createAuthError();
     }
+    
+    // If this is user ID '1', return Alex Thompson (currentUser) data
+    if (userId === '1') {
+      const alexProfile = {
+        id: currentUser.id,
+        email: 'alex@example.com',
+        username: 'alexthompson',
+        first_name: currentUser.first_name,
+        last_name: currentUser.last_name,
+        bio: currentUser.bio,
+        profile_picture: currentUser.profilePicture,
+        location: currentUser.location ? `${currentUser.location.proximityMiles} miles away` : null,
+        date_of_birth: currentUser.age ? new Date(Date.now() - currentUser.age * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined,
+        email_verified: true,
+        created_at: now(),
+        updated_at: now(),
+        age: currentUser.age,
+        interests: currentUser.interests || [],
+        social_links: [
+          {
+            platform: 'instagram',
+            url: 'https://instagram.com/alexthompson',
+            username: 'alexthompson'
+          }
+        ],
+        additional_photos: [],
+        privacy_settings: {
+          show_name: true,
+          show_age: true,
+          show_location: true,
+          show_social_media: true,
+          show_montages: true,
+          show_checkins: true,
+          show_mutual_friends: true,
+        },
+        mutual_friends: currentUser.mutualFriends?.length || 0,
+        last_login_at: now(),
+        profile_visibility: 'public',
+      };
+      
+      return createSuccessResponse(alexProfile);
+    }
 
     // Get user profile from mock database
     const userProfile = mockUserProfiles.get(userId);
@@ -141,12 +183,17 @@ export const handlers = [
         ],
         additional_photos: [],
         privacy_settings: {
+          show_name: true,
           show_age: true,
           show_location: false,
+          show_social_media: true,
+          show_montages: true,
+          show_checkins: true,
           show_mutual_friends: true,
         },
         mutual_friends: 5,
         last_login_at: now(),
+        profile_visibility: 'public',
       };
       
       mockUserProfiles.set(userId, defaultProfile);
@@ -162,12 +209,17 @@ export const handlers = [
       social_links: userProfile.social_links || [],
       additional_photos: userProfile.additional_photos || [],
       privacy_settings: userProfile.privacy_settings || {
+        show_name: true,
         show_age: true,
         show_location: false,
+        show_social_media: true,
+        show_montages: true,
+        show_checkins: true,
         show_mutual_friends: true,
       },
       mutual_friends: userProfile.mutual_friends || 0,
       last_login_at: userProfile.last_login_at || now(),
+      profile_visibility: userProfile.profile_visibility || 'public',
     };
 
     return createSuccessResponse(completeProfile);
@@ -223,8 +275,12 @@ export const handlers = [
       ],
       additional_photos: [], // Empty for now
       privacy_settings: {
+        show_name: user.profileType === 'public',
         show_age: user.profileType === 'public',
         show_location: user.profileType === 'public',
+        show_social_media: user.profileType === 'public',
+        show_montages: user.profileType === 'public',
+        show_checkins: user.profileType === 'public', // This was missing!
         show_mutual_friends: user.profileType === 'public',
       },
       // Friend-related fields
@@ -247,7 +303,7 @@ export const handlers = [
 
     // Return the current demo user
     const user = {
-      id: 'user-jane',
+      id: '17',
       email: 'jane@example.com',
       username: 'janesmith',
       first_name: 'Jane',

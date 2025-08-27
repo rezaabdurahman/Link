@@ -16,7 +16,8 @@
     "build:staging": "npm run type-check && vite build --mode staging",
     "build:production": "npm run type-check && vite build --mode production",
     "build:demo": "vite build --mode demo",
-    "build:analyze": "npm run build && npx vite-bundle-analyzer dist",
+    "build:analyze": "ANALYZE=true npm run build",
+    "build:report": "npm run build && npx rollup-plugin-visualizer dist/stats.html --open",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 200",
     "lint:fix": "eslint src --ext ts,tsx --fix",
     "lint:check": "npm run lint && npm run type-check",
@@ -104,11 +105,14 @@
     "mock-socket": "^9.3.1",
     "msw": "^2.10.5",
     "postcss": "^8.5.6",
+    "rollup-plugin-visualizer": "^6.0.3",
     "tailwind-scrollbar-hide": "^4.0.0",
     "tailwindcss": "^3.4.17",
     "ts-jest": "^29.1.1",
     "typescript": "^5.2.2",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "vite-bundle-analyzer": "^1.2.1",
+    "vite-plugin-compression": "^0.5.1"
   },
   "msw": {
     "workerDirectory": [

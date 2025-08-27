@@ -4,7 +4,6 @@ import { useChatData } from '../hooks/useChatData';
 import { useChatStore, useUIStore, useUserPreferencesStore } from '../stores';
 import { Chat } from '../types';
 import ChatListItem from '../components/ChatListItem';
-import IntelligentMessageBox from '../components/IntelligentMessageBox';
 import AnimatedSearchInput from '../components/AnimatedSearchInput';
 import { isFeatureEnabled } from '../config/featureFlags';
 import RankToggle from '../components/RankToggle';
@@ -31,7 +30,6 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
     sortBy,
     setSearchQuery,
     setSortBy,
-    setMessageDraft,
   } = useChatStore();
 
   // SWR data fetching with automatic refresh based on preferences
@@ -70,22 +68,6 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
     }
   };
 
-  const handleSendMessage = (message: string, recipientId?: string): void => {
-    if (recipientId) {
-      // Find the chat with this recipient
-      const existingChat = combinedChatList.find(chat => chat.participantId === recipientId);
-      
-      if (existingChat) {
-        // Store message draft and open chat
-        setMessageDraft(existingChat.id || recipientId, message);
-        handleChatClick(existingChat);
-      } else {
-        // Create a new chat entry for this recipient
-        console.log('Creating new chat with:', recipientId, 'Message:', message);
-        showToast('Starting new conversation...', 'success');
-      }
-    }
-  };
 
   const handleProfileClick = (participantId: string): void => {
     openModal('isProfileDetailModalOpen', participantId);
@@ -239,10 +221,6 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
         <div className="max-w-sm mx-auto">
           {renderContent()}
 
-          {/* Intelligent Message Box */}
-          {isFeatureEnabled('INTELLIGENT_MESSAGE_BOX') && (
-            <IntelligentMessageBox onSendMessage={handleSendMessage} />
-          )}
         </div>
       </div>
 

@@ -3,6 +3,7 @@
 
 import { AuthUser, AuthToken } from '../types';
 import secureTokenStorage from './secureTokenStorage';
+import { DEV_USER_IDS } from '../constants/users';
 
 /**
  * Create a mock authenticated user for development
@@ -10,7 +11,7 @@ import secureTokenStorage from './secureTokenStorage';
  */
 export async function devLogin(userData?: Partial<AuthUser>): Promise<{ user: AuthUser; token: AuthToken }> {
   const mockUser: AuthUser = {
-    id: userData?.id || 'dev-user-123',
+    id: userData?.id || DEV_USER_IDS.ALEX_THOMPSON,
     email: userData?.email || 'dev@example.com',
     username: userData?.username || 'devuser',
     first_name: userData?.first_name || 'Dev',
@@ -63,29 +64,13 @@ export async function devLogin(userData?: Partial<AuthUser>): Promise<{ user: Au
  * Quick development login with preset users
  */
 export const DEV_USERS = {
-  john: {
-    id: 'user-john',
-    first_name: 'John',
-    last_name: 'Doe',
-    email: 'john@example.com',
-    username: 'johndoe',
-    profile_picture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-  },
   jane: {
-    id: 'user-jane', 
+    id: DEV_USER_IDS.JANE_SMITH,
     first_name: 'Jane',
     last_name: 'Smith',
     email: 'jane@example.com',
     username: 'janesmith',
     profile_picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-  },
-  dev: {
-    id: 'dev-user',
-    first_name: 'Dev',
-    last_name: 'Tester',
-    email: 'dev@test.com',
-    username: 'devtester',
-    profile_picture: null,
   },
 } as const;
 
@@ -141,16 +126,14 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 ===================================
 
 Available commands:
-- devAuth.loginAs('john')    → Login as John Doe
-- devAuth.loginAs('jane')    → Login as Jane Smith  
-- devAuth.loginAs('dev')     → Login as Dev Tester
+- devAuth.loginAs('jane')    → Login as Jane Smith
 - devAuth.loginCustom({...}) → Login with custom user data
 - devAuth.logout()           → Clear authentication
 - devAuth.status()           → Check current auth status
 - devAuth.help()             → Show this help
 
 Example:
-> devAuth.loginAs('john')
+> devAuth.loginAs('jane')
 > devAuth.status()
 > devAuth.logout()
       `);
@@ -174,9 +157,16 @@ export async function autoAuthenticateForDev(): Promise<void> {
       return;
     }
 
-    // Auto-login with the default demo user
-    console.log('🔧 Dev auth: No token found, auto-authenticating with demo user');
-    await devLogin(DEV_USERS.jane);
+    // Auto-login with the current user (Alex Thompson)
+    console.log('🔧 Dev auth: No token found, auto-authenticating with current user');
+    await devLogin({
+      id: DEV_USER_IDS.ALEX_THOMPSON,
+      first_name: 'Alex', 
+      last_name: 'Thompson',
+      email: 'alex@example.com',
+      username: 'alexthompson',
+      profile_picture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face'
+    });
     console.log('🔧 Dev auth: Auto-authentication completed successfully');
   } catch (error) {
     console.error('🔧 Dev auth: Auto-authentication failed:', error);

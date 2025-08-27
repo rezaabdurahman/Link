@@ -1764,6 +1764,7 @@ export const userHandlers = [
   }),
 ];
 
+
 export const authHandlers = [
   // POST /auth/login - Mock login
   http.post('*/auth/login', async ({ request }) => {

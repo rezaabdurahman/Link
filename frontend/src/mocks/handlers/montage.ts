@@ -135,7 +135,7 @@ export const handlers = [
     const paginatedResult = paginateItems(filteredItems, cursor || undefined, limit);
 
     const response: MontageResponse = {
-      type: interest ? 'interest-based' : 'general',
+      type: interest ? 'interest' : 'general',
       items: paginatedResult.items,
       metadata: {
         total_count: filteredItems.length,

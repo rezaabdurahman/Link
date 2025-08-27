@@ -17,9 +17,11 @@ import (
 	"github.com/link-app/user-svc/internal/cache"
 	"github.com/link-app/user-svc/internal/checkin"
 	"github.com/link-app/user-svc/internal/config"
+	"github.com/link-app/user-svc/internal/contacts"
 	"github.com/link-app/user-svc/internal/events"
 	"github.com/link-app/user-svc/internal/friends"
 	"github.com/link-app/user-svc/internal/middleware"
+	"github.com/link-app/user-svc/internal/notifications"
 	"github.com/link-app/user-svc/internal/onboarding"
 	"github.com/link-app/user-svc/internal/profile"
 	"github.com/link-app/user-svc/internal/repository"
@@ -128,6 +130,42 @@ func main() {
 	// Initialize upload service
 	uploadService := uploads.NewService(db)
 
+	// Initialize notification service
+	notificationConfig := &notifications.NotificationConfig{
+		EmailProvider: sharedConfig.GetEnv("EMAIL_PROVIDER", "sendgrid"),
+		SMSProvider:   sharedConfig.GetEnv("SMS_PROVIDER", "twilio"),
+		SendGrid: &notifications.SendGridConfig{
+			APIKey: sharedConfig.GetEnv("SENDGRID_API_KEY", ""),
+		},
+		Twilio: &notifications.TwilioConfig{
+			AccountSID: sharedConfig.GetEnv("TWILIO_ACCOUNT_SID", ""),
+			AuthToken:  sharedConfig.GetEnv("TWILIO_AUTH_TOKEN", ""),
+			FromNumber: sharedConfig.GetEnv("TWILIO_FROM_NUMBER", ""),
+		},
+		DefaultFrom: notifications.DefaultFromConfig{
+			EmailAddress: sharedConfig.GetEnv("EMAIL_FROM_ADDRESS", "invites@link-app.com"),
+			EmailName:    sharedConfig.GetEnv("EMAIL_FROM_NAME", "Link App"),
+			PhoneNumber:  sharedConfig.GetEnv("SMS_FROM_NUMBER", ""),
+		},
+	}
+
+	notificationService, err := notifications.NewNotificationService(notificationConfig)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize notification service: %v", err)
+		log.Println("Contact invitations will be logged only...")
+	}
+
+	// Initialize contact service
+	contactRepo := contacts.NewRepository(db)
+	contactServiceConfig := &contacts.ServiceConfig{
+		BaseURL:              sharedConfig.GetEnv("BASE_URL", "https://link-app.com"),
+		DailyInvitationLimit:  10,
+		WeeklyInvitationLimit: 50,
+		InvitationExpiryDays:  7,
+		EnablePhoneLookup:     true,
+	}
+	contactService := contacts.NewService(contactRepo, notificationService, friendService, contactServiceConfig)
+
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
 	profileHandler := profile.NewProfileHandler(profileService)
@@ -135,6 +173,7 @@ func main() {
 	friendHandler := friends.NewFriendHandler(friendService)
 	checkinHandler := checkin.NewHandler(checkinService)
 	uploadHandler := uploads.NewHandler(uploadService)
+	contactHandler := contacts.NewHandler(contactService)
 
 	// Initialize metrics
 	serviceMetrics := metrics.NewServiceMetrics("user-svc")
@@ -177,6 +216,7 @@ func main() {
 		friends.RegisterRoutes(v1, friendHandler)
 		checkin.RegisterRoutes(v1, checkinHandler)
 		uploads.RegisterRoutes(v1, uploadHandler)
+		contacts.RegisterRoutes(v1.Group("/users"), contactHandler)
 
 		// Content moderation endpoints
 		moderation := v1.Group("/moderation")

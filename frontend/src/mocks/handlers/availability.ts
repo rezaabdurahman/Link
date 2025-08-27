@@ -34,10 +34,10 @@ mockAvailability.set('demo-user-3', {
   updated_at: now(),
 });
 
-// Add the demo user 'user-jane' for proper availability functionality
-mockAvailability.set('user-jane', {
+// Add the demo user '17' for proper availability functionality
+mockAvailability.set('17', {
   id: generateId(),
-  user_id: 'user-jane',
+  user_id: '17',
   is_available: true,
   last_available_at: now(),
   created_at: now(),
