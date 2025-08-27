@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, MessageCircle, MapPin, Users, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Megaphone, Shield } from 'lucide-react';
+import { X, MessageCircle, MapPin, Users, Clock, Edit3, Trash2, Share, Plus, HelpCircle, Megaphone, Shield, Globe, Lock } from 'lucide-react';
 import { FaInstagram, FaTwitter, FaFacebook, FaLinkedin, FaTiktok, FaSnapchat, FaYoutube } from 'react-icons/fa';
 import { User, Chat } from '../types';
-import { CheckIn } from '../types/checkin';
+import { CheckIn, Privacy } from '../types/checkin';
 import ConversationModal from './ConversationModal';
 import FriendButton from './FriendButton';
 import BlockButton from './BlockButton';
 import CheckInModal from './CheckInModal';
+import CheckInDetailModal from './CheckInDetailModal';
 import { useFriendRequests } from '../hooks/useFriendRequests';
 import { getUserProfile, UserProfileResponse, getProfileErrorMessage } from '../services/userClient';
 import { useMontage } from '../hooks/useMontage';
@@ -16,6 +17,18 @@ import { getUserBroadcast, PublicBroadcastResponse, getBroadcastErrorMessage, is
 import { getDisplayName, getInitials } from '../utils/nameHelpers';
 import { getOrCreateDirectConversation, conversationToDirectChat } from '../services/chatClient';
 import { useAuth } from '../contexts/AuthContext';
+import { 
+  getUserCheckIns, 
+  createCheckIn, 
+  updateCheckIn, 
+  deleteCheckIn, 
+  convertCheckInDataToRequest,
+  getCheckInErrorMessage,
+  isCheckInError,
+  type CheckInApiError
+} from '../services/checkinClient';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
+import { convertBackendCheckInToExtended, ExtendedCheckIn } from '../utils/checkinTransformers';
 
 interface ProfileDetailModalProps {
   userId: string;
@@ -73,72 +86,21 @@ const mapUserProfileToUser = (profile: UserProfileResponse, mode: 'own' | 'other
 };
 
 // Extended CheckIn interface for modal use
-interface ExtendedCheckIn extends CheckIn {
-  source?: 'manual' | 'instagram' | 'twitter' | 'other';
-  instagramData?: {
-    username: string;
-    profilePicture: string;
-    likes: number;
-    imageUrl: string;
-    caption: string;
-    hashtags: string[];
-  };
-}
 
-// Mock check-ins data for own profile view
-const generateMockCheckIns = (): ExtendedCheckIn[] => [
-  {
-    id: 'checkin-instagram-1',
-    text: 'Beautiful sunset at the beach today! 🌅 Nothing beats those golden hour vibes',
-    mediaAttachments: [],
-    fileAttachments: [],
-    voiceNote: null,
-    locationAttachment: null,
-    tags: [
-      { id: 'tag-ig-1', label: 'sunset', type: 'manual', color: '#F59E0B' },
-      { id: 'tag-ig-2', label: 'beach', type: 'manual', color: '#3B82F6' }
-    ],
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-    source: 'instagram',
-    instagramData: {
-      username: 'alexthompson',
-      profilePicture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
-      likes: 247,
-      imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop',
-      caption: 'Beautiful sunset at the beach today! 🌅 Nothing beats those golden hour vibes',
-      hashtags: ['#sunset', '#beach', '#goldenhour']
-    }
-  },
-  {
-    id: 'checkin-1',
-    text: 'Just finished an amazing workout session at the gym! Feeling energized and ready to tackle the rest of the day.',
-    mediaAttachments: [],
-    fileAttachments: [],
-    voiceNote: null,
-    locationAttachment: { id: 'loc-1', name: 'FitnessFirst Gym', coordinates: { lat: 37.7749, lng: -122.4194 } },
-    tags: [
-      { id: 'tag-1', label: 'workout', type: 'manual', color: '#10B981' },
-      { id: 'tag-2', label: 'fitness', type: 'ai', color: '#3B82F6' }
-    ],
-    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
-    source: 'manual'
-  },
-  {
-    id: 'checkin-2',
-    text: 'Coffee shop vibes on this cozy Sunday morning ☕️ Perfect spot to catch up on some reading.',
-    mediaAttachments: [],
-    fileAttachments: [],
-    voiceNote: null,
-    locationAttachment: { id: 'loc-2', name: 'Blue Bottle Coffee', coordinates: { lat: 37.7849, lng: -122.4094 } },
-    tags: [
-      { id: 'tag-3', label: 'coffee', type: 'manual', color: '#8B4513' },
-      { id: 'tag-4', label: 'reading', type: 'ai', color: '#9333EA' },
-      { id: 'tag-5', label: 'weekend', type: 'manual', color: '#EF4444' }
-    ],
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-    source: 'manual'
+
+// Privacy helper function
+const getPrivacyDisplay = (privacy?: Privacy) => {
+  switch (privacy) {
+    case 'public':
+      return { icon: Globe, color: 'text-green-600', bgColor: 'bg-green-100', label: 'Public' };
+    case 'friends':
+      return { icon: Users, color: 'text-blue-600', bgColor: 'bg-blue-100', label: 'Friends' };
+    case 'private':
+      return { icon: Lock, color: 'text-gray-600', bgColor: 'bg-gray-100', label: 'Private' };
+    default:
+      return { icon: Globe, color: 'text-green-600', bgColor: 'bg-green-100', label: 'Public' };
   }
-];
+};
 
 // Time formatting utility
 const formatTimeAgo = (timestamp: Date): string => {
@@ -162,6 +124,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   isEditing: _isEditing = false
 }): JSX.Element => {
   const { user: currentUser } = useAuth();
+  const checkInsEnabled = useFeatureFlag('enable_checkins');
   const [user, setUser] = useState<User | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -170,10 +133,18 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const [conversationLookupError, setConversationLookupError] = useState<string | undefined>(undefined);
   const [selectedMontageInterest, setSelectedMontageInterest] = useState<string | undefined>(undefined);
   
-  // Check-ins state (only for own profile view)
+  // Check-ins state
   const [checkIns, setCheckIns] = useState<ExtendedCheckIn[]>([]);
   const [showCheckInModal, setShowCheckInModal] = useState<boolean>(false);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  const [showCheckInDetailModal, setShowCheckInDetailModal] = useState<boolean>(false);
+  const [selectedCheckInId, setSelectedCheckInId] = useState<string | null>(null);
+  const [checkInsLoading, setCheckInsLoading] = useState<boolean>(false);
+  const [checkInsError, setCheckInsError] = useState<string | undefined>(undefined);
+  const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState<boolean>(false);
+  const [editingCheckInId, setEditingCheckInId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>('');
+  const [editingPrivacy, setEditingPrivacy] = useState<Privacy>('public');
   
   // Broadcast state
   const [broadcast, setBroadcast] = useState<PublicBroadcastResponse | null>(null);
@@ -184,54 +155,177 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const [preserveScrollPosition, setPreserveScrollPosition] = useState<number>(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
-  // Initialize check-ins based on mode
+  // Load check-ins from API when component mounts or userId changes
   useEffect(() => {
-    if (mode === 'own') {
-      setCheckIns(generateMockCheckIns());
-    } else {
-      // For 'other' mode, show all check-ins (read-only)
-      setCheckIns(generateMockCheckIns());
-    }
-  }, [mode]);
+    // Create an abort controller for this request
+    const abortController = new AbortController();
+    let isCancelled = false;
+
+    const loadCheckIns = async () => {
+      if (!userId) {
+        if (!isCancelled) {
+          setCheckIns([]);
+        }
+        return;
+      }
+      
+      // Load check-ins for all users - backend will filter based on privacy settings
+      // For own profile: all check-ins
+      // For other users: only public check-ins (filtered by backend)
+      
+      if (!isCancelled) {
+        setCheckInsLoading(true);
+        setCheckInsError(undefined);
+      }
+      
+      try {
+        const checkInsResponse = await getUserCheckIns(
+          mode === 'own' ? undefined : userId, // Pass userId for other users' profiles
+          {
+            page: 1,
+            page_size: 20,
+            privacy: mode === 'own' ? undefined : 'public' // Backend enforces public-only for other users
+          }
+        );
+        
+        if (!isCancelled) {
+          const convertedCheckIns = checkInsResponse.checkins.map(convertBackendCheckInToExtended);
+          setCheckIns(convertedCheckIns);
+        }
+      } catch (error: any) {
+        if (!isCancelled) {
+          const errorMessage = isCheckInError(error) 
+            ? getCheckInErrorMessage(error as unknown as CheckInApiError) 
+            : 'Failed to load check-ins. Please try again.';
+          setCheckInsError(errorMessage);
+          
+          // Don't set check-ins on error - leave empty to show error state
+          setCheckIns([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setCheckInsLoading(false);
+        }
+      }
+    };
+
+    loadCheckIns();
+
+    // Cleanup function to cancel the request if component unmounts or dependencies change
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+    };
+  }, [userId, mode]);
   
   // Check-ins handlers
   const handleEditCheckin = (checkinId: string): void => {
-    console.log('Edit checkin:', checkinId);
-    // TODO: Implement edit functionality
+    const currentCheckIn = checkIns.find(c => c.id === checkinId);
+    if (!currentCheckIn) return;
+    
+    setEditingCheckInId(checkinId);
+    setEditingText(currentCheckIn.text);
+    setEditingPrivacy(currentCheckIn.privacy || 'public');
   };
   
-  const handleShareCheckin = (checkin: CheckIn): void => {
-    console.log('Share checkin:', checkin);
-    // TODO: Implement share functionality
+  const handleSaveEdit = async (): Promise<void> => {
+    if (!editingCheckInId || editingText.trim() === '') return;
+    
+    const originalCheckIn = checkIns.find(c => c.id === editingCheckInId);
+    const originalText = originalCheckIn?.text || '';
+    const originalPrivacy = originalCheckIn?.privacy || 'public';
+    
+    // Check if anything actually changed
+    if (editingText.trim() === originalText && editingPrivacy === originalPrivacy) {
+      handleCancelEdit();
+      return;
+    }
+    
+    try {
+      const updateRequest = {
+        text_content: editingText.trim(),
+        privacy: editingPrivacy
+      };
+      
+      const updatedCheckIn = await updateCheckIn(editingCheckInId, updateRequest);
+      const updatedExtendedCheckIn = convertBackendCheckInToExtended(updatedCheckIn);
+      
+      // Update local state
+      setCheckIns(prev => prev.map(c => 
+        c.id === editingCheckInId ? updatedExtendedCheckIn : c
+      ));
+      
+      handleCancelEdit();
+    } catch (error: any) {
+      setCheckInsError(
+        isCheckInError(error) 
+          ? getCheckInErrorMessage(error as unknown as CheckInApiError) 
+          : 'Failed to update check-in. Please try again.'
+      );
+    }
   };
   
-  const handleDeleteCheckin = (checkinId: string): void => {
-    console.log('Delete checkin:', checkinId);
-    // TODO: Implement delete functionality
+  const handleCancelEdit = (): void => {
+    setEditingCheckInId(null);
+    setEditingText('');
+    setEditingPrivacy('public');
+  };
+  
+  const handleShareCheckin = (_checkin: CheckIn): void => {
+    // TODO: Implement share functionality (could copy link, open share modal, etc.)
+  };
+  
+  const handleDeleteCheckin = async (checkinId: string): Promise<void> => {
+    // Confirm deletion
+    if (!confirm('Are you sure you want to delete this check-in?')) {
+      return;
+    }
+    
+    try {
+      await deleteCheckIn(checkinId);
+      
+      // Remove from local state
+      setCheckIns(prev => prev.filter(c => c.id !== checkinId));
+    } catch (error: any) {
+      setCheckInsError(
+        isCheckInError(error) 
+          ? getCheckInErrorMessage(error as unknown as CheckInApiError) 
+          : 'Failed to delete check-in. Please try again.'
+      );
+    }
   };
   
   // Handle new check-in submission
   const handleNewCheckInSubmit = async (checkInData: any): Promise<void> => {
-    // Create new check-in from the modal data
-    const newCheckIn: ExtendedCheckIn = {
-      id: `checkin-${Date.now()}`,
-      text: checkInData.text,
-      mediaAttachments: checkInData.mediaAttachments,
-      fileAttachments: checkInData.fileAttachments,
-      voiceNote: checkInData.voiceNote,
-      locationAttachment: checkInData.locationAttachment,
-      tags: checkInData.tags,
-      timestamp: new Date(),
-      source: 'manual'
-    };
+    setIsSubmittingCheckIn(true);
     
-    // Add to front of check-ins array
-    setCheckIns(prev => [newCheckIn, ...prev]);
-    
-    // Close modal
-    setShowCheckInModal(false);
-    
-    console.log('New check-in created:', newCheckIn);
+    try {
+      // Convert modal data to API format with user-selected privacy
+      const createRequest = convertCheckInDataToRequest(checkInData, checkInData.privacy);
+      
+      // Create check-in via API
+      const createdCheckIn = await createCheckIn(createRequest);
+      
+      // Convert back to frontend format
+      const newExtendedCheckIn = convertBackendCheckInToExtended(createdCheckIn);
+      
+      // Add to front of check-ins array
+      setCheckIns(prev => [newExtendedCheckIn, ...prev]);
+      
+      // Close modal
+      setShowCheckInModal(false);
+      
+    } catch (error: any) {
+      setCheckInsError(
+        isCheckInError(error) 
+          ? getCheckInErrorMessage(error as unknown as CheckInApiError) 
+          : 'Failed to create check-in. Please try again.'
+      );
+      
+      // Don't close modal on error - let user retry
+    } finally {
+      setIsSubmittingCheckIn(false);
+    }
   };
   
   // Use the friendship hook to get real friendship status
@@ -384,8 +478,13 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
   // Handle montage item click - open existing check-in detail modal
   const handleMontageItemClick = (checkinId: string): void => {
-    // TODO: Implement check-in detail modal opening
-    console.log('Opening check-in detail for:', checkinId);
+    setSelectedCheckInId(checkinId);
+    setShowCheckInDetailModal(true);
+  };
+  
+  const handleCloseCheckInDetailModal = () => {
+    setShowCheckInDetailModal(false);
+    setSelectedCheckInId(null);
   };
 
   // Get top 5 interests for montage toggle pills
@@ -699,6 +798,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
               )}
 
               {/* Check-ins Section (read-only for others, editable for own) */}
+              {checkInsEnabled && (mode === 'own' || (profileResponse && shouldShowContent(profileResponse, 'checkins', mode))) && (
               <div className="px-4 mb-4">
                   {/* Check-ins divider */}
                   <div className="mb-3 border-t border-gray-300/30 w-16 mx-auto"></div>
@@ -726,17 +826,42 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                     )}
                   </div>
 
-                  {/* Check-ins Horizontal Carousel */}
-                  {checkIns.length === 0 ? (
+                  {/* Check-ins Loading State */}
+                  {checkInsLoading ? (
                     <div className="text-center py-6">
-                      <p className="text-text-secondary text-sm mb-2">No check-ins yet</p>
+                      <div className="animate-spin rounded-full h-8 w-8 border border-aqua border-t-transparent mx-auto mb-2" />
+                      <p className="text-text-secondary text-sm">Loading check-ins...</p>
+                    </div>
+                  ) : checkInsError && checkIns.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-red-500 text-sm mb-2">Failed to load check-ins</p>
+                      <p className="text-text-secondary text-xs mb-3">{checkInsError}</p>
                       <button
-                        onClick={() => setShowCheckInModal(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                        onClick={() => window.location.reload()}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full text-sm font-medium transition-colors"
                       >
-                        <Plus size={16} />
-                        Share your first thought
+                        Try Again
                       </button>
+                    </div>
+                  ) : checkIns.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-text-secondary text-sm mb-2">
+                        {mode === 'own' 
+                          ? 'No check-ins yet' 
+                          : profileResponse && shouldShowContent(profileResponse, 'checkins', mode)
+                            ? 'No public check-ins yet'
+                            : 'Check-ins are private'
+                        }
+                      </p>
+                      {mode === 'own' && (
+                        <button
+                          onClick={() => setShowCheckInModal(true)}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-aqua hover:bg-aqua-dark text-white rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
+                        >
+                          <Plus size={16} />
+                          Share your first thought
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="relative">
@@ -852,6 +977,17 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                                   <div className="flex items-center gap-2">
                                     <Clock size={11} className="text-gray-500" />
                                     <span className="text-xs text-gray-500">{formatTimeAgo(checkin.timestamp)}</span>
+                                    {/* Privacy Badge */}
+                                    {(() => {
+                                      const privacyDisplay = getPrivacyDisplay(checkin.privacy);
+                                      const PrivacyIcon = privacyDisplay.icon;
+                                      return (
+                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs ${privacyDisplay.bgColor} ${privacyDisplay.color}`}>
+                                          <PrivacyIcon size={10} />
+                                          {privacyDisplay.label}
+                                        </span>
+                                      );
+                                    })()}
                                   </div>
                                   
                                   {mode === 'own' && (
@@ -882,9 +1018,73 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                                 </div>
                                 
                                 {/* Check-in Content */}
-                                <p className="text-sm text-gray-700 mb-2 leading-relaxed">
-                                  {checkin.text}
-                                </p>
+                                {editingCheckInId === checkin.id ? (
+                                  <div className="mb-2">
+                                    <textarea
+                                      value={editingText}
+                                      onChange={(e) => setEditingText(e.target.value)}
+                                      className="w-full text-sm text-gray-700 leading-relaxed border border-gray-300 rounded px-2 py-1 resize-none"
+                                      rows={2}
+                                      maxLength={280}
+                                      autoFocus
+                                    />
+                                    {/* Privacy selector for editing */}
+                                    <div className="flex gap-1 mt-2 mb-1">
+                                      <button
+                                        onClick={() => setEditingPrivacy('public')}
+                                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                                          editingPrivacy === 'public'
+                                            ? 'bg-green-100 text-green-700 border border-green-300'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                      >
+                                        <Globe size={10} />
+                                        Public
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingPrivacy('friends')}
+                                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                                          editingPrivacy === 'friends'
+                                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                      >
+                                        <Users size={10} />
+                                        Friends
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingPrivacy('private')}
+                                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                                          editingPrivacy === 'private'
+                                            ? 'bg-gray-100 text-gray-700 border border-gray-400'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                      >
+                                        <Lock size={10} />
+                                        Private
+                                      </button>
+                                    </div>
+                                    <div className="flex justify-end gap-1 mt-1">
+                                      <button
+                                        onClick={handleCancelEdit}
+                                        className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        onClick={handleSaveEdit}
+                                        className="px-2 py-1 text-xs bg-aqua hover:bg-aqua-dark text-white rounded transition-colors"
+                                        disabled={editingText.trim() === ''}
+                                      >
+                                        Save
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-700 mb-2 leading-relaxed">
+                                    {checkin.text}
+                                  </p>
+                                )}
                                 
                                 {/* Location */}
                                 {checkin.locationAttachment && (
@@ -933,6 +1133,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                     </div>
                   )}
                 </div>
+              )}
 
               {/* Montage Section - Show for both own and other modes */}
               <div className="px-4 mb-4">
@@ -1058,8 +1259,16 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           isOpen={showCheckInModal}
           onClose={() => setShowCheckInModal(false)}
           onSubmit={handleNewCheckInSubmit}
+          isSubmitting={isSubmittingCheckIn}
         />
       )}
+      
+      {/* Check-In Detail Modal */}
+      <CheckInDetailModal
+        isOpen={showCheckInDetailModal}
+        onClose={handleCloseCheckInDetailModal}
+        checkInId={selectedCheckInId}
+      />
       
       {/* Help Modal */}
       {showHelpModal && (

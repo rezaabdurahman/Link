@@ -13,9 +13,8 @@ Contains core app configuration including:
 - **Feature Descriptions**: Brief descriptions of main features
 
 ### `featureFlags.ts`
-Contains feature toggle configuration for development and gradual rollouts:
+Contains legacy feature toggle configuration (being migrated to dynamic system):
 - `CONVERSATION_CUE_CARDS`: Enable/disable conversation cue cards
-- `INTELLIGENT_MESSAGE_BOX`: Enable/disable intelligent message search
 
 ### `index.ts`
 Barrel export file for easy importing of configuration values.

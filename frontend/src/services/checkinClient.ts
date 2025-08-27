@@ -24,6 +24,16 @@ const CHECKIN_ENDPOINTS = {
 
 export type Privacy = 'public' | 'friends' | 'private';
 export type MediaType = 'image' | 'video';
+export type Source = 'manual' | 'instagram' | 'twitter' | 'facebook' | 'other';
+
+export interface CheckInSourceData {
+  post_id?: string;
+  username?: string;
+  profile_picture?: string;
+  likes_count?: number;
+  caption?: string;
+  hashtags?: string[];
+}
 
 export interface MediaAttachment {
   id: string;
@@ -70,6 +80,10 @@ export interface CheckIn {
   user_id: string;
   text_content?: string;
   privacy: Privacy;
+  source?: Source;
+  source_metadata?: { [key: string]: any };
+  source_post_id?: string;
+  source_username?: string;
   media_attachments: MediaAttachment[];
   location?: LocationAttachment;
   tags: TagAttachment[];
@@ -84,6 +98,8 @@ export interface CheckIn {
 export interface CreateCheckInRequest {
   text_content?: string;
   privacy: Privacy;
+  source?: Source;
+  source_data?: CheckInSourceData;
   media_attachments?: CreateMediaAttachment[];
   location?: CreateLocationAttachment;
   tags?: string[];
@@ -250,15 +266,20 @@ export async function getCheckIn(checkInId: string): Promise<CheckIn> {
 
 /**
  * Get user's check-ins with filtering and pagination
+ * @param userId - Optional user ID to get another user's check-ins (defaults to authenticated user)
  * @param filter - Filter options for querying check-ins
  * @returns Promise resolving to paginated check-ins list
  * @throws AuthServiceError with detailed error information
  */
-export async function getUserCheckIns(filter?: CheckInFilter): Promise<CheckInListResponse> {
+export async function getUserCheckIns(userId?: string, filter?: CheckInFilter): Promise<CheckInListResponse> {
   try {
     // Build query parameters
     const params = new URLSearchParams();
     
+    // Add user_id parameter if specified (for getting another user's check-ins)
+    if (userId) {
+      params.append('user_id', userId);
+    }
     if (filter?.page) {
       params.append('page', filter.page.toString());
     }

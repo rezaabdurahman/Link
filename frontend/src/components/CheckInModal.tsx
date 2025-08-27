@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, MapPin, Hash, Mic, Paperclip, X, Upload } from 'lucide-react';
+import { Camera, MapPin, Hash, Mic, Paperclip, X, Upload, Globe, Users, Lock } from 'lucide-react';
 import { 
   uploadMedia, 
   uploadFile, 
@@ -57,6 +57,7 @@ interface CheckInData {
   voiceNote: VoiceNote | null;
   locationAttachment: LocationAttachment | null;
   tags: Tag[];
+  privacy: 'public' | 'friends' | 'private';
 }
 
 interface CheckInModalProps {
@@ -96,6 +97,9 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
   const [tagInput, setTagInput] = useState<string>('');
   const [showTagSuggestions, setShowTagSuggestions] = useState<boolean>(false);
   
+  // Privacy state
+  const [privacy, setPrivacy] = useState<'public' | 'friends' | 'private'>('public');
+  
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -119,6 +123,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     setShowTagSuggestions(false);
     setIsRecording(false);
     setRecordingDuration(0);
+    setPrivacy('public');
     
     // Clear upload state
     setIsUploading(false);
@@ -352,6 +357,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
       voiceNote,
       locationAttachment,
       tags: manualTags,
+      privacy,
     };
     
     try {
@@ -676,6 +682,53 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
                       ))}
                     </motion.div>
                   )}
+                </div>
+              </div>
+
+              {/* Privacy Selector */}
+              <div className="mb-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Who can see this?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPrivacy('public')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      privacy === 'public'
+                        ? 'bg-green-100 text-green-700 border-2 border-green-300'
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    }`}
+                  >
+                    <Globe size={16} />
+                    Public
+                  </button>
+                  <button
+                    onClick={() => setPrivacy('friends')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      privacy === 'friends'
+                        ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    }`}
+                  >
+                    <Users size={16} />
+                    Friends
+                  </button>
+                  <button
+                    onClick={() => setPrivacy('private')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      privacy === 'private'
+                        ? 'bg-gray-100 text-gray-700 border-2 border-gray-400'
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    }`}
+                  >
+                    <Lock size={16} />
+                    Private
+                  </button>
+                </div>
+                <div className="mt-1">
+                  <p className="text-xs text-gray-500">
+                    {privacy === 'public' && 'Visible to everyone'}
+                    {privacy === 'friends' && 'Visible to friends only'}
+                    {privacy === 'private' && 'Visible to you only'}
+                  </p>
                 </div>
               </div>
 

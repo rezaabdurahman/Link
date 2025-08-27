@@ -10,6 +10,7 @@ import { handlers as auth } from './auth';
 import { handlers as availability } from './availability';
 import { handlers as broadcast } from './broadcast';
 import { handlers as chat } from './chat';
+import { handlers as checkin } from './checkin';
 import { cueHandlers as cues } from './cues';
 import { featureHandlers as features } from './features';
 import { handlers as friends } from './friends';
@@ -27,6 +28,7 @@ export const handlers = [
   ...availability,
   ...broadcast,
   ...chat,
+  ...checkin,
   ...cues,
   ...features,
   ...friends,
@@ -45,6 +47,7 @@ export {
   availability as availabilityHandlers,
   broadcast as broadcastHandlers,
   chat as chatHandlers,
+  checkin as checkinHandlers,
   cues as cueHandlers,
   features as featureHandlers,
   friends as friendsHandlers,

@@ -76,6 +76,7 @@ export const startMockWorker = async () => {
         'Onboarding': '/onboarding/status, /onboarding/start, /onboarding/step',
         'Availability': '/availability',
         'Broadcasts': '/broadcasts',
+        'Check-ins': '/checkins (GET, POST, PUT, DELETE)',
         'Montage': '/users/:id/montage',
         'Search': '/search'
       });

@@ -224,7 +224,7 @@ const isDarkModeEnabled = useFeatureFlag('dark_mode');
 12. **Code Organization**: Clear separation of concerns. Dedicated directories for source, tests, docs, config
 13. **Dependency Management**: Use exact versions in production. Regular security audits and updates
 14. **Conventional Commits**: Use conventional commit format (feat:, fix:, docs:, etc.)
-15. **Documentation**: Keep docs current. Use the new `docs/` structure for all documentation
+15. **Documentation**: Keep docs current. Use `docs/` structure for all documentation
 
 ### 🛡️ **Security & Operations**
 16. **mTLS Required**: All service-to-service communication via Linkerd service mesh
@@ -268,7 +268,7 @@ const isDarkModeEnabled = useFeatureFlag('dark_mode');
 6. **Scaling**: Auto-scaling policies, load testing
 
 ## Notes for Claude
-- **Documentation**: Use the new `docs/` structure. All major topics are covered including `docs/FEATURE_FLAGS_SETUP_GUIDE.md`
+- **Documentation**: Use the `docs/` structure. All major topics are covered including `docs/FEATURE_FLAGS_SETUP_GUIDE.md`
 - **Development**: Use `./scripts/dev-workflow.sh` for local development
 - **Feature Flags**: Use `./scripts/feature-admin.sh` for CLI-based flag management (security-first approach)
 - **Deployment**: Use ArgoCD for production deployments

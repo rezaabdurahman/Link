@@ -1,39 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-import { visualizer } from 'rollup-plugin-visualizer'
-import viteCompression from 'vite-plugin-compression'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [
     react({
-      // Fast Refresh is enabled by default in development
+      // Enable React Fast Refresh in development
+      fastRefresh: mode === 'development',
       // Include JSX runtime optimizations
       jsxRuntime: 'automatic'
-    }),
-    // Bundle analyzer - only in analyze mode
-    ...(process.env.ANALYZE === 'true' ? [
-      visualizer({
-        filename: 'dist/stats.html',
-        open: true,
-        gzipSize: true,
-        brotliSize: true
-      })
-    ] : []),
-    // Compression plugins for production
-    ...(mode === 'production' ? [
-      // Gzip compression
-      viteCompression({
-        algorithm: 'gzip',
-        ext: '.gz'
-      }),
-      // Brotli compression
-      viteCompression({
-        algorithm: 'brotliCompress',
-        ext: '.br'
-      })
-    ] : [])
+    })
   ],
   resolve: {
     alias: {
@@ -61,7 +38,7 @@ export default defineConfig(({ mode }) => ({
     
     // Production performance optimizations
     cssMinify: mode === 'production',
-    assetsInlineLimit: 2048, // Inline assets smaller than 2kb (reduced from 4kb)
+    assetsInlineLimit: 4096, // Inline assets smaller than 4kb
     cssCodeSplit: true, // Split CSS into separate files for better caching
     
     // Chunk splitting strategy for better caching
@@ -124,8 +101,8 @@ export default defineConfig(({ mode }) => ({
       minify: true,
     }),
     
-    // Warn on large chunks - reduced for better performance
-    chunkSizeWarningLimit: 500
+    // Warn on large chunks
+    chunkSizeWarningLimit: 1000
   },
   
   // Define global variables for better tree shaking

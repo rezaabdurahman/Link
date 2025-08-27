@@ -34,6 +34,18 @@ export interface Tag {
   color?: string;
 }
 
+export type Privacy = 'public' | 'friends' | 'private';
+export type CheckInSource = 'manual' | 'instagram' | 'twitter' | 'facebook' | 'other';
+
+export interface CheckInSourceData {
+  post_id?: string;
+  username?: string;
+  profile_picture?: string;
+  likes_count?: number;
+  caption?: string;
+  hashtags?: string[];
+}
+
 export interface CheckIn {
   id: string;
   text: string;
@@ -42,6 +54,9 @@ export interface CheckIn {
   voiceNote: VoiceNote | null;
   locationAttachment: LocationAttachment | null;
   tags: Tag[];
+  privacy?: Privacy;
+  source?: CheckInSource;
+  source_metadata?: CheckInSourceData;
   aiSuggestionsPending?: boolean;
   aiSuggestions?: Tag[];
   timestamp: Date;

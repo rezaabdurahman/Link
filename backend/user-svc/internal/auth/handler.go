@@ -3,11 +3,28 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/link-app/user-svc/internal/middleware"
 )
+
+// Cookie configuration constants
+const (
+	AccessTokenCookieName  = "link_access_token"
+	RefreshTokenCookieName = "link_refresh_token"
+	RefreshTokenCookiePath = "/auth"
+	CookieMaxAge           = 30 * 24 * 60 * 60 // 30 days in seconds
+)
+
+// getEnv gets an environment variable with a default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
 type AuthHandler struct {
 	authService AuthService
@@ -32,10 +49,15 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	response, err := h.authService.RegisterUser(req)
+	response, tokenPair, err := h.authService.RegisterUser(req)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return
+	}
+
+	// Set secure cookies for both access and refresh tokens
+	if tokenPair != nil {
+		h.setTokenCookies(c, tokenPair)
 	}
 
 	c.JSON(http.StatusCreated, response)
@@ -53,34 +75,40 @@ func (h *AuthHandler) LoginUser(c *gin.Context) {
 		return
 	}
 
-	response, session, err := h.authService.LoginUser(req)
+	// Extract IP address and user agent for security tracking
+	req.IPAddress = c.ClientIP()
+	req.DeviceInfo = c.GetHeader("User-Agent")
+
+	response, tokenPair, err := h.authService.LoginUser(req)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return
 	}
 
-	// Set secure cookie (if session is created)
-	if session != nil {
-		c.SetCookie(
-			"link_auth_session",
-			session.Token,
-			int(time.Until(session.ExpiresAt).Seconds()),
-			"/",
-			"",
-			false, // Set to true in production with HTTPS
-			true,  // HttpOnly
-		)
+	// Set secure cookies for both access and refresh tokens
+	if tokenPair != nil {
+		h.setTokenCookies(c, tokenPair)
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-// RefreshToken handles token refresh
+// RefreshToken handles token refresh with rotation
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	// Try to get refresh token from multiple sources
 	refreshToken := c.GetHeader("X-Refresh-Token")
 	if refreshToken == "" {
 		// Try cookie
 		refreshToken, _ = c.Cookie("link_refresh_token")
+	}
+	if refreshToken == "" {
+		// Try from JSON body
+		var reqBody struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := c.ShouldBindJSON(&reqBody); err == nil && reqBody.RefreshToken != "" {
+			refreshToken = reqBody.RefreshToken
+		}
 	}
 
 	if refreshToken == "" {
@@ -92,11 +120,26 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	response, err := h.authService.RefreshToken(refreshToken)
+	// Create refresh request with security context
+	req := RefreshTokenRequest{
+		RefreshToken: refreshToken,
+		IPAddress:    c.ClientIP(),
+		DeviceInfo:   c.GetHeader("User-Agent"),
+	}
+
+	response, err := h.authService.RefreshTokens(req)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return
 	}
+
+	// Set new token cookies (both access and refresh tokens are rotated)
+	tokenPair := &TokenPair{
+		AccessToken:  response.AccessToken,
+		RefreshToken: response.RefreshToken,
+		ExpiresAt:    response.ExpiresAt,
+	}
+	h.setTokenCookies(c, tokenPair)
 
 	c.JSON(http.StatusOK, response)
 }
@@ -134,6 +177,35 @@ func (h *AuthHandler) LogoutUser(c *gin.Context) {
 	})
 }
 
+// setTokenCookies sets secure HTTP-only cookies for access and refresh tokens
+func (h *AuthHandler) setTokenCookies(c *gin.Context, tokenPair *TokenPair) {
+	// Determine if we're in production for secure cookie settings
+	environment := getEnv("ENVIRONMENT", "development")
+	isSecure := environment == "production" || c.GetHeader("X-Forwarded-Proto") == "https"
+	
+	// Set access token cookie (shorter-lived, HttpOnly)
+	c.SetCookie(
+		AccessTokenCookieName,
+		tokenPair.AccessToken,
+		int(time.Until(tokenPair.ExpiresAt).Seconds()), // 1 hour
+		"/",
+		"", // domain - let browser determine
+		isSecure, // secure in production
+		true, // httpOnly
+	)
+	
+	// Set refresh token cookie (longer-lived, HttpOnly, more restrictive path)
+	c.SetCookie(
+		RefreshTokenCookieName,
+		tokenPair.RefreshToken,
+		CookieMaxAge, // 30 days
+		RefreshTokenCookiePath, // limited path
+		"", // domain - let browser determine
+		isSecure, // secure in production
+		true, // httpOnly
+	)
+}
+
 // handleServiceError maps service errors to HTTP responses
 func (h *AuthHandler) handleServiceError(c *gin.Context, err error) {
 	switch {
@@ -166,6 +238,30 @@ func (h *AuthHandler) handleServiceError(c *gin.Context, err error) {
 			"error":   "AUTHENTICATION_ERROR",
 			"message": "Invalid or expired token",
 			"code":    "INVALID_TOKEN",
+		})
+	case errors.Is(err, ErrRefreshTokenExpired):
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "Refresh token expired",
+			"code":    "REFRESH_TOKEN_EXPIRED",
+		})
+	case errors.Is(err, ErrRefreshTokenRevoked):
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "Refresh token revoked",
+			"code":    "REFRESH_TOKEN_REVOKED",
+		})
+	case errors.Is(err, ErrRefreshTokenReused):
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "AUTHENTICATION_ERROR",
+			"message": "Security violation detected",
+			"code":    "REFRESH_TOKEN_REUSED",
+		})
+	case errors.Is(err, ErrTooManyTokens):
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":   "RATE_LIMIT_ERROR",
+			"message": "Too many active sessions",
+			"code":    "TOO_MANY_TOKENS",
 		})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{
