@@ -1,18 +1,21 @@
 go 1.23.8
 
 use (
-	./ai-svc
 	./api-gateway
 	./chat-svc
 	./discovery-svc
 	./feature-svc
+	./priority-svc
 	./proto/ai
 	./proto/chat
 	./proto/common
 	./proto/discovery
 	./proto/search
+	./proto/subscription
 	./proto/user
 	./search-svc
 	./shared-libs
+	./subscription-svc
+	./summarygen-svc
 	./user-svc
 )

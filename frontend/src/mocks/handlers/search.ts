@@ -19,16 +19,7 @@ export const handlers = [
         filteredUsers = filteredUsers.filter(user => user.isAvailable);
       }
       
-      // Apply interest filter
-      if (searchRequest.filters?.interests && searchRequest.filters.interests.length > 0) {
-        filteredUsers = filteredUsers.filter(user => 
-          user.interests.some(interest => 
-            searchRequest.filters!.interests!.some(filterInterest => 
-              interest.toLowerCase().includes(filterInterest.toLowerCase())
-            )
-          )
-        );
-      }
+      // Note: interests filtering removed - semantic search handles this via query text
       
       // Apply text query filter (search in name, bio, interests)
       if (searchRequest.query && searchRequest.query.trim()) {
@@ -88,16 +79,7 @@ export const handlers = [
         filteredUsers = filteredUsers.filter(user => user.isAvailable);
       }
       
-      // Apply interest filter
-      if (searchRequest.filters?.interests && searchRequest.filters.interests.length > 0) {
-        filteredUsers = filteredUsers.filter(user => 
-          user.interests.some(interest => 
-            searchRequest.filters!.interests!.some(filterInterest => 
-              interest.toLowerCase().includes(filterInterest.toLowerCase())
-            )
-          )
-        );
-      }
+      // Note: interests filtering removed - semantic search handles this via query text
       
       // Apply text query filter (search in name, bio, interests)
       if (searchRequest.query && searchRequest.query.trim()) {

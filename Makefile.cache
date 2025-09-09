@@ -49,7 +49,7 @@ dev-frontend-cached: ## Start frontend development with caching
 
 build-optimize: ## Build all services with optimization flags
 	@echo "$(GREEN)Building all services with optimization...$(NC)"
-	@for service in user-svc chat-svc ai-svc discovery-svc search-svc api-gateway; do \
+	@for service in user-svc chat-svc summarygen-svc discovery-svc search-svc api-gateway; do \
 		echo "$(YELLOW)Building $$service...$(NC)"; \
 		docker build \
 			--build-arg BUILDKIT_INLINE_CACHE=1 \

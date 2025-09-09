@@ -2,7 +2,6 @@ package migrations
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -97,13 +96,13 @@ func (e *ZeroDowntimeEngine) SafeUp(ctx context.Context) error {
 	}
 
 	if len(pending) == 0 {
-		e.logger.Info("No pending migrations")
+		e.logger.Println("No pending migrations")
 		return nil
 	}
 
 	// Process each migration with zero-downtime strategies
 	for _, migration := range pending {
-		if err := e.safeMigration(ctx, migration); err != nil {
+		if err := e.safeMigration(ctx, &migration); err != nil {
 			return fmt.Errorf("failed to safely apply migration %s: %w", migration.Name, err)
 		}
 	}
@@ -118,10 +117,7 @@ func (e *ZeroDowntimeEngine) SafeUp(ctx context.Context) error {
 
 // safeMigration applies a single migration using zero-downtime strategies
 func (e *ZeroDowntimeEngine) safeMigration(ctx context.Context, migration *Migration) error {
-	e.logger.WithFields(map[string]interface{}{
-		"migration": migration.Name,
-		"version":   migration.Version,
-	}).Info("Starting zero-downtime migration")
+	e.logger.Printf("Starting zero-downtime migration: %s (version: %s)", migration.Name, migration.Version)
 
 	// Analyze migration content for zero-downtime compatibility
 	strategy, err := e.analyzeMigrationStrategy(migration)
@@ -326,11 +322,7 @@ func (e *ZeroDowntimeEngine) configureConnectionPool() error {
 // runHealthChecks executes health checks
 func (e *ZeroDowntimeEngine) runHealthChecks(ctx context.Context, checks []HealthCheck, phase string) error {
 	for i, check := range checks {
-		e.logger.WithFields(map[string]interface{}{
-			"phase": phase,
-			"check": i + 1,
-			"total": len(checks),
-		}).Info("Running health check")
+		e.logger.Printf("Running health check %d/%d for phase: %s", i+1, len(checks), phase)
 
 		if err := check(ctx, e.db); err != nil {
 			return fmt.Errorf("health check %d failed: %w", i+1, err)

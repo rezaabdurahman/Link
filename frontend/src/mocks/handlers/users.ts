@@ -341,4 +341,125 @@ export const handlers = [
   http.post(buildApiUrl(API_ENDPOINTS.AUTH.logout), () => {
     return createSuccessResponse({ message: 'Logout successful' });
   }),
+
+  // PUT /users/profile - Update user profile
+  http.put(buildApiUrl(API_ENDPOINTS.USERS.updateProfile), async ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    try {
+      const updates = await request.json() as any;
+      console.log('🔄 MSW: Profile update request for user:', userId, 'with data:', updates);
+      
+      // Get current profile from mock database or create if not exists
+      let currentProfile = mockUserProfiles.get(userId);
+      
+      if (!currentProfile) {
+        // If this is user ID '1', use the current user data
+        if (userId === '1') {
+          currentProfile = {
+            id: currentUser.id,
+            email: 'alex@example.com',
+            username: 'alexthompson',
+            first_name: currentUser.first_name,
+            last_name: currentUser.last_name,
+            bio: currentUser.bio,
+            profile_picture: currentUser.profilePicture,
+            location: currentUser.location ? `${currentUser.location.proximityMiles} miles away` : null,
+            date_of_birth: currentUser.age ? new Date(Date.now() - currentUser.age * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined,
+            email_verified: true,
+            created_at: now(),
+            updated_at: now(),
+            age: currentUser.age,
+            interests: currentUser.interests || [],
+            social_links: [
+              {
+                platform: 'instagram',
+                url: 'https://instagram.com/alexthompson',
+                username: 'alexthompson'
+              }
+            ],
+            additional_photos: [],
+            privacy_settings: {
+              show_name: true,
+              show_age: true,
+              show_location: true,
+              show_social_media: true,
+              show_montages: true,
+              show_checkins: true,
+              show_mutual_friends: true,
+            },
+            mutual_friends: currentUser.mutualFriends?.length || 0,
+            last_login_at: now(),
+            profile_visibility: 'public',
+          };
+        } else {
+          // Create default profile for other users
+          currentProfile = {
+            id: userId,
+            email: `user${userId}@example.com`,
+            username: `user${userId}`,
+            first_name: 'User',
+            last_name: userId,
+            bio: 'Hello, I\'m using Link!',
+            profile_picture: null,
+            location: null,
+            email_verified: true,
+            created_at: now(),
+            updated_at: now(),
+            age: 25,
+            interests: ['technology'],
+            social_links: [],
+            additional_photos: [],
+            privacy_settings: {
+              show_name: true,
+              show_age: true,
+              show_location: true,
+              show_social_media: true,
+              show_montages: true,
+              show_checkins: true,
+              show_mutual_friends: true,
+            },
+            mutual_friends: 0,
+            last_login_at: now(),
+            profile_visibility: 'public',
+          };
+        }
+      }
+
+      // Apply updates to the profile
+      const updatedProfile = {
+        ...currentProfile,
+        ...updates,
+        updated_at: now(), // Always update the timestamp
+      };
+
+      // Store the updated profile
+      mockUserProfiles.set(userId, updatedProfile);
+      
+      console.log('✅ MSW: Profile updated successfully for user:', userId);
+      console.log('✅ MSW: Updated bio:', updatedProfile.bio);
+      
+      return createSuccessResponse(updatedProfile);
+      
+    } catch (error) {
+      console.error('❌ MSW: Profile update error:', error);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: 'UPDATE_ERROR',
+            message: 'Failed to update profile',
+          },
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+  }),
 ];

@@ -30,6 +30,15 @@ service AIService {
   // Generate conversation insights
   rpc GenerateInsights(GenerateInsightsRequest) returns (GenerateInsightsResponse);
   
+  // Generate conversational cue cards
+  rpc GenerateCueCards(GenerateCueCardsRequest) returns (GenerateCueCardsResponse);
+  
+  // Generate message from selected cue card with tonality adjustment
+  rpc GenerateMessageFromCue(GenerateMessageFromCueRequest) returns (GenerateMessageFromCueResponse);
+  
+  // Analyze user tonality patterns
+  rpc AnalyzeTonality(AnalyzeTonalityRequest) returns (AnalyzeTonalityResponse);
+  
   // Health check
   rpc Health(common.HealthCheckRequest) returns (common.HealthCheckResponse);
 }
@@ -217,4 +226,117 @@ message Insight {
   float confidence_score = 5;
   repeated string supporting_evidence = 6;
   google.protobuf.Timestamp generated_at = 7;
+}
+
+// Cue card generation modes
+enum CueCardGenerationMode {
+  CONTEXTUAL = 0;      // Based on current conversation
+  COLD_START = 1;      // New conversation with no history
+  RE_ENGAGEMENT = 2;   // Reviving stale conversation
+}
+
+// Tonality analysis scope
+enum TonalityScope {
+  CONVERSATION_SPECIFIC = 0; // This conversation only
+  USER_GENERAL = 1;          // Across all conversations
+  MUTUAL_ADAPTATION = 2;     // Between two specific users
+}
+
+// User context for cue card generation
+message UserContext {
+  repeated string interests = 1;
+  string communication_style = 2;
+  map<string, float> topic_preferences = 3;
+  TonalityProfile tonality_profile = 4;
+}
+
+// User tonality profile
+message TonalityProfile {
+  float formality_score = 1;     // 0.0 (casual) to 1.0 (formal)
+  float enthusiasm_score = 2;    // 0.0 (reserved) to 1.0 (enthusiastic)
+  float brevity_score = 3;       // 0.0 (verbose) to 1.0 (concise)
+  repeated string common_phrases = 4;
+  map<string, float> emoji_usage = 5; // emoji -> frequency
+}
+
+// Individual cue card
+message CueCard {
+  string id = 1;
+  string prompt_text = 2;        // Short text shown on card
+  string category = 3;           // question, activity, follow-up, interest, plans
+  float relevance_score = 4;
+  CueCardMetadata metadata = 5;
+}
+
+// Cue card metadata
+message CueCardMetadata {
+  string reasoning = 1;          // Why this suggestion was made
+  repeated string context_signals = 2; // What influenced this suggestion
+  string tone_adjustment = 3;    // How tone will be adjusted
+}
+
+// Tonality adjustments applied to messages
+message TonalityAdjustments {
+  string original_tone = 1;
+  string adjusted_tone = 2;
+  repeated string modifications = 3; // e.g., "added emoji", "made more casual"
+}
+
+// Tonality insight
+message TonalityInsight {
+  string type = 1;               // e.g., "greeting_style", "question_pattern"
+  string observation = 2;
+  float confidence = 3;
+}
+
+// === REQUEST/RESPONSE MESSAGES ===
+
+// Cue card generation request
+message GenerateCueCardsRequest {
+  common.UUID conversation_id = 1;
+  common.UUID requesting_user_id = 2;
+  repeated AIMessage recent_messages = 3; // Last 10-20 messages
+  UserContext user_context = 4;
+  int32 card_count = 5;                   // Default 3
+  CueCardGenerationMode mode = 6;
+}
+
+// Cue card generation response
+message GenerateCueCardsResponse {
+  repeated CueCard cue_cards = 1;
+  TonalityProfile tonality_analysis = 2;
+  common.SuccessResponse result = 3;
+}
+
+// Message generation from cue card request
+message GenerateMessageFromCueRequest {
+  common.UUID conversation_id = 1;
+  common.UUID requesting_user_id = 2;
+  CueCard selected_card = 3;
+  TonalityProfile user_tonality = 4;
+  TonalityProfile conversation_tonality = 5;
+  bool apply_tonality_adjustment = 6;
+}
+
+// Message generation from cue card response
+message GenerateMessageFromCueResponse {
+  string message = 1;
+  TonalityAdjustments adjustments_applied = 2;
+  float confidence_score = 3;
+  common.SuccessResponse result = 4;
+}
+
+// Tonality analysis request
+message AnalyzeTonalityRequest {
+  common.UUID user_id = 1;
+  repeated AIMessage messages = 2;
+  TonalityScope scope = 3;
+}
+
+// Tonality analysis response
+message AnalyzeTonalityResponse {
+  TonalityProfile profile = 1;
+  map<string, float> pattern_confidence = 2;
+  repeated TonalityInsight insights = 3;
+  common.SuccessResponse result = 4;
 }

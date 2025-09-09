@@ -10,6 +10,8 @@ import (
 
 // UserRepository interface defines user data operations
 type UserRepository interface {
+	// Database access
+	DB() *gorm.DB
 	// Database transaction operations
 	BeginTx() *gorm.DB
 	
@@ -37,6 +39,13 @@ type UserRepository interface {
 	DeleteFriendship(userID1, userID2 uuid.UUID) error
 	GetMutualFriendsCount(userID1, userID2 uuid.UUID) (int64, error)
 
+	// Close friends operations  
+	GetCloseFriends(userID uuid.UUID) ([]models.PublicUser, error)
+	AddCloseFriend(userID, friendID uuid.UUID) error
+	RemoveCloseFriend(userID, friendID uuid.UUID) error
+	IsCloseFriend(userID, friendID uuid.UUID) (bool, error)
+	UpdateCloseFriends(userID uuid.UUID, friendIDs []uuid.UUID) error
+
 	// Session operations
 	CreateSession(session *models.Session) error
 	GetSessionByToken(token string) (*models.Session, error)
@@ -57,6 +66,11 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 	return &userRepository{
 		db: db,
 	}
+}
+
+// DB returns the underlying database instance
+func (r *userRepository) DB() *gorm.DB {
+	return r.db
 }
 
 // BeginTx starts a new database transaction
@@ -282,6 +296,98 @@ func (r *userRepository) GetMutualFriendsCount(userID1, userID2 uuid.UUID) (int6
 	
 	err := r.db.Raw(query, userID1, userID1, userID1, userID2, userID2, userID2).Scan(&count).Error
 	return count, err
+}
+
+// GetCloseFriends retrieves a user's close friends list with profile information
+func (r *userRepository) GetCloseFriends(userID uuid.UUID) ([]models.PublicUser, error) {
+	var closeFriends []models.PublicUser
+	
+	// Query close friends with user profile information
+	query := `
+		SELECT DISTINCT u.id, u.username, u.first_name, u.last_name, u.profile_picture, 
+		       u.bio, u.location, u.created_at, u.last_login_at
+		FROM users u
+		INNER JOIN close_friends cf ON cf.friend_id = u.id
+		WHERE cf.user_id = ? AND u.is_active = true
+		ORDER BY cf.added_at DESC
+	`
+	
+	err := r.db.Raw(query, userID).Scan(&closeFriends).Error
+	return closeFriends, err
+}
+
+// AddCloseFriend adds a friend to the close friends list
+func (r *userRepository) AddCloseFriend(userID, friendID uuid.UUID) error {
+	// First verify they are actually friends
+	areFriends, err := r.AreFriends(userID, friendID)
+	if err != nil {
+		return err
+	}
+	if !areFriends {
+		return gorm.ErrRecordNotFound // or custom error "not friends"
+	}
+
+	closeFriend := &models.CloseFriend{
+		UserID:   userID,
+		FriendID: friendID,
+	}
+	
+	// Use ON CONFLICT DO NOTHING equivalent (ignore if already exists)
+	return r.db.Where(models.CloseFriend{UserID: userID, FriendID: friendID}).
+		FirstOrCreate(closeFriend).Error
+}
+
+// RemoveCloseFriend removes a friend from the close friends list
+func (r *userRepository) RemoveCloseFriend(userID, friendID uuid.UUID) error {
+	return r.db.Where("user_id = ? AND friend_id = ?", userID, friendID).
+		Delete(&models.CloseFriend{}).Error
+}
+
+// IsCloseFriend checks if a user is in another user's close friends list
+func (r *userRepository) IsCloseFriend(userID, friendID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.CloseFriend{}).
+		Where("user_id = ? AND friend_id = ?", userID, friendID).
+		Count(&count).Error
+	return count > 0, err
+}
+
+// UpdateCloseFriends updates the entire close friends list for a user (bulk operation)
+func (r *userRepository) UpdateCloseFriends(userID uuid.UUID, friendIDs []uuid.UUID) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// First, verify all provided IDs are actually friends
+		for _, friendID := range friendIDs {
+			areFriends, err := r.AreFriends(userID, friendID)
+			if err != nil {
+				return err
+			}
+			if !areFriends {
+				return gorm.ErrRecordNotFound // or custom error for specific friend
+			}
+		}
+
+		// Remove all existing close friends for this user
+		if err := tx.Where("user_id = ?", userID).Delete(&models.CloseFriend{}).Error; err != nil {
+			return err
+		}
+
+		// Add new close friends if any provided
+		if len(friendIDs) > 0 {
+			closeFriends := make([]models.CloseFriend, len(friendIDs))
+			for i, friendID := range friendIDs {
+				closeFriends[i] = models.CloseFriend{
+					UserID:   userID,
+					FriendID: friendID,
+				}
+			}
+			
+			if err := tx.Create(&closeFriends).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // CreateSession creates a new user session

@@ -29,9 +29,11 @@ type indexingService struct {
 	searchRepo        repository.SearchRepository
 	discoveryClient   client.DiscoveryClient
 	userClient        client.UserClient
+	consentClient     *client.ConsentClient
 	embeddingProvider config.EmbeddingProvider
 	imageAnalyzer     *vision.ImageAnalyzer
 	config            *IndexingConfig
+	serviceConfig     *config.Config
 	stats             *IndexingStats
 	mu                sync.RWMutex
 }
@@ -48,24 +50,34 @@ type IndexingConfig struct {
 	BatchSize int
 	// TTL for embeddings (in hours)
 	EmbeddingTTLHours int
+	// TTL for unavailable user embeddings (longer retention)
+	UnavailableUserTTLHours int
 	// Enable image analysis
 	EnableImageAnalysis bool
+	// Enable full user indexing (beyond just available users)
+	EnableFullUserIndexing bool
+	// Full indexing interval (in hours)
+	FullIndexingIntervalHours int
 	// Retry configuration
 	RetryConfig *utils.RetryConfig
 }
 
 // IndexingStats tracks statistics about the indexing process
 type IndexingStats struct {
-	LastRunTime          time.Time `json:"last_run_time"`
-	LastRunDuration      int64     `json:"last_run_duration_ms"`
-	TotalUsersIndexed    int64     `json:"total_users_indexed"`
-	UsersWithImages      int64     `json:"users_with_images"`
-	ImagesAnalyzed       int64     `json:"images_analyzed"`
-	ImageAnalysisErrors  int64     `json:"image_analysis_errors"`
-	ImageAnalysisCost    float64   `json:"image_analysis_cost_usd"`
-	ErrorsCount          int64     `json:"errors_count"`
-	IsRunning            bool      `json:"is_running"`
-	NextRunTime          time.Time `json:"next_run_time"`
+	LastRunTime             time.Time `json:"last_run_time"`
+	LastRunDuration         int64     `json:"last_run_duration_ms"`
+	TotalUsersIndexed       int64     `json:"total_users_indexed"`
+	AvailableUsersIndexed   int64     `json:"available_users_indexed"`
+	UnavailableUsersIndexed int64     `json:"unavailable_users_indexed"`
+	UsersWithImages         int64     `json:"users_with_images"`
+	ImagesAnalyzed          int64     `json:"images_analyzed"`
+	ImageAnalysisErrors     int64     `json:"image_analysis_errors"`
+	ImageAnalysisCost       float64   `json:"image_analysis_cost_usd"`
+	ErrorsCount             int64     `json:"errors_count"`
+	IsRunning               bool      `json:"is_running"`
+	NextRunTime             time.Time `json:"next_run_time"`
+	LastFullIndexTime       time.Time `json:"last_full_index_time"`
+	NextFullIndexTime       time.Time `json:"next_full_index_time"`
 }
 
 // IndexingJob represents a single user indexing job
@@ -80,18 +92,23 @@ func NewIndexingService(
 	searchRepo repository.SearchRepository,
 	discoveryClient client.DiscoveryClient,
 	userClient client.UserClient,
+	consentClient *client.ConsentClient,
 	embeddingProvider config.EmbeddingProvider,
 	config *IndexingConfig,
+	serviceConfig *config.Config,
 ) IndexingService {
 	if config == nil {
 		config = &IndexingConfig{
-			CronIntervalMinutes:  120, // 2 hours by default
-			WorkerPoolSize:       10,
-			RateLimitPerSecond:   50,
-			BatchSize:           100,
-			EmbeddingTTLHours:   2,
-			EnableImageAnalysis: true, // Enable by default
-			RetryConfig:         utils.DefaultRetryConfig(),
+			CronIntervalMinutes:          120, // 2 hours by default
+			WorkerPoolSize:               10,
+			RateLimitPerSecond:           50,
+			BatchSize:                   100,
+			EmbeddingTTLHours:           2,   // Short TTL for available users
+			UnavailableUserTTLHours:     24,  // Longer TTL for unavailable users
+			EnableImageAnalysis:         true, // Enable by default
+			EnableFullUserIndexing:      true, // Enable full user indexing
+			FullIndexingIntervalHours:   24,   // Run full indexing daily
+			RetryConfig:                 utils.DefaultRetryConfig(),
 		}
 	}
 
@@ -112,11 +129,14 @@ func NewIndexingService(
 		searchRepo:        searchRepo,
 		discoveryClient:   discoveryClient,
 		userClient:        userClient,
+		consentClient:     consentClient,
 		embeddingProvider: embeddingProvider,
 		imageAnalyzer:     imageAnalyzer,
 		config:            config,
+		serviceConfig:     serviceConfig,
 		stats: &IndexingStats{
-			NextRunTime: time.Now().Add(time.Duration(config.CronIntervalMinutes) * time.Minute),
+			NextRunTime:       time.Now().Add(time.Duration(config.CronIntervalMinutes) * time.Minute),
+			NextFullIndexTime: time.Now().Add(time.Duration(config.FullIndexingIntervalHours) * time.Hour),
 		},
 	}
 }
@@ -178,24 +198,64 @@ func (s *indexingService) RunIndexingCycle(ctx context.Context) error {
 		"timestamp": start.Format(time.RFC3339),
 	})
 
-	// Step 1: Get available users from discovery-svc
-	userIDs, err := s.fetchAvailableUsers(ctx)
+	// Phase 1: Always index available users (for both discovery and friend search)
+	availableUserIDs, err := s.fetchAvailableUsers(ctx)
 	if err != nil {
 		s.incrementErrorCount()
 		return fmt.Errorf("failed to fetch available users: %w", err)
 	}
 
 	s.logStructured("info", "available_users_fetched", map[string]interface{}{
-		"user_count": len(userIDs),
+		"user_count": len(availableUserIDs),
 	})
 
-	if len(userIDs) == 0 {
-		s.logStructured("info", "no_users_to_index", map[string]interface{}{})
-		return nil
+	totalProcessed, totalErrors := 0, 0
+	
+	if len(availableUserIDs) > 0 {
+		// Process available users with short TTL
+		processed, errors := s.processUsersBatchWithTTL(ctx, availableUserIDs, s.config.EmbeddingTTLHours, "available")
+		totalProcessed += processed
+		totalErrors += errors
+		
+		s.mu.Lock()
+		s.stats.AvailableUsersIndexed += int64(processed)
+		s.mu.Unlock()
 	}
 
-	// Step 2: Process users in batches with worker pool
-	totalProcessed, totalErrors := s.processUsersBatch(ctx, userIDs)
+	// Phase 2: Periodically index all users for comprehensive friend search
+	if s.config.EnableFullUserIndexing && s.shouldRunFullIndex() {
+		s.logStructured("info", "starting_full_user_indexing", map[string]interface{}{})
+		
+		// Get all users in batches
+		allUserIDs, err := s.fetchAllUsers(ctx)
+		if err != nil {
+			s.logStructured("error", "failed_to_fetch_all_users", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			// Filter out users that were just processed as available
+			unavailableUserIDs := s.filterUnavailableUsers(allUserIDs, availableUserIDs)
+			
+			s.logStructured("info", "unavailable_users_to_index", map[string]interface{}{
+				"total_users": len(allUserIDs),
+				"available_users": len(availableUserIDs),
+				"unavailable_users": len(unavailableUserIDs),
+			})
+			
+			if len(unavailableUserIDs) > 0 {
+				// Process unavailable users with longer TTL
+				processed, errors := s.processUsersBatchWithTTL(ctx, unavailableUserIDs, s.config.UnavailableUserTTLHours, "unavailable")
+				totalProcessed += processed
+				totalErrors += errors
+				
+				s.mu.Lock()
+				s.stats.UnavailableUsersIndexed += int64(processed)
+				s.stats.LastFullIndexTime = time.Now()
+				s.stats.NextFullIndexTime = time.Now().Add(time.Duration(s.config.FullIndexingIntervalHours) * time.Hour)
+				s.mu.Unlock()
+			}
+		}
+	}
 
 	s.mu.Lock()
 	s.stats.TotalUsersIndexed += int64(totalProcessed)
@@ -226,8 +286,72 @@ func (s *indexingService) fetchAvailableUsers(ctx context.Context) ([]uuid.UUID,
 	return userIDs, err
 }
 
+// fetchAllUsers gets all user IDs from user-svc (paginated)
+func (s *indexingService) fetchAllUsers(ctx context.Context) ([]uuid.UUID, error) {
+	var allUserIDs []uuid.UUID
+	offset := 0
+	limit := 1000 // Process in batches
+	
+	for {
+		userIDs, err := s.userClient.GetAllUsers(ctx, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch users at offset %d: %w", offset, err)
+		}
+		
+		if len(userIDs) == 0 {
+			break // No more users
+		}
+		
+		allUserIDs = append(allUserIDs, userIDs...)
+		offset += len(userIDs)
+		
+		// If we got less than the limit, we're done
+		if len(userIDs) < limit {
+			break
+		}
+	}
+	
+	s.logStructured("info", "all_users_fetched", map[string]interface{}{
+		"total_users": len(allUserIDs),
+	})
+	
+	return allUserIDs, nil
+}
+
+// filterUnavailableUsers returns users that are not in the available list
+func (s *indexingService) filterUnavailableUsers(allUserIDs, availableUserIDs []uuid.UUID) []uuid.UUID {
+	// Create a map for fast lookup
+	availableMap := make(map[uuid.UUID]bool, len(availableUserIDs))
+	for _, id := range availableUserIDs {
+		availableMap[id] = true
+	}
+	
+	var unavailableUserIDs []uuid.UUID
+	for _, id := range allUserIDs {
+		if !availableMap[id] {
+			unavailableUserIDs = append(unavailableUserIDs, id)
+		}
+	}
+	
+	return unavailableUserIDs
+}
+
+// shouldRunFullIndex determines if full indexing should run
+func (s *indexingService) shouldRunFullIndex() bool {
+	s.mu.RLock()
+	nextFullIndex := s.stats.NextFullIndexTime
+	s.mu.RUnlock()
+	
+	return time.Now().After(nextFullIndex)
+}
+
 // processUsersBatch processes users in batches using a worker pool
 func (s *indexingService) processUsersBatch(ctx context.Context, userIDs []uuid.UUID) (int, int) {
+	return s.processUsersBatchWithTTL(ctx, userIDs, s.config.EmbeddingTTLHours, "default")
+}
+
+// processUsersBatchWithTTL processes users in batches with specific TTL
+func (s *indexingService) processUsersBatchWithTTL(ctx context.Context, userIDs []uuid.UUID, ttlHours int, userType string) (int, int) {
 	// Create job channel and worker pool
 	jobCh := make(chan IndexingJob, s.config.BatchSize)
 	resultCh := make(chan error, len(userIDs))
@@ -240,7 +364,7 @@ func (s *indexingService) processUsersBatch(ctx context.Context, userIDs []uuid.
 	var wg sync.WaitGroup
 	for i := 0; i < s.config.WorkerPoolSize; i++ {
 		wg.Add(1)
-		go s.indexingWorker(ctx, jobCh, resultCh, rateLimiter, &wg)
+		go s.indexingWorkerWithTTL(ctx, jobCh, resultCh, rateLimiter, ttlHours, &wg)
 	}
 
 	// Send jobs to workers
@@ -258,6 +382,12 @@ func (s *indexingService) processUsersBatch(ctx context.Context, userIDs []uuid.
 			}
 		}
 	}()
+	
+	s.logStructured("info", "processing_users_batch", map[string]interface{}{
+		"user_count": len(userIDs),
+		"user_type": userType,
+		"ttl_hours": ttlHours,
+	})
 
 	// Wait for all workers to finish
 	wg.Wait()
@@ -275,8 +405,13 @@ func (s *indexingService) processUsersBatch(ctx context.Context, userIDs []uuid.
 	return totalProcessed, totalErrors
 }
 
-// indexingWorker processes individual user indexing jobs
+// indexingWorker processes individual user indexing jobs (legacy method)
 func (s *indexingService) indexingWorker(ctx context.Context, jobCh <-chan IndexingJob, resultCh chan<- error, rateLimiter *time.Ticker, wg *sync.WaitGroup) {
+	s.indexingWorkerWithTTL(ctx, jobCh, resultCh, rateLimiter, s.config.EmbeddingTTLHours, wg)
+}
+
+// indexingWorkerWithTTL processes individual user indexing jobs with specific TTL
+func (s *indexingService) indexingWorkerWithTTL(ctx context.Context, jobCh <-chan IndexingJob, resultCh chan<- error, rateLimiter *time.Ticker, ttlHours int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for job := range jobCh {
@@ -288,7 +423,7 @@ func (s *indexingService) indexingWorker(ctx context.Context, jobCh <-chan Index
 			// Rate limited - proceed with job
 		}
 
-		err := s.processUserProfile(ctx, job.UserID)
+		err := s.processUserProfileWithTTL(ctx, job.UserID, ttlHours)
 		resultCh <- err
 
 		if err != nil {
@@ -305,8 +440,13 @@ func (s *indexingService) indexingWorker(ctx context.Context, jobCh <-chan Index
 	}
 }
 
-// processUserProfile processes a single user's profile for indexing
+// processUserProfile processes a single user's profile for indexing (legacy method)
 func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UUID) error {
+	return s.processUserProfileWithTTL(ctx, userID, s.config.EmbeddingTTLHours)
+}
+
+// processUserProfileWithTTL processes a single user's profile for indexing with specific TTL
+func (s *indexingService) processUserProfileWithTTL(ctx context.Context, userID uuid.UUID, ttlHours int) error {
 	// Step 1: Fetch user profile from user-svc with retry
 	var profile *client.UserProfile
 	err := utils.RetryWithBackoff(ctx, s.config.RetryConfig, func() error {
@@ -318,6 +458,46 @@ func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UU
 	if err != nil {
 		return fmt.Errorf("failed to fetch profile for user %s: %w", userID, err)
 	}
+
+	// Step 1.5: Check user consent for search indexing via consent service
+	hasConsent, consentErr := s.checkSearchConsent(ctx, userID)
+	if consentErr != nil {
+		// Log the error but continue with indexing if consent service is unavailable
+		// and fallback is enabled (fail-safe approach)
+		s.logStructured("warn", "consent_check_failed", map[string]interface{}{
+			"user_id": userID.String(),
+			"error":   consentErr.Error(),
+		})
+		
+		if s.serviceConfig.Features.ConsentServiceFallback {
+			s.logStructured("info", "consent_fallback_allowing_indexing", map[string]interface{}{
+				"user_id": userID.String(),
+			})
+		} else {
+			return fmt.Errorf("consent check failed and fallback disabled: %w", consentErr)
+		}
+	} else if !hasConsent {
+		s.logStructured("info", "user_opted_out_of_search", map[string]interface{}{
+			"user_id": userID.String(),
+		})
+		
+		// If user has opted out, remove their existing embedding if it exists
+		if existingEmbedding, err := s.searchRepo.GetUserEmbedding(ctx, userID); err == nil && existingEmbedding != nil {
+			if deleteErr := s.searchRepo.DeleteUserEmbedding(ctx, userID); deleteErr != nil {
+				s.logStructured("warn", "failed_to_delete_opted_out_user_embedding", map[string]interface{}{
+					"error": deleteErr.Error(),
+				})
+			} else {
+				s.logStructured("info", "removed_embedding_for_opted_out_user", map[string]interface{}{})
+			}
+		}
+		
+		return nil // Skip indexing without error
+	}
+	
+	s.logStructured("debug", "user_consented_to_search", map[string]interface{}{
+		"user_id": userID.String(),
+	})
 
 	// Step 2: Process images if image analysis is enabled
 	var imageAnalysisResult *vision.BatchImageAnalysisResult
@@ -384,9 +564,9 @@ func (s *indexingService) processUserProfile(ctx context.Context, userID uuid.UU
 	model := "text-embedding-3-small" // Default model
 
 	if existingEmbedding != nil {
-		err = s.searchRepo.UpdateUserEmbeddingWithTTL(ctx, userID, embedding, profileText, provider, model, s.config.EmbeddingTTLHours)
+		err = s.searchRepo.UpdateUserEmbeddingWithTTL(ctx, userID, embedding, profileText, provider, model, ttlHours)
 	} else {
-		err = s.searchRepo.StoreUserEmbeddingWithTTL(ctx, userID, embedding, profileText, provider, model, s.config.EmbeddingTTLHours)
+		err = s.searchRepo.StoreUserEmbeddingWithTTL(ctx, userID, embedding, profileText, provider, model, ttlHours)
 	}
 
 	if err != nil {
@@ -590,4 +770,44 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// checkSearchConsent checks if a user has consented to search indexing
+func (s *indexingService) checkSearchConsent(ctx context.Context, userID uuid.UUID) (bool, error) {
+	// Skip consent check if consent service is disabled
+	if !s.serviceConfig.ConsentService.Enabled {
+		s.logStructured("debug", "consent_service_disabled", map[string]interface{}{
+			"user_id": userID.String(),
+		})
+		return true, nil
+	}
+	
+	// Skip consent check if enforcement is disabled
+	if !s.serviceConfig.Features.EnforceConsent {
+		s.logStructured("debug", "consent_enforcement_disabled", map[string]interface{}{
+			"user_id": userID.String(),
+		})
+		return true, nil
+	}
+	
+	// Create a timeout context for consent check
+	consentCtx, cancel := context.WithTimeout(ctx, s.serviceConfig.Search.ConsentCheckTimeout)
+	defer cancel()
+	
+	// Check consent via consent service
+	hasConsent, err := s.consentClient.ValidateSearchConsent(consentCtx, userID)
+	if err != nil {
+		s.logStructured("warn", "consent_check_error", map[string]interface{}{
+			"user_id": userID.String(),
+			"error":   err.Error(),
+		})
+		return false, err
+	}
+	
+	s.logStructured("debug", "consent_check_result", map[string]interface{}{
+		"user_id":     userID.String(),
+		"has_consent": hasConsent,
+	})
+	
+	return hasConsent, nil
 }

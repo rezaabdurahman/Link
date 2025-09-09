@@ -11,6 +11,10 @@ require (
 	github.com/link-app/backend/proto/common v0.0.0
 	github.com/link-app/backend/proto/discovery v0.0.0
 	github.com/link-app/shared-libs v0.0.0
+	github.com/link-app/shared-libs/config v0.0.0
+	github.com/link-app/shared-libs/database v0.0.0
+	github.com/link-app/shared-libs/errors v0.0.0
+	github.com/link-app/shared-libs/logging v0.0.0
 	github.com/prometheus/client_golang v1.23.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.37.0
@@ -26,6 +30,10 @@ replace (
 	github.com/link-app/backend/proto/common => ../proto/common
 	github.com/link-app/backend/proto/discovery => ../proto/discovery
 	github.com/link-app/shared-libs => ../shared-libs
+	github.com/link-app/shared-libs/config => ../shared-libs/config
+	github.com/link-app/shared-libs/database => ../shared-libs/database
+	github.com/link-app/shared-libs/errors => ../shared-libs/errors
+	github.com/link-app/shared-libs/logging => ../shared-libs/logging
 )
 
 require (
@@ -63,6 +71,8 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/link-app/shared-libs/cache v0.0.0
+	github.com/link-app/shared-libs/grpc v0.0.0
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -83,3 +93,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/link-app/shared-libs/grpc => ../shared-libs/grpc
+
+replace github.com/link-app/shared-libs/cache => ../shared-libs/cache

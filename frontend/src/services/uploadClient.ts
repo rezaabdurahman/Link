@@ -1,7 +1,7 @@
 // File upload service for handling media, files, and voice notes
 // Provides secure upload functionality with progress tracking
 
-import { /* apiClient, */ AuthServiceError, ApiError, getErrorMessage } from './authClient';  // TODO: apiClient will be used for future upload API integration
+import { apiClient, AuthServiceError, ApiError, getErrorMessage } from './authClient';
 
 // Extended API error type for upload-specific errors
 export type UploadApiError = ApiError | {
@@ -98,12 +98,8 @@ export async function uploadMedia(
       formData.append('generate_thumbnail', 'true');
     }
     
-    // Upload with progress tracking
-    const response = await uploadWithProgress<MediaUploadResponse>(
-      UPLOAD_ENDPOINTS.media,
-      formData,
-      opts.onProgress
-    );
+    // Upload using apiClient for consistency
+    const response = await apiClient.post<MediaUploadResponse>(UPLOAD_ENDPOINTS.media, formData);
     
     return response;
   } catch (error) {
@@ -140,12 +136,8 @@ export async function uploadFile(
     const formData = new FormData();
     formData.append('file', file);
     
-    // Upload with progress tracking
-    const response = await uploadWithProgress<UploadResponse>(
-      UPLOAD_ENDPOINTS.files,
-      formData,
-      opts.onProgress
-    );
+    // Upload using apiClient for consistency
+    const response = await apiClient.post<UploadResponse>(UPLOAD_ENDPOINTS.files, formData);
     
     return response;
   } catch (error) {
@@ -184,12 +176,8 @@ export async function uploadVoiceNote(
     formData.append('file', file);
     formData.append('generate_waveform', 'true'); // Generate waveform for UI
     
-    // Upload with progress tracking
-    const response = await uploadWithProgress<VoiceUploadResponse>(
-      UPLOAD_ENDPOINTS.voice,
-      formData,
-      opts.onProgress
-    );
+    // Upload using apiClient for consistency
+    const response = await apiClient.post<VoiceUploadResponse>(UPLOAD_ENDPOINTS.voice, formData);
     
     return response;
   } catch (error) {
@@ -202,24 +190,16 @@ export async function uploadVoiceNote(
 }
 
 /**
- * Upload multiple files concurrently with individual progress tracking
+ * Upload multiple files concurrently 
  * @param files - Array of files to upload
  * @param uploadFn - Upload function to use for each file
- * @param onProgress - Progress callback that receives (fileIndex, progress)
  * @returns Promise resolving to array of upload responses
  */
 export async function uploadMultipleFiles<T extends UploadResponse>(
   files: File[],
-  uploadFn: (file: File, options?: UploadOptions) => Promise<T>,
-  onProgress?: (fileIndex: number, progress: number) => void
+  uploadFn: (file: File, options?: UploadOptions) => Promise<T>
 ): Promise<T[]> {
-  const uploads = files.map((file, index) => {
-    const options: UploadOptions = {
-      onProgress: onProgress ? (progress) => onProgress(index, progress) : undefined,
-    };
-    
-    return uploadFn(file, options);
-  });
+  const uploads = files.map(file => uploadFn(file));
   
   try {
     const results = await Promise.all(uploads);
@@ -232,88 +212,6 @@ export async function uploadMultipleFiles<T extends UploadResponse>(
 }
 
 // Utility functions
-
-/**
- * Generic upload function with progress tracking
- */
-async function uploadWithProgress<T>(
-  endpoint: string,
-  formData: FormData,
-  onProgress?: UploadProgressCallback
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    
-    // Set up progress tracking
-    if (onProgress) {
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const progress = (event.loaded / event.total) * 100;
-          onProgress(progress);
-        }
-      });
-    }
-    
-    // Set up response handlers
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const response = JSON.parse(xhr.responseText);
-          resolve(response);
-        } catch (error) {
-          reject(new AuthServiceError({
-            type: 'SERVER_ERROR',
-            message: 'Invalid response format from upload service',
-            code: 'INTERNAL_SERVER_ERROR',
-          }));
-        }
-      } else {
-        try {
-          const errorResponse = JSON.parse(xhr.responseText);
-          reject(new AuthServiceError({
-            type: 'SERVER_ERROR',
-            message: errorResponse.message || 'Upload failed',
-            code: errorResponse.code || 'INTERNAL_SERVER_ERROR',
-          }));
-        } catch (error) {
-          reject(new AuthServiceError({
-            type: 'SERVER_ERROR',
-            message: `Upload failed with status ${xhr.status}`,
-            code: 'INTERNAL_SERVER_ERROR',
-          }));
-        }
-      }
-    });
-    
-    xhr.addEventListener('error', () => {
-      reject(new AuthServiceError({
-        type: 'NETWORK_ERROR',
-        message: 'Network error during upload',
-        code: 'CONNECTION_FAILED',
-      }));
-    });
-    
-    xhr.addEventListener('timeout', () => {
-      reject(new AuthServiceError({
-        type: 'NETWORK_ERROR',
-        message: 'Upload timed out',
-        code: 'TIMEOUT',
-      }));
-    });
-    
-    // Configure and send request
-    xhr.timeout = 60000; // 60 second timeout
-    xhr.open('POST', endpoint);
-    
-    // Add auth header if available
-    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-    if (token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    }
-    
-    xhr.send(formData);
-  });
-}
 
 /**
  * Validate file before upload

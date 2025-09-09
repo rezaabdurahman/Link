@@ -53,17 +53,12 @@ export const startMockWorker = async () => {
     logMSWConfig();
     
     try {
+      console.log('🚀 MSW: Starting service worker...');
+      
+      // Start MSW with better error handling
       await worker.start({
-        onUnhandledRequest: (request) => {
-          // Log unhandled requests to help debug
-          console.warn('🚫 MSW: Unhandled request:', {
-            method: request.method,
-            url: request.url,
-            headers: Object.fromEntries(request.headers.entries())
-          });
-          // Still bypass, but with logging
-        },
-        quiet: false, // Always show logs in demo mode for debugging
+        onUnhandledRequest: 'bypass',
+        quiet: false
       });
       
       console.log('🔧 MSW: Mock Service Worker started successfully');
@@ -89,6 +84,10 @@ export const startMockWorker = async () => {
       console.log('🔒 MSW: All backend calls will be mocked - no real server needed');
     } catch (error) {
       console.error('❌ MSW: Failed to start Mock Service Worker:', error);
+      console.warn('⚠️ MSW: App will continue without mocking - API calls may fail');
+      
+      // Continue anyway - don't block the app
+      console.log('🔧 MSW: Skipping mock setup, app will use real API endpoints');
     }
   } else {
     console.log('ℹ️ MSW: Not starting - not in development/demo mode');

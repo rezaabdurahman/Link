@@ -47,9 +47,9 @@ scrape_configs:
     metrics_path: '/metrics'
     scrape_interval: 20s
 
-  - job_name: 'ai-service'
+  - job_name: 'summarygen-service'
     static_configs:
-      - targets: ['ai-svc:8000']
+      - targets: ['summarygen-svc:8000']
     metrics_path: '/metrics'
     scrape_interval: 30s
     scrape_timeout: 15s

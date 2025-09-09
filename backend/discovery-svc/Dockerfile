@@ -29,7 +29,7 @@ COPY discovery-svc/migrations/ ./migrations/
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
-    -o discovery-svc .
+    -o discovery-svc ./cmd/server
 
 # Build the migration tool with optimizations  
 RUN CGO_ENABLED=0 GOOS=linux go build \

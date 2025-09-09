@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package subscription;
+
+option go_package = "github.com/link-app/backend/proto/subscription";
+
+import "google/protobuf/timestamp.proto";
+
+// SubscriptionService defines the gRPC interface for subscription operations
+service SubscriptionService {
+  // GetUserLimits returns the subscription limits for a user
+  rpc GetUserLimits(GetUserLimitsRequest) returns (GetUserLimitsResponse);
+  
+  // CheckFeatureAccess checks if a user has access to a specific feature
+  rpc CheckFeatureAccess(CheckFeatureAccessRequest) returns (CheckFeatureAccessResponse);
+  
+  // RecordUsage records usage of a subscription feature
+  rpc RecordUsage(RecordUsageRequest) returns (RecordUsageResponse);
+  
+  // AtomicCheckAndRecordUsage atomically checks usage limits and records usage in one operation
+  rpc AtomicCheckAndRecordUsage(RecordUsageRequest) returns (RecordUsageResponse);
+  
+  // GetSubscriptionStatus returns the current subscription status for a user
+  rpc GetSubscriptionStatus(GetSubscriptionStatusRequest) returns (GetSubscriptionStatusResponse);
+}
+
+// Request/Response messages
+
+message GetUserLimitsRequest {
+  string user_id = 1;
+}
+
+message GetUserLimitsResponse {
+  SubscriptionLimits limits = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+message CheckFeatureAccessRequest {
+  string user_id = 1;
+  string feature = 2; // e.g., "discovery", "radius_3km", "priority_support"
+}
+
+message CheckFeatureAccessResponse {
+  bool has_access = 1;
+  string reason = 2; // e.g., "limit_exceeded", "upgrade_required"
+  bool success = 3;
+  string error = 4;
+}
+
+message RecordUsageRequest {
+  string user_id = 1;
+  string metric_type = 2; // e.g., "discovery_count"
+  int32 count = 3; // default 1
+}
+
+message RecordUsageResponse {
+  bool success = 1;
+  string error = 2;
+  int32 remaining_count = 3;
+}
+
+message GetSubscriptionStatusRequest {
+  string user_id = 1;
+}
+
+message GetSubscriptionStatusResponse {
+  UserSubscription subscription = 1;
+  UsageMetrics usage = 2;
+  bool success = 3;
+  string error = 4;
+}
+
+// Data structures
+
+message SubscriptionLimits {
+  string user_id = 1;
+  string tier = 2; // "basic" or "pro"
+  int32 max_discovery_per_month = 3;
+  double max_radius_km = 4;
+  int32 remaining_discoveries = 5;
+  google.protobuf.Timestamp current_period_start = 6;
+  google.protobuf.Timestamp current_period_end = 7;
+  bool is_active = 8;
+}
+
+message UserSubscription {
+  string id = 1;
+  string user_id = 2;
+  SubscriptionPlan plan = 3;
+  string status = 4; // "active", "canceled", "past_due", etc.
+  google.protobuf.Timestamp current_period_start = 5;
+  google.protobuf.Timestamp current_period_end = 6;
+  google.protobuf.Timestamp canceled_at = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message SubscriptionPlan {
+  string id = 1;
+  string name = 2;
+  string tier = 3;
+  int32 price_cents = 4;
+  string currency = 5;
+  PlanFeatures features = 6;
+  bool is_active = 7;
+}
+
+message PlanFeatures {
+  int32 max_discovery_per_month = 1;
+  double max_radius_km = 2;
+  bool unlimited_chats = 3;
+  bool priority_support = 4;
+}
+
+message UsageMetrics {
+  string user_id = 1;
+  google.protobuf.Timestamp current_period = 2;
+  int32 discovery_count = 3;
+  int32 discovery_limit = 4;
+  double radius_used_km = 5;
+  double radius_limit_km = 6;
+  int32 days_remaining = 7;
+}

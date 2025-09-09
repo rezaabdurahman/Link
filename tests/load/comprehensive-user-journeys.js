@@ -507,10 +507,8 @@ function executeSearchJourney(testUser) {
     // Step 3: Advanced search with filters
     group('Advanced Search with Filters', () => {
       const searchData = {
-        query: 'technology music',
+        query: 'technology music professionals aged 25-35',
         filters: {
-          interests: ['technology', 'music'],
-          age_range: { min: 25, max: 35 },
           location: { radius: 50, lat: 37.7749, lng: -122.4194 }
         },
         limit: 10

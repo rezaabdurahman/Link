@@ -1,5 +1,12 @@
 version: '3.8'
 
+# Load environment variables from multiple files
+# Priority: .env.local (highest) -> .env (lowest)
+# .env.local contains generated secrets and should not be committed
+x-env-files: &env-files
+  - .env
+  - .env.local
+
 services:
   # PostgreSQL with CloudNativePG-compatible settings for local development
   postgres:
@@ -14,7 +21,8 @@ services:
       # Service-specific database passwords
       USER_SERVICE_PASSWORD: ${USER_SERVICE_PASSWORD:-user_svc_pass}
       CHAT_SERVICE_PASSWORD: ${CHAT_SERVICE_PASSWORD:-chat_svc_pass}
-      AI_SERVICE_PASSWORD: ${AI_SERVICE_PASSWORD:-ai_svc_pass}
+      SUMMARYGEN_SERVICE_PASSWORD: ${SUMMARYGEN_SERVICE_PASSWORD:-summarygen_svc_pass}
+      AI_SERVICE_PASSWORD: ${AI_SERVICE_PASSWORD:-ai_svc_pass}  # Legacy compatibility
       DISCOVERY_SERVICE_PASSWORD: ${DISCOVERY_SERVICE_PASSWORD:-discovery_svc_pass}
       SEARCH_SERVICE_PASSWORD: ${SEARCH_SERVICE_PASSWORD:-search_svc_pass}
       FEATURE_SERVICE_PASSWORD: ${FEATURE_SERVICE_PASSWORD:-feature_svc_pass}
@@ -83,7 +91,7 @@ services:
       - user-svc
       - chat-svc
       - discovery-svc
-      - ai-svc
+      - summarygen-svc
       - search-svc
       - feature-svc
       - redis
@@ -96,7 +104,8 @@ services:
       USER_SVC_URL: http://user-svc:8081
       CHAT_SVC_URL: http://chat-svc:8082
       DISCOVERY_SVC_URL: http://discovery-svc:8083
-      AI_SVC_URL: http://ai-svc:8084
+      SUMMARYGEN_SVC_URL: http://summarygen-svc:8084
+      AI_SVC_URL: http://summarygen-svc:8084  # Legacy compatibility
       SEARCH_SVC_URL: http://search-svc:8085
       FEATURE_SVC_URL: http://feature-svc:8086
       
@@ -109,9 +118,9 @@ services:
       # Database and Gateway Redis
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: linkuser
+      DB_USER: ${POSTGRES_USER:-linkuser}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-linkpass}
-      DB_NAME: linkdb
+      DB_NAME: ${DB_NAME:-linkdb}
       DB_SSL_MODE: disable
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -139,6 +148,11 @@ services:
       - user-svc/.env.local  # Service-specific local config
     environment:
       DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: user_service_user
+      DB_PASSWORD: ${USER_SERVICE_PASSWORD:-user_svc_pass}
+      DB_NAME: user_service_db
+      DB_SSL_MODE: disable
       PORT: 8081
       GRPC_PORT: 50051
       METRICS_PORT: 9090
@@ -165,9 +179,9 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-linkuser}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-linkpass}
-      DB_NAME: ${DB_NAME:-linkdb}
+      DB_USER: chat_service_user
+      DB_PASSWORD: ${CHAT_SERVICE_PASSWORD:-chat_svc_pass}
+      DB_NAME: chat_service_db
       PORT: 8082
       GRPC_PORT: 50053
       METRICS_PORT: 9092
@@ -193,6 +207,11 @@ services:
       - redis
     environment:
       DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: discovery_service_user
+      DB_PASSWORD: ${DISCOVERY_SERVICE_PASSWORD:-discovery_svc_pass}
+      DB_NAME: discovery_service_db
+      DB_SSL_MODE: disable
       PORT: 8083
       GRPC_PORT: 50052
       METRICS_PORT: 9091
@@ -205,10 +224,10 @@ services:
       timeout: 5s
       retries: 3
 
-  ai-svc:
+  summarygen-svc:
     build:
       context: .
-      dockerfile: ai-svc/Dockerfile
+      dockerfile: summarygen-svc/Dockerfile
     ports:
       - "8084:8084"   # HTTP
       - "50054:50054" # gRPC
@@ -235,6 +254,11 @@ services:
       - postgres
     environment:
       DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: search_service_user
+      DB_PASSWORD: ${SEARCH_SERVICE_PASSWORD:-search_svc_pass}
+      DB_NAME: search_service_db
+      DB_SSL_MODE: disable
       PORT: 8085
       GRPC_PORT: 50055
       METRICS_PORT: 9094

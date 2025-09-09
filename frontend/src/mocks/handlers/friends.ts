@@ -2,6 +2,7 @@ import { http } from 'msw';
 import { extractUserId, now, parsePaginationParams } from '../utils/mockHelpers';
 import { createAuthError, createValidationError, createNotFoundError, createConflictError, createSuccessResponse } from '../utils/responseBuilders';
 import { buildApiUrl } from '../utils/config';
+import { apiFriends, apiCloseFriends } from '../../data/mockData';
 
 // Mock user data for responses
 const mockUsers = new Map([
@@ -45,6 +46,82 @@ const mockUsers = new Map([
     created_at: '2024-01-01T00:00:00Z',
   }],
 ]);
+
+// Mock database for friend memories
+const mockFriendMemories: Map<string, {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  message_type: string;
+  message_content: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}> = new Map();
+
+// Initialize some demo memories
+const demoMemories = [
+  {
+    id: 'memory-1',
+    user_id: 'current-user-id',
+    friend_id: 'demo-user-1',
+    message_id: 'msg-123',
+    conversation_id: 'conv-456',
+    sender_id: 'demo-user-1',
+    message_type: 'text',
+    message_content: 'Hey! Just wanted to say thanks for helping me move last weekend. You\'re such a great friend! 🙏',
+    notes: 'Alice helped me move apartments. Really showed her caring nature and reliability.',
+    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+    updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'memory-2',
+    user_id: 'current-user-id',
+    friend_id: 'demo-user-1',
+    message_id: 'msg-124',
+    conversation_id: 'conv-456',
+    sender_id: 'demo-user-1',
+    message_type: 'text',
+    message_content: 'The sunset from the mountain peak was absolutely breathtaking! Definitely worth the 5-hour hike 🌅',
+    notes: 'Our hiking trip to Mount Wilson. Alice is such an adventure buddy!',
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
+    updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'memory-3',
+    user_id: 'current-user-id',
+    friend_id: 'demo-user-2',
+    message_id: 'msg-125',
+    conversation_id: 'conv-789',
+    sender_id: 'demo-user-2',
+    message_type: 'text',
+    message_content: 'Just finished the design mockups for your project! I think you\'re going to love the new color scheme ✨',
+    notes: 'Bob designed my portfolio website. So talented and generous with his time.',
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
+    updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'memory-4',
+    user_id: 'current-user-id',
+    friend_id: 'demo-user-2',
+    message_id: 'msg-126',
+    conversation_id: 'conv-789',
+    sender_id: 'current-user-id',
+    message_type: 'text',
+    message_content: 'Thanks for introducing me to that amazing coffee shop! The latte art was incredible ☕️',
+    notes: '',
+    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
+    updated_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+// Populate demo memories
+demoMemories.forEach(memory => {
+  mockFriendMemories.set(memory.id, memory);
+});
 
 // Mock database for friend requests
 const mockFriendRequests: Map<string, {
@@ -392,15 +469,8 @@ export const handlers = [
     const url = new URL(request.url);
     const { limit, offset } = parsePaginationParams(url);
 
-    // Get all friendships for this user
-    let friends = Array.from(mockFriendships.values())
-      .filter(friendship => 
-        friendship.user1_id === userId || friendship.user2_id === userId
-      )
-      .map(friendship => {
-        const friendId = friendship.user1_id === userId ? friendship.user2_id : friendship.user1_id;
-        return getUserFromId(friendId);
-      });
+    // Use the API-compatible friends data
+    let friends = apiFriends;
 
     const paginatedFriends = friends.slice(offset, offset + limit);
 
@@ -493,6 +563,282 @@ export const handlers = [
         status: 'none',
         can_send_request: true,
       }
+    });
+  }),
+
+  // Close Friends API Endpoints
+
+  // GET /users/friends/close - Get close friends list
+  http.get(buildApiUrl('/users/friends/close'), ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    // Return the mock close friends data
+    return createSuccessResponse({
+      data: apiCloseFriends,
+      count: apiCloseFriends.length,
+    });
+  }),
+
+  // PUT /users/friends/close - Update close friends list
+  http.put(buildApiUrl('/users/friends/close'), async ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    try {
+      const body = await request.json() as { friend_ids: string[] };
+      const friendIds = body.friend_ids || [];
+
+      // Validate that all provided IDs are actual friends
+      const invalidIds = friendIds.filter(friendId => 
+        !apiFriends.some(friend => friend.id === friendId)
+      );
+
+      if (invalidIds.length > 0) {
+        return createConflictError(`Invalid friend IDs: ${invalidIds.join(', ')}`);
+      }
+
+      // Validate no self-inclusion (though frontend should prevent this)
+      if (friendIds.includes(userId)) {
+        return createValidationError('Cannot include yourself in close friends list');
+      }
+
+      // In a real implementation, we would update the database here
+      // For now, we just simulate success
+      return createSuccessResponse({
+        message: 'Close friends updated successfully',
+      });
+    } catch (error) {
+      return createValidationError('Invalid request body');
+    }
+  }),
+
+  // POST /users/friends/close/:userId - Add close friend
+  http.post(buildApiUrl('/users/friends/close/:userId'), ({ request, params }) => {
+    const { userId: friendId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    if (userId === friendId) {
+      return createValidationError('Cannot add yourself as close friend');
+    }
+
+    // Check if they're actually friends
+    const isFriend = apiFriends.some(friend => friend.id === friendId);
+    if (!isFriend) {
+      return createValidationError('Can only add friends as close friends');
+    }
+
+    // In a real implementation, we would add to database here
+    return createSuccessResponse({
+      message: 'Friend added to close friends successfully',
+    });
+  }),
+
+  // DELETE /users/friends/close/:userId - Remove close friend
+  http.delete(buildApiUrl('/users/friends/close/:userId'), ({ request, params }) => {
+    const { userId: friendId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    if (userId === friendId) {
+      return createValidationError('Invalid close friend operation');
+    }
+
+    // In a real implementation, we would remove from database here
+    return createSuccessResponse({
+      message: 'Friend removed from close friends successfully',
+    });
+  }),
+
+  // Friend Memory Endpoints
+
+  // GET /users/friends/memories/friend/:friendId - Get memories with a specific friend
+  http.get(buildApiUrl('/users/friends/memories/friend/:friendId'), ({ request, params }) => {
+    const { friendId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const url = new URL(request.url);
+    const { limit, offset } = parsePaginationParams(url);
+    const cursor = url.searchParams.get('cursor');
+
+    // Get memories for the specific friend
+    let friendMemories = Array.from(mockFriendMemories.values()).filter(memory => 
+      memory.user_id === userId && memory.friend_id === friendId
+    );
+
+    // Sort by created_at descending (newest first)
+    friendMemories.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // Apply cursor-based pagination if cursor is provided
+    if (cursor) {
+      const cursorDate = new Date(cursor);
+      friendMemories = friendMemories.filter(memory => 
+        new Date(memory.created_at) < cursorDate
+      );
+    }
+
+    // Apply pagination
+    const paginatedMemories = friendMemories.slice(offset, offset + limit);
+    const hasMore = friendMemories.length > offset + limit;
+    const nextCursor = hasMore && paginatedMemories.length > 0 
+      ? paginatedMemories[paginatedMemories.length - 1].created_at 
+      : null;
+
+    // Transform to API response format
+    const responseData = paginatedMemories.map(memory => ({
+      id: memory.id,
+      friend_id: memory.friend_id,
+      friend_name: mockUsers.get(memory.friend_id)?.first_name || 'Unknown',
+      message_id: memory.message_id,
+      conversation_id: memory.conversation_id,
+      sender_id: memory.sender_id,
+      message_type: memory.message_type,
+      message_content: memory.message_content,
+      notes: memory.notes,
+      created_at: memory.created_at,
+      updated_at: memory.updated_at,
+    }));
+
+    return createSuccessResponse({
+      memories: responseData,
+      has_more: hasMore,
+      next_cursor: nextCursor,
+    });
+  }),
+
+  // PUT /users/friends/memories/:memoryId/notes - Update memory notes
+  http.put(buildApiUrl('/users/friends/memories/:memoryId/notes'), async ({ request, params }) => {
+    const { memoryId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const memory = mockFriendMemories.get(memoryId as string);
+    if (!memory) {
+      return createNotFoundError('Memory not found');
+    }
+
+    if (memory.user_id !== userId) {
+      return createConflictError('Unauthorized to update this memory');
+    }
+
+    try {
+      const body = await request.json() as { notes: string };
+      
+      // Update the memory
+      const updatedMemory = {
+        ...memory,
+        notes: body.notes || '',
+        updated_at: now(),
+      };
+      mockFriendMemories.set(memoryId as string, updatedMemory);
+
+      // Return updated memory in API format
+      return createSuccessResponse({
+        id: updatedMemory.id,
+        friend_id: updatedMemory.friend_id,
+        friend_name: mockUsers.get(updatedMemory.friend_id)?.first_name || 'Unknown',
+        message_id: updatedMemory.message_id,
+        conversation_id: updatedMemory.conversation_id,
+        sender_id: updatedMemory.sender_id,
+        message_type: updatedMemory.message_type,
+        message_content: updatedMemory.message_content,
+        notes: updatedMemory.notes,
+        created_at: updatedMemory.created_at,
+        updated_at: updatedMemory.updated_at,
+      });
+    } catch (error) {
+      return createValidationError('Invalid request body');
+    }
+  }),
+
+  // DELETE /users/friends/memories/:memoryId - Delete a friend memory
+  http.delete(buildApiUrl('/users/friends/memories/:memoryId'), ({ request, params }) => {
+    const { memoryId } = params;
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const memory = mockFriendMemories.get(memoryId as string);
+    if (!memory) {
+      return createNotFoundError('Memory not found');
+    }
+
+    if (memory.user_id !== userId) {
+      return createConflictError('Unauthorized to delete this memory');
+    }
+
+    // Delete the memory
+    mockFriendMemories.delete(memoryId as string);
+
+    return createSuccessResponse({
+      message: 'Memory deleted successfully',
+    });
+  }),
+
+  // GET /users/friends/memories - Get all user memories (for completeness)
+  http.get(buildApiUrl('/users/friends/memories'), ({ request }) => {
+    const userId = extractUserId(request);
+    
+    if (!userId) {
+      return createAuthError();
+    }
+
+    const url = new URL(request.url);
+    const { limit, offset } = parsePaginationParams(url);
+
+    // Get all memories for the user
+    let userMemories = Array.from(mockFriendMemories.values()).filter(memory => 
+      memory.user_id === userId
+    );
+
+    // Sort by created_at descending
+    userMemories.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // Apply pagination
+    const paginatedMemories = userMemories.slice(offset, offset + limit);
+
+    // Transform to API response format
+    const responseData = paginatedMemories.map(memory => ({
+      id: memory.id,
+      friend_id: memory.friend_id,
+      friend_name: mockUsers.get(memory.friend_id)?.first_name || 'Unknown',
+      message_id: memory.message_id,
+      conversation_id: memory.conversation_id,
+      sender_id: memory.sender_id,
+      message_type: memory.message_type,
+      message_content: memory.message_content,
+      notes: memory.notes,
+      created_at: memory.created_at,
+      updated_at: memory.updated_at,
+    }));
+
+    return createSuccessResponse({
+      data: responseData,
+      count: responseData.length,
+      limit,
+      offset,
     });
   }),
 ];

@@ -26,7 +26,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
-    -o main cmd/gateway/integrated_main.go
+    -o main ./cmd/server
 
 # Final stage - minimal production image
 FROM alpine:latest AS production

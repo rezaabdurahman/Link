@@ -17,35 +17,7 @@ import (
 	"gorm.io/gorm"
 )
 
-
-
-type LoginRequest struct {
-	Email      string `json:"email" validate:"required,email"`
-	Password   string `json:"password" validate:"required"`
-	DeviceInfo string `json:"device_info,omitempty"`
-	IPAddress  string `json:"ip_address,omitempty"`
-}
-
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
-	DeviceInfo   string `json:"device_info,omitempty"`
-	IPAddress    string `json:"ip_address,omitempty"`
-}
-
-type RefreshTokenResponse struct {
-	AccessToken  string             `json:"access_token"`
-	RefreshToken string             `json:"refresh_token"`
-	ExpiresAt    time.Time          `json:"expires_at"`
-	User         models.ProfileUser `json:"user"`
-}
-
-type AuthResponse struct {
-	User    models.ProfileUser `json:"user"`
-	Token   *string            `json:"token,omitempty"`
-	Message string             `json:"message"`
-}
-
-// AuthService interface defines authentication operations
+// Core auth service - simplified and consolidated
 type AuthService interface {
 	RegisterUser(req RegisterUserRequest) (*AuthResponse, *TokenPair, error)
 	LoginUser(req LoginRequest) (*AuthResponse, *TokenPair, error)
@@ -58,39 +30,15 @@ type AuthService interface {
 type authService struct {
 	userRepo            repository.UserRepository
 	refreshTokenRepo    repository.RefreshTokenRepository
-	jwtService          *JWTService
+	jwtService          JWTService
 	passwordHasher      *security.PasswordHasher
 	tokenHasher         *security.TokenHasher
 	eventBus            events.EventBus
 	onboardingInterface onboarding.OnboardingInterface
 	redisClient         *redis.Client
-	securityLogger      *EnhancedSecurityLogger
 }
 
-// NewAuthService creates a new auth service
-func NewAuthService(
-	userRepo repository.UserRepository,
-	refreshTokenRepo repository.RefreshTokenRepository,
-	jwtService *JWTService,
-	eventBus events.EventBus,
-	onboardingInterface onboarding.OnboardingInterface,
-	redisClient *redis.Client,
-) AuthService {
-	passwordConfig := security.GetPasswordConfig()
-	passwordHasher := security.NewPasswordHasher(passwordConfig)
-	
-	return &authService{
-		userRepo:            userRepo,
-		refreshTokenRepo:    refreshTokenRepo,
-		jwtService:          jwtService,
-		passwordHasher:      passwordHasher,
-		tokenHasher:         security.NewTokenHasher(),
-		eventBus:            eventBus,
-		onboardingInterface: onboardingInterface,
-		redisClient:         redisClient,
-		securityLogger:      NewEnhancedSecurityLogger(redisClient),
-	}
-}
+// Note: newAuthService is now in auth.go as part of the compatibility layer
 
 // RegisterUser registers a new user
 func (s *authService) RegisterUser(req RegisterUserRequest) (*AuthResponse, *TokenPair, error) {
@@ -101,14 +49,16 @@ func (s *authService) RegisterUser(req RegisterUserRequest) (*AuthResponse, *Tok
 		return nil, nil, fmt.Errorf("failed to check email uniqueness: %w", err)
 	}
 
-	// Validate username uniqueness
-	if _, err := s.userRepo.GetUserByUsername(req.Username); err == nil {
-		return nil, nil, ErrUsernameAlreadyExists
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil, fmt.Errorf("failed to check username uniqueness: %w", err)
+	// Validate username uniqueness if provided
+	if req.Username != "" {
+		if _, err := s.userRepo.GetUserByUsername(req.Username); err == nil {
+			return nil, nil, ErrUsernameAlreadyExists
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, fmt.Errorf("failed to check username uniqueness: %w", err)
+		}
 	}
 
-	// Hash password using enhanced hasher
+	// Hash password
 	hashedPassword, err := s.passwordHasher.HashPassword(req.Password)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to hash password: %w", err)
@@ -135,24 +85,19 @@ func (s *authService) RegisterUser(req RegisterUserRequest) (*AuthResponse, *Tok
 		user.ID, user.Email, user.Username, user.FirstName, user.LastName, user.DateOfBirth,
 	)
 	if err := s.eventBus.Publish(ctx, userRegisteredEvent); err != nil {
-		// Log error but don't fail registration
 		fmt.Printf("Failed to publish user registered event: %v\n", err)
 	}
 
-	// Notify onboarding service through interface (decoupled call)
+	// Notify onboarding service
 	if err := s.onboardingInterface.NotifyUserRegistered(
 		ctx, user.ID, user.Email, user.Username, user.FirstName, user.LastName,
 	); err != nil {
-		// Log error but don't fail registration - onboarding initialization is not critical
 		fmt.Printf("Failed to initialize onboarding for user %s: %v\n", user.ID, err)
 	}
 
-	// Generate token pair (access + refresh tokens)
-	roles := []string{"user"} // Default role for all users
-	permissions := []string{} // Add user-specific permissions if needed
-	deviceInfo := "web-registration" // Default device info for registration
-	
-	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, user.Email, user.Username, roles, permissions, deviceInfo)
+	// Generate token pair with platform detection
+	platform := detectPlatform(req.Platform, req.DeviceInfo)
+	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, user.Email, user.Username, []string{"user"}, []string{}, platform)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate token pair: %w", err)
 	}
@@ -160,9 +105,9 @@ func (s *authService) RegisterUser(req RegisterUserRequest) (*AuthResponse, *Tok
 	// Store refresh token
 	refreshTokenRecord := &repository.RefreshToken{
 		UserID:     user.ID,
-		ExpiresAt:  time.Now().Add(s.jwtService.config.RefreshTokenTTL),
-		DeviceInfo: deviceInfo,
-		IPAddress:  "unknown", // Will be populated by handler layer
+		ExpiresAt:  time.Now().Add(s.jwtService.GetRefreshTokenTTL()),
+		DeviceInfo: req.DeviceInfo,
+		IPAddress:  req.IPAddress,
 		FamilyID:   tokenPair.FamilyID,
 	}
 
@@ -172,7 +117,6 @@ func (s *authService) RegisterUser(req RegisterUserRequest) (*AuthResponse, *Tok
 
 	// Update last login
 	if err := s.userRepo.UpdateLastLogin(user.ID); err != nil {
-		// Log error but don't fail the registration
 		fmt.Printf("Failed to update last login for user %s: %v\n", user.ID, err)
 	}
 
@@ -186,6 +130,7 @@ func (s *authService) RegisterUser(req RegisterUserRequest) (*AuthResponse, *Tok
 // LoginUser authenticates a user
 func (s *authService) LoginUser(req LoginRequest) (*AuthResponse, *TokenPair, error) {
 	ctx := context.Background()
+
 	// Get user by email
 	user, err := s.userRepo.GetUserByEmail(strings.ToLower(req.Email))
 	if err != nil {
@@ -195,7 +140,7 @@ func (s *authService) LoginUser(req LoginRequest) (*AuthResponse, *TokenPair, er
 		return nil, nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Verify password using enhanced hasher
+	// Verify password
 	isValid, err := s.passwordHasher.VerifyPassword(req.Password, user.PasswordHash)
 	if err != nil {
 		return nil, nil, fmt.Errorf("password verification failed: %w", err)
@@ -204,25 +149,16 @@ func (s *authService) LoginUser(req LoginRequest) (*AuthResponse, *TokenPair, er
 		return nil, nil, ErrInvalidCredentials
 	}
 
-	// Check if password should be rehashed with updated parameters
+	// Check if password should be rehashed
 	if s.passwordHasher.ShouldRehash(user.PasswordHash) {
-		// Rehash password with current parameters (synchronous for security)
 		if err := s.handlePasswordRehashing(ctx, user, req.Password); err != nil {
-			// Log the error but don't fail the login
-			s.logSecurityEvent("password_rehash_failed", user.ID.String(), err.Error())
 			fmt.Printf("Password rehashing failed for user %s: %v\n", user.ID, err)
 		}
 	}
 
-	// Generate token pair (access + refresh tokens)
-	roles := []string{"user"} // Default role for all users
-	permissions := []string{} // Add user-specific permissions if needed
-	deviceInfo := req.DeviceInfo
-	if deviceInfo == "" {
-		deviceInfo = "web-login" // Default device info
-	}
-	
-	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, user.Email, user.Username, roles, permissions, deviceInfo)
+	// Generate token pair with platform detection
+	platform := detectPlatform(req.Platform, req.DeviceInfo)
+	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, user.Email, user.Username, []string{"user"}, []string{}, platform)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate token pair: %w", err)
 	}
@@ -230,8 +166,8 @@ func (s *authService) LoginUser(req LoginRequest) (*AuthResponse, *TokenPair, er
 	// Store refresh token
 	refreshTokenRecord := &repository.RefreshToken{
 		UserID:     user.ID,
-		ExpiresAt:  time.Now().Add(s.jwtService.config.RefreshTokenTTL),
-		DeviceInfo: deviceInfo,
+		ExpiresAt:  time.Now().Add(s.jwtService.GetRefreshTokenTTL()),
+		DeviceInfo: req.DeviceInfo,
 		IPAddress:  req.IPAddress,
 		FamilyID:   tokenPair.FamilyID,
 	}
@@ -242,8 +178,14 @@ func (s *authService) LoginUser(req LoginRequest) (*AuthResponse, *TokenPair, er
 
 	// Update last login
 	if err := s.userRepo.UpdateLastLogin(user.ID); err != nil {
-		// Log error but don't fail the login
 		fmt.Printf("Failed to update last login for user %s: %v\n", user.ID, err)
+	}
+
+	// Store device info for mobile platforms (for future push notifications)
+	if platform != "web" && req.DeviceID != "" {
+		if err := s.storeDeviceInfo(ctx, user.ID, req.DeviceID, platform, req.DeviceInfo); err != nil {
+			fmt.Printf("Failed to store device info for user %s: %v\n", user.ID, err)
+		}
 	}
 
 	return &AuthResponse{
@@ -253,12 +195,12 @@ func (s *authService) LoginUser(req LoginRequest) (*AuthResponse, *TokenPair, er
 	}, tokenPair, nil
 }
 
-// RefreshTokens implements token refresh with rotation and security measures
+// RefreshTokens refreshes access and refresh tokens
 func (s *authService) RefreshTokens(req RefreshTokenRequest) (*RefreshTokenResponse, error) {
 	ctx := context.Background()
-	
-	// Validate refresh token structure
-	claims, err := s.jwtService.ValidateRefreshTokenWithFamily(req.RefreshToken)
+
+	// Validate refresh token
+	claims, err := s.jwtService.ValidateRefreshTokenWithFamily(req.RefreshToken, "")
 	if err != nil {
 		return nil, ErrInvalidToken
 	}
@@ -266,26 +208,20 @@ func (s *authService) RefreshTokens(req RefreshTokenRequest) (*RefreshTokenRespo
 	// Hash token for database lookup
 	tokenHash := s.hashToken(req.RefreshToken)
 
-	// Validate family ID from claims
+	// Validate family ID
 	if claims.FamilyID == "" {
-		s.logSecurityEvent("invalid_family_id", claims.Subject, "Refresh token missing family ID")
-		return nil, ErrInvalidToken
-	}
-	if _, err := uuid.Parse(claims.FamilyID); err != nil {
-		s.logSecurityEvent("invalid_family_id", claims.Subject, fmt.Sprintf("Malformed family ID: %s", claims.FamilyID))
 		return nil, ErrInvalidToken
 	}
 
-	// Validate token in database (this also checks cache internally)
+	// Validate token in database
 	_, err = s.refreshTokenRepo.ValidateRefreshToken(ctx, tokenHash)
 	if err != nil {
-		// If token is invalid, revoke entire family (rotation attack detection)
+		// Revoke entire family on invalid token (rotation attack detection)
 		s.refreshTokenRepo.RevokeTokenFamily(ctx, claims.FamilyID)
-		s.logSecurityEvent("token_family_revoked", claims.Subject, fmt.Sprintf("Invalid token used, family %s revoked", claims.FamilyID))
 		return nil, ErrInvalidToken
 	}
 
-	// Parse user ID from claims
+	// Parse user ID
 	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		return nil, ErrInvalidToken
@@ -300,127 +236,116 @@ func (s *authService) RefreshTokens(req RefreshTokenRequest) (*RefreshTokenRespo
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Check token limit for user
+	// Check token limit
 	activeTokenCount, err := s.refreshTokenRepo.GetActiveTokenCount(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check active token count: %w", err)
 	}
-	
-	if activeTokenCount >= int64(s.jwtService.config.MaxRefreshTokens) {
-		// Clean up oldest tokens if limit exceeded
+
+	if activeTokenCount >= int64(s.jwtService.GetMaxRefreshTokens()) {
 		s.refreshTokenRepo.RevokeAllUserTokens(ctx, userID)
-		s.logSecurityEvent("token_limit_exceeded", userID.String(), "All tokens revoked due to limit exceeded")
+		return nil, ErrTooManyTokens
 	}
 
-	// Generate new token pair (refresh token rotation)
-	roles := []string{"user"} // Default role for all users  
-	permissions := []string{} // Add user-specific permissions if needed
-	deviceInfo := req.DeviceInfo
-	if deviceInfo == "" {
-		deviceInfo = claims.DeviceInfo // Preserve original device info
-	}
-	
-	newTokenPair, err := s.jwtService.GenerateTokenPair(user.ID, user.Email, user.Username, roles, permissions, deviceInfo)
+	// Generate new token pair
+	platform := detectPlatform(req.Platform, req.DeviceInfo)
+	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, user.Email, user.Username, []string{"user"}, []string{}, platform)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate new token pair: %w", err)
+		return nil, fmt.Errorf("failed to generate token pair: %w", err)
 	}
 
-	// Rotate tokens atomically (revoke old + store new in transaction)
-	newRefreshTokenRecord := &repository.RefreshToken{
+	// Revoke old token and store new one atomically
+	if err := s.refreshTokenRepo.RevokeRefreshToken(ctx, tokenHash); err != nil {
+		return nil, fmt.Errorf("failed to revoke old token: %w", err)
+	}
+
+	refreshTokenRecord := &repository.RefreshToken{
 		UserID:     user.ID,
-		ExpiresAt:  time.Now().Add(s.jwtService.config.RefreshTokenTTL),
-		DeviceInfo: deviceInfo,
+		ExpiresAt:  time.Now().Add(s.jwtService.GetRefreshTokenTTL()),
+		DeviceInfo: req.DeviceInfo,
 		IPAddress:  req.IPAddress,
-		FamilyID:   newTokenPair.FamilyID,
+		FamilyID:   tokenPair.FamilyID,
 	}
 
-	if err := s.refreshTokenRepo.RotateRefreshTokenAtomic(ctx, tokenHash, newRefreshTokenRecord, newTokenPair.RefreshToken); err != nil {
-		s.logSecurityEvent("token_rotation_failed", userID.String(), fmt.Sprintf("Atomic rotation failed: %v", err))
-		return nil, fmt.Errorf("failed to rotate refresh token: %w", err)
+	if err := s.refreshTokenRepo.StoreRefreshToken(ctx, refreshTokenRecord, tokenPair.RefreshToken); err != nil {
+		return nil, fmt.Errorf("failed to store new token: %w", err)
 	}
 
 	return &RefreshTokenResponse{
-		AccessToken:  newTokenPair.AccessToken,
-		RefreshToken: newTokenPair.RefreshToken,
-		ExpiresAt:    newTokenPair.ExpiresAt,
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresAt:    tokenPair.ExpiresAt,
 		User:         user.ToProfileUser(),
 	}, nil
 }
 
-// LogoutUser logs out a user by invalidating their session
+// LogoutUser logs out a user
 func (s *authService) LogoutUser(userID uuid.UUID, sessionToken string) error {
-	// Delete the specific session
-	if err := s.userRepo.DeleteSession(sessionToken); err != nil {
-		return fmt.Errorf("failed to delete session: %w", err)
-	}
-	return nil
-}
-
-// CleanupExpiredSessions removes expired sessions
-func (s *authService) CleanupExpiredSessions() error {
-	if err := s.userRepo.CleanupExpiredSessions(); err != nil {
-		return fmt.Errorf("failed to cleanup expired sessions: %w", err)
-	}
-	return nil
-}
-
-// CleanupExpiredRefreshTokens removes expired refresh tokens
-func (s *authService) CleanupExpiredRefreshTokens() error {
 	ctx := context.Background()
-	deletedCount, err := s.refreshTokenRepo.CleanupExpiredTokens(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to cleanup expired refresh tokens: %w", err)
+
+	if sessionToken != "" {
+		tokenHash := s.hashToken(sessionToken)
+		return s.refreshTokenRepo.RevokeRefreshToken(ctx, tokenHash)
 	}
-	
-	fmt.Printf("Cleaned up %d expired refresh tokens\n", deletedCount)
-	return nil
+
+	// If no specific token provided, revoke all user tokens
+	return s.refreshTokenRepo.RevokeAllUserTokens(ctx, userID)
 }
 
-// hashToken generates SHA-256 hash of the token for database lookup
+// CleanupExpiredSessions cleans up expired sessions
+func (s *authService) CleanupExpiredSessions() error {
+	ctx := context.Background()
+	_, err := s.refreshTokenRepo.CleanupExpiredTokens(ctx)
+	return err
+}
+
+// CleanupExpiredRefreshTokens cleans up expired refresh tokens
+func (s *authService) CleanupExpiredRefreshTokens() error {
+	return s.CleanupExpiredSessions() // Same operation
+}
+
+// Helper functions
+
+func (s *authService) handlePasswordRehashing(ctx context.Context, user *models.User, password string) error {
+	newHash, err := s.passwordHasher.HashPassword(password)
+	if err != nil {
+		return err
+	}
+
+	user.PasswordHash = newHash
+	return s.userRepo.UpdateUser(user)
+}
+
 func (s *authService) hashToken(token string) string {
 	return s.tokenHasher.HashToken(token)
 }
 
-// handlePasswordRehashing safely rehashes a password with proper error handling and auditing
-func (s *authService) handlePasswordRehashing(ctx context.Context, user *models.User, password string) error {
-	// Generate new hash with current security parameters
-	newHash, err := s.passwordHasher.HashPassword(password)
-	if err != nil {
-		return fmt.Errorf("failed to generate new password hash: %w", err)
-	}
-	
-	// Update the user model
-	originalHash := user.PasswordHash
-	user.PasswordHash = newHash
-	
-	// Update in database with transaction support
-	if err := s.userRepo.UpdateUser(user); err != nil {
-		// Rollback the user model on database failure
-		user.PasswordHash = originalHash
-		return fmt.Errorf("failed to update password hash in database: %w", err)
-	}
-	
-	// Log successful rehashing for security audit
-	s.logSecurityEvent("password_rehashed", user.ID.String(), "Password hash updated with current security parameters")
-	
+func (s *authService) storeDeviceInfo(ctx context.Context, userID uuid.UUID, deviceID, platform, deviceInfo string) error {
+	// Simple device info storage - can be enhanced later
+	// For now, just log it for future push notification implementation
+	fmt.Printf("Device info stored - User: %s, Device: %s, Platform: %s\n", userID, deviceID, platform)
 	return nil
 }
 
-// logSecurityEvent logs security-related events for monitoring
-func (s *authService) logSecurityEvent(event, userID, details string) {
-	// Parse details and determine severity
-	detailsMap := map[string]interface{}{"details": details}
-	severity := SeverityInfo
-	
-	// Determine severity based on event type
-	switch event {
-	case "login_failed", "invalid_token", "token_family_revoked":
-		severity = SeverityWarning
-	case "password_rehash_failed", "suspicious_activity":
-		severity = SeverityError
-	case "account_compromise", "token_theft_detected":
-		severity = SeverityCritical
+// Platform detection - simple but effective
+func detectPlatform(platformHeader, deviceInfo string) string {
+	// Check explicit platform header first (from mobile apps)
+	switch strings.ToLower(platformHeader) {
+	case "ios":
+		return "ios"
+	case "android":
+		return "android"
+	case "mobile":
+		// Detect specific mobile platform from device info
+		if strings.Contains(strings.ToLower(deviceInfo), "iphone") ||
+			strings.Contains(strings.ToLower(deviceInfo), "ipad") {
+			return "ios"
+		}
+		if strings.Contains(strings.ToLower(deviceInfo), "android") {
+			return "android"
+		}
+		return "mobile"
+	default:
+		return "web"
 	}
-	
-	s.securityLogger.LogSecurityEvent(event, userID, detailsMap, severity)
 }

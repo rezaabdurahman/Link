@@ -750,6 +750,87 @@ Following the established rules:
 - **Privacy-first approach** - Location sharing is opt-in with proximity controls
 - **Secure data handling** - All user data properly typed and validated
 
+### 🔐 Encryption Key Management
+
+**Status: ✅ Deployed - Versioned encryption system with safe key rotation**
+
+#### Current Implementation
+- **Versioned encryption library** - Supports safe key rotation without data loss
+- **Multi-key support** - Current key + legacy keys for backward compatibility
+- **Automatic version detection** - Each encrypted field remembers its key version
+- **Zero-downtime rotation** - Monthly automated key rotation enabled
+
+#### Key Management Strategy
+```
+Phase 1: Active Keys (Current)
+├─ v3: current-key     ← New encryptions
+├─ v2: legacy-key      ← Existing data readable
+└─ v1: legacy-key      ← Existing data readable
+
+Phase 2: Migration (Planned - 6-12 months)
+├─ Background re-encryption of old data
+├─ Gradual cleanup of very old keys
+└─ Keep last 2-3 versions for safety
+
+Phase 3: Production Maturity (12+ months)  
+├─ Automated lifecycle management
+├─ Compliance reporting
+└─ Consider AWS KMS integration
+```
+
+#### Encryption Lifecycle TODOs
+
+**✅ Completed (Safe to use now)**
+- [x] Deploy versioned encryption library
+- [x] Update secrets management pipeline  
+- [x] Configure safe key rotation scripts
+- [x] Test backward compatibility
+- [x] Enable monthly key rotation
+
+**🔄 Phase 2: Migration & Optimization (6-12 months)**
+- [ ] **Data Migration Planning** - Analyze encrypted data distribution by key version
+- [ ] **Background Migration Jobs** - Implement lazy/batch re-encryption of old data
+  ```bash
+  # Example background migration
+  ./scripts/migrate-encryption-keys.sh --from-version=1 --batch-size=1000
+  ```
+- [ ] **Key Usage Monitoring** - Dashboard showing key version distribution
+- [ ] **Legacy Key Cleanup** - Remove keys after confirming no data uses them
+- [ ] **Migration Performance Testing** - Ensure zero impact on production
+
+**🚀 Phase 3: Advanced Features (12+ months)**
+- [ ] **AWS KMS Integration** - Evaluate vendor-managed encryption keys
+  ```go
+  // Future: AWS KMS with our versioning
+  kmsEncryptor := encryption.NewKMSVersionedEncryptor(awsKMSKey)
+  ```
+- [ ] **Compliance Reporting** - Key rotation audit logs and reports
+- [ ] **Automated Key Lifecycle** - Policy-based key retirement
+- [ ] **Performance Optimization** - Caching, key derivation improvements
+- [ ] **Security Monitoring** - Encryption/decryption success rate alerts
+
+#### For Developers
+
+**Using Encryption in Services:**
+```go
+// Simple usage - handles versioning automatically
+encryptor, _ := encryption.NewServiceEncryptor()
+encrypted, _ := encryptor.EncryptString("sensitive data")
+decrypted, _ := encryptor.DecryptString(encrypted)
+```
+
+**Key Rotation Process (Monthly - Automated):**
+```bash
+# Safe rotation - no data loss
+./scripts/rotate-application-secrets.sh production
+# Result: New key becomes current, old key moves to legacy
+```
+
+**Documentation:**
+- `docs/security/encryption-key-versioning.md` - Complete technical guide
+- `docs/security/encryption-deployment-status.md` - Current status
+- `backend/shared-libs/encryption/` - Library implementation
+
 ## 🧪 Testing & Quality Assurance
 
 ### Smoke Tests

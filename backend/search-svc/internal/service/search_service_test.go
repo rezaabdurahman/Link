@@ -24,6 +24,11 @@ func (m *mockSearchRepository) StoreUserEmbedding(ctx context.Context, userID uu
 	return args.Error(0)
 }
 
+func (m *mockSearchRepository) StoreUserEmbeddingWithTTL(ctx context.Context, userID uuid.UUID, embedding []float32, profileText, provider, model string, ttlHours int) error {
+	args := m.Called(ctx, userID, embedding, profileText, provider, model, ttlHours)
+	return args.Error(0)
+}
+
 func (m *mockSearchRepository) GetUserEmbedding(ctx context.Context, userID uuid.UUID) (*models.UserEmbedding, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
@@ -34,6 +39,11 @@ func (m *mockSearchRepository) GetUserEmbedding(ctx context.Context, userID uuid
 
 func (m *mockSearchRepository) UpdateUserEmbedding(ctx context.Context, userID uuid.UUID, embedding []float32, profileText, provider, model string) error {
 	args := m.Called(ctx, userID, embedding, profileText, provider, model)
+	return args.Error(0)
+}
+
+func (m *mockSearchRepository) UpdateUserEmbeddingWithTTL(ctx context.Context, userID uuid.UUID, embedding []float32, profileText, provider, model string, ttlHours int) error {
+	args := m.Called(ctx, userID, embedding, profileText, provider, model, ttlHours)
 	return args.Error(0)
 }
 
@@ -52,6 +62,32 @@ func (m *mockSearchRepository) SearchSimilarUsers(ctx context.Context, queryEmbe
 
 func (m *mockSearchRepository) GetTotalUserCount(ctx context.Context, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) (int, error) {
 	args := m.Called(ctx, userIDFilter, excludeUserID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *mockSearchRepository) FullTextSearch(ctx context.Context, query string, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID) ([]models.UserEmbedding, []float64, error) {
+	args := m.Called(ctx, query, limit, userIDFilter, excludeUserID)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	return args.Get(0).([]models.UserEmbedding), args.Get(1).([]float64), args.Error(2)
+}
+
+func (m *mockSearchRepository) HybridSearch(ctx context.Context, query string, queryEmbedding []float32, limit int, userIDFilter []uuid.UUID, excludeUserID *uuid.UUID, bm25Weight, vectorWeight float64) ([]models.UserEmbedding, []float64, error) {
+	args := m.Called(ctx, query, queryEmbedding, limit, userIDFilter, excludeUserID, bm25Weight, vectorWeight)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	return args.Get(0).([]models.UserEmbedding), args.Get(1).([]float64), args.Error(2)
+}
+
+func (m *mockSearchRepository) CleanupExpiredEmbeddings(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *mockSearchRepository) DeleteExpiredEmbeddings(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
 	return args.Int(0), args.Error(1)
 }
 

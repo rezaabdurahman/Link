@@ -1,30 +1,35 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import DiscoveryPage from './pages/DiscoveryPage';
-import ChatPage from './pages/ChatPageRefactored';
-import OpportunitiesPage from './pages/OpportunitiesPage';
-import ProfilePage from './pages/ProfilePageRefactored';
-import SettingsPage from './pages/SettingsPage';
-import PrivacySettingsPage from './pages/PrivacySettingsPage';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import FriendRequestsPage from './pages/FriendRequestsPageRefactored';
-import MainLayout from './components/MainLayout';
-import RequireAuth from './components/RequireAuth';
-import GuestOnly from './components/GuestOnly';
-import AuthExample from './examples/AuthExample';
-import UserCardDemo from './pages/UserCardDemo';
-import { AuthProvider } from './contexts/AuthContext';
-import { OnboardingProvider } from './contexts/OnboardingContext';
-import { CueProvider } from './contexts/CueContext';
-import { FeatureProvider } from './contexts/FeatureContext';
-import OnboardingPage from './pages/OnboardingPage';
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
-import TermsOfServicePage from './pages/TermsOfServicePage';
-import DemoInitializer from './components/DemoInitializer';
+
+import AsyncErrorBoundary from './components/ErrorBoundary/AsyncErrorBoundary';
 import GlobalErrorBoundary from './components/ErrorBoundary/GlobalErrorBoundary';
 import RouteErrorBoundary from './components/ErrorBoundary/RouteErrorBoundary';
-import AsyncErrorBoundary from './components/ErrorBoundary/AsyncErrorBoundary';
+import DemoInitializer from './components/DemoInitializer';
+import GuestOnly from './components/GuestOnly';
+import MainLayout from './components/MainLayout';
+import RequireAuth from './components/RequireAuth';
+
+import { AuthProvider } from './contexts/AuthContext';
+import { CueProvider } from './contexts/CueContext';
+import { FeatureProvider } from './contexts/FeatureContext';
+import { OnboardingProvider } from './contexts/OnboardingContext';
+
+import AuthExample from './examples/AuthExample';
+
+import ChatPage from './pages/ChatPageRefactored';
+import DiscoveryPage from './pages/DiscoveryPage';
+import FriendRequestsPage from './pages/FriendRequestsPageRefactored';
+import LoginPage from './pages/LoginPage';
+import OnboardingPage from './pages/OnboardingPage';
+import OpportunitiesPage from './pages/OpportunitiesPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import PrivacySettingsPage from './pages/PrivacySettingsPage';
+import ProfilePage from './pages/ProfilePageRefactored';
+import SettingsPage from './pages/SettingsPage';
+import SignupPage from './pages/SignupPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
+import UserCardDemo from './pages/UserCardDemo';
+
 import './App.css';
 
 const App: React.FC = (): JSX.Element => {
@@ -47,6 +52,11 @@ const App: React.FC = (): JSX.Element => {
                 <Route path="/demo/usercard" element={
                   <RouteErrorBoundary routeName="User Card Demo">
                     <UserCardDemo />
+                  </RouteErrorBoundary>
+                } />
+                <Route path="/debug-onboarding" element={
+                  <RouteErrorBoundary routeName="Debug Onboarding">
+                    <OnboardingPage />
                   </RouteErrorBoundary>
                 } />
                 
@@ -81,7 +91,7 @@ const App: React.FC = (): JSX.Element => {
                   } />
                 </Route>
                 
-                {/* Onboarding Route (authenticated users only) */}
+                {/* Onboarding Route - Separate RequireAuth to avoid conflicts */}
                 <Route element={<RequireAuth />}>
                   <Route path="/onboarding" element={
                     <RouteErrorBoundary routeName="Onboarding">
@@ -90,7 +100,7 @@ const App: React.FC = (): JSX.Element => {
                   } />
                 </Route>
                 
-                {/* Protected App Routes with MainLayout */}
+                {/* Main App Routes (authenticated users only) */}
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<MainLayout />}>
                     <Route index element={

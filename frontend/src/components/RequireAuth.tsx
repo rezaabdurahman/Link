@@ -5,6 +5,7 @@ import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isAuthRequired } from '../config';
+import { useStableLocation } from '../hooks/useStableLocation';
 
 /**
  * RequireAuth component that protects routes requiring authentication
@@ -17,6 +18,16 @@ import { isAuthRequired } from '../config';
 const RequireAuth: React.FC = (): JSX.Element => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+  const { intendedPath, currentPath } = useStableLocation();
+  
+  console.log('🔍 RequireAuth: Checking auth for route:', {
+    currentPath,
+    intendedPath,
+    user: user?.id,
+    isLoading,
+    userExists: !!user,
+    timestamp: new Date().toISOString()
+  });
 
   // Skip authentication if environment doesn't require it (demo mode, etc.)
   if (!isAuthRequired()) {

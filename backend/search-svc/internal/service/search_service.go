@@ -36,6 +36,8 @@ type SearchServiceConfig struct {
 	EmbeddingProvider config.EmbeddingProvider
 	UserClient        client.UserClient      // optional
 	DiscoveryClient   client.DiscoveryClient // optional
+	ConsentClient     *client.ConsentClient  // optional
+	Config            *config.Config         // service configuration
 	DisableAnalytics  bool                   // for testing purposes
 }
 
@@ -44,6 +46,8 @@ type searchService struct {
 	embeddingProvider config.EmbeddingProvider
 	userClient        client.UserClient
 	discoveryClient   client.DiscoveryClient
+	consentClient     *client.ConsentClient
+	config            *config.Config
 	disableAnalytics  bool
 }
 
@@ -54,6 +58,8 @@ func NewSearchService(config SearchServiceConfig) SearchService {
 		embeddingProvider: config.EmbeddingProvider,
 		userClient:        config.UserClient,
 		discoveryClient:   config.DiscoveryClient,
+		consentClient:     config.ConsentClient,
+		config:            config.Config,
 		disableAnalytics:  config.DisableAnalytics,
 	}
 }
@@ -122,6 +128,12 @@ func (s *searchService) Search(ctx context.Context, userID uuid.UUID, req *dto.S
 	
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform %s search: %w", searchMode, err)
+	}
+	
+	// Filter results based on current consent status (real-time consent check)
+	embeddings, scores, err = s.filterResultsByConsent(ctx, embeddings, scores)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter results by consent: %w", err)
 	}
 	
 	// Convert to response format
@@ -563,4 +575,55 @@ func (s *searchService) hasSemanticMatch(query, profileText string) bool {
 		}
 	}
 	return false
+}
+
+// filterResultsByConsent filters search results based on current user consent status
+func (s *searchService) filterResultsByConsent(ctx context.Context, embeddings []models.UserEmbedding, scores []float64) ([]models.UserEmbedding, []float64, error) {
+	// Skip consent filtering if consent service is disabled or not configured
+	if s.consentClient == nil || s.config == nil {
+		return embeddings, scores, nil
+	}
+	
+	if !s.config.ConsentService.Enabled || !s.config.Features.EnforceConsent {
+		return embeddings, scores, nil
+	}
+	
+	if len(embeddings) == 0 {
+		return embeddings, scores, nil
+	}
+	
+	// Extract user IDs from embeddings
+	userIDs := make([]uuid.UUID, len(embeddings))
+	for i, embedding := range embeddings {
+		userIDs[i] = embedding.UserID
+	}
+	
+	// Create timeout context for consent check
+	consentCtx, cancel := context.WithTimeout(ctx, s.config.Search.ConsentCheckTimeout)
+	defer cancel()
+	
+	// Batch check consent for all users
+	consentMap, err := s.consentClient.BatchCheckSearchConsents(consentCtx, userIDs)
+	if err != nil {
+		// Log error and decide whether to fail or continue based on fallback configuration
+		if s.config.Features.ConsentServiceFallback {
+			// Continue with all results if fallback is enabled
+			return embeddings, scores, nil
+		}
+		return nil, nil, fmt.Errorf("consent check failed: %w", err)
+	}
+	
+	// Filter embeddings and scores based on consent
+	var filteredEmbeddings []models.UserEmbedding
+	var filteredScores []float64
+	
+	for i, embedding := range embeddings {
+		if hasConsent, exists := consentMap[embedding.UserID]; exists && hasConsent {
+			filteredEmbeddings = append(filteredEmbeddings, embedding)
+			filteredScores = append(filteredScores, scores[i])
+		}
+		// Skip users who don't have consent or aren't in consent map
+	}
+	
+	return filteredEmbeddings, filteredScores, nil
 }

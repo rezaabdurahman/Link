@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserPlus, Mail, Users, Phone } from 'lucide-react';
+import { lookupContact, addContact, sendInvitation, getContactErrorMessage } from '../services/userClient';
+import { ContactLookupRequest, AddContactRequest, SendInvitationRequest } from '../services/userClient';
 
 interface AddMyContactModalProps {
   isOpen: boolean;
@@ -12,19 +14,95 @@ const AddMyContactModal: React.FC<AddMyContactModalProps> = ({ isOpen, onClose }
   const [email, setEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [showInvitation, setShowInvitation] = useState<boolean>(false);
+  const [invitationMessage, setInvitationMessage] = useState<string>('Join me on Link to discover amazing people and experiences!');
 
   const handleAddByEmail = async (): Promise<void> => {
     if (!email.trim()) return;
     
     setIsLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
     
-    // Simulate API call
+    try {
+      // First, lookup the contact to see if they exist
+      const lookupRequest: ContactLookupRequest = {
+        identifier: email.trim(),
+        type: 'email'
+      };
+      
+      const lookupResponse = await lookupContact(lookupRequest);
+      
+      if (lookupResponse.found && lookupResponse.user) {
+        // User exists - send friend request
+        const addContactRequest: AddContactRequest = {
+          user_id: lookupResponse.user.id
+        };
+        
+        await addContact(addContactRequest);
+        setSuccessMessage(`Friend request sent to ${lookupResponse.user.first_name}!`);
+        setEmail('');
+        
+        // Close modal after success
+        setTimeout(() => {
+          setSuccessMessage('');
+          onClose();
+        }, 2000);
+        
+      } else {
+        // User doesn't exist - show invitation form
+        setShowInvitation(true);
+      }
+      
+    } catch (error: any) {
+      setErrorMessage(getContactErrorMessage(error.error || error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendInvitation = async (): Promise<void> => {
+    if (!email.trim()) return;
+    
+    setIsLoading(true);
+    setErrorMessage('');
+    
+    try {
+      const invitationRequest: SendInvitationRequest = {
+        identifier: email.trim(),
+        type: 'email',
+        message: invitationMessage.trim() || undefined
+      };
+      
+      await sendInvitation(invitationRequest);
+      setSuccessMessage(`Invitation sent to ${email}!`);
+      setEmail('');
+      setShowInvitation(false);
+      
+      // Close modal after success
+      setTimeout(() => {
+        setSuccessMessage('');
+        onClose();
+      }, 2000);
+      
+    } catch (error: any) {
+      setErrorMessage(getContactErrorMessage(error.error || error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportContacts = async (): Promise<void> => {
+    setIsLoading(true);
+    setErrorMessage('');
+    
+    // TODO: Implement actual contact import functionality
+    // For now, show a message about upcoming feature
     setTimeout(() => {
       setIsLoading(false);
-      setSuccessMessage(`Invitation sent to ${email}`);
-      setEmail('');
+      setSuccessMessage('Contact import feature coming soon!');
       
-      // Clear success message after 3 seconds
       setTimeout(() => {
         setSuccessMessage('');
         onClose();
@@ -32,20 +110,10 @@ const AddMyContactModal: React.FC<AddMyContactModalProps> = ({ isOpen, onClose }
     }, 1000);
   };
 
-  const handleImportContacts = async (): Promise<void> => {
-    setIsLoading(true);
-    
-    // Simulate contact import
-    setTimeout(() => {
-      setIsLoading(false);
-      setSuccessMessage('Contacts imported successfully!');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccessMessage('');
-        onClose();
-      }, 2000);
-    }, 1500);
+  const handleBack = (): void => {
+    setShowInvitation(false);
+    setErrorMessage('');
+    setSuccessMessage('');
   };
 
   if (!isOpen) return <></>;
@@ -98,47 +166,131 @@ const AddMyContactModal: React.FC<AddMyContactModalProps> = ({ isOpen, onClose }
         <div className="px-6 pb-6">
           {activeTab === 'email' ? (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter contact's email address"
-                  className="ios-text-field w-full px-4 py-3"
-                  disabled={isLoading}
-                />
-              </div>
-              
-              {successMessage && (
-                <div className="bg-aqua/10 border border-aqua/30 text-aqua px-4 py-3 rounded-lg text-sm">
-                  {successMessage}
-                </div>
-              )}
+              {!showInvitation ? (
+                // Email lookup form
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter contact's email address"
+                      className="ios-text-field w-full px-4 py-3"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  
+                  {errorMessage && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
+                      {errorMessage}
+                    </div>
+                  )}
+                  
+                  {successMessage && (
+                    <div className="bg-aqua/10 border border-aqua/30 text-aqua px-4 py-3 rounded-lg text-sm">
+                      {successMessage}
+                    </div>
+                  )}
 
-              <button
-                onClick={handleAddByEmail}
-                disabled={!email.trim() || isLoading}
-                className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 hover-glow hover-scale ${
-                  email.trim() && !isLoading
-                    ? 'bg-aqua text-white hover:bg-aqua-dark shadow-sm'
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={16} />
-                    Add to Contacts
-                  </>
-                )}
-              </button>
+                  <button
+                    onClick={handleAddByEmail}
+                    disabled={!email.trim() || isLoading}
+                    className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 hover-glow hover-scale ${
+                      email.trim() && !isLoading
+                        ? 'bg-aqua text-white hover:bg-aqua-dark shadow-sm'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        Looking up...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={16} />
+                        Add to Contacts
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                // Invitation form
+                <>
+                  <div className="text-center py-4">
+                    <Mail size={48} className="mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      User Not Found
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-4">
+                      {email} isn't on Link yet. Send them an invitation to join!
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Personal Message (Optional)
+                    </label>
+                    <textarea
+                      value={invitationMessage}
+                      onChange={(e) => setInvitationMessage(e.target.value)}
+                      placeholder="Add a personal message to your invitation..."
+                      className="ios-text-field w-full px-4 py-3 min-h-[80px] resize-none"
+                      disabled={isLoading}
+                      maxLength={200}
+                    />
+                    <div className="text-xs text-gray-500 text-right mt-1">
+                      {invitationMessage.length}/200
+                    </div>
+                  </div>
+                  
+                  {errorMessage && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
+                      {errorMessage}
+                    </div>
+                  )}
+                  
+                  {successMessage && (
+                    <div className="bg-aqua/10 border border-aqua/30 text-aqua px-4 py-3 rounded-lg text-sm">
+                      {successMessage}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleBack}
+                      disabled={isLoading}
+                      className="flex-1 py-3 px-4 rounded-lg font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleSendInvitation}
+                      disabled={isLoading}
+                      className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 hover-glow hover-scale ${
+                        !isLoading
+                          ? 'bg-aqua text-white hover:bg-aqua-dark shadow-sm'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Mail size={16} />
+                          Send Invitation
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4">

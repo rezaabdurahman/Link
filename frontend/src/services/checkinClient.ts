@@ -596,7 +596,7 @@ export function convertCheckInDataToRequest(
   if (checkInData.fileAttachments && checkInData.fileAttachments.length > 0) {
     request.file_attachments = checkInData.fileAttachments.map(file => ({
       file_name: file.name,
-      file_url: file.url || '#', // TODO: Handle file upload
+      file_url: file.url || '', // File URL from upload service
       file_size: file.size,
       mime_type: file.type,
     }));
@@ -606,7 +606,7 @@ export function convertCheckInDataToRequest(
   if (checkInData.voiceNote) {
     request.voice_note = {
       file_name: 'voice_note.wav',
-      file_url: checkInData.voiceNote.url || '#', // TODO: Handle voice note upload
+      file_url: checkInData.voiceNote.url || '', // Voice note URL from upload service
       duration_seconds: checkInData.voiceNote.duration,
     };
   }

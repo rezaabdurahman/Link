@@ -4,14 +4,14 @@ import { Camera, MapPin, Hash, Mic, Paperclip, X, Upload, Globe, Users, Lock } f
 import { 
   uploadMedia, 
   uploadFile, 
-  // uploadVoiceNote,  // TODO: Will be used for voice note functionality
+  uploadVoiceNote,
   createFilePreview, 
   revokeFilePreview, 
-  // getFileCategory,  // TODO: Will be used for file type categorization
+  getFileCategory,
   getUploadErrorMessage,
-  // type MediaUploadResponse,  // TODO: Will be used for media upload responses
-  // type UploadResponse,  // TODO: Will be used for file upload responses
-  // type VoiceUploadResponse,  // TODO: Will be used for voice note responses
+  type MediaUploadResponse,
+  type UploadResponse,
+  type VoiceUploadResponse,
   type UploadProgressCallback,
   type UploadApiError
 } from '../services/uploadClient';
@@ -227,13 +227,21 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
           setUploadProgress(prev => ({ ...prev, [tempId]: progress }));
         };
         
-        const _uploadResult = await uploadFile(file, {  // TODO: Will be used to update file attachment data
+        const uploadResult = await uploadFile(file, {
           onProgress: progressCallback
         });
-        void _uploadResult; // Mark as intentionally unused
         
-        // File attachment doesn't need URL update since it's handled by the backend
-        // The backend will serve the file via the returned file ID
+        // Update attachment with actual uploaded file data
+        setFileAttachments(prev => prev.map(attachment => 
+          attachment.id === tempId 
+            ? { 
+                ...attachment, 
+                url: uploadResult.file_url, 
+                name: uploadResult.file_name,
+                size: uploadResult.file_size 
+              }
+            : attachment
+        ));
         
       } catch (error) {
         const errorMessage = getUploadErrorMessage(error as UploadApiError);

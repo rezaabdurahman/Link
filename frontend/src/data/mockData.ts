@@ -1,5 +1,6 @@
 import { User, Chat, Opportunity, SocialNote, CloseFriend } from '../types';
 import { CheckIn } from '../services/checkinClient';
+import { PublicUser, PrivacySettings } from '../services/userClient';
 import { getDisplayName } from '../utils/nameHelpers';
 
 export const currentUser: User = {
@@ -61,7 +62,7 @@ export const nearbyUsers: User[] = [
       lng: -122.4194,
       proximityMiles: 1.2
     },
-    isAvailable: false,
+    isAvailable: true,
     mutualFriends: ['David Kim', 'Sarah Wilson'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
@@ -144,7 +145,7 @@ export const nearbyUsers: User[] = [
       lng: -122.4194,
       proximityMiles: 0.9
     },
-    isAvailable: false,
+    isAvailable: true,
     mutualFriends: ['Mike Johnson'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 60 * 60 * 1000),
@@ -207,7 +208,7 @@ export const nearbyUsers: User[] = [
       lng: -122.4194,
       proximityMiles: 0.7
     },
-    isAvailable: false,
+    isAvailable: true,
     mutualFriends: ['David Kim'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 35 * 60 * 1000),
@@ -265,7 +266,7 @@ export const nearbyUsers: User[] = [
       lng: -122.4194,
       proximityMiles: 1.9
     },
-    isAvailable: false,
+    isAvailable: true,
     mutualFriends: ['Maya Patel'],
     connectionPriority: 'regular',
     lastSeen: new Date(Date.now() - 55 * 60 * 1000),
@@ -660,11 +661,131 @@ export const friends: User[] = nearbyUsers.filter(user => {
   return chat?.isFriend === true;
 });
 
-// Close friends - subset of friends
+// Mock privacy settings for API-compatible friends
+const defaultPrivacySettings: PrivacySettings = {
+  show_age: true,
+  show_location: true,
+  show_mutual_friends: true,
+  show_name: true,
+  show_social_media: true,
+  show_montages: true,
+  show_checkins: true,
+};
+
+// API-compatible friends data (matches PublicUser interface)
+export const apiFriends: PublicUser[] = [
+  {
+    id: '2',
+    email: 'reza@link.app',
+    username: 'rezaabdurahman',
+    first_name: 'Reza',
+    last_name: 'Abdurahman',
+    date_of_birth: '1993-03-15',
+    profile_picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=500&fit=crop&crop=face',
+    bio: 'Film enthusiast, volleyball player, coffee lover. Founder of this app! Give me feedback.',
+    location: 'San Francisco, CA',
+    interests: ['indie films', 'volleyball', 'coffee', 'books', 'startups'],
+    social_links: [
+      { platform: 'twitter', url: 'https://twitter.com/rezaabdurahman', username: 'rezaabdurahman' }
+    ],
+    additional_photos: [
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=500&fit=crop&crop=face'
+    ],
+    privacy_settings: defaultPrivacySettings,
+    email_verified: true,
+    created_at: '2023-01-15T08:00:00Z',
+    updated_at: '2024-12-20T10:30:00Z',
+    profile_visibility: 'public' as const,
+    is_friend: true,
+    mutual_friends_count: 5,
+    last_active: '2024-12-20T09:45:00Z',
+  },
+  {
+    id: '3',
+    email: 'marcus@example.com',
+    username: 'marcusrodriguez',
+    first_name: 'Marcus',
+    last_name: 'Rodriguez',
+    date_of_birth: '1993-08-22',
+    profile_picture: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&h=150&fit=crop&crop=face',
+    bio: 'Tech entrepreneur, rock climbing enthusiast',
+    location: 'Oakland, CA',
+    interests: ['rock climbing', 'tech', 'startups', 'hiking'],
+    social_links: [
+      { platform: 'linkedin', url: 'https://linkedin.com/in/marcusrodriguez', username: 'marcusrodriguez' }
+    ],
+    additional_photos: [],
+    privacy_settings: defaultPrivacySettings,
+    email_verified: true,
+    created_at: '2023-02-10T12:00:00Z',
+    updated_at: '2024-12-19T16:15:00Z',
+    profile_visibility: 'public' as const,
+    is_friend: true,
+    mutual_friends_count: 3,
+    last_active: '2024-12-19T18:20:00Z',
+  },
+  {
+    id: '4',
+    email: 'emma@example.com',
+    username: 'emmajohnson',
+    first_name: 'Emma',
+    last_name: 'Johnson',
+    date_of_birth: '1999-11-05',
+    profile_picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=500&fit=crop&crop=face',
+    bio: 'Artist, yoga instructor, nature lover',
+    location: 'Berkeley, CA',
+    interests: ['art', 'yoga', 'nature', 'photography', 'coffee'],
+    social_links: [
+      { platform: 'instagram', url: 'https://instagram.com/emmajohnsonart', username: 'emmajohnsonart' }
+    ],
+    additional_photos: [
+      'https://images.unsplash.com/photo-1494790108755-2616c96d3380?w=400&h=500&fit=crop&crop=face'
+    ],
+    privacy_settings: defaultPrivacySettings,
+    email_verified: true,
+    created_at: '2023-03-20T14:30:00Z',
+    updated_at: '2024-12-18T11:45:00Z',
+    profile_visibility: 'public' as const,
+    is_friend: true,
+    mutual_friends_count: 2,
+    last_active: '2024-12-18T20:10:00Z',
+  },
+  {
+    id: '5',
+    email: 'david@example.com',
+    username: 'davidkim',
+    first_name: 'David',
+    last_name: 'Kim',
+    date_of_birth: '1995-06-18',
+    profile_picture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    bio: 'Software engineer, musician, cat lover',
+    location: 'Palo Alto, CA',
+    interests: ['programming', 'music', 'cats', 'gaming'],
+    social_links: [
+      { platform: 'github', url: 'https://github.com/davidkim', username: 'davidkim' }
+    ],
+    additional_photos: [],
+    privacy_settings: defaultPrivacySettings,
+    email_verified: true,
+    created_at: '2023-04-12T09:15:00Z',
+    updated_at: '2024-12-17T13:22:00Z',
+    profile_visibility: 'private' as const,
+    is_friend: true,
+    mutual_friends_count: 4,
+    last_active: '2024-12-17T19:35:00Z',
+  }
+];
+
+// Close friends - subset of friends using the API-compatible format
 export const closeFriends: CloseFriend[] = [
   { userId: '2', addedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Reza - added 1 week ago
   { userId: '3', addedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) }, // Marcus - added 2 weeks ago
 ];
+
+// API-compatible close friends list (what the API would return)
+export const apiCloseFriends: PublicUser[] = apiFriends.filter(friend => 
+  closeFriends.some(cf => cf.userId === friend.id)
+);
 
 // Social notes about friends
 export const socialNotes: SocialNote[] = [

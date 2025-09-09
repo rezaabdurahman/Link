@@ -11,6 +11,7 @@ import (
 	"github.com/pgvector/pgvector-go"
 	"gorm.io/gorm"
 
+	"github.com/link-app/search-svc/internal/encryption"
 	"github.com/link-app/search-svc/internal/models"
 )
 
@@ -40,6 +41,7 @@ type SearchRepository interface {
 	LogSearchQuery(ctx context.Context, userID uuid.UUID, query string, queryEmbedding []float32, resultsCount, searchTimeMs, totalCandidates int) (*models.SearchQuery, error)
 	LogSearchResults(ctx context.Context, queryID uuid.UUID, results []models.SearchResult) error
 
+	
 	// Batch operations for reindexing
 	GetAllUserIDs(ctx context.Context) ([]uuid.UUID, error)
 	GetUserIDsPage(ctx context.Context, offset, limit int) ([]uuid.UUID, error)
@@ -72,26 +74,7 @@ func (r *searchRepository) autoMigrate() error {
 
 // StoreUserEmbedding stores a new user embedding
 func (r *searchRepository) StoreUserEmbedding(ctx context.Context, userID uuid.UUID, embedding []float32, profileText, provider, model string) error {
-	embeddingHash := generateTextHash(profileText)
-	
-	userEmbedding := models.UserEmbedding{
-		UserID:        userID,
-		Embedding:     pgvector.NewVector(embedding),
-		ProfileText:   profileText,
-		EmbeddingHash: embeddingHash,
-		Provider:      provider,
-		Model:         model,
-	}
-
-	// Generate search vector for full-text search using triggers in database
-	result := r.db.WithContext(ctx).Create(&userEmbedding)
-	if result.Error != nil {
-		return result.Error
-	}
-	
-	// Update search_vector using PostgreSQL's to_tsvector
-	return r.db.WithContext(ctx).Model(&userEmbedding).
-		Update("search_vector", gorm.Expr("to_tsvector('english', profile_text)")).Error
+	return r.StoreUserEmbeddingWithTTL(ctx, userID, embedding, profileText, provider, model, 0)
 }
 
 // GetUserEmbedding retrieves a user's embedding
@@ -103,23 +86,18 @@ func (r *searchRepository) GetUserEmbedding(ctx context.Context, userID uuid.UUI
 		return nil, result.Error
 	}
 	
+	// Decrypt profile text if encrypted
+	if err := r.decryptProfileText(&embedding); err != nil {
+		log.Printf("Warning: Failed to decrypt profile text: %v", err)
+		// Continue with encrypted data rather than failing
+	}
+	
 	return &embedding, nil
 }
 
 // UpdateUserEmbedding updates an existing user embedding
 func (r *searchRepository) UpdateUserEmbedding(ctx context.Context, userID uuid.UUID, embedding []float32, profileText, provider, model string) error {
-	embeddingHash := generateTextHash(profileText)
-	
-	updates := map[string]interface{}{
-		"embedding":      pgvector.NewVector(embedding),
-		"profile_text":   profileText,
-		"embedding_hash": embeddingHash,
-		"provider":       provider,
-		"model":          model,
-	}
-
-	result := r.db.WithContext(ctx).Model(&models.UserEmbedding{}).Where("user_id = ?", userID).Updates(updates)
-	return result.Error
+	return r.UpdateUserEmbeddingWithTTL(ctx, userID, embedding, profileText, provider, model, 0)
 }
 
 // DeleteUserEmbedding removes a user's embedding
@@ -176,6 +154,12 @@ func (r *searchRepository) SearchSimilarUsers(ctx context.Context, queryEmbeddin
 
 // StoreUserEmbeddingWithTTL stores a new user embedding with a TTL
 func (r *searchRepository) StoreUserEmbeddingWithTTL(ctx context.Context, userID uuid.UUID, embedding []float32, profileText, provider, model string, ttlHours int) error {
+	// Encrypt profile text
+	encryptedText, isEncrypted, err := r.encryptProfileText(profileText)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt profile text: %w", err)
+	}
+	
 	embeddingHash := generateTextHash(profileText)
 	
 	var expiresAt *time.Time
@@ -184,22 +168,44 @@ func (r *searchRepository) StoreUserEmbeddingWithTTL(ctx context.Context, userID
 		expiresAt = &t
 	}
 	
+	now := time.Now()
 	userEmbedding := models.UserEmbedding{
-		UserID:        userID,
-		Embedding:     pgvector.NewVector(embedding),
-		ProfileText:   profileText,
-		EmbeddingHash: embeddingHash,
-		Provider:      provider,
-		Model:         model,
-		ExpiresAt:     expiresAt,
+		UserID:           userID,
+		Embedding:        pgvector.NewVector(embedding),
+		ProfileText:      encryptedText,
+		EmbeddingHash:    embeddingHash,
+		Provider:         provider,
+		Model:            model,
+		ExpiresAt:        expiresAt,
+		IsEncrypted:      isEncrypted,
+		ConsentCheckedAt: &now,                 // Track when consent was verified
 	}
 
-	result := r.db.WithContext(ctx).Create(&userEmbedding)
-	return result.Error
+	// Use transaction to ensure atomicity between record creation and search vector update
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Create the embedding record
+		if err := tx.Create(&userEmbedding).Error; err != nil {
+			return fmt.Errorf("failed to create user embedding: %w", err)
+		}
+		
+		// Update search_vector using plaintext (PostgreSQL's to_tsvector)
+		// We use the original plaintext for search indexing
+		if err := tx.Model(&userEmbedding).Update("search_vector", gorm.Expr("to_tsvector('english', ?)", profileText)).Error; err != nil {
+			return fmt.Errorf("failed to update search vector: %w", err)
+		}
+		
+		return nil
+	})
 }
 
 // UpdateUserEmbeddingWithTTL updates an existing user embedding with a TTL
 func (r *searchRepository) UpdateUserEmbeddingWithTTL(ctx context.Context, userID uuid.UUID, embedding []float32, profileText, provider, model string, ttlHours int) error {
+	// Encrypt profile text
+	encryptedText, isEncrypted, err := r.encryptProfileText(profileText)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt profile text: %w", err)
+	}
+	
 	embeddingHash := generateTextHash(profileText)
 	
 	var expiresAt *time.Time
@@ -209,16 +215,31 @@ func (r *searchRepository) UpdateUserEmbeddingWithTTL(ctx context.Context, userI
 	}
 	
 	updates := map[string]interface{}{
-		"embedding":      pgvector.NewVector(embedding),
-		"profile_text":   profileText,
-		"embedding_hash": embeddingHash,
-		"provider":       provider,
-		"model":          model,
-		"expires_at":     expiresAt,
+		"embedding":         pgvector.NewVector(embedding),
+		"profile_text":      encryptedText,
+		"embedding_hash":    embeddingHash,
+		"provider":          provider,
+		"model":             model,
+		"expires_at":        expiresAt,
+		"is_encrypted":      isEncrypted,
+		"consent_checked_at": time.Now(),  // Track when consent was verified
 	}
 
-	result := r.db.WithContext(ctx).Model(&models.UserEmbedding{}).Where("user_id = ?", userID).Updates(updates)
-	return result.Error
+	// Use transaction to ensure atomicity between record update and search vector update
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Update the embedding record
+		if err := tx.Model(&models.UserEmbedding{}).Where("user_id = ?", userID).Updates(updates).Error; err != nil {
+			return fmt.Errorf("failed to update user embedding: %w", err)
+		}
+		
+		// Update search_vector using plaintext
+		if err := tx.Model(&models.UserEmbedding{}).Where("user_id = ?", userID).
+			Update("search_vector", gorm.Expr("to_tsvector('english', ?)", profileText)).Error; err != nil {
+			return fmt.Errorf("failed to update search vector: %w", err)
+		}
+		
+		return nil
+	})
 }
 
 // CleanupExpiredEmbeddings removes embeddings that have passed their TTL
@@ -451,4 +472,35 @@ func (r *searchRepository) HybridSearch(ctx context.Context, query string, query
 func generateTextHash(text string) string {
 	hash := sha256.Sum256([]byte(text))
 	return fmt.Sprintf("%x", hash)
+}
+
+// encryptProfileText encrypts profile text if encryption is enabled
+func (r *searchRepository) encryptProfileText(plaintext string) (string, bool, error) {
+	if !encryption.EncryptionEnabled() || plaintext == "" {
+		return plaintext, false, nil
+	}
+	
+	encryptor := encryption.GetProfileEncryptor()
+	encrypted, err := encryptor.EncryptString(plaintext)
+	if err != nil {
+		return "", false, err
+	}
+	
+	return encrypted, true, nil
+}
+
+// decryptProfileText decrypts profile text if it's encrypted
+func (r *searchRepository) decryptProfileText(embedding *models.UserEmbedding) error {
+	if !embedding.IsEncrypted || embedding.ProfileText == "" {
+		return nil
+	}
+	
+	encryptor := encryption.GetProfileEncryptor()
+	decrypted, err := encryptor.DecryptString(embedding.ProfileText)
+	if err != nil {
+		return err
+	}
+	
+	embedding.ProfileText = decrypted
+	return nil
 }

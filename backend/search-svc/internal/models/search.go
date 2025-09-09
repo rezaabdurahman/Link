@@ -9,19 +9,21 @@ import (
 
 // UserEmbedding represents a user's profile embedding for semantic search
 type UserEmbedding struct {
-	ID            uuid.UUID       `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	UserID        uuid.UUID       `json:"user_id" gorm:"type:uuid;uniqueIndex;not null"`
-	Embedding     pgvector.Vector `json:"embedding" gorm:"type:vector(1536);not null"` // Default to OpenAI text-embedding-3-small dimensions
-	ProfileText   string          `json:"profile_text" gorm:"type:text;not null"`       // The text that was embedded
-	EmbeddingHash string          `json:"embedding_hash" gorm:"type:varchar(64);not null"` // Hash of profile text to detect changes
-	Provider      string          `json:"provider" gorm:"type:varchar(50);not null;default:'openai'"`
-	Model         string          `json:"model" gorm:"type:varchar(100);not null;default:'text-embedding-3-small'"`
-	ExpiresAt     *time.Time      `json:"expires_at" gorm:"type:timestamptz;index"`     // TTL for automatic cleanup
-	CreatedAt     time.Time       `json:"created_at" gorm:"type:timestamptz;not null;default:now()"`
-	UpdatedAt     time.Time       `json:"updated_at" gorm:"type:timestamptz;not null;default:now()"`
+	ID                  uuid.UUID       `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID              uuid.UUID       `json:"user_id" gorm:"type:uuid;uniqueIndex;not null"`
+	Embedding           pgvector.Vector `json:"embedding" gorm:"type:vector(1536);not null"` // Default to OpenAI text-embedding-3-small dimensions
+	ProfileText         string          `json:"profile_text" gorm:"type:text;not null"`       // Encrypted profile text (base64-encoded)
+	EmbeddingHash       string          `json:"embedding_hash" gorm:"type:varchar(64);not null"` // Hash of profile text to detect changes
+	Provider            string          `json:"provider" gorm:"type:varchar(50);not null;default:'openai'"`
+	Model               string          `json:"model" gorm:"type:varchar(100);not null;default:'text-embedding-3-small'"`
+	ExpiresAt           *time.Time      `json:"expires_at" gorm:"type:timestamptz;index"`     // TTL for automatic cleanup
+	CreatedAt           time.Time       `json:"created_at" gorm:"type:timestamptz;not null;default:now()"`
+	UpdatedAt           time.Time       `json:"updated_at" gorm:"type:timestamptz;not null;default:now()"`
+	IsEncrypted         bool            `json:"is_encrypted" gorm:"type:boolean;not null;default:false"` // Flag to track encryption status
+	ConsentCheckedAt    *time.Time      `json:"consent_checked_at" gorm:"type:timestamptz;index"`                 // When consent was last verified
 	
 	// Full-text search vector for hybrid search
-	SearchVector  string          `json:"-" gorm:"type:tsvector;index:gin"`  // GIN index for full-text search
+	SearchVector        string          `json:"-" gorm:"type:tsvector;index:gin"`  // GIN index for full-text search (uses decrypted text)
 }
 
 // SearchQuery represents a search query log for analytics

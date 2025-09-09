@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { Chat } from '../types';
 
 export interface ToastState {
   isVisible: boolean;
@@ -15,6 +16,8 @@ export interface ModalState {
   selectedUserId: string | null;
   isAddMyContactModalOpen: boolean;
   conversationModalOpen: boolean;
+  selectedChat: Chat | null;
+  initialMessage: string;
 }
 
 interface UIStore {
@@ -28,6 +31,10 @@ interface UIStore {
   openModal: (modal: keyof ModalState, userId?: string) => void;
   closeModal: (modal: keyof ModalState) => void;
   closeAllModals: () => void;
+  
+  // Conversation modal specific actions
+  openConversationModal: (chat: Chat, initialMessage?: string) => void;
+  closeConversationModal: () => void;
 
   // View preferences
   isGridView: boolean;
@@ -61,6 +68,8 @@ const initialModalState: ModalState = {
   selectedUserId: null,
   isAddMyContactModalOpen: false,
   conversationModalOpen: false,
+  selectedChat: null,
+  initialMessage: '',
 };
 
 export const useUIStore = create<UIStore>()(
@@ -108,7 +117,9 @@ export const useUIStore = create<UIStore>()(
           ...state.modals,
           [modal]: false,
           // Clear selected user when closing profile modal
-          ...(modal === 'isProfileDetailModalOpen' && { selectedUserId: null })
+          ...(modal === 'isProfileDetailModalOpen' && { selectedUserId: null }),
+          // Clear conversation data when closing conversation modal
+          ...(modal === 'conversationModalOpen' && { selectedChat: null, initialMessage: '' })
         }
       }));
     },
@@ -116,6 +127,29 @@ export const useUIStore = create<UIStore>()(
     closeAllModals: () => set({ 
       modals: initialModalState 
     }),
+    
+    // Conversation modal specific actions
+    openConversationModal: (chat: Chat, initialMessage: string = '') => {
+      set(state => ({
+        modals: {
+          ...state.modals,
+          conversationModalOpen: true,
+          selectedChat: chat,
+          initialMessage
+        }
+      }));
+    },
+
+    closeConversationModal: () => {
+      set(state => ({
+        modals: {
+          ...state.modals,
+          conversationModalOpen: false,
+          selectedChat: null,
+          initialMessage: ''
+        }
+      }));
+    },
 
     // View preferences
     isGridView: true,

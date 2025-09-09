@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/hashicorp/consul/api v1.32.1
 	github.com/lib/pq v1.10.9
-	github.com/prometheus/client_golang v1.20.5
+	github.com/prometheus/client_golang v1.23.0
 	github.com/redis/go-redis/v9 v9.12.1
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
@@ -16,6 +16,8 @@ require (
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.25.12
 )
+
+require github.com/robfig/cron/v3 v3.0.1 // indirect
 
 require (
 	github.com/armon/go-metrics v0.4.1 // indirect
@@ -49,9 +51,17 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/link-app/proto/ai v0.0.0
+	github.com/link-app/proto/chat v0.0.0
+	github.com/link-app/proto/common v0.0.0
+	github.com/link-app/proto/discovery v0.0.0
+	github.com/link-app/proto/search v0.0.0
+	github.com/link-app/proto/user v0.0.0
+	github.com/link-app/shared-libs/grpc v0.0.0
+	github.com/link-app/shared-libs/secrets v0.0.0
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
@@ -61,9 +71,9 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.60.1 // indirect
-	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/prometheus/client_model v0.6.2 // indirect
+	github.com/prometheus/common v0.65.0 // indirect
+	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.11.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
@@ -76,6 +86,22 @@ require (
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
+	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/link-app/proto/ai => ../proto/ai
+
+replace github.com/link-app/proto/chat => ../proto/chat
+
+replace github.com/link-app/proto/common => ../proto/common
+
+replace github.com/link-app/proto/discovery => ../proto/discovery
+
+replace github.com/link-app/proto/search => ../proto/search
+
+replace github.com/link-app/proto/user => ../proto/user
+
+replace github.com/link-app/shared-libs/grpc => ./grpc
+
+replace github.com/link-app/shared-libs/secrets => ./secrets

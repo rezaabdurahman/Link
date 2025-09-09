@@ -7,7 +7,6 @@ import { setUserAvailability, isAvailabilityError, getAvailabilityErrorMessage }
 
 const ProfilePage: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
-  const [isEditing, setIsEditing] = useState<boolean>(false);
   const currentUser = initialCurrentUser;
   const [isAvailable, setIsAvailable] = useState<boolean>(initialCurrentUser.isAvailable);
   const [isAvailabilitySubmitting, setIsAvailabilitySubmitting] = useState<boolean>(false);
@@ -16,13 +15,13 @@ const ProfilePage: React.FC = (): JSX.Element => {
     navigate('/settings');
   };
 
+  const [bioEditTrigger, setBioEditTrigger] = useState<number>(0);
+  
   const handleEditProfile = (): void => {
-    setIsEditing(true);
+    // Trigger bio editing in the ProfileDetailModal
+    setBioEditTrigger(prev => prev + 1);
   };
 
-  const handleCloseEdit = (): void => {
-    setIsEditing(false);
-  };
 
   const toggleAvailability = async (): Promise<void> => {
     if (isAvailabilitySubmitting) return; // Prevent multiple submissions
@@ -172,19 +171,10 @@ const ProfilePage: React.FC = (): JSX.Element => {
         mode="own"
         isEmbedded={true} // New prop to indicate it's embedded in page, not a modal
         showMontageByDefault={true} // New prop to show montage on page load
-        isEditing={isEditing}
+        bioEditTrigger={bioEditTrigger}
       />
 
-      {/* Edit mode overlay modal when editing */}
-      {isEditing && (
-        <ProfileDetailModal
-          userId={currentUser.id}
-          onClose={handleCloseEdit}
-          mode="own"
-          isEmbedded={false}
-          isEditing={true}
-        />
-      )}
+      {/* Remove the modal overlay for editing - we now do inline bio editing */}
     </div>
   );
 };

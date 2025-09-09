@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector, persist } from 'zustand/middleware';
-import { Chat, Message } from '../types';
-import { PublicUser } from '../services/userClient';
+import { Chat, Message, User } from '../types';
 
 // Helper function to create a blank message
 const createBlankMessage = (): Message => ({
@@ -14,11 +13,11 @@ const createBlankMessage = (): Message => ({
 });
 
 // Helper function to create a pseudo-chat from a friend
-const createPseudoChat = (friend: PublicUser): Chat => ({
+const createPseudoChat = (friend: User): Chat => ({
   id: '',
   participantId: friend.id,
-  participantName: `${friend.first_name} ${friend.last_name}`,
-  participantAvatar: friend.profile_picture || '/default-avatar.png',
+  participantName: `${friend.first_name} ${friend.last_name || ''}`,
+  participantAvatar: friend.profilePicture || '/default-avatar.png',
   lastMessage: createBlankMessage(),
   unreadCount: 0,
   conversationSummary: '',
@@ -41,9 +40,14 @@ export interface ChatState {
   error: string | null;
 
   // Search state for friends
-  friendResults: PublicUser[];
+  friendResults: User[];
   searchLoading: boolean;
   searchQuery: string;
+  
+  // Pagination state for friend search
+  searchOffset: number;
+  searchHasMore: boolean;
+  searchTotalResults: number;
 
   // Selected chat state
   selectedChat: Chat | null;
@@ -72,9 +76,13 @@ interface ChatStore extends ChatState {
 
   // Search actions
   setSearchQuery: (query: string) => void;
-  setFriendResults: (results: PublicUser[]) => void;
+  setFriendResults: (results: User[]) => void;
   setSearchLoading: (loading: boolean) => void;
   clearSearch: () => void;
+  
+  // Pagination actions
+  appendFriendResults: (results: User[], hasMore: boolean, total: number) => void;
+  resetSearchPagination: () => void;
 
   // Selected chat actions
   setSelectedChat: (chat: Chat | null) => void;
@@ -111,6 +119,11 @@ const initialState: ChatState = {
   friendResults: [],
   searchLoading: false,
   searchQuery: '',
+  
+  // Pagination state
+  searchOffset: 0,
+  searchHasMore: false,
+  searchTotalResults: 0,
 
   // Selected chat state
   selectedChat: null,
@@ -162,12 +175,32 @@ export const useChatStore = create<ChatStore>()(
 
         // Search actions
         setSearchQuery: (query: string) => set({ searchQuery: query }),
-        setFriendResults: (results: PublicUser[]) => set({ friendResults: results }),
+        setFriendResults: (results: User[]) => set({ friendResults: results }),
         setSearchLoading: (loading: boolean) => set({ searchLoading: loading }),
 
         clearSearch: () => set({
           searchQuery: '',
           friendResults: [],
+          searchOffset: 0,
+          searchHasMore: false,
+          searchTotalResults: 0,
+        }),
+        
+        // Pagination actions
+        appendFriendResults: (results: User[], hasMore: boolean, total: number) => {
+          set(state => ({
+            friendResults: [...state.friendResults, ...results],
+            searchHasMore: hasMore,
+            searchTotalResults: total,
+            searchOffset: state.friendResults.length + results.length,
+          }));
+        },
+        
+        resetSearchPagination: () => set({
+          friendResults: [],
+          searchOffset: 0,
+          searchHasMore: false,
+          searchTotalResults: 0,
         }),
 
         // Selected chat actions
@@ -246,17 +279,18 @@ export const useChatStore = create<ChatStore>()(
         },
 
         getCombinedList: () => {
-          const { chats, friendResults, searchQuery } = get();
+          const { friendResults, searchQuery, getSortedChats } = get();
           
-          // Filter chats based on search query
-          const filteredChats = chats.filter(chat => {
+          // Get sorted chats first, then filter based on search query
+          const sortedChats = getSortedChats();
+          const filteredChats = sortedChats.filter(chat => {
             const matchesSearch = chat.participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
               chat.conversationSummary.toLowerCase().includes(searchQuery.toLowerCase());
             
             return matchesSearch;
           });
 
-          // If no search query, just return filtered chats
+          // If no search query, just return filtered sorted chats
           if (!searchQuery.trim()) {
             return filteredChats;
           }
@@ -266,7 +300,7 @@ export const useChatStore = create<ChatStore>()(
           
           // Add pseudo-chats for friends that don't have existing conversations
           friendResults.forEach(friend => {
-            const existingChat = chats.find(chat => chat.participantId === friend.id);
+            const existingChat = sortedChats.find(chat => chat.participantId === friend.id);
             if (!existingChat) {
               combinedItems.push(createPseudoChat(friend));
             }

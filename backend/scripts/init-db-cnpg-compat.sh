@@ -41,10 +41,21 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     GRANT pg_read_all_stats TO pgbouncer_stats;
 EOSQL
 
-# Initialize each service database with pg_stat_statements
-for db in user_service_db chat_service_db discovery_service_db search_service_db ai_service_db feature_service_db; do
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db" <<-EOSQL
+# Initialize each service database with pg_stat_statements and grant schema permissions
+for db_info in "user_service_db:user_service_user" "chat_service_db:chat_service_user" "discovery_service_db:discovery_service_user" "search_service_db:search_service_user" "ai_service_db:ai_service_user" "feature_service_db:feature_service_user"; do
+    db_name=$(echo $db_info | cut -d: -f1)
+    db_user=$(echo $db_info | cut -d: -f2)
+    
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db_name" <<-EOSQL
         CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+        
+        -- Grant schema permissions to service user
+        GRANT ALL ON SCHEMA public TO $db_user;
+        GRANT CREATE ON SCHEMA public TO $db_user;
+        
+        -- Grant default privileges for future tables/sequences
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $db_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO $db_user;
 EOSQL
 done
 

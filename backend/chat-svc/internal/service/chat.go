@@ -734,3 +734,32 @@ func (s *Service) Close() error {
 func (s *Service) Health(ctx context.Context) error {
 	return s.redis.Health(ctx)
 }
+
+// Wrapper methods for backward compatibility with handlers
+
+// GetConversationsForUser delegates to ConversationService
+func (s *Service) GetConversationsForUser(ctx context.Context, userID string) ([]*model.ConversationWithUnread, error) {
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+	conversations, _, err := s.GetConversationService().GetConversationsWithUnread(ctx, userUUID, 1, 50)
+	return conversations, err
+}
+
+// CreateConversation delegates to ConversationService  
+func (s *Service) CreateConversation(ctx context.Context, req model.Conversation) (*model.ChatRoom, error) {
+	// This is a simplified adapter - in reality you'd need to properly map the request
+	// For now, return error to indicate it needs proper implementation
+	return nil, fmt.Errorf("CreateConversation needs proper implementation based on request type")
+}
+
+// GetMessages delegates to MessageService
+func (s *Service) GetMessages(ctx context.Context, roomID, userID uuid.UUID, page, size int) ([]*model.Message, int, error) {
+	return s.GetMessageService().GetMessages(ctx, roomID, userID, page, size)
+}
+
+// SendMessage delegates to MessageService
+func (s *Service) SendMessage(ctx context.Context, req model.SendMessageRequest, roomID, userID uuid.UUID) (*model.Message, error) {
+	return s.GetMessageService().SendMessage(ctx, req, roomID, userID)
+}

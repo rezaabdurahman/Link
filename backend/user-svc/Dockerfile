@@ -5,31 +5,36 @@ WORKDIR /app
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy go mod files first for better caching
-COPY shared-libs/go.mod shared-libs/go.sum ./shared-libs/
-COPY user-svc/go.mod user-svc/go.sum ./
+# Copy entire source for dependency resolution
+COPY shared-libs/ ./shared-libs/
+COPY proto/ ./proto/
+COPY user-svc/ ./user-svc/
 
-# Download dependencies (cached unless go.mod/go.sum changes)
+# Change to user-svc directory and download dependencies
+WORKDIR /app/user-svc
+# Set environment variables to force local module resolution
+ENV GONOPROXY=github.com/link-app
+ENV GONOSUMDB=github.com/link-app
+ENV GOPRIVATE=github.com/link-app
 RUN go mod download
 
 # Build stage
 FROM deps AS builder
 
-# Copy source code
-COPY shared-libs/ ./shared-libs/
-COPY user-svc/ .
+# Set environment variables for build stage
+ENV GONOPROXY=github.com/link-app
+ENV GONOSUMDB=github.com/link-app
+ENV GOPRIVATE=github.com/link-app
 
-# Tidy and ensure all dependencies
-RUN go mod tidy
-
-# Build the application with optimizations
-RUN CGO_ENABLED=0 GOOS=linux go build \
+# Build the application with optimizations  
+RUN CGO_ENABLED=0 GOOS=linux GOPROXY=direct GOSUMDB=off go build \
+    -mod=mod \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
-    -o main .
+    -o main ./cmd/server
 
 # Build migration CLI
-RUN cd shared-libs && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o migrate ./migrations/cmd/migrate
+RUN cd ../shared-libs && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o migrate ./migrations/cmd/migrate
 
 # Final stage - minimal production image
 FROM alpine:latest AS production
@@ -41,7 +46,7 @@ RUN apk --no-cache add ca-certificates tzdata netcat-openbsd wget
 WORKDIR /root/
 
 # Copy binaries from builder stage
-COPY --from=builder /app/main .
+COPY --from=builder /app/user-svc/main .
 COPY --from=builder /app/shared-libs/migrate .
 
 # Copy migrations directory

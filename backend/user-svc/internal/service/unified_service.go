@@ -16,6 +16,7 @@ type UserService interface {
 	AuthService
 	ProfileService
 	OnboardingService
+	UserManagementService
 }
 
 // AuthService interface defines authentication operations
@@ -52,6 +53,13 @@ type OnboardingService interface {
 	GetPreferences(ctx context.Context, userID uuid.UUID) (*onboarding.UserPreferences, error)
 }
 
+// UserManagementService interface defines user management operations
+type UserManagementService interface {
+	GetHiddenUsers(userID uuid.UUID) ([]models.PublicUser, error)
+	HideUser(userID, targetUserID uuid.UUID) error
+	UnhideUser(userID, targetUserID uuid.UUID) error
+}
+
 // unifiedUserService implements the UserService interface by delegating to individual domain services
 type unifiedUserService struct {
 	authService       auth.AuthService
@@ -74,15 +82,35 @@ func NewUnifiedUserService(
 
 // Auth methods - delegate to auth service
 func (s *unifiedUserService) RegisterUser(req auth.RegisterUserRequest) (*auth.AuthResponse, error) {
-	return s.authService.RegisterUser(req)
+	authResponse, _, err := s.authService.RegisterUser(req)
+	return authResponse, err
 }
 
 func (s *unifiedUserService) LoginUser(req auth.LoginRequest) (*auth.AuthResponse, *models.Session, error) {
-	return s.authService.LoginUser(req)
+	authResponse, tokenPair, err := s.authService.LoginUser(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Convert TokenPair to Session - for backward compatibility
+	session := &models.Session{
+		UserID: authResponse.User.ID,
+		Token:  tokenPair.AccessToken,
+	}
+	return authResponse, session, nil
 }
 
 func (s *unifiedUserService) RefreshToken(refreshToken string) (*auth.AuthResponse, error) {
-	return s.authService.RefreshToken(refreshToken)
+	req := auth.RefreshTokenRequest{RefreshToken: refreshToken}
+	response, err := s.authService.RefreshTokens(req)
+	if err != nil {
+		return nil, err
+	}
+	// Convert RefreshTokenResponse to AuthResponse
+	authResponse := &auth.AuthResponse{
+		Token:   &response.AccessToken,
+		Message: "Token refreshed successfully",
+	}
+	return authResponse, nil
 }
 
 func (s *unifiedUserService) LogoutUser(userID uuid.UUID, sessionToken string) error {
@@ -159,3 +187,18 @@ func (s *unifiedUserService) GetPreferences(ctx context.Context, userID uuid.UUI
 	return s.onboardingService.GetPreferences(ctx, userID)
 }
 
+// User management methods - placeholder implementations
+func (s *unifiedUserService) GetHiddenUsers(userID uuid.UUID) ([]models.PublicUser, error) {
+	// Placeholder implementation - could delegate to profile service or a dedicated user management service
+	return []models.PublicUser{}, nil
+}
+
+func (s *unifiedUserService) HideUser(userID, targetUserID uuid.UUID) error {
+	// Placeholder implementation - could delegate to profile service or a dedicated user management service
+	return nil
+}
+
+func (s *unifiedUserService) UnhideUser(userID, targetUserID uuid.UUID) error {
+	// Placeholder implementation - could delegate to profile service or a dedicated user management service
+	return nil
+}

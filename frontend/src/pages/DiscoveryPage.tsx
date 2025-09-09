@@ -100,7 +100,6 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
         scope: 'discovery', // Search for discoverable users
         filters: {
           distance: activeFilters.distance,
-          interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
           available_only: true, // Only search available users in discovery
         },
         pagination: {
@@ -144,7 +143,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     } finally {
       setSearching(false);
     }
-  }, [searchQuery, activeFilters.distance, activeFilters.interests, isSearching, setSearchResults, setHasSearched, setSearchError, setSearching, showToast, isInitialized, isAuthenticated]);
+  }, [searchQuery, activeFilters.distance, isSearching, setSearchResults, setHasSearched, setSearchError, setSearching, showToast, isInitialized, isAuthenticated]);
 
   // Load user profile
   useEffect(() => {
@@ -221,7 +220,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
 
   // Auto-search when filters change (only if we've already searched once)
   useEffect(() => {
-    if (hasSearched && (activeFilters.distance || activeFilters.interests.length > 0)) {
+    if (hasSearched && activeFilters.distance) {
       // Debounce the search to avoid too many API calls
       const timeoutId = setTimeout(() => {
         performSearch(false); // Filter changes are automatic, not user-initiated
@@ -231,7 +230,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     }
     // Return undefined cleanup for cases where no search is needed
     return undefined;
-  }, [activeFilters.distance, activeFilters.interests, hasSearched, performSearch]);
+  }, [activeFilters.distance, hasSearched, performSearch]);
 
   // Effect to load initial users when available
   useEffect(() => {
@@ -387,15 +386,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
     setActiveFilters({ distance });
   };
 
-  const handleInterestToggle = (interest: string): void => {
-    const newInterests = activeFilters.interests.includes(interest)
-      ? activeFilters.interests.filter(i => i !== interest)
-      : [...activeFilters.interests, interest];
-    setActiveFilters({ interests: newInterests });
-  };
-
   const clearFilters = (): void => {
-    setActiveFilters({ interests: [] });
+    setActiveFilters({ distance: undefined });
   };
 
   const clearSearch = (): void => {
@@ -541,7 +533,7 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
               />
               
               {/* Filter Chips */}
-              {(activeFilters.distance || activeFilters.interests.length > 0 || hasSearched) && (
+              {(activeFilters.distance || hasSearched) && (
                 <div className="flex flex-wrap gap-2 mt-3">
                   {/* Distance filter */}
                   {activeFilters.distance && (
@@ -556,22 +548,8 @@ const DiscoveryPage: React.FC = (): JSX.Element => {
                     </button>
                   )}
                   
-                  {/* Interest filters */}
-                  {activeFilters.interests.map(interest => (
-                    <button
-                      key={interest}
-                      onClick={() => handleInterestToggle(interest)}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-aqua/10 text-aqua text-xs rounded-full border border-aqua/20 hover:bg-aqua/20 transition-colors"
-                    >
-                      <span>{interest}</span>
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  ))}
-                  
                   {/* Clear all filters */}
-                  {(activeFilters.distance || activeFilters.interests.length > 0) && (
+                  {activeFilters.distance && (
                     <button
                       onClick={clearFilters}
                       className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full hover:bg-gray-200 transition-colors"

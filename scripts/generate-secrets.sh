@@ -33,10 +33,24 @@ echo "JWT_SECRET=$(openssl rand -base64 64)" >> "$SECRETS_FILE"
 echo "SERVICE_AUTH_TOKEN=$(openssl rand -base64 32)" >> "$SECRETS_FILE"
 echo "" >> "$SECRETS_FILE"
 
+echo "🔐 Generating encryption secrets..."
+echo "# 🔐 Encryption Secrets" >> "$SECRETS_FILE"
+echo "DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$SECRETS_FILE"
+echo "BACKUP_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$SECRETS_FILE"
+echo "" >> "$SECRETS_FILE"
+
 echo "🗄️ Generating database secrets..."
 echo "# 🗄️ Database Secrets" >> "$SECRETS_FILE"
 echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
 echo "REDIS_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
+echo "" >> "$SECRETS_FILE"
+echo "# Service-specific Database Passwords" >> "$SECRETS_FILE"
+echo "USER_SERVICE_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
+echo "CHAT_SERVICE_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
+echo "DISCOVERY_SERVICE_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
+echo "SEARCH_SERVICE_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
+echo "AI_SERVICE_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
+echo "FEATURE_SERVICE_PASSWORD=$(openssl rand -base64 24)" >> "$SECRETS_FILE"
 echo "" >> "$SECRETS_FILE"
 
 echo "📊 Generating monitoring secrets..."
@@ -76,6 +90,8 @@ cat >> "$SECRETS_FILE" << 'EOF'
 # Required secrets for CI/CD:
 # ✅ JWT_SECRET
 # ✅ SERVICE_AUTH_TOKEN  
+# ✅ DATA_ENCRYPTION_KEY
+# ✅ BACKUP_ENCRYPTION_KEY
 # ✅ POSTGRES_HOST
 # ✅ POSTGRES_USER
 # ✅ POSTGRES_PASSWORD

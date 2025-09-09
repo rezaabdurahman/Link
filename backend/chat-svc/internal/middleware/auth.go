@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/link-app/chat-svc/internal/config"
+	sharedErrors "github.com/link-app/shared-libs/errors"
 )
 
 type contextKey string
@@ -182,6 +184,81 @@ func GetUserNameFromContext(ctx context.Context) (string, bool) {
 // RequireAuth creates middleware that ensures user is authenticated
 func (a *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return a.Middleware(next)
+}
+
+// GinMiddleware returns the JWT authentication middleware for Gin
+func (a *AuthMiddleware) GinMiddleware(c *gin.Context) {
+	// First, check if gateway has already validated JWT and forwarded user context via headers
+	if userID := c.GetHeader("X-User-ID"); userID != "" {
+		// Gateway has already validated JWT - extract user info from headers
+		a.handleGinGatewayAuth(c)
+		return
+	}
+
+	// No gateway headers - perform direct JWT validation
+	token := a.extractTokenFromGin(c)
+	if token == "" {
+		sharedErrors.RespondWithUnauthorized(c, "Authentication required - missing token")
+		c.Abort()
+		return
+	}
+
+	claims, err := a.validateToken(token)
+	if err != nil {
+		a.logger.WithError(err).Debug("Invalid JWT token")
+		sharedErrors.RespondWithUnauthorized(c, "Invalid authorization token")
+		c.Abort()
+		return
+	}
+
+	// Add user info to Gin context
+	c.Set("user_id", claims.UserID.String())
+	c.Set("user_email", claims.Email)
+	c.Set("user_name", claims.Username)
+
+	c.Next()
+}
+
+// handleGinGatewayAuth processes authentication when user context is forwarded by gateway
+func (a *AuthMiddleware) handleGinGatewayAuth(c *gin.Context) {
+	userIDStr := c.GetHeader("X-User-ID")
+	userEmail := c.GetHeader("X-User-Email")
+	userName := c.GetHeader("X-User-Name")
+
+	// Validate user ID format
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		a.logger.WithError(err).Warn("Invalid user ID from gateway")
+		sharedErrors.RespondWithUnauthorized(c, "Invalid user context")
+		c.Abort()
+		return
+	}
+
+	// Set user information in Gin context
+	c.Set("user_id", userID.String())
+	if userEmail != "" {
+		c.Set("user_email", userEmail)
+	}
+	if userName != "" {
+		c.Set("user_name", userName)
+	}
+
+	c.Next()
+}
+
+// extractTokenFromGin extracts JWT token from Gin context (Authorization header or cookies)
+func (a *AuthMiddleware) extractTokenFromGin(c *gin.Context) string {
+	// Try Authorization header first (Bearer token)
+	if token := extractTokenFromHeader(c.Request); token != "" {
+		return token
+	}
+
+	// Try gateway-issued cookie as fallback
+	if cookie, err := c.Cookie("link_auth"); err == nil {
+		return cookie
+	}
+
+	return ""
 }
 
 // writeUnauthorized writes an unauthorized error response

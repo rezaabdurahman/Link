@@ -223,11 +223,11 @@ services:
       - link_internal
     restart: "no"
 
-  migrate-ai-svc:
+  migrate-summarygen-svc:
     build:
       context: ./backend/shared-libs/migrations
       dockerfile: Dockerfile
-    container_name: link_migrate_ai_svc
+    container_name: link_migrate_summarygen_svc
     security_opt:
       - no-new-privileges:true
     user: 1001:1001
@@ -238,9 +238,9 @@ services:
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_SSLMODE=require
-    command: ["-service=ai-svc", "-action=up", "-yes"]
+    command: ["-service=summarygen-svc", "-action=up", "-yes"]
     volumes:
-      - ./backend/ai-svc/migrations:/root/migrations:ro
+      - ./backend/summarygen-svc/migrations:/root/migrations:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -359,7 +359,7 @@ services:
         condition: service_completed_successfully
       migrate-chat-svc:
         condition: service_completed_successfully
-      migrate-ai-svc:
+      migrate-summarygen-svc:
         condition: service_completed_successfully
       migrate-discovery-svc:
         condition: service_completed_successfully
