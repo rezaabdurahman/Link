@@ -60,6 +60,10 @@ vendor/
 */main
 */cmd/main
 *-svc
+server
+*/server
+gateway
+*/gateway
 */coverage.out
 coverage.out
 *.test
