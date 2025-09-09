@@ -23,7 +23,16 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 
 const OnboardingPage: React.FC = (): JSX.Element => {
+  console.log('🔧 OnboardingPage: Component rendering...');
+  
   const { user, isAuthenticated } = useAuth();
+  const onboardingData = useOnboarding();
+  
+  console.log('🔧 OnboardingPage: Auth state check:', {
+    isAuthenticated,
+    user: user?.id,
+    userObj: user
+  });
   const { 
     status, 
     isLoading, 
@@ -34,22 +43,114 @@ const OnboardingPage: React.FC = (): JSX.Element => {
     isCompleted,
     isSkipped,
     progress
-  } = useOnboarding();
+  } = onboardingData;
+
+  // Debug ALL onboarding data at the start of each render
+  console.log('🔧 OnboardingPage: Full onboarding data:', {
+    status,
+    isLoading,
+    error,
+    isInitialized,
+    isCompleted,
+    isSkipped,
+    progress,
+    user: user?.id,
+    isAuthenticated
+  });
 
   // Auto-start onboarding if user hasn't started yet
   useEffect(() => {
-    if (isInitialized && status?.status === 'not_started') {
-      startOnboardingFlow().catch(console.error);
+    // Debug logging for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 OnboardingPage: State check:', {
+        isInitialized,
+        statusValue: status?.status,
+        currentStep: status?.current_step,
+        isLoading,
+        isCompleted,
+        isSkipped,
+        progress: Math.round(progress)
+      });
     }
-  }, [isInitialized, status?.status, startOnboardingFlow]);
+
+    if (isInitialized && status?.status === 'not_started' && !isLoading) {
+      console.log('🚀 OnboardingPage: Auto-starting onboarding flow...');
+      
+      // Add a small delay to prevent race conditions
+      const timer = setTimeout(() => {
+        startOnboardingFlow()
+          .then(() => {
+            console.log('✅ OnboardingPage: Successfully started onboarding flow');
+          })
+          .catch((error) => {
+            console.error('❌ OnboardingPage: Failed to start onboarding flow:', error);
+          });
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isInitialized, status?.status, isLoading, startOnboardingFlow, isCompleted, isSkipped]);
 
   // Redirect if not authenticated
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect if onboarding is completed or skipped
-  if (isInitialized && (isCompleted || isSkipped)) {
+  // Debug computed values BEFORE redirect check - with detailed breakdown
+  console.log('🔍 OnboardingPage: RENDER CHECKPOINT - Detailed redirect check:', {
+    timestamp: new Date().toISOString(),
+    windowLocation: window.location.href,
+    isInitialized,
+    status: status,
+    statusValue: status?.status,
+    isCompleted: status?.status === 'completed',
+    isSkipped: status?.status === 'skipped',
+    computedIsCompleted: isCompleted,
+    computedIsSkipped: isSkipped,
+    willRedirect: isInitialized && (isCompleted || isSkipped),
+    redirectCondition: {
+      initialized: isInitialized,
+      completed: isCompleted,
+      skipped: isSkipped,
+      logicalOr: isCompleted || isSkipped,
+      finalResult: isInitialized && (isCompleted || isSkipped)
+    }
+  });
+
+  // FIXED: Only redirect when we have a definitive status and it's truly complete/skipped
+  // AND we're not in the middle of an auth state transition
+  // IMPORTANT: Also check that we're actually on the onboarding page to prevent redirect loops
+  const shouldRedirect = isAuthenticated &&  // Ensure we're fully authenticated
+                          user !== null &&     // Ensure we have user data
+                          isInitialized &&     // Ensure onboarding context is initialized  
+                          status !== null &&   // Ensure we have status data
+                          (status.status === 'completed' || status.status === 'skipped') && // Only if truly complete/skipped
+                          !isLoading &&        // Don't redirect if still loading
+                          window.location.pathname === '/onboarding'; // Only redirect if actually on onboarding page
+  
+  console.log('🔍 OnboardingPage: REDIRECT DECISION:', {
+    shouldRedirect,
+    reasons: {
+      isAuthenticated: isAuthenticated,
+      userNotNull: user !== null,
+      isInitialized: isInitialized,
+      statusNotNull: status !== null,
+      statusCompleted: status?.status === 'completed',
+      statusSkipped: status?.status === 'skipped',
+      statusCombined: status?.status === 'completed' || status?.status === 'skipped',
+      notLoading: !isLoading
+    }
+  });
+  
+  if (shouldRedirect) {
+    console.log('🚨 OnboardingPage: REDIRECTING to discovery because:', {
+      reason: status?.status === 'completed' ? 'status=completed' : 'status=skipped',
+      status: status?.status,
+      isCompleted,
+      isSkipped,
+      isInitialized,
+      fullStatus: status
+    });
     return <Navigate to="/discovery" replace />;
   }
 
@@ -91,22 +192,38 @@ const OnboardingPage: React.FC = (): JSX.Element => {
     );
   }
 
-  // Show message if no current step
+  // Handle case where onboarding is in progress but no current step is set
   if (!status?.current_step) {
+    const isInProgress = status?.status === 'in_progress';
+    
     return (
       <OnboardingLayout>
         <div className="text-center py-12">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-            Welcome to Link!
+          <h2 className="text-2xl font-semibold text-text-primary mb-4">
+            {isInProgress ? 'Continue Your Setup' : 'Welcome to Link!'}
           </h2>
-          <p className="text-gray-600 mb-8">
-            Let's get you set up with a few quick questions.
+          <p className="text-text-secondary mb-8">
+            {isInProgress 
+              ? 'Let\'s continue setting up your profile.' 
+              : 'Let\'s get you set up with a few quick questions.'
+            }
           </p>
           <button
-            onClick={startOnboardingFlow}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={() => {
+              console.log('🔧 OnboardingPage: Manual start button clicked');
+              startOnboardingFlow();
+            }}
+            disabled={isLoading}
+            className="ios-button-primary px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Get Started
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Starting...</span>
+              </div>
+            ) : (
+              isInProgress ? 'Continue Setup' : 'Get Started'
+            )}
           </button>
         </div>
       </OnboardingLayout>
@@ -143,14 +260,14 @@ const OnboardingPage: React.FC = (): JSX.Element => {
 
   return (
     <OnboardingLayout>
-      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-16">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Progress Bar */}
-        <div className="w-full max-w-none">
+        <div className="w-full mb-4 sm:mb-6">
           <OnboardingProgressBar progress={progress} />
         </div>
         
         {/* Current Step Component */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 sm:p-10 lg:p-12 min-h-[600px] mt-6 backdrop-blur-sm">
+        <div className="ios-card p-6 sm:p-8 lg:p-10 min-h-[500px] sm:min-h-[600px]">
           {renderStepComponent(status.current_step)}
         </div>
       </div>

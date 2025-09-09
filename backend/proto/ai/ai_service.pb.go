@@ -126,6 +126,106 @@ func (Sentiment) EnumDescriptor() ([]byte, []int) {
 	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{1}
 }
 
+// Cue card generation modes
+type CueCardGenerationMode int32
+
+const (
+	CueCardGenerationMode_CONTEXTUAL    CueCardGenerationMode = 0 // Based on current conversation
+	CueCardGenerationMode_COLD_START    CueCardGenerationMode = 1 // New conversation with no history
+	CueCardGenerationMode_RE_ENGAGEMENT CueCardGenerationMode = 2 // Reviving stale conversation
+)
+
+// Enum value maps for CueCardGenerationMode.
+var (
+	CueCardGenerationMode_name = map[int32]string{
+		0: "CONTEXTUAL",
+		1: "COLD_START",
+		2: "RE_ENGAGEMENT",
+	}
+	CueCardGenerationMode_value = map[string]int32{
+		"CONTEXTUAL":    0,
+		"COLD_START":    1,
+		"RE_ENGAGEMENT": 2,
+	}
+)
+
+func (x CueCardGenerationMode) Enum() *CueCardGenerationMode {
+	p := new(CueCardGenerationMode)
+	*p = x
+	return p
+}
+
+func (x CueCardGenerationMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CueCardGenerationMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_ai_ai_service_proto_enumTypes[2].Descriptor()
+}
+
+func (CueCardGenerationMode) Type() protoreflect.EnumType {
+	return &file_proto_ai_ai_service_proto_enumTypes[2]
+}
+
+func (x CueCardGenerationMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CueCardGenerationMode.Descriptor instead.
+func (CueCardGenerationMode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{2}
+}
+
+// Tonality analysis scope
+type TonalityScope int32
+
+const (
+	TonalityScope_CONVERSATION_SPECIFIC TonalityScope = 0 // This conversation only
+	TonalityScope_USER_GENERAL          TonalityScope = 1 // Across all conversations
+	TonalityScope_MUTUAL_ADAPTATION     TonalityScope = 2 // Between two specific users
+)
+
+// Enum value maps for TonalityScope.
+var (
+	TonalityScope_name = map[int32]string{
+		0: "CONVERSATION_SPECIFIC",
+		1: "USER_GENERAL",
+		2: "MUTUAL_ADAPTATION",
+	}
+	TonalityScope_value = map[string]int32{
+		"CONVERSATION_SPECIFIC": 0,
+		"USER_GENERAL":          1,
+		"MUTUAL_ADAPTATION":     2,
+	}
+)
+
+func (x TonalityScope) Enum() *TonalityScope {
+	p := new(TonalityScope)
+	*p = x
+	return p
+}
+
+func (x TonalityScope) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TonalityScope) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_ai_ai_service_proto_enumTypes[3].Descriptor()
+}
+
+func (TonalityScope) Type() protoreflect.EnumType {
+	return &file_proto_ai_ai_service_proto_enumTypes[3]
+}
+
+func (x TonalityScope) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TonalityScope.Descriptor instead.
+func (TonalityScope) EnumDescriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{3}
+}
+
 // Message for AI processing
 type AIMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1694,6 +1794,842 @@ func (x *Insight) GetGeneratedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// User context for cue card generation
+type UserContext struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Interests          []string               `protobuf:"bytes,1,rep,name=interests,proto3" json:"interests,omitempty"`
+	CommunicationStyle string                 `protobuf:"bytes,2,opt,name=communication_style,json=communicationStyle,proto3" json:"communication_style,omitempty"`
+	TopicPreferences   map[string]float32     `protobuf:"bytes,3,rep,name=topic_preferences,json=topicPreferences,proto3" json:"topic_preferences,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	TonalityProfile    *TonalityProfile       `protobuf:"bytes,4,opt,name=tonality_profile,json=tonalityProfile,proto3" json:"tonality_profile,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *UserContext) Reset() {
+	*x = UserContext{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserContext) ProtoMessage() {}
+
+func (x *UserContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserContext.ProtoReflect.Descriptor instead.
+func (*UserContext) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *UserContext) GetInterests() []string {
+	if x != nil {
+		return x.Interests
+	}
+	return nil
+}
+
+func (x *UserContext) GetCommunicationStyle() string {
+	if x != nil {
+		return x.CommunicationStyle
+	}
+	return ""
+}
+
+func (x *UserContext) GetTopicPreferences() map[string]float32 {
+	if x != nil {
+		return x.TopicPreferences
+	}
+	return nil
+}
+
+func (x *UserContext) GetTonalityProfile() *TonalityProfile {
+	if x != nil {
+		return x.TonalityProfile
+	}
+	return nil
+}
+
+// User tonality profile
+type TonalityProfile struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	FormalityScore  float32                `protobuf:"fixed32,1,opt,name=formality_score,json=formalityScore,proto3" json:"formality_score,omitempty"`    // 0.0 (casual) to 1.0 (formal)
+	EnthusiasmScore float32                `protobuf:"fixed32,2,opt,name=enthusiasm_score,json=enthusiasmScore,proto3" json:"enthusiasm_score,omitempty"` // 0.0 (reserved) to 1.0 (enthusiastic)
+	BrevityScore    float32                `protobuf:"fixed32,3,opt,name=brevity_score,json=brevityScore,proto3" json:"brevity_score,omitempty"`          // 0.0 (verbose) to 1.0 (concise)
+	CommonPhrases   []string               `protobuf:"bytes,4,rep,name=common_phrases,json=commonPhrases,proto3" json:"common_phrases,omitempty"`
+	EmojiUsage      map[string]float32     `protobuf:"bytes,5,rep,name=emoji_usage,json=emojiUsage,proto3" json:"emoji_usage,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"` // emoji -> frequency
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TonalityProfile) Reset() {
+	*x = TonalityProfile{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TonalityProfile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TonalityProfile) ProtoMessage() {}
+
+func (x *TonalityProfile) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TonalityProfile.ProtoReflect.Descriptor instead.
+func (*TonalityProfile) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *TonalityProfile) GetFormalityScore() float32 {
+	if x != nil {
+		return x.FormalityScore
+	}
+	return 0
+}
+
+func (x *TonalityProfile) GetEnthusiasmScore() float32 {
+	if x != nil {
+		return x.EnthusiasmScore
+	}
+	return 0
+}
+
+func (x *TonalityProfile) GetBrevityScore() float32 {
+	if x != nil {
+		return x.BrevityScore
+	}
+	return 0
+}
+
+func (x *TonalityProfile) GetCommonPhrases() []string {
+	if x != nil {
+		return x.CommonPhrases
+	}
+	return nil
+}
+
+func (x *TonalityProfile) GetEmojiUsage() map[string]float32 {
+	if x != nil {
+		return x.EmojiUsage
+	}
+	return nil
+}
+
+// Individual cue card
+type CueCard struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	PromptText     string                 `protobuf:"bytes,2,opt,name=prompt_text,json=promptText,proto3" json:"prompt_text,omitempty"` // Short text shown on card
+	Category       string                 `protobuf:"bytes,3,opt,name=category,proto3" json:"category,omitempty"`                       // question, activity, follow-up, interest, plans
+	RelevanceScore float32                `protobuf:"fixed32,4,opt,name=relevance_score,json=relevanceScore,proto3" json:"relevance_score,omitempty"`
+	Metadata       *CueCardMetadata       `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CueCard) Reset() {
+	*x = CueCard{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CueCard) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CueCard) ProtoMessage() {}
+
+func (x *CueCard) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CueCard.ProtoReflect.Descriptor instead.
+func (*CueCard) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *CueCard) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *CueCard) GetPromptText() string {
+	if x != nil {
+		return x.PromptText
+	}
+	return ""
+}
+
+func (x *CueCard) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *CueCard) GetRelevanceScore() float32 {
+	if x != nil {
+		return x.RelevanceScore
+	}
+	return 0
+}
+
+func (x *CueCard) GetMetadata() *CueCardMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+// Cue card metadata
+type CueCardMetadata struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Reasoning      string                 `protobuf:"bytes,1,opt,name=reasoning,proto3" json:"reasoning,omitempty"`                                 // Why this suggestion was made
+	ContextSignals []string               `protobuf:"bytes,2,rep,name=context_signals,json=contextSignals,proto3" json:"context_signals,omitempty"` // What influenced this suggestion
+	ToneAdjustment string                 `protobuf:"bytes,3,opt,name=tone_adjustment,json=toneAdjustment,proto3" json:"tone_adjustment,omitempty"` // How tone will be adjusted
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CueCardMetadata) Reset() {
+	*x = CueCardMetadata{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CueCardMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CueCardMetadata) ProtoMessage() {}
+
+func (x *CueCardMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CueCardMetadata.ProtoReflect.Descriptor instead.
+func (*CueCardMetadata) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *CueCardMetadata) GetReasoning() string {
+	if x != nil {
+		return x.Reasoning
+	}
+	return ""
+}
+
+func (x *CueCardMetadata) GetContextSignals() []string {
+	if x != nil {
+		return x.ContextSignals
+	}
+	return nil
+}
+
+func (x *CueCardMetadata) GetToneAdjustment() string {
+	if x != nil {
+		return x.ToneAdjustment
+	}
+	return ""
+}
+
+// Tonality adjustments applied to messages
+type TonalityAdjustments struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OriginalTone  string                 `protobuf:"bytes,1,opt,name=original_tone,json=originalTone,proto3" json:"original_tone,omitempty"`
+	AdjustedTone  string                 `protobuf:"bytes,2,opt,name=adjusted_tone,json=adjustedTone,proto3" json:"adjusted_tone,omitempty"`
+	Modifications []string               `protobuf:"bytes,3,rep,name=modifications,proto3" json:"modifications,omitempty"` // e.g., "added emoji", "made more casual"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TonalityAdjustments) Reset() {
+	*x = TonalityAdjustments{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TonalityAdjustments) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TonalityAdjustments) ProtoMessage() {}
+
+func (x *TonalityAdjustments) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TonalityAdjustments.ProtoReflect.Descriptor instead.
+func (*TonalityAdjustments) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *TonalityAdjustments) GetOriginalTone() string {
+	if x != nil {
+		return x.OriginalTone
+	}
+	return ""
+}
+
+func (x *TonalityAdjustments) GetAdjustedTone() string {
+	if x != nil {
+		return x.AdjustedTone
+	}
+	return ""
+}
+
+func (x *TonalityAdjustments) GetModifications() []string {
+	if x != nil {
+		return x.Modifications
+	}
+	return nil
+}
+
+// Tonality insight
+type TonalityInsight struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // e.g., "greeting_style", "question_pattern"
+	Observation   string                 `protobuf:"bytes,2,opt,name=observation,proto3" json:"observation,omitempty"`
+	Confidence    float32                `protobuf:"fixed32,3,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TonalityInsight) Reset() {
+	*x = TonalityInsight{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TonalityInsight) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TonalityInsight) ProtoMessage() {}
+
+func (x *TonalityInsight) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TonalityInsight.ProtoReflect.Descriptor instead.
+func (*TonalityInsight) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *TonalityInsight) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *TonalityInsight) GetObservation() string {
+	if x != nil {
+		return x.Observation
+	}
+	return ""
+}
+
+func (x *TonalityInsight) GetConfidence() float32 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+// Cue card generation request
+type GenerateCueCardsRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ConversationId   *common.UUID           `protobuf:"bytes,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	RequestingUserId *common.UUID           `protobuf:"bytes,2,opt,name=requesting_user_id,json=requestingUserId,proto3" json:"requesting_user_id,omitempty"`
+	RecentMessages   []*AIMessage           `protobuf:"bytes,3,rep,name=recent_messages,json=recentMessages,proto3" json:"recent_messages,omitempty"` // Last 10-20 messages
+	UserContext      *UserContext           `protobuf:"bytes,4,opt,name=user_context,json=userContext,proto3" json:"user_context,omitempty"`
+	CardCount        int32                  `protobuf:"varint,5,opt,name=card_count,json=cardCount,proto3" json:"card_count,omitempty"` // Default 3
+	Mode             CueCardGenerationMode  `protobuf:"varint,6,opt,name=mode,proto3,enum=ai.CueCardGenerationMode" json:"mode,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GenerateCueCardsRequest) Reset() {
+	*x = GenerateCueCardsRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateCueCardsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateCueCardsRequest) ProtoMessage() {}
+
+func (x *GenerateCueCardsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateCueCardsRequest.ProtoReflect.Descriptor instead.
+func (*GenerateCueCardsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *GenerateCueCardsRequest) GetConversationId() *common.UUID {
+	if x != nil {
+		return x.ConversationId
+	}
+	return nil
+}
+
+func (x *GenerateCueCardsRequest) GetRequestingUserId() *common.UUID {
+	if x != nil {
+		return x.RequestingUserId
+	}
+	return nil
+}
+
+func (x *GenerateCueCardsRequest) GetRecentMessages() []*AIMessage {
+	if x != nil {
+		return x.RecentMessages
+	}
+	return nil
+}
+
+func (x *GenerateCueCardsRequest) GetUserContext() *UserContext {
+	if x != nil {
+		return x.UserContext
+	}
+	return nil
+}
+
+func (x *GenerateCueCardsRequest) GetCardCount() int32 {
+	if x != nil {
+		return x.CardCount
+	}
+	return 0
+}
+
+func (x *GenerateCueCardsRequest) GetMode() CueCardGenerationMode {
+	if x != nil {
+		return x.Mode
+	}
+	return CueCardGenerationMode_CONTEXTUAL
+}
+
+// Cue card generation response
+type GenerateCueCardsResponse struct {
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	CueCards         []*CueCard              `protobuf:"bytes,1,rep,name=cue_cards,json=cueCards,proto3" json:"cue_cards,omitempty"`
+	TonalityAnalysis *TonalityProfile        `protobuf:"bytes,2,opt,name=tonality_analysis,json=tonalityAnalysis,proto3" json:"tonality_analysis,omitempty"`
+	Result           *common.SuccessResponse `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GenerateCueCardsResponse) Reset() {
+	*x = GenerateCueCardsResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateCueCardsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateCueCardsResponse) ProtoMessage() {}
+
+func (x *GenerateCueCardsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateCueCardsResponse.ProtoReflect.Descriptor instead.
+func (*GenerateCueCardsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *GenerateCueCardsResponse) GetCueCards() []*CueCard {
+	if x != nil {
+		return x.CueCards
+	}
+	return nil
+}
+
+func (x *GenerateCueCardsResponse) GetTonalityAnalysis() *TonalityProfile {
+	if x != nil {
+		return x.TonalityAnalysis
+	}
+	return nil
+}
+
+func (x *GenerateCueCardsResponse) GetResult() *common.SuccessResponse {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+// Message generation from cue card request
+type GenerateMessageFromCueRequest struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	ConversationId          *common.UUID           `protobuf:"bytes,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	RequestingUserId        *common.UUID           `protobuf:"bytes,2,opt,name=requesting_user_id,json=requestingUserId,proto3" json:"requesting_user_id,omitempty"`
+	SelectedCard            *CueCard               `protobuf:"bytes,3,opt,name=selected_card,json=selectedCard,proto3" json:"selected_card,omitempty"`
+	UserTonality            *TonalityProfile       `protobuf:"bytes,4,opt,name=user_tonality,json=userTonality,proto3" json:"user_tonality,omitempty"`
+	ConversationTonality    *TonalityProfile       `protobuf:"bytes,5,opt,name=conversation_tonality,json=conversationTonality,proto3" json:"conversation_tonality,omitempty"`
+	ApplyTonalityAdjustment bool                   `protobuf:"varint,6,opt,name=apply_tonality_adjustment,json=applyTonalityAdjustment,proto3" json:"apply_tonality_adjustment,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *GenerateMessageFromCueRequest) Reset() {
+	*x = GenerateMessageFromCueRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateMessageFromCueRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateMessageFromCueRequest) ProtoMessage() {}
+
+func (x *GenerateMessageFromCueRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateMessageFromCueRequest.ProtoReflect.Descriptor instead.
+func (*GenerateMessageFromCueRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *GenerateMessageFromCueRequest) GetConversationId() *common.UUID {
+	if x != nil {
+		return x.ConversationId
+	}
+	return nil
+}
+
+func (x *GenerateMessageFromCueRequest) GetRequestingUserId() *common.UUID {
+	if x != nil {
+		return x.RequestingUserId
+	}
+	return nil
+}
+
+func (x *GenerateMessageFromCueRequest) GetSelectedCard() *CueCard {
+	if x != nil {
+		return x.SelectedCard
+	}
+	return nil
+}
+
+func (x *GenerateMessageFromCueRequest) GetUserTonality() *TonalityProfile {
+	if x != nil {
+		return x.UserTonality
+	}
+	return nil
+}
+
+func (x *GenerateMessageFromCueRequest) GetConversationTonality() *TonalityProfile {
+	if x != nil {
+		return x.ConversationTonality
+	}
+	return nil
+}
+
+func (x *GenerateMessageFromCueRequest) GetApplyTonalityAdjustment() bool {
+	if x != nil {
+		return x.ApplyTonalityAdjustment
+	}
+	return false
+}
+
+// Message generation from cue card response
+type GenerateMessageFromCueResponse struct {
+	state              protoimpl.MessageState  `protogen:"open.v1"`
+	Message            string                  `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	AdjustmentsApplied *TonalityAdjustments    `protobuf:"bytes,2,opt,name=adjustments_applied,json=adjustmentsApplied,proto3" json:"adjustments_applied,omitempty"`
+	ConfidenceScore    float32                 `protobuf:"fixed32,3,opt,name=confidence_score,json=confidenceScore,proto3" json:"confidence_score,omitempty"`
+	Result             *common.SuccessResponse `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GenerateMessageFromCueResponse) Reset() {
+	*x = GenerateMessageFromCueResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateMessageFromCueResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateMessageFromCueResponse) ProtoMessage() {}
+
+func (x *GenerateMessageFromCueResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateMessageFromCueResponse.ProtoReflect.Descriptor instead.
+func (*GenerateMessageFromCueResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *GenerateMessageFromCueResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *GenerateMessageFromCueResponse) GetAdjustmentsApplied() *TonalityAdjustments {
+	if x != nil {
+		return x.AdjustmentsApplied
+	}
+	return nil
+}
+
+func (x *GenerateMessageFromCueResponse) GetConfidenceScore() float32 {
+	if x != nil {
+		return x.ConfidenceScore
+	}
+	return 0
+}
+
+func (x *GenerateMessageFromCueResponse) GetResult() *common.SuccessResponse {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+// Tonality analysis request
+type AnalyzeTonalityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        *common.UUID           `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Messages      []*AIMessage           `protobuf:"bytes,2,rep,name=messages,proto3" json:"messages,omitempty"`
+	Scope         TonalityScope          `protobuf:"varint,3,opt,name=scope,proto3,enum=ai.TonalityScope" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AnalyzeTonalityRequest) Reset() {
+	*x = AnalyzeTonalityRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AnalyzeTonalityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AnalyzeTonalityRequest) ProtoMessage() {}
+
+func (x *AnalyzeTonalityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AnalyzeTonalityRequest.ProtoReflect.Descriptor instead.
+func (*AnalyzeTonalityRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *AnalyzeTonalityRequest) GetUserId() *common.UUID {
+	if x != nil {
+		return x.UserId
+	}
+	return nil
+}
+
+func (x *AnalyzeTonalityRequest) GetMessages() []*AIMessage {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+func (x *AnalyzeTonalityRequest) GetScope() TonalityScope {
+	if x != nil {
+		return x.Scope
+	}
+	return TonalityScope_CONVERSATION_SPECIFIC
+}
+
+// Tonality analysis response
+type AnalyzeTonalityResponse struct {
+	state             protoimpl.MessageState  `protogen:"open.v1"`
+	Profile           *TonalityProfile        `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	PatternConfidence map[string]float32      `protobuf:"bytes,2,rep,name=pattern_confidence,json=patternConfidence,proto3" json:"pattern_confidence,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	Insights          []*TonalityInsight      `protobuf:"bytes,3,rep,name=insights,proto3" json:"insights,omitempty"`
+	Result            *common.SuccessResponse `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AnalyzeTonalityResponse) Reset() {
+	*x = AnalyzeTonalityResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AnalyzeTonalityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AnalyzeTonalityResponse) ProtoMessage() {}
+
+func (x *AnalyzeTonalityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AnalyzeTonalityResponse.ProtoReflect.Descriptor instead.
+func (*AnalyzeTonalityResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *AnalyzeTonalityResponse) GetProfile() *TonalityProfile {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *AnalyzeTonalityResponse) GetPatternConfidence() map[string]float32 {
+	if x != nil {
+		return x.PatternConfidence
+	}
+	return nil
+}
+
+func (x *AnalyzeTonalityResponse) GetInsights() []*TonalityInsight {
+	if x != nil {
+		return x.Insights
+	}
+	return nil
+}
+
+func (x *AnalyzeTonalityResponse) GetResult() *common.SuccessResponse {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
 var File_proto_ai_ai_service_proto protoreflect.FileDescriptor
 
 const file_proto_ai_ai_service_proto_rawDesc = "" +
@@ -1832,7 +2768,82 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\fgenerated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vgeneratedAt\x1a7\n" +
 	"\tDataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*-\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb5\x02\n" +
+	"\vUserContext\x12\x1c\n" +
+	"\tinterests\x18\x01 \x03(\tR\tinterests\x12/\n" +
+	"\x13communication_style\x18\x02 \x01(\tR\x12communicationStyle\x12R\n" +
+	"\x11topic_preferences\x18\x03 \x03(\v2%.ai.UserContext.TopicPreferencesEntryR\x10topicPreferences\x12>\n" +
+	"\x10tonality_profile\x18\x04 \x01(\v2\x13.ai.TonalityProfileR\x0ftonalityProfile\x1aC\n" +
+	"\x15TopicPreferencesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\"\xb6\x02\n" +
+	"\x0fTonalityProfile\x12'\n" +
+	"\x0fformality_score\x18\x01 \x01(\x02R\x0eformalityScore\x12)\n" +
+	"\x10enthusiasm_score\x18\x02 \x01(\x02R\x0fenthusiasmScore\x12#\n" +
+	"\rbrevity_score\x18\x03 \x01(\x02R\fbrevityScore\x12%\n" +
+	"\x0ecommon_phrases\x18\x04 \x03(\tR\rcommonPhrases\x12D\n" +
+	"\vemoji_usage\x18\x05 \x03(\v2#.ai.TonalityProfile.EmojiUsageEntryR\n" +
+	"emojiUsage\x1a=\n" +
+	"\x0fEmojiUsageEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\"\xb0\x01\n" +
+	"\aCueCard\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
+	"\vprompt_text\x18\x02 \x01(\tR\n" +
+	"promptText\x12\x1a\n" +
+	"\bcategory\x18\x03 \x01(\tR\bcategory\x12'\n" +
+	"\x0frelevance_score\x18\x04 \x01(\x02R\x0erelevanceScore\x12/\n" +
+	"\bmetadata\x18\x05 \x01(\v2\x13.ai.CueCardMetadataR\bmetadata\"\x81\x01\n" +
+	"\x0fCueCardMetadata\x12\x1c\n" +
+	"\treasoning\x18\x01 \x01(\tR\treasoning\x12'\n" +
+	"\x0fcontext_signals\x18\x02 \x03(\tR\x0econtextSignals\x12'\n" +
+	"\x0ftone_adjustment\x18\x03 \x01(\tR\x0etoneAdjustment\"\x85\x01\n" +
+	"\x13TonalityAdjustments\x12#\n" +
+	"\roriginal_tone\x18\x01 \x01(\tR\foriginalTone\x12#\n" +
+	"\radjusted_tone\x18\x02 \x01(\tR\fadjustedTone\x12$\n" +
+	"\rmodifications\x18\x03 \x03(\tR\rmodifications\"g\n" +
+	"\x0fTonalityInsight\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12 \n" +
+	"\vobservation\x18\x02 \x01(\tR\vobservation\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x03 \x01(\x02R\n" +
+	"confidence\"\xc6\x02\n" +
+	"\x17GenerateCueCardsRequest\x125\n" +
+	"\x0fconversation_id\x18\x01 \x01(\v2\f.common.UUIDR\x0econversationId\x12:\n" +
+	"\x12requesting_user_id\x18\x02 \x01(\v2\f.common.UUIDR\x10requestingUserId\x126\n" +
+	"\x0frecent_messages\x18\x03 \x03(\v2\r.ai.AIMessageR\x0erecentMessages\x122\n" +
+	"\fuser_context\x18\x04 \x01(\v2\x0f.ai.UserContextR\vuserContext\x12\x1d\n" +
+	"\n" +
+	"card_count\x18\x05 \x01(\x05R\tcardCount\x12-\n" +
+	"\x04mode\x18\x06 \x01(\x0e2\x19.ai.CueCardGenerationModeR\x04mode\"\xb7\x01\n" +
+	"\x18GenerateCueCardsResponse\x12(\n" +
+	"\tcue_cards\x18\x01 \x03(\v2\v.ai.CueCardR\bcueCards\x12@\n" +
+	"\x11tonality_analysis\x18\x02 \x01(\v2\x13.ai.TonalityProfileR\x10tonalityAnalysis\x12/\n" +
+	"\x06result\x18\x03 \x01(\v2\x17.common.SuccessResponseR\x06result\"\x84\x03\n" +
+	"\x1dGenerateMessageFromCueRequest\x125\n" +
+	"\x0fconversation_id\x18\x01 \x01(\v2\f.common.UUIDR\x0econversationId\x12:\n" +
+	"\x12requesting_user_id\x18\x02 \x01(\v2\f.common.UUIDR\x10requestingUserId\x120\n" +
+	"\rselected_card\x18\x03 \x01(\v2\v.ai.CueCardR\fselectedCard\x128\n" +
+	"\ruser_tonality\x18\x04 \x01(\v2\x13.ai.TonalityProfileR\fuserTonality\x12H\n" +
+	"\x15conversation_tonality\x18\x05 \x01(\v2\x13.ai.TonalityProfileR\x14conversationTonality\x12:\n" +
+	"\x19apply_tonality_adjustment\x18\x06 \x01(\bR\x17applyTonalityAdjustment\"\xe0\x01\n" +
+	"\x1eGenerateMessageFromCueResponse\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12H\n" +
+	"\x13adjustments_applied\x18\x02 \x01(\v2\x17.ai.TonalityAdjustmentsR\x12adjustmentsApplied\x12)\n" +
+	"\x10confidence_score\x18\x03 \x01(\x02R\x0fconfidenceScore\x12/\n" +
+	"\x06result\x18\x04 \x01(\v2\x17.common.SuccessResponseR\x06result\"\x93\x01\n" +
+	"\x16AnalyzeTonalityRequest\x12%\n" +
+	"\auser_id\x18\x01 \x01(\v2\f.common.UUIDR\x06userId\x12)\n" +
+	"\bmessages\x18\x02 \x03(\v2\r.ai.AIMessageR\bmessages\x12'\n" +
+	"\x05scope\x18\x03 \x01(\x0e2\x11.ai.TonalityScopeR\x05scope\"\xd3\x02\n" +
+	"\x17AnalyzeTonalityResponse\x12-\n" +
+	"\aprofile\x18\x01 \x01(\v2\x13.ai.TonalityProfileR\aprofile\x12a\n" +
+	"\x12pattern_confidence\x18\x02 \x03(\v22.ai.AnalyzeTonalityResponse.PatternConfidenceEntryR\x11patternConfidence\x12/\n" +
+	"\binsights\x18\x03 \x03(\v2\x13.ai.TonalityInsightR\binsights\x12/\n" +
+	"\x06result\x18\x04 \x01(\v2\x17.common.SuccessResponseR\x06result\x1aD\n" +
+	"\x16PatternConfidenceEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01*-\n" +
 	"\fConsentLevel\x12\b\n" +
 	"\x04NONE\x10\x00\x12\t\n" +
 	"\x05BASIC\x10\x01\x12\b\n" +
@@ -1841,7 +2852,17 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\aNEUTRAL\x10\x00\x12\f\n" +
 	"\bPOSITIVE\x10\x01\x12\f\n" +
 	"\bNEGATIVE\x10\x02\x12\t\n" +
-	"\x05MIXED\x10\x032\xac\x05\n" +
+	"\x05MIXED\x10\x03*J\n" +
+	"\x15CueCardGenerationMode\x12\x0e\n" +
+	"\n" +
+	"CONTEXTUAL\x10\x00\x12\x0e\n" +
+	"\n" +
+	"COLD_START\x10\x01\x12\x11\n" +
+	"\rRE_ENGAGEMENT\x10\x02*S\n" +
+	"\rTonalityScope\x12\x19\n" +
+	"\x15CONVERSATION_SPECIFIC\x10\x00\x12\x10\n" +
+	"\fUSER_GENERAL\x10\x01\x12\x15\n" +
+	"\x11MUTUAL_ADAPTATION\x10\x022\xa8\a\n" +
 	"\tAIService\x12\\\n" +
 	"\x15SummarizeConversation\x12 .ai.SummarizeConversationRequest\x1a!.ai.SummarizeConversationResponse\x12n\n" +
 	"\x1bGenerateResponseSuggestions\x12&.ai.GenerateResponseSuggestionsRequest\x1a'.ai.GenerateResponseSuggestionsResponse\x12M\n" +
@@ -1849,7 +2870,10 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x13StreamSummarization\x12\x1e.ai.StreamSummarizationRequest\x1a\x16.ai.SummarizationChunk0\x01\x12M\n" +
 	"\x10CheckUserConsent\x12\x1b.ai.CheckUserConsentRequest\x1a\x1c.ai.CheckUserConsentResponse\x12P\n" +
 	"\x11UpdateUserConsent\x12\x1c.ai.UpdateUserConsentRequest\x1a\x1d.ai.UpdateUserConsentResponse\x12M\n" +
-	"\x10GenerateInsights\x12\x1b.ai.GenerateInsightsRequest\x1a\x1c.ai.GenerateInsightsResponse\x12A\n" +
+	"\x10GenerateInsights\x12\x1b.ai.GenerateInsightsRequest\x1a\x1c.ai.GenerateInsightsResponse\x12M\n" +
+	"\x10GenerateCueCards\x12\x1b.ai.GenerateCueCardsRequest\x1a\x1c.ai.GenerateCueCardsResponse\x12_\n" +
+	"\x16GenerateMessageFromCue\x12!.ai.GenerateMessageFromCueRequest\x1a\".ai.GenerateMessageFromCueResponse\x12J\n" +
+	"\x0fAnalyzeTonality\x12\x1a.ai.AnalyzeTonalityRequest\x1a\x1b.ai.AnalyzeTonalityResponse\x12A\n" +
 	"\x06Health\x12\x1a.common.HealthCheckRequest\x1a\x1b.common.HealthCheckResponseB&Z$github.com/link-app/backend/proto/aib\x06proto3"
 
 var (
@@ -1864,121 +2888,170 @@ func file_proto_ai_ai_service_proto_rawDescGZIP() []byte {
 	return file_proto_ai_ai_service_proto_rawDescData
 }
 
-var file_proto_ai_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_proto_ai_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_proto_ai_ai_service_proto_goTypes = []any{
 	(ConsentLevel)(0),                           // 0: ai.ConsentLevel
 	(Sentiment)(0),                              // 1: ai.Sentiment
-	(*AIMessage)(nil),                           // 2: ai.AIMessage
-	(*UserConsent)(nil),                         // 3: ai.UserConsent
-	(*SummarizeConversationRequest)(nil),        // 4: ai.SummarizeConversationRequest
-	(*SummarizeConversationResponse)(nil),       // 5: ai.SummarizeConversationResponse
-	(*Participant)(nil),                         // 6: ai.Participant
-	(*GenerateResponseSuggestionsRequest)(nil),  // 7: ai.GenerateResponseSuggestionsRequest
-	(*GenerateResponseSuggestionsResponse)(nil), // 8: ai.GenerateResponseSuggestionsResponse
-	(*ResponseSuggestion)(nil),                  // 9: ai.ResponseSuggestion
-	(*AnalyzeSentimentRequest)(nil),             // 10: ai.AnalyzeSentimentRequest
-	(*AnalyzeSentimentResponse)(nil),            // 11: ai.AnalyzeSentimentResponse
-	(*MessageSentiment)(nil),                    // 12: ai.MessageSentiment
-	(*SentimentTrends)(nil),                     // 13: ai.SentimentTrends
-	(*SentimentDataPoint)(nil),                  // 14: ai.SentimentDataPoint
-	(*StreamSummarizationRequest)(nil),          // 15: ai.StreamSummarizationRequest
-	(*SummarizationChunk)(nil),                  // 16: ai.SummarizationChunk
-	(*CheckUserConsentRequest)(nil),             // 17: ai.CheckUserConsentRequest
-	(*CheckUserConsentResponse)(nil),            // 18: ai.CheckUserConsentResponse
-	(*UpdateUserConsentRequest)(nil),            // 19: ai.UpdateUserConsentRequest
-	(*UpdateUserConsentResponse)(nil),           // 20: ai.UpdateUserConsentResponse
-	(*GenerateInsightsRequest)(nil),             // 21: ai.GenerateInsightsRequest
-	(*GenerateInsightsResponse)(nil),            // 22: ai.GenerateInsightsResponse
-	(*Insight)(nil),                             // 23: ai.Insight
-	nil,                                         // 24: ai.AIMessage.MetadataEntry
-	nil,                                         // 25: ai.CheckUserConsentResponse.OperationPermissionsEntry
-	nil,                                         // 26: ai.Insight.DataEntry
-	(*common.UUID)(nil),                         // 27: common.UUID
-	(*timestamppb.Timestamp)(nil),               // 28: google.protobuf.Timestamp
-	(*common.SuccessResponse)(nil),              // 29: common.SuccessResponse
-	(*common.HealthCheckRequest)(nil),           // 30: common.HealthCheckRequest
-	(*common.HealthCheckResponse)(nil),          // 31: common.HealthCheckResponse
+	(CueCardGenerationMode)(0),                  // 2: ai.CueCardGenerationMode
+	(TonalityScope)(0),                          // 3: ai.TonalityScope
+	(*AIMessage)(nil),                           // 4: ai.AIMessage
+	(*UserConsent)(nil),                         // 5: ai.UserConsent
+	(*SummarizeConversationRequest)(nil),        // 6: ai.SummarizeConversationRequest
+	(*SummarizeConversationResponse)(nil),       // 7: ai.SummarizeConversationResponse
+	(*Participant)(nil),                         // 8: ai.Participant
+	(*GenerateResponseSuggestionsRequest)(nil),  // 9: ai.GenerateResponseSuggestionsRequest
+	(*GenerateResponseSuggestionsResponse)(nil), // 10: ai.GenerateResponseSuggestionsResponse
+	(*ResponseSuggestion)(nil),                  // 11: ai.ResponseSuggestion
+	(*AnalyzeSentimentRequest)(nil),             // 12: ai.AnalyzeSentimentRequest
+	(*AnalyzeSentimentResponse)(nil),            // 13: ai.AnalyzeSentimentResponse
+	(*MessageSentiment)(nil),                    // 14: ai.MessageSentiment
+	(*SentimentTrends)(nil),                     // 15: ai.SentimentTrends
+	(*SentimentDataPoint)(nil),                  // 16: ai.SentimentDataPoint
+	(*StreamSummarizationRequest)(nil),          // 17: ai.StreamSummarizationRequest
+	(*SummarizationChunk)(nil),                  // 18: ai.SummarizationChunk
+	(*CheckUserConsentRequest)(nil),             // 19: ai.CheckUserConsentRequest
+	(*CheckUserConsentResponse)(nil),            // 20: ai.CheckUserConsentResponse
+	(*UpdateUserConsentRequest)(nil),            // 21: ai.UpdateUserConsentRequest
+	(*UpdateUserConsentResponse)(nil),           // 22: ai.UpdateUserConsentResponse
+	(*GenerateInsightsRequest)(nil),             // 23: ai.GenerateInsightsRequest
+	(*GenerateInsightsResponse)(nil),            // 24: ai.GenerateInsightsResponse
+	(*Insight)(nil),                             // 25: ai.Insight
+	(*UserContext)(nil),                         // 26: ai.UserContext
+	(*TonalityProfile)(nil),                     // 27: ai.TonalityProfile
+	(*CueCard)(nil),                             // 28: ai.CueCard
+	(*CueCardMetadata)(nil),                     // 29: ai.CueCardMetadata
+	(*TonalityAdjustments)(nil),                 // 30: ai.TonalityAdjustments
+	(*TonalityInsight)(nil),                     // 31: ai.TonalityInsight
+	(*GenerateCueCardsRequest)(nil),             // 32: ai.GenerateCueCardsRequest
+	(*GenerateCueCardsResponse)(nil),            // 33: ai.GenerateCueCardsResponse
+	(*GenerateMessageFromCueRequest)(nil),       // 34: ai.GenerateMessageFromCueRequest
+	(*GenerateMessageFromCueResponse)(nil),      // 35: ai.GenerateMessageFromCueResponse
+	(*AnalyzeTonalityRequest)(nil),              // 36: ai.AnalyzeTonalityRequest
+	(*AnalyzeTonalityResponse)(nil),             // 37: ai.AnalyzeTonalityResponse
+	nil,                                         // 38: ai.AIMessage.MetadataEntry
+	nil,                                         // 39: ai.CheckUserConsentResponse.OperationPermissionsEntry
+	nil,                                         // 40: ai.Insight.DataEntry
+	nil,                                         // 41: ai.UserContext.TopicPreferencesEntry
+	nil,                                         // 42: ai.TonalityProfile.EmojiUsageEntry
+	nil,                                         // 43: ai.AnalyzeTonalityResponse.PatternConfidenceEntry
+	(*common.UUID)(nil),                         // 44: common.UUID
+	(*timestamppb.Timestamp)(nil),               // 45: google.protobuf.Timestamp
+	(*common.SuccessResponse)(nil),              // 46: common.SuccessResponse
+	(*common.HealthCheckRequest)(nil),           // 47: common.HealthCheckRequest
+	(*common.HealthCheckResponse)(nil),          // 48: common.HealthCheckResponse
 }
 var file_proto_ai_ai_service_proto_depIdxs = []int32{
-	27, // 0: ai.AIMessage.id:type_name -> common.UUID
-	27, // 1: ai.AIMessage.sender_id:type_name -> common.UUID
-	28, // 2: ai.AIMessage.timestamp:type_name -> google.protobuf.Timestamp
-	24, // 3: ai.AIMessage.metadata:type_name -> ai.AIMessage.MetadataEntry
-	27, // 4: ai.UserConsent.user_id:type_name -> common.UUID
+	44, // 0: ai.AIMessage.id:type_name -> common.UUID
+	44, // 1: ai.AIMessage.sender_id:type_name -> common.UUID
+	45, // 2: ai.AIMessage.timestamp:type_name -> google.protobuf.Timestamp
+	38, // 3: ai.AIMessage.metadata:type_name -> ai.AIMessage.MetadataEntry
+	44, // 4: ai.UserConsent.user_id:type_name -> common.UUID
 	0,  // 5: ai.UserConsent.conversation_summarization:type_name -> ai.ConsentLevel
 	0,  // 6: ai.UserConsent.sentiment_analysis:type_name -> ai.ConsentLevel
 	0,  // 7: ai.UserConsent.response_suggestions:type_name -> ai.ConsentLevel
 	0,  // 8: ai.UserConsent.insights_generation:type_name -> ai.ConsentLevel
-	28, // 9: ai.UserConsent.updated_at:type_name -> google.protobuf.Timestamp
-	28, // 10: ai.UserConsent.expires_at:type_name -> google.protobuf.Timestamp
-	27, // 11: ai.SummarizeConversationRequest.conversation_id:type_name -> common.UUID
-	2,  // 12: ai.SummarizeConversationRequest.messages:type_name -> ai.AIMessage
-	27, // 13: ai.SummarizeConversationRequest.requesting_user_id:type_name -> common.UUID
-	6,  // 14: ai.SummarizeConversationResponse.participants:type_name -> ai.Participant
-	28, // 15: ai.SummarizeConversationResponse.conversation_period_start:type_name -> google.protobuf.Timestamp
-	28, // 16: ai.SummarizeConversationResponse.conversation_period_end:type_name -> google.protobuf.Timestamp
-	29, // 17: ai.SummarizeConversationResponse.result:type_name -> common.SuccessResponse
-	27, // 18: ai.Participant.user_id:type_name -> common.UUID
+	45, // 9: ai.UserConsent.updated_at:type_name -> google.protobuf.Timestamp
+	45, // 10: ai.UserConsent.expires_at:type_name -> google.protobuf.Timestamp
+	44, // 11: ai.SummarizeConversationRequest.conversation_id:type_name -> common.UUID
+	4,  // 12: ai.SummarizeConversationRequest.messages:type_name -> ai.AIMessage
+	44, // 13: ai.SummarizeConversationRequest.requesting_user_id:type_name -> common.UUID
+	8,  // 14: ai.SummarizeConversationResponse.participants:type_name -> ai.Participant
+	45, // 15: ai.SummarizeConversationResponse.conversation_period_start:type_name -> google.protobuf.Timestamp
+	45, // 16: ai.SummarizeConversationResponse.conversation_period_end:type_name -> google.protobuf.Timestamp
+	46, // 17: ai.SummarizeConversationResponse.result:type_name -> common.SuccessResponse
+	44, // 18: ai.Participant.user_id:type_name -> common.UUID
 	1,  // 19: ai.Participant.dominant_sentiment:type_name -> ai.Sentiment
-	27, // 20: ai.GenerateResponseSuggestionsRequest.conversation_id:type_name -> common.UUID
-	2,  // 21: ai.GenerateResponseSuggestionsRequest.recent_messages:type_name -> ai.AIMessage
-	27, // 22: ai.GenerateResponseSuggestionsRequest.requesting_user_id:type_name -> common.UUID
-	9,  // 23: ai.GenerateResponseSuggestionsResponse.suggestions:type_name -> ai.ResponseSuggestion
-	29, // 24: ai.GenerateResponseSuggestionsResponse.result:type_name -> common.SuccessResponse
-	2,  // 25: ai.AnalyzeSentimentRequest.messages:type_name -> ai.AIMessage
-	27, // 26: ai.AnalyzeSentimentRequest.requesting_user_id:type_name -> common.UUID
+	44, // 20: ai.GenerateResponseSuggestionsRequest.conversation_id:type_name -> common.UUID
+	4,  // 21: ai.GenerateResponseSuggestionsRequest.recent_messages:type_name -> ai.AIMessage
+	44, // 22: ai.GenerateResponseSuggestionsRequest.requesting_user_id:type_name -> common.UUID
+	11, // 23: ai.GenerateResponseSuggestionsResponse.suggestions:type_name -> ai.ResponseSuggestion
+	46, // 24: ai.GenerateResponseSuggestionsResponse.result:type_name -> common.SuccessResponse
+	4,  // 25: ai.AnalyzeSentimentRequest.messages:type_name -> ai.AIMessage
+	44, // 26: ai.AnalyzeSentimentRequest.requesting_user_id:type_name -> common.UUID
 	1,  // 27: ai.AnalyzeSentimentResponse.overall_sentiment:type_name -> ai.Sentiment
-	12, // 28: ai.AnalyzeSentimentResponse.individual_sentiments:type_name -> ai.MessageSentiment
-	13, // 29: ai.AnalyzeSentimentResponse.trends:type_name -> ai.SentimentTrends
-	29, // 30: ai.AnalyzeSentimentResponse.result:type_name -> common.SuccessResponse
-	27, // 31: ai.MessageSentiment.message_id:type_name -> common.UUID
+	14, // 28: ai.AnalyzeSentimentResponse.individual_sentiments:type_name -> ai.MessageSentiment
+	15, // 29: ai.AnalyzeSentimentResponse.trends:type_name -> ai.SentimentTrends
+	46, // 30: ai.AnalyzeSentimentResponse.result:type_name -> common.SuccessResponse
+	44, // 31: ai.MessageSentiment.message_id:type_name -> common.UUID
 	1,  // 32: ai.MessageSentiment.sentiment:type_name -> ai.Sentiment
-	14, // 33: ai.SentimentTrends.trend_points:type_name -> ai.SentimentDataPoint
-	28, // 34: ai.SentimentDataPoint.timestamp:type_name -> google.protobuf.Timestamp
+	16, // 33: ai.SentimentTrends.trend_points:type_name -> ai.SentimentDataPoint
+	45, // 34: ai.SentimentDataPoint.timestamp:type_name -> google.protobuf.Timestamp
 	1,  // 35: ai.SentimentDataPoint.sentiment:type_name -> ai.Sentiment
-	27, // 36: ai.StreamSummarizationRequest.conversation_id:type_name -> common.UUID
-	27, // 37: ai.StreamSummarizationRequest.requesting_user_id:type_name -> common.UUID
-	27, // 38: ai.CheckUserConsentRequest.user_id:type_name -> common.UUID
-	3,  // 39: ai.CheckUserConsentResponse.consent:type_name -> ai.UserConsent
-	25, // 40: ai.CheckUserConsentResponse.operation_permissions:type_name -> ai.CheckUserConsentResponse.OperationPermissionsEntry
-	27, // 41: ai.UpdateUserConsentRequest.user_id:type_name -> common.UUID
+	44, // 36: ai.StreamSummarizationRequest.conversation_id:type_name -> common.UUID
+	44, // 37: ai.StreamSummarizationRequest.requesting_user_id:type_name -> common.UUID
+	44, // 38: ai.CheckUserConsentRequest.user_id:type_name -> common.UUID
+	5,  // 39: ai.CheckUserConsentResponse.consent:type_name -> ai.UserConsent
+	39, // 40: ai.CheckUserConsentResponse.operation_permissions:type_name -> ai.CheckUserConsentResponse.OperationPermissionsEntry
+	44, // 41: ai.UpdateUserConsentRequest.user_id:type_name -> common.UUID
 	0,  // 42: ai.UpdateUserConsentRequest.conversation_summarization:type_name -> ai.ConsentLevel
 	0,  // 43: ai.UpdateUserConsentRequest.sentiment_analysis:type_name -> ai.ConsentLevel
 	0,  // 44: ai.UpdateUserConsentRequest.response_suggestions:type_name -> ai.ConsentLevel
 	0,  // 45: ai.UpdateUserConsentRequest.insights_generation:type_name -> ai.ConsentLevel
-	28, // 46: ai.UpdateUserConsentRequest.expires_at:type_name -> google.protobuf.Timestamp
-	3,  // 47: ai.UpdateUserConsentResponse.consent:type_name -> ai.UserConsent
-	29, // 48: ai.UpdateUserConsentResponse.result:type_name -> common.SuccessResponse
-	27, // 49: ai.GenerateInsightsRequest.user_id:type_name -> common.UUID
-	27, // 50: ai.GenerateInsightsRequest.conversation_ids:type_name -> common.UUID
-	28, // 51: ai.GenerateInsightsRequest.period_start:type_name -> google.protobuf.Timestamp
-	28, // 52: ai.GenerateInsightsRequest.period_end:type_name -> google.protobuf.Timestamp
-	23, // 53: ai.GenerateInsightsResponse.insights:type_name -> ai.Insight
-	29, // 54: ai.GenerateInsightsResponse.result:type_name -> common.SuccessResponse
-	26, // 55: ai.Insight.data:type_name -> ai.Insight.DataEntry
-	28, // 56: ai.Insight.generated_at:type_name -> google.protobuf.Timestamp
-	4,  // 57: ai.AIService.SummarizeConversation:input_type -> ai.SummarizeConversationRequest
-	7,  // 58: ai.AIService.GenerateResponseSuggestions:input_type -> ai.GenerateResponseSuggestionsRequest
-	10, // 59: ai.AIService.AnalyzeSentiment:input_type -> ai.AnalyzeSentimentRequest
-	15, // 60: ai.AIService.StreamSummarization:input_type -> ai.StreamSummarizationRequest
-	17, // 61: ai.AIService.CheckUserConsent:input_type -> ai.CheckUserConsentRequest
-	19, // 62: ai.AIService.UpdateUserConsent:input_type -> ai.UpdateUserConsentRequest
-	21, // 63: ai.AIService.GenerateInsights:input_type -> ai.GenerateInsightsRequest
-	30, // 64: ai.AIService.Health:input_type -> common.HealthCheckRequest
-	5,  // 65: ai.AIService.SummarizeConversation:output_type -> ai.SummarizeConversationResponse
-	8,  // 66: ai.AIService.GenerateResponseSuggestions:output_type -> ai.GenerateResponseSuggestionsResponse
-	11, // 67: ai.AIService.AnalyzeSentiment:output_type -> ai.AnalyzeSentimentResponse
-	16, // 68: ai.AIService.StreamSummarization:output_type -> ai.SummarizationChunk
-	18, // 69: ai.AIService.CheckUserConsent:output_type -> ai.CheckUserConsentResponse
-	20, // 70: ai.AIService.UpdateUserConsent:output_type -> ai.UpdateUserConsentResponse
-	22, // 71: ai.AIService.GenerateInsights:output_type -> ai.GenerateInsightsResponse
-	31, // 72: ai.AIService.Health:output_type -> common.HealthCheckResponse
-	65, // [65:73] is the sub-list for method output_type
-	57, // [57:65] is the sub-list for method input_type
-	57, // [57:57] is the sub-list for extension type_name
-	57, // [57:57] is the sub-list for extension extendee
-	0,  // [0:57] is the sub-list for field type_name
+	45, // 46: ai.UpdateUserConsentRequest.expires_at:type_name -> google.protobuf.Timestamp
+	5,  // 47: ai.UpdateUserConsentResponse.consent:type_name -> ai.UserConsent
+	46, // 48: ai.UpdateUserConsentResponse.result:type_name -> common.SuccessResponse
+	44, // 49: ai.GenerateInsightsRequest.user_id:type_name -> common.UUID
+	44, // 50: ai.GenerateInsightsRequest.conversation_ids:type_name -> common.UUID
+	45, // 51: ai.GenerateInsightsRequest.period_start:type_name -> google.protobuf.Timestamp
+	45, // 52: ai.GenerateInsightsRequest.period_end:type_name -> google.protobuf.Timestamp
+	25, // 53: ai.GenerateInsightsResponse.insights:type_name -> ai.Insight
+	46, // 54: ai.GenerateInsightsResponse.result:type_name -> common.SuccessResponse
+	40, // 55: ai.Insight.data:type_name -> ai.Insight.DataEntry
+	45, // 56: ai.Insight.generated_at:type_name -> google.protobuf.Timestamp
+	41, // 57: ai.UserContext.topic_preferences:type_name -> ai.UserContext.TopicPreferencesEntry
+	27, // 58: ai.UserContext.tonality_profile:type_name -> ai.TonalityProfile
+	42, // 59: ai.TonalityProfile.emoji_usage:type_name -> ai.TonalityProfile.EmojiUsageEntry
+	29, // 60: ai.CueCard.metadata:type_name -> ai.CueCardMetadata
+	44, // 61: ai.GenerateCueCardsRequest.conversation_id:type_name -> common.UUID
+	44, // 62: ai.GenerateCueCardsRequest.requesting_user_id:type_name -> common.UUID
+	4,  // 63: ai.GenerateCueCardsRequest.recent_messages:type_name -> ai.AIMessage
+	26, // 64: ai.GenerateCueCardsRequest.user_context:type_name -> ai.UserContext
+	2,  // 65: ai.GenerateCueCardsRequest.mode:type_name -> ai.CueCardGenerationMode
+	28, // 66: ai.GenerateCueCardsResponse.cue_cards:type_name -> ai.CueCard
+	27, // 67: ai.GenerateCueCardsResponse.tonality_analysis:type_name -> ai.TonalityProfile
+	46, // 68: ai.GenerateCueCardsResponse.result:type_name -> common.SuccessResponse
+	44, // 69: ai.GenerateMessageFromCueRequest.conversation_id:type_name -> common.UUID
+	44, // 70: ai.GenerateMessageFromCueRequest.requesting_user_id:type_name -> common.UUID
+	28, // 71: ai.GenerateMessageFromCueRequest.selected_card:type_name -> ai.CueCard
+	27, // 72: ai.GenerateMessageFromCueRequest.user_tonality:type_name -> ai.TonalityProfile
+	27, // 73: ai.GenerateMessageFromCueRequest.conversation_tonality:type_name -> ai.TonalityProfile
+	30, // 74: ai.GenerateMessageFromCueResponse.adjustments_applied:type_name -> ai.TonalityAdjustments
+	46, // 75: ai.GenerateMessageFromCueResponse.result:type_name -> common.SuccessResponse
+	44, // 76: ai.AnalyzeTonalityRequest.user_id:type_name -> common.UUID
+	4,  // 77: ai.AnalyzeTonalityRequest.messages:type_name -> ai.AIMessage
+	3,  // 78: ai.AnalyzeTonalityRequest.scope:type_name -> ai.TonalityScope
+	27, // 79: ai.AnalyzeTonalityResponse.profile:type_name -> ai.TonalityProfile
+	43, // 80: ai.AnalyzeTonalityResponse.pattern_confidence:type_name -> ai.AnalyzeTonalityResponse.PatternConfidenceEntry
+	31, // 81: ai.AnalyzeTonalityResponse.insights:type_name -> ai.TonalityInsight
+	46, // 82: ai.AnalyzeTonalityResponse.result:type_name -> common.SuccessResponse
+	6,  // 83: ai.AIService.SummarizeConversation:input_type -> ai.SummarizeConversationRequest
+	9,  // 84: ai.AIService.GenerateResponseSuggestions:input_type -> ai.GenerateResponseSuggestionsRequest
+	12, // 85: ai.AIService.AnalyzeSentiment:input_type -> ai.AnalyzeSentimentRequest
+	17, // 86: ai.AIService.StreamSummarization:input_type -> ai.StreamSummarizationRequest
+	19, // 87: ai.AIService.CheckUserConsent:input_type -> ai.CheckUserConsentRequest
+	21, // 88: ai.AIService.UpdateUserConsent:input_type -> ai.UpdateUserConsentRequest
+	23, // 89: ai.AIService.GenerateInsights:input_type -> ai.GenerateInsightsRequest
+	32, // 90: ai.AIService.GenerateCueCards:input_type -> ai.GenerateCueCardsRequest
+	34, // 91: ai.AIService.GenerateMessageFromCue:input_type -> ai.GenerateMessageFromCueRequest
+	36, // 92: ai.AIService.AnalyzeTonality:input_type -> ai.AnalyzeTonalityRequest
+	47, // 93: ai.AIService.Health:input_type -> common.HealthCheckRequest
+	7,  // 94: ai.AIService.SummarizeConversation:output_type -> ai.SummarizeConversationResponse
+	10, // 95: ai.AIService.GenerateResponseSuggestions:output_type -> ai.GenerateResponseSuggestionsResponse
+	13, // 96: ai.AIService.AnalyzeSentiment:output_type -> ai.AnalyzeSentimentResponse
+	18, // 97: ai.AIService.StreamSummarization:output_type -> ai.SummarizationChunk
+	20, // 98: ai.AIService.CheckUserConsent:output_type -> ai.CheckUserConsentResponse
+	22, // 99: ai.AIService.UpdateUserConsent:output_type -> ai.UpdateUserConsentResponse
+	24, // 100: ai.AIService.GenerateInsights:output_type -> ai.GenerateInsightsResponse
+	33, // 101: ai.AIService.GenerateCueCards:output_type -> ai.GenerateCueCardsResponse
+	35, // 102: ai.AIService.GenerateMessageFromCue:output_type -> ai.GenerateMessageFromCueResponse
+	37, // 103: ai.AIService.AnalyzeTonality:output_type -> ai.AnalyzeTonalityResponse
+	48, // 104: ai.AIService.Health:output_type -> common.HealthCheckResponse
+	94, // [94:105] is the sub-list for method output_type
+	83, // [83:94] is the sub-list for method input_type
+	83, // [83:83] is the sub-list for extension type_name
+	83, // [83:83] is the sub-list for extension extendee
+	0,  // [0:83] is the sub-list for field type_name
 }
 
 func init() { file_proto_ai_ai_service_proto_init() }
@@ -1991,8 +3064,8 @@ func file_proto_ai_ai_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ai_ai_service_proto_rawDesc), len(file_proto_ai_ai_service_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   25,
+			NumEnums:      4,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

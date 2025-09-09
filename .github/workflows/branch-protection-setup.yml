@@ -30,14 +30,27 @@ jobs:
             required_status_checks: {
               strict: true,
               checks: [
+                // Core CI/CD Pipeline
+                { context: 'CI - Testing & Validation' },
+                { context: 'Code Quality & Security' },
+                { context: 'Backend Tests' },
+                { context: 'Frontend Tests' },
+                { context: 'Frontend Quality' },
+                { context: 'Unified Testing Suite' },
+                
+                // Infrastructure & Deployment
                 { context: 'validate-and-plan' },
                 { context: 'integration-tests-staging' },
-                { context: 'deploy-staging' }
+                { context: 'deploy-staging' },
+                
+                // Security Checks (existing workflows)
+                { context: 'security-scan' },        // from safety-checks.yml
+                { context: 'security-audit' }        // from frontend-quality.yml
               ]
             },
             enforce_admins: false, // Allow admins to bypass in emergencies
             required_pull_request_reviews: {
-              required_approving_review_count: 2,
+              required_approving_review_count: 2, // Increase for production
               dismiss_stale_reviews: true,
               require_code_owner_reviews: true,
               require_last_push_approval: true
@@ -66,9 +79,19 @@ jobs:
             required_status_checks: {
               strict: true,
               checks: [
+                // Core CI/CD Pipeline
+                { context: 'CI - Testing & Validation' },
+                { context: 'Code Quality & Security' },
+                { context: 'Backend Tests' },
+                { context: 'Frontend Tests' },
+                { context: 'Frontend Quality' },
+                
+                // Infrastructure
                 { context: 'validate-and-plan' },
-                { context: 'frontend-tests' },
-                { context: 'backend-tests' }
+                
+                // Security (lighter for develop) 
+                { context: 'security-scan' },        // from safety-checks.yml
+                { context: 'security-audit' }        // from frontend-quality.yml
               ]
             },
             enforce_admins: false,
@@ -87,6 +110,38 @@ jobs:
           
           console.log('✅ Develop branch protection configured');
 
+    - name: Setup Release Branch Protection
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ github.event.inputs.github_token }}
+        script: |
+          const { owner, repo } = context.repo;
+          
+          // Release branch protection (pre-production)
+          // Note: GitHub doesn't support wildcard protection via API
+          // This would need to be configured manually in GitHub UI for release/* pattern
+          console.log('⚠️ Release branch protection (release/*) must be configured manually in GitHub UI');
+          console.log('Recommended settings for release/* branches:');
+          console.log('- Required status checks: Backend Tests, Frontend Tests, Security Scanning');
+          console.log('- Required reviews: 1');
+          console.log('- Require code owner reviews: true');
+
+    - name: Setup Hotfix Branch Protection  
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ github.event.inputs.github_token }}
+        script: |
+          const { owner, repo } = context.repo;
+          
+          // Hotfix branch protection (emergency fixes)
+          // Note: GitHub doesn't support wildcard protection via API
+          console.log('⚠️ Hotfix branch protection (hotfix/*) must be configured manually in GitHub UI');
+          console.log('Recommended settings for hotfix/* branches:');
+          console.log('- Required status checks: Backend Tests, Frontend Tests, Security Scanning, Critical Tests');
+          console.log('- Required reviews: 2 (critical fixes need extra scrutiny)');
+          console.log('- Require code owner reviews: true');
+          console.log('- Dismiss stale reviews: true');
+
     - name: Create GitHub Environments
       uses: actions/github-script@v7  
       with:
@@ -100,7 +155,7 @@ jobs:
               owner,
               repo,
               environment_name: 'production',
-              wait_timer: 5, // 5 minute delay
+              wait_timer: 10, // 10 minute delay for production safety
               reviewers: [
                 {
                   type: 'Team',
@@ -109,7 +164,8 @@ jobs:
               ],
               deployment_branch_policy: {
                 protected_branches: true,
-                custom_branch_policies: false
+                custom_branch_policies: true,
+                custom_branches: ['main'] // Only main can deploy to production
               }
             });
             console.log('✅ Production environment configured');
@@ -151,26 +207,69 @@ jobs:
               deployment_branch_policy: {
                 protected_branches: false,
                 custom_branch_policies: true,
-                custom_branches: ['develop', 'main']
+                custom_branches: ['develop', 'main', 'release/*']
               }
             });
             console.log('✅ Staging environment configured');
           } catch (error) {
             console.log('Staging environment may already exist:', error.message);
           }
+          
+          // Hotfix approval environment (emergency approvals)
+          try {
+            await github.rest.repos.createOrUpdateEnvironment({
+              owner,
+              repo,
+              environment_name: 'hotfix-approval',
+              wait_timer: 0, // No wait for emergency hotfixes
+              reviewers: [
+                {
+                  type: 'Team',
+                  id: process.env.GITHUB_TEAM_ID || null
+                }
+              ],
+              deployment_branch_policy: {
+                protected_branches: false,
+                custom_branch_policies: true,
+                custom_branches: ['hotfix/*'] // Only hotfix branches
+              }
+            });
+            console.log('✅ Hotfix approval environment configured');
+          } catch (error) {
+            console.log('Hotfix approval environment may already exist:', error.message);
+          }
 
-    - name: Summary
+    - name: Enhanced Protection Summary
       run: |
-        echo "🎉 Branch protection and environments configured!"
+        echo "🎉 Enhanced branch protection and environments configured!"
         echo ""
-        echo "✅ Configured:"
-        echo "  • main branch: Requires 2 approvals, status checks, code owner review"
-        echo "  • develop branch: Requires 1 approval, status checks"
-        echo "  • production environment: Manual approval required"
-        echo "  • staging environment: Automatic deployment"
+        echo "✅ Main Branch Protection (Production):"
+        echo "  • Required approvals: 2 (increased for production safety)"
+        echo "  • Required status checks: 11 comprehensive checks"
+        echo "  • Code owner review: Required"
+        echo "  • Conversation resolution: Required"
+        echo "  • Includes: CI/CD pipeline, security, infrastructure validation"
+        echo ""
+        echo "✅ Develop Branch Protection (Staging):"
+        echo "  • Required approvals: 1"
+        echo "  • Required status checks: 8 quality checks"
+        echo "  • More permissive for development velocity"
+        echo "  • Includes: CI/CD pipeline, security scanning"
+        echo ""
+        echo "✅ Enhanced Environments:"
+        echo "  • Production: 10-minute wait + manual approval + main-only deployment"
+        echo "  • Staging: Automatic deployment from develop/main/release branches"
+        echo "  • Hotfix-approval: Emergency approvals for hotfix/* branches (no wait time)"
+        echo ""
+        echo "⚠️  Manual Configuration Required:"
+        echo "  • Release branch protection (release/*) - configure in GitHub UI"
+        echo "  • Hotfix branch protection (hotfix/*) - configure in GitHub UI"
         echo ""
         echo "📋 Next Steps:"
-        echo "1. Add team members to the repository"
-        echo "2. Configure CODEOWNERS file"
-        echo "3. Set up GitHub secrets and variables"
-        echo "4. Test the deployment pipeline"
+        echo "1. Ensure all 11 status check workflows exist and are properly named"
+        echo "2. Configure CODEOWNERS file with team assignments"
+        echo "3. Set up GitHub team permissions and GITHUB_TEAM_ID environment variable"
+        echo "4. Manually configure release/* and hotfix/* branch protection in GitHub UI"
+        echo "5. Test the enhanced protection with a test PR"
+        echo "6. ✅ Security workflows already exist (security-scan, security-audit)"
+        echo "7. ✅ Hotfix pipeline created - use scripts/hotfix.sh for emergency fixes"

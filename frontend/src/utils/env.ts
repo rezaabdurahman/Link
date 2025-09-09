@@ -46,7 +46,7 @@ export const getEnvVar = (key: string, defaultValue?: string): string => {
   return value || ENV_DEFAULTS[key] || defaultValue || '';
 };
 
-export const getBooleanEnvVar = (key: string, _defaultValue = false): boolean => {  // TODO: defaultValue used for fallback boolean values
+export const getBooleanEnvVar = (key: string, defaultValue = false): boolean => {
   const value = getEnvVar(key).toLowerCase();
   return value === 'true' || value === '1';
 };

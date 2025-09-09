@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Link Onboarding</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .debug-title { font-weight: bold; color: #333; margin-bottom: 10px; }
+        .debug-output { background: #f5f5f5; padding: 10px; border-radius: 3px; white-space: pre-wrap; font-family: monospace; }
+        .debug-button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .debug-button:hover { background: #0056b3; }
+        .error { background: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        iframe { width: 100%; height: 600px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <h1>Link Onboarding Debug Tool</h1>
+    
+    <div class="debug-section">
+        <div class="debug-title">Quick Actions</div>
+        <button class="debug-button" onclick="openOnboardingInFrame()">Load Onboarding Page</button>
+        <button class="debug-button" onclick="checkConsole()">Check Console Logs</button>
+        <button class="debug-button" onclick="resetOnboarding()">Reset Onboarding</button>
+        <button class="debug-button" onclick="openInNewTab()">Open in New Tab</button>
+    </div>
+
+    <div class="debug-section">
+        <div class="debug-title">Environment Check</div>
+        <div id="env-check" class="debug-output">Click "Check Environment" to run...</div>
+        <button class="debug-button" onclick="checkEnvironment()">Check Environment</button>
+    </div>
+
+    <div class="debug-section">
+        <div class="debug-title">Console Output</div>
+        <div id="console-output" class="debug-output">Console logs will appear here...</div>
+    </div>
+
+    <div class="debug-section">
+        <div class="debug-title">Onboarding Page (iframe)</div>
+        <iframe id="onboarding-frame" src="about:blank"></iframe>
+    </div>
+
+    <script>
+        // Capture console logs
+        let consoleOutput = [];
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        console.log = function(...args) {
+            consoleOutput.push({type: 'log', args: args, timestamp: new Date().toLocaleTimeString()});
+            updateConsoleOutput();
+            originalLog.apply(console, arguments);
+        };
+
+        console.error = function(...args) {
+            consoleOutput.push({type: 'error', args: args, timestamp: new Date().toLocaleTimeString()});
+            updateConsoleOutput();
+            originalError.apply(console, arguments);
+        };
+
+        console.warn = function(...args) {
+            consoleOutput.push({type: 'warn', args: args, timestamp: new Date().toLocaleTimeString()});
+            updateConsoleOutput();
+            originalWarn.apply(console, arguments);
+        };
+
+        function updateConsoleOutput() {
+            const output = document.getElementById('console-output');
+            output.textContent = consoleOutput.map(entry => 
+                `[${entry.timestamp}] ${entry.type.toUpperCase()}: ${entry.args.join(' ')}`
+            ).join('\n');
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function openOnboardingInFrame() {
+            const frame = document.getElementById('onboarding-frame');
+            frame.src = 'http://localhost:3000/onboarding';
+            console.log('Loading onboarding page in iframe...');
+        }
+
+        function openInNewTab() {
+            window.open('http://localhost:3000/onboarding', '_blank');
+            console.log('Opened onboarding page in new tab');
+        }
+
+        function checkEnvironment() {
+            const envCheck = document.getElementById('env-check');
+            envCheck.textContent = 'Checking environment...';
+            
+            fetch('http://localhost:3000/')
+                .then(response => response.text())
+                .then(html => {
+                    const checks = {
+                        'Frontend Server': html.includes('<title>Link') ? 'OK' : 'ERROR',
+                        'React App': html.includes('react-refresh') ? 'OK' : 'ERROR',
+                        'Vite Dev Server': html.includes('/@vite/client') ? 'OK' : 'ERROR'
+                    };
+                    
+                    let result = 'Environment Check Results:\n';
+                    Object.entries(checks).forEach(([key, value]) => {
+                        result += `${key}: ${value}\n`;
+                    });
+                    result += '\nExpected environment variables for development:\n';
+                    result += '- VITE_APP_MODE=development\n';
+                    result += '- VITE_ENABLE_MOCKING=true\n';
+                    result += '- VITE_AUTO_LOGIN=true\n';
+                    
+                    envCheck.textContent = result;
+                    envCheck.className = 'debug-output ' + (Object.values(checks).includes('ERROR') ? 'error' : 'success');
+                })
+                .catch(error => {
+                    envCheck.textContent = `Error checking frontend server: ${error.message}`;
+                    envCheck.className = 'debug-output error';
+                });
+        }
+
+        function resetOnboarding() {
+            // Clear onboarding-related localStorage entries
+            const keysToRemove = ['onboarding_status_cache', 'onboarding_status_cache_expiry', 'dev_onboarding_override'];
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+            });
+            
+            // Set fresh onboarding state
+            localStorage.setItem('dev_onboarding_override', JSON.stringify({
+                status: 'not_started',
+                timestamp: Date.now()
+            }));
+            
+            console.log('Onboarding state reset to "not_started"');
+            console.log('Reload the onboarding page to see changes');
+        }
+
+        function checkConsole() {
+            console.log('=== Manual Console Check ===');
+            console.log('Environment:', {
+                hostname: window.location.hostname,
+                port: window.location.port,
+                protocol: window.location.protocol
+            });
+            console.log('LocalStorage keys:', Object.keys(localStorage));
+            console.log('Current timestamp:', new Date().toISOString());
+            console.log('=== End Manual Check ===');
+        }
+
+        // Instructions for manual debugging
+        console.log(`
+🔧 Link Onboarding Debug Tool Loaded
+
+Manual debugging steps:
+1. Open browser dev tools (F12)
+2. Navigate to http://localhost:3000/onboarding
+3. Check Console tab for:
+   - "🔧 MSW: Mock Service Worker started successfully"
+   - "🔧 Main.tsx: MSW started successfully"
+   - "🔧 OnboardingPage: Component rendering..."
+   - "🔧 OnboardingContext: Initializing..."
+
+Common issues:
+- Blank page = JavaScript error (check Console)
+- Loading spinner stuck = API call failing (check Network tab)
+- No MSW logs = MSW not starting (check environment)
+
+Development commands available in console:
+- devAuth.help() - Show dev auth commands
+- devAuth.resetOnboarding() - Reset onboarding state
+- devAuth.loginAsNewUser() - Create test user
+        `);
+
+        // Auto-check environment on load
+        setTimeout(checkEnvironment, 1000);
+    </script>
+</body>
+</html>

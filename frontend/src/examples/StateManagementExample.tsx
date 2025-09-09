@@ -18,10 +18,7 @@ const StateManagementExample: React.FC = (): JSX.Element => {
     searchQuery,
     searchResults,
     isSearching,
-    activeFilters,
     setSearchQuery,
-    addInterestFilter,
-    removeInterestFilter,
     hasActiveFilters,
     clearFilters
   } = useDiscoveryStore();
@@ -137,18 +134,9 @@ const StateManagementExample: React.FC = (): JSX.Element => {
               placeholder="Search query..."
               className="px-3 py-2 border rounded"
             />
-            <button
-              onClick={() => addInterestFilter('Technology')}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Add Tech Filter
-            </button>
-            <button
-              onClick={() => removeInterestFilter('Technology')}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-            >
-              Remove Tech Filter
-            </button>
+            <span className="px-4 py-2 bg-gray-200 text-gray-500 rounded">
+              Interest filters removed (using semantic search)
+            </span>
             <button
               onClick={clearFilters}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
@@ -161,8 +149,7 @@ const StateManagementExample: React.FC = (): JSX.Element => {
             Search Query: "{searchQuery}" | 
             Results: {searchResults.length} | 
             Searching: {isSearching ? 'Yes' : 'No'} | 
-            Active Filters: {hasActiveFilters() ? 'Yes' : 'No'} | 
-            Interests: [{activeFilters.interests.join(', ')}]
+            Active Filters: {hasActiveFilters() ? 'Yes' : 'No'}
           </div>
           
           <div className="text-sm text-gray-600">

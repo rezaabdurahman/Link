@@ -29,7 +29,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
-    -o chat-svc ./cmd
+    -o chat-svc ./cmd/server
 
 # Install golang-migrate tool as fallback (while shared-libs has build issues)
 RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest

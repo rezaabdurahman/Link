@@ -42,19 +42,53 @@ mockUserProfiles.set('demo-user-1', {
   updated_at: now(),
 });
 
+// Helper to check for dev onboarding overrides
+const getDevOnboardingOverride = () => {
+  try {
+    const override = localStorage.getItem('dev_onboarding_override');
+    return override ? JSON.parse(override) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const handlers = [
   // GET /onboarding/status - Get onboarding status
   http.get(buildApiUrl(API_ENDPOINTS.ONBOARDING.status), ({ request }) => {
+    console.log('🎯 MSW: Onboarding status handler called:', {
+      url: request.url,
+      method: request.method,
+      expectedUrl: buildApiUrl(API_ENDPOINTS.ONBOARDING.status)
+    });
+    
     const userId = extractUserId(request);
     
     if (!userId) {
+      console.error('❌ MSW: No user ID found, returning auth error');
       return createAuthError();
     }
 
     let onboardingStatus = mockOnboarding.get(userId);
     
-    // Create default onboarding status if it doesn't exist
-    if (!onboardingStatus) {
+    // Check for dev override first
+    const devOverride = getDevOnboardingOverride();
+    if (devOverride && devOverride.timestamp > Date.now() - 60000) { // Valid for 1 minute
+      console.log('🔧 MSW: Using dev onboarding override:', devOverride);
+      onboardingStatus = {
+        user_id: userId,
+        status: devOverride.status as OnboardingStatusType,
+        current_step: devOverride.current_step as OnboardingStepType | undefined,
+        completed_steps: devOverride.status === 'completed' ? [
+          'profile_picture', 'bio', 'interests', 'location_preferences',
+          'privacy_settings', 'notification_preferences', 'welcome_tutorial'
+        ] as OnboardingStepType[] : (devOverride.current_step ? [] : []),
+        created_at: now(),
+        updated_at: now(),
+      };
+      // Store the overridden status
+      mockOnboarding.set(userId, onboardingStatus);
+    } else if (!onboardingStatus) {
+      // Create default onboarding status if it doesn't exist
       onboardingStatus = {
         user_id: userId,
         status: 'not_started' as OnboardingStatusType,
@@ -65,6 +99,7 @@ export const handlers = [
       mockOnboarding.set(userId, onboardingStatus);
     }
 
+    console.log('🔧 MSW: Returning onboarding status:', onboardingStatus);
     return createSuccessResponse(onboardingStatus);
   }),
 
@@ -249,7 +284,13 @@ export const handlers = [
   }),
 
   // POST /onboarding/skip - Skip entire onboarding
-  http.post(buildApiUrl('/onboarding/skip'), ({ request }) => {
+  http.post(buildApiUrl(API_ENDPOINTS.ONBOARDING.skip), ({ request }) => {
+    console.log('🎯 MSW: Onboarding skip handler called:', {
+      url: request.url,
+      method: request.method,
+      expectedUrl: buildApiUrl(API_ENDPOINTS.ONBOARDING.skip)
+    });
+    
     const userId = extractUserId(request);
     
     if (!userId) {
@@ -277,7 +318,13 @@ export const handlers = [
   }),
 
   // POST /onboarding/skip-step - Skip specific step
-  http.post(buildApiUrl('/onboarding/skip-step'), async ({ request }) => {
+  http.post(buildApiUrl(API_ENDPOINTS.ONBOARDING.skipStep), async ({ request }) => {
+    console.log('🎯 MSW: Onboarding skip-step handler called:', {
+      url: request.url,
+      method: request.method,
+      expectedUrl: buildApiUrl(API_ENDPOINTS.ONBOARDING.skipStep)
+    });
+    
     const userId = extractUserId(request);
     
     if (!userId) {

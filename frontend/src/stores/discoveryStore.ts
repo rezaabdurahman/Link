@@ -5,7 +5,6 @@ import { UserWithLikelihood } from '../services/clickLikelihoodClient';
 
 export interface SearchFilters {
   distance?: number;
-  interests: string[];
   availableOnly?: boolean;
 }
 
@@ -47,8 +46,6 @@ interface DiscoveryStore extends DiscoveryState {
   // Filter actions
   setActiveFilters: (filters: Partial<SearchFilters>) => void;
   clearFilters: () => void;
-  addInterestFilter: (interest: string) => void;
-  removeInterestFilter: (interest: string) => void;
   setDistanceFilter: (distance?: number) => void;
 
 
@@ -80,7 +77,6 @@ const initialState: DiscoveryState = {
 
   // Filter state  
   activeFilters: {
-    interests: [],
     availableOnly: true,
   },
 
@@ -133,28 +129,9 @@ export const useDiscoveryStore = create<DiscoveryStore>()(
 
         clearFilters: () => set({
           activeFilters: {
-            interests: [],
             availableOnly: true,
           }
         }),
-
-        addInterestFilter: (interest: string) => {
-          set(state => ({
-            activeFilters: {
-              ...state.activeFilters,
-              interests: [...state.activeFilters.interests, interest],
-            }
-          }));
-        },
-
-        removeInterestFilter: (interest: string) => {
-          set(state => ({
-            activeFilters: {
-              ...state.activeFilters,
-              interests: state.activeFilters.interests.filter(i => i !== interest),
-            }
-          }));
-        },
 
         setDistanceFilter: (distance?: number) => {
           set(state => ({
@@ -208,14 +185,6 @@ export const useDiscoveryStore = create<DiscoveryStore>()(
           const { searchResults, activeFilters } = get();
           
           return searchResults.filter(user => {
-            // Filter by interests
-            if (activeFilters.interests.length > 0) {
-              const hasMatchingInterest = user.interests?.some(interest =>
-                activeFilters.interests.includes(interest)
-              );
-              if (!hasMatchingInterest) return false;
-            }
-
             // Filter by availability
             if (activeFilters.availableOnly && !user.isAvailable) {
               return false;
@@ -227,8 +196,7 @@ export const useDiscoveryStore = create<DiscoveryStore>()(
 
         hasActiveFilters: () => {
           const { activeFilters } = get();
-          return activeFilters.interests.length > 0 || 
-                 activeFilters.distance !== undefined ||
+          return activeFilters.distance !== undefined ||
                  activeFilters.availableOnly === false;
         },
       }),

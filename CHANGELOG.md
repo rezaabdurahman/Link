@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING**: Renamed `ai-svc` to `summarygen-svc` for better clarity
+  - Service now uses the more descriptive name `summarygen-svc`
+  - All configuration files, Docker Compose, Kubernetes manifests updated
+  - API endpoints now use `/summarygen/` prefix (with legacy `/ai/` compatibility)
+  - Frontend client renamed from `aiClient.ts` to `summarygenClient.ts`
+  - Migration: All deployments and configurations need to reference new service name
+  - Backward compatibility maintained for existing API calls
+
 ### Added
 - Initial AI Service (ai-svc) implementation
 - Comprehensive documentation and README files

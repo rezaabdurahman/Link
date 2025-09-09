@@ -60,7 +60,11 @@ async function startApp() {
     try {
       const { startMockWorker } = await import('./mocks/browser');
       console.log('📦 Main.tsx: MSW module loaded, starting worker...');
+      
+      // Start MSW without timeout - let it take as long as it needs
+      console.log('🔧 Main.tsx: Starting MSW without timeout...');
       await startMockWorker();
+      
       console.log('✅ Main.tsx: MSW started successfully, API calls will be mocked');
       
       // Auto-authenticate for development
@@ -74,6 +78,11 @@ async function startApp() {
     }
   } else {
     console.log('🚫 Main.tsx: MSW not enabled, using real API endpoints');
+    
+    // Still run dev auth even without MSW
+    const { autoAuthenticateForDev } = await import('./utils/devAuth');
+    await autoAuthenticateForDev();
+    console.log('🔧 Main.tsx: Development auto-authentication completed');
   }
 
   // Render the app after MSW is initialized

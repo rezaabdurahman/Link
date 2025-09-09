@@ -52,7 +52,7 @@ spec:
         - name: DISCOVERY_SVC_URL
           value: "http://discovery-svc.link-services.svc.cluster.local:8080"
         - name: AI_SVC_URL
-          value: "http://ai-svc.link-services.svc.cluster.local:8080"
+          value: "http://summarygen-svc.link-services.svc.cluster.local:8080"
         - name: SEARCH_SVC_URL
           value: "http://search-svc.link-services.svc.cluster.local:8080"
         resources:
@@ -380,20 +380,20 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-svc
+  name: summarygen-svc
   namespace: link-services
   labels:
-    app: ai-svc
+    app: summarygen-svc
     component: backend
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: ai-svc
+      app: summarygen-svc
   template:
     metadata:
       labels:
-        app: ai-svc
+        app: summarygen-svc
         component: backend
       annotations:
         linkerd.io/inject: enabled
@@ -402,8 +402,8 @@ spec:
     spec:
       serviceAccountName: link-ai-service-sa
       containers:
-      - name: ai-svc
-        image: link/ai-svc:latest
+      - name: summarygen-svc
+        image: link/summarygen-svc:latest
         ports:
         - containerPort: 8000
           name: http
@@ -458,15 +458,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ai-svc
+  name: summarygen-svc
   namespace: link-services
   labels:
-    app: ai-svc
+    app: summarygen-svc
   annotations:
     viz.linkerd.io/tap-enabled: "true"
 spec:
   selector:
-    app: ai-svc
+    app: summarygen-svc
   ports:
   - name: http
     port: 8080

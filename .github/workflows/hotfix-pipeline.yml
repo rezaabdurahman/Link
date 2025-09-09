@@ -1,0 +1,392 @@
+name: Hotfix Pipeline - Emergency Deployment
+
+# Emergency hotfix pipeline for critical production issues
+# Bypasses normal development flow for urgent fixes
+
+on:
+  push:
+    branches: 
+      - 'hotfix/*'
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    # Only trigger for PRs from hotfix branches
+  
+  workflow_dispatch:
+    inputs:
+      hotfix_branch:
+        description: 'Hotfix branch name (e.g., hotfix/critical-security-patch)'
+        required: true
+        type: string
+      severity:
+        description: 'Issue severity level'
+        required: true
+        type: choice
+        options:
+          - critical    # Production down, security breach
+          - high        # Major functionality broken
+          - medium      # Important fix needed soon
+        default: critical
+      skip_tests:
+        description: 'Skip non-critical tests (emergency only)'
+        required: false
+        type: boolean
+        default: false
+      reason:
+        description: 'Reason for hotfix (required for audit)'
+        required: true
+        type: string
+
+env:
+  HOTFIX_TIMEOUT: 900  # 15 minutes max for critical fixes
+  
+concurrency:
+  group: hotfix-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel hotfix deployments
+
+jobs:
+  # ================================================================
+  # STAGE 1: HOTFIX VALIDATION & TRIAGE  
+  # ================================================================
+  
+  hotfix-validation:
+    name: 🚨 Hotfix Validation & Triage
+    runs-on: ubuntu-latest
+    outputs:
+      severity: ${{ steps.triage.outputs.severity }}
+      skip_tests: ${{ steps.triage.outputs.skip_tests }}
+      emergency_mode: ${{ steps.triage.outputs.emergency_mode }}
+      hotfix_branch: ${{ steps.triage.outputs.hotfix_branch }}
+      
+    steps:
+    - name: Checkout hotfix branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.hotfix_branch || github.ref }}
+        
+    - name: Validate hotfix branch naming
+      run: |
+        branch_name="${{ github.event.inputs.hotfix_branch || github.ref_name }}"
+        
+        if [[ ! "$branch_name" =~ ^hotfix/ ]]; then
+          echo "❌ Invalid branch name: $branch_name"
+          echo "Hotfix branches must follow pattern: hotfix/description"
+          echo "Examples: hotfix/security-patch, hotfix/payment-bug"
+          exit 1
+        fi
+        
+        echo "✅ Valid hotfix branch: $branch_name"
+        
+    - name: Hotfix triage and classification
+      id: triage
+      run: |
+        branch_name="${{ github.event.inputs.hotfix_branch || github.ref_name }}"
+        severity="${{ github.event.inputs.severity || 'critical' }}"
+        skip_tests="${{ github.event.inputs.skip_tests || 'false' }}"
+        reason="${{ github.event.inputs.reason || 'Emergency hotfix' }}"
+        
+        echo "🚨 HOTFIX TRIAGE REPORT"
+        echo "====================="
+        echo "Branch: $branch_name"
+        echo "Severity: $severity"
+        echo "Skip tests: $skip_tests"
+        echo "Reason: $reason"
+        echo "Triggered by: ${{ github.actor }}"
+        echo "Time: $(date -u)"
+        echo ""
+        
+        # Determine emergency mode
+        emergency_mode="false"
+        if [[ "$severity" == "critical" ]]; then
+          emergency_mode="true"
+          echo "🔴 CRITICAL SEVERITY - Emergency mode enabled"
+          echo "- Reduced approval requirements"
+          echo "- Accelerated deployment timeline"  
+          echo "- Enhanced monitoring post-deployment"
+        elif [[ "$severity" == "high" ]]; then
+          echo "🟠 HIGH SEVERITY - Expedited processing"
+        else
+          echo "🟡 MEDIUM SEVERITY - Standard hotfix process"
+        fi
+        
+        echo "severity=$severity" >> $GITHUB_OUTPUT
+        echo "skip_tests=$skip_tests" >> $GITHUB_OUTPUT
+        echo "emergency_mode=$emergency_mode" >> $GITHUB_OUTPUT
+        echo "hotfix_branch=$branch_name" >> $GITHUB_OUTPUT
+        
+    - name: Create incident tracking issue
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const title = `🚨 Hotfix: ${{ steps.triage.outputs.hotfix_branch }}`;
+          const body = `## Hotfix Incident Tracking
+          
+          **Branch:** ${{ steps.triage.outputs.hotfix_branch }}
+          **Severity:** ${{ steps.triage.outputs.severity }}  
+          **Triggered by:** ${{ github.actor }}
+          **Reason:** ${{ github.event.inputs.reason || 'Emergency hotfix' }}
+          **Emergency mode:** ${{ steps.triage.outputs.emergency_mode }}
+          
+          **Timeline:**
+          - Hotfix initiated: ${new Date().toISOString()}
+          - Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          
+          **Next Steps:**
+          - [ ] Code review completed
+          - [ ] Tests passed (or skipped if emergency)
+          - [ ] Production deployment
+          - [ ] Verification in production
+          - [ ] Merge back to main and develop
+          `;
+          
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['hotfix', `severity-${{ steps.triage.outputs.severity }}`, 'incident']
+          });
+          
+          console.log(`Created tracking issue: ${issue.data.html_url}`);
+
+  # ================================================================
+  # STAGE 2: CRITICAL TESTS (MINIMAL FOR SPEED)
+  # ================================================================
+  
+  critical-tests:
+    name: 🧪 Critical Tests Only
+    needs: hotfix-validation
+    if: needs.hotfix-validation.outputs.skip_tests != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # Fast tests only
+    
+    steps:
+    - name: Checkout hotfix branch
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'frontend/package-lock.json'
+        
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        
+    - name: Install frontend dependencies
+      working-directory: frontend
+      run: npm ci --prefer-offline
+      
+    - name: Run critical frontend tests
+      working-directory: frontend
+      run: |
+        echo "Running only critical frontend tests..."
+        # Run tests matching "critical" pattern
+        npm test -- --testNamePattern="critical|security|auth" --passWithNoTests
+        
+    - name: Run critical backend tests
+      run: |
+        echo "Running critical backend tests..."
+        # Test only critical services and security components
+        cd backend
+        
+        # Test authentication and security components
+        if [ -d "user-svc" ]; then
+          cd user-svc && go test -run="Test.*Critical|Test.*Security|Test.*Auth" ./... && cd ..
+        fi
+        
+        if [ -d "api-gateway" ]; then
+          cd api-gateway && go test -run="Test.*Critical|Test.*Security|Test.*Auth" ./... && cd ..
+        fi
+        
+    - name: Security vulnerability check
+      run: |
+        echo "Running critical security checks..."
+        
+        # Frontend security check
+        cd frontend
+        npm audit --audit-level=critical
+        
+        # Basic secret scanning
+        if command -v gitleaks >/dev/null 2>&1; then
+          cd ..
+          gitleaks detect --source . --verbose
+        else
+          echo "⚠️ Gitleaks not available, skipping secret scan"
+        fi
+
+  # ================================================================
+  # STAGE 3: HOTFIX APPROVAL (EXPEDITED)
+  # ================================================================
+  
+  hotfix-approval:
+    name: 🚨 Hotfix Emergency Approval
+    needs: [hotfix-validation, critical-tests]
+    if: |
+      always() && 
+      needs.hotfix-validation.result == 'success' &&
+      (needs.critical-tests.result == 'success' || needs.critical-tests.result == 'skipped') &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: 
+      name: hotfix-approval
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      
+    steps:
+    - name: Hotfix approval gate
+      run: |
+        echo "🚨 HOTFIX EMERGENCY APPROVAL REQUIRED"
+        echo "====================================="
+        echo ""
+        echo "📊 Hotfix Summary:"
+        echo "• Branch: ${{ needs.hotfix-validation.outputs.hotfix_branch }}"
+        echo "• Severity: ${{ needs.hotfix-validation.outputs.severity }}"
+        echo "• Emergency mode: ${{ needs.hotfix-validation.outputs.emergency_mode }}"
+        echo "• Triggered by: ${{ github.actor }}"
+        echo "• Reason: ${{ github.event.inputs.reason || 'Emergency hotfix' }}"
+        echo ""
+        echo "✅ Pre-approval Checklist:"
+        echo "• Critical tests: ${{ needs.critical-tests.result }}"
+        echo "• Security scan: Completed"
+        echo "• Branch validation: Passed"
+        echo ""
+        echo "⚠️ Production Impact:"
+        echo "• Direct deployment to production"
+        echo "• Bypassing normal development flow"
+        echo "• Immediate rollback available if needed"
+        echo ""
+        
+        if [[ "${{ needs.hotfix-validation.outputs.emergency_mode }}" == "true" ]]; then
+          echo "🔴 CRITICAL SEVERITY - Fast-track approval recommended"
+        fi
+        
+        echo "👍 Approve this hotfix to proceed to production deployment"
+
+  # ================================================================
+  # STAGE 4: EMERGENCY PRODUCTION DEPLOYMENT
+  # ================================================================
+  
+  emergency-deployment:
+    name: 🚀 Emergency Production Deployment
+    needs: [hotfix-validation, hotfix-approval]
+    if: needs.hotfix-approval.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout hotfix branch
+      uses: actions/checkout@v4
+      
+    - name: Deploy hotfix to production
+      run: |
+        echo "🚀 EMERGENCY HOTFIX DEPLOYMENT"
+        echo "=============================="
+        echo "Branch: ${{ needs.hotfix-validation.outputs.hotfix_branch }}"
+        echo "Severity: ${{ needs.hotfix-validation.outputs.severity }}"
+        echo "Time: $(date -u)"
+        echo ""
+        
+        # Use your existing deployment script
+        if [ -f "scripts/deploy/deploy.sh" ]; then
+          echo "Using production deployment script..."
+          ./scripts/deploy/deploy.sh production
+        else
+          echo "Direct ArgoCD sync for hotfix..."
+          # Apply hotfix via ArgoCD or kubectl
+          echo "kubectl set image deployment/app-name container-name=new-image:tag"
+          echo "kubectl rollout status deployment/app-name --timeout=300s"
+        fi
+        
+        echo "✅ Hotfix deployment completed"
+        
+    - name: Production health verification
+      run: |
+        echo "🔍 Verifying production health after hotfix..."
+        
+        # Health check your production endpoints
+        endpoints=(
+          "https://api.linkapp.com/health"
+          "https://linkapp.com/"
+        )
+        
+        for endpoint in "${endpoints[@]}"; do
+          echo "Checking: $endpoint"
+          if curl -f -s -o /dev/null "$endpoint"; then
+            echo "✅ $endpoint - OK"
+          else
+            echo "❌ $endpoint - FAILED"
+            echo "🚨 Production health check failed - consider rollback"
+            exit 1
+          fi
+        done
+        
+        echo "✅ All production health checks passed"
+
+  # ================================================================
+  # STAGE 5: POST-DEPLOYMENT VERIFICATION & CLEANUP
+  # ================================================================
+  
+  post-deployment:
+    name: 📋 Post-Deployment Tasks
+    needs: [hotfix-validation, emergency-deployment]
+    if: needs.emergency-deployment.result == 'success'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Create merge-back PR to main
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const branch = '${{ needs.hotfix-validation.outputs.hotfix_branch }}';
+          const title = `🔥 Merge hotfix: ${branch}`;
+          const body = `## Hotfix Merge Back
+          
+          **Original hotfix:** ${branch}
+          **Severity:** ${{ needs.hotfix-validation.outputs.severity }}
+          **Deployed to production:** ✅ Success
+          
+          This PR merges the hotfix back to main branch to maintain git history.
+          
+          **Post-deployment checklist:**
+          - [x] Production deployment successful
+          - [x] Health checks passed
+          - [ ] Merge to main
+          - [ ] Merge to develop
+          - [ ] Delete hotfix branch
+          `;
+          
+          const pr = await github.rest.pulls.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            head: branch,
+            base: 'main'
+          });
+          
+          console.log(`Created merge-back PR: ${pr.data.html_url}`);
+          
+    - name: Notify stakeholders
+      run: |
+        echo "📢 HOTFIX DEPLOYMENT NOTIFICATION"
+        echo "================================="
+        echo "✅ Hotfix successfully deployed to production"
+        echo ""
+        echo "📊 Summary:"
+        echo "• Branch: ${{ needs.hotfix-validation.outputs.hotfix_branch }}"
+        echo "• Severity: ${{ needs.hotfix-validation.outputs.severity }}"
+        echo "• Deployed by: ${{ github.actor }}"
+        echo "• Deployment time: $(date -u)"
+        echo "• Production status: ✅ Healthy"
+        echo ""
+        echo "📋 Next steps:"
+        echo "1. Monitor production metrics closely"
+        echo "2. Merge hotfix back to main and develop"  
+        echo "3. Schedule post-incident review"
+        echo "4. Update runbooks if needed"

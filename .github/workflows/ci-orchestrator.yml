@@ -87,8 +87,9 @@ jobs:
             if git diff --name-only HEAD~1 | grep -q "backend/api-gateway/"; then services+=(\"api-gateway\"); fi
             if git diff --name-only HEAD~1 | grep -q "backend/chat-svc/"; then services+=(\"chat-svc\"); fi
             if git diff --name-only HEAD~1 | grep -q "backend/discovery-svc/"; then services+=(\"discovery-svc\"); fi
-            if git diff --name-only HEAD~1 | grep -q "backend/ai-svc/"; then services+=(\"ai-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/summarygen-svc/"; then services+=(\"summarygen-svc\"); fi
             if git diff --name-only HEAD~1 | grep -q "backend/search-svc/"; then services+=(\"search-svc\"); fi
+            if git diff --name-only HEAD~1 | grep -q "backend/feature-svc/"; then services+=(\"feature-svc\"); fi
             if git diff --name-only HEAD~1 | grep -q "backend/shared-libs/"; then services+=(\"all\"); fi
           fi
           
@@ -191,7 +192,57 @@ jobs:
     secrets: inherit
 
   # ================================================================
-  # STAGE 2: INTEGRATION & E2E TESTS
+  # STAGE 2: UNIFIED TESTING WITH MAKEFILE
+  # ================================================================
+  
+  unified-tests:
+    name: 🧪 Unified Testing Suite
+    needs: [ci-strategy, code-quality]
+    if: needs.ci-strategy.outputs.run_tests == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: 'frontend/package-lock.json'
+        
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        cd frontend && npm ci
+        
+    - name: Start services for testing
+      run: make dev-start-backend
+      
+    - name: Wait for services
+      run: sleep 30
+      
+    - name: Run security tests
+      run: make test-security
+      
+    - name: Run smoke tests
+      run: make test-smoke
+      
+    - name: Run integration tests
+      if: needs.ci-strategy.outputs.test_suite == 'all' || needs.ci-strategy.outputs.test_suite == 'integration'
+      run: make test-integration
+      
+    - name: Stop services
+      if: always()
+      run: make dev-stop
+      
+  # ================================================================
+  # STAGE 3: INTEGRATION & E2E TESTS  
   # ================================================================
     
   frontend-e2e:
@@ -214,7 +265,7 @@ jobs:
   
   ci-summary:
     name: 📋 CI Results Summary
-    needs: [ci-strategy, code-quality, backend-tests, frontend-tests, frontend-quality, frontend-e2e]
+    needs: [ci-strategy, code-quality, backend-tests, frontend-tests, frontend-quality, unified-tests, frontend-e2e]
     if: always()
     runs-on: ubuntu-latest
     outputs:
@@ -313,6 +364,7 @@ jobs:
         echo "| Backend Tests | ${{ needs.backend-tests.result == 'success' && '✅ Passed' || needs.backend-tests.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ needs.ci-strategy.outputs.run_backend_tests == 'true' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Frontend Unit Tests | ${{ needs.frontend-tests.result == 'success' && '✅ Passed' || needs.frontend-tests.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ needs.ci-strategy.outputs.run_frontend_tests == 'true' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Frontend Quality | ${{ needs.frontend-quality.result == 'success' && '✅ Passed' || needs.frontend-quality.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ${{ needs.ci-strategy.outputs.run_frontend_tests == 'true' && '✅ Yes' || '⏭️ No' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Unified Tests (Security/Integration) | ${{ needs.unified-tests.result == 'success' && '✅ Passed' || needs.unified-tests.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
         echo "| Frontend E2E Tests | ${{ needs.frontend-e2e.result == 'success' && '✅ Passed' || needs.frontend-e2e.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} | ⚠️ Optional |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         

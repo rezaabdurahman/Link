@@ -1,6 +1,6 @@
 import useSWR from 'swr';
 import { useChatStore } from '../stores/chatStore';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { 
   getConversations,
   conversationToChat,
@@ -13,8 +13,14 @@ import {
   isUnifiedSearchError,
   getUnifiedSearchErrorMessage
 } from '../services/unifiedSearchClient';
-import { searchFriends, PublicUser } from '../services/userClient';
-import { generateUsernameFromEmail } from '../utils/nameHelpers';
+import { 
+  getPriorityRankings,
+  shouldUsePriorityService,
+  recordUserAction,
+  isPriorityServiceError,
+  getPriorityServiceErrorMessage
+} from '../services/priorityClient';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { Chat } from '../types';
 
 interface UseChatDataOptions {
@@ -23,19 +29,33 @@ interface UseChatDataOptions {
   revalidateOnFocus?: boolean;
 }
 
+// Constants
+const PRIORITY_CACHE_DURATION = 30000; // 30 seconds
+const SEARCH_DEDUP_INTERVAL = 500; // 0.5 seconds
+const CONVERSATION_DEDUP_INTERVAL = 5000; // 5 seconds
+const PRIORITY_RETRY_COUNT = 1; // Minimal retries for quick fallback
+
 export function useChatData(options: UseChatDataOptions = {}) {
   const {
     chats,
     friendResults,
     searchQuery,
     searchLoading,
+    searchOffset,
+    searchHasMore,
+    searchTotalResults,
     setChats,
     setFriendResults,
+    appendFriendResults,
+    resetSearchPagination,
     setSearchLoading,
     setError,
     getSortedChats,
     getCombinedList,
   } = useChatStore();
+
+  // Feature flag for priority service
+  const isPriorityServiceFlagEnabled = useFeatureFlag('PRIORITY_SERVICE_ENABLED');
 
   // Fetch conversations
   const { 
@@ -49,19 +69,64 @@ export function useChatData(options: UseChatDataOptions = {}) {
       const response = await getConversations({ limit: 50 });
       return response.data.map((conversation, index) => ({
         ...conversationToChat(conversation),
-        priority: index + 1, // Set priority based on API order
+        priority: index + 1, // Default priority based on API order
       }));
     },
     {
       refreshInterval: options.refreshInterval || 0, // Don't auto-refresh by default
       revalidateOnFocus: options.revalidateOnFocus !== false,
-      dedupingInterval: 5000,
+      dedupingInterval: CONVERSATION_DEDUP_INTERVAL,
       errorRetryCount: 3,
       errorRetryInterval: 2000,
     }
   );
 
-  // Friend search with debounced query
+  // Get current sort option from store
+  const { sortBy } = useChatStore();
+
+  // Fetch priority rankings when priority service should be used
+  const shouldUsePriority = (isPriorityServiceFlagEnabled || shouldUsePriorityService()) && 
+                           sortBy === 'priority' && 
+                           conversationsData && 
+                           conversationsData.length > 0;
+  
+  const { 
+    data: priorityData, 
+    error: priorityError,
+    isLoading: priorityLoading 
+  } = useSWR(
+    shouldUsePriority ? ['priority-rankings', conversationsData?.map(c => c.id).join(',')] : null,
+    async () => {
+      const conversationIds = conversationsData?.map(c => c.id).filter(Boolean) || [];
+      if (conversationIds.length === 0) return null;
+      
+      try {
+        const response = await getPriorityRankings({
+          conversationIds,
+          limit: 50,
+          includeContext: true,
+        });
+        return response;
+      } catch (err) {
+        if (isPriorityServiceError(err)) {
+          console.error('Priority service failed:', getPriorityServiceErrorMessage(err));
+          // Fall back to default priority
+          return null;
+        }
+        throw err;
+      }
+    },
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      dedupingInterval: PRIORITY_CACHE_DURATION,
+      errorRetryCount: PRIORITY_RETRY_COUNT, // Don't retry too much, fall back quickly
+    }
+  );
+
+  // Friend search with pagination support
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
   const searchRequest: UnifiedSearchRequest | null = useMemo(() => {
     if (!searchQuery.trim()) return null;
     
@@ -70,6 +135,7 @@ export function useChatData(options: UseChatDataOptions = {}) {
       scope: 'friends',
       pagination: {
         limit: 20,
+        offset: 0, // Always start from 0 for initial search
       },
     };
   }, [searchQuery]);
@@ -84,51 +150,13 @@ export function useChatData(options: UseChatDataOptions = {}) {
       const request = JSON.parse(requestStr);
       
       try {
-        // Try unified search first
         const response = await unifiedSearch(request);
-        
-        // Convert User[] to PublicUser[] for backward compatibility
-        const friends: PublicUser[] = response.users.map(user => ({
-          id: user.id,
-          email: '',
-          username: generateUsernameFromEmail(user.id + '@example.com'),
-          first_name: user.first_name,
-          last_name: user.last_name || '',
-          profile_picture: user.profilePicture,
-          bio: user.bio,
-          interests: user.interests,
-          social_links: [],
-          additional_photos: [],
-          privacy_settings: {
-            show_age: true,
-            show_location: true,
-            show_mutual_friends: true,
-            show_name: true,
-            show_social_media: true,
-            show_montages: true,
-            show_checkins: true
-          },
-          is_friend: true,
-          mutual_friends_count: user.mutualFriends?.length || 0,
-          last_active: user.lastSeen?.toISOString() || new Date().toISOString(),
-          email_verified: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-        
-        return friends;
+        return response.users;
         
       } catch (err) {
-        // Fallback to legacy search on unified search failure
         if (isUnifiedSearchError(err)) {
-          console.warn('Unified search failed, falling back to legacy search:', getUnifiedSearchErrorMessage(err));
-          try {
-            const response = await searchFriends(request.query, { limit: 20 });
-            return response.friends;
-          } catch (legacyErr) {
-            console.error('Legacy search also failed:', legacyErr);
-            throw err; // Re-throw original error
-          }
+          console.error('Unified search failed:', getUnifiedSearchErrorMessage(err));
+          throw err;
         } else {
           throw err;
         }
@@ -137,45 +165,84 @@ export function useChatData(options: UseChatDataOptions = {}) {
     {
       refreshInterval: 0,
       revalidateOnFocus: false,
-      dedupingInterval: 500,
+      dedupingInterval: SEARCH_DEDUP_INTERVAL,
       errorRetryCount: 2,
     }
   );
 
-  // Sync SWR data with Zustand store
+  // Sync SWR data with Zustand store, merge with priority data
   useEffect(() => {
     if (conversationsData) {
-      setChats(conversationsData);
+      let finalChats = conversationsData;
+      
+      // If we have priority data and are using priority sorting, merge the scores
+      if (priorityData && sortBy === 'priority' && shouldUsePriority) {
+        const priorityMap = new Map(
+          priorityData.conversations.map(pc => [pc.conversation_id, pc])
+        );
+        
+        finalChats = conversationsData.map(chat => {
+          const priorityConversation = priorityMap.get(chat.id);
+          if (priorityConversation) {
+            return {
+              ...chat,
+              priority: priorityConversation.priority,
+              // Keep existing conversation summary for now
+              conversationSummary: chat.conversationSummary,
+            };
+          }
+          return chat;
+        });
+      }
+      
+      setChats(finalChats);
     }
-  }, [conversationsData, setChats]);
+  }, [conversationsData, priorityData, sortBy, shouldUsePriority, setChats]);
 
   useEffect(() => {
     if (searchData) {
+      // Reset pagination when search query changes
+      resetSearchPagination();
       setFriendResults(searchData);
     } else if (!searchQuery.trim()) {
+      resetSearchPagination();
       setFriendResults([]);
     }
-  }, [searchData, searchQuery, setFriendResults]);
+  }, [searchData, searchQuery, setFriendResults, resetSearchPagination]);
 
   useEffect(() => {
     setSearchLoading(swrSearchLoading);
   }, [swrSearchLoading, setSearchLoading]);
 
   useEffect(() => {
-    if (conversationsError || searchError) {
+    if (conversationsError || searchError || priorityError) {
       const errorMessage = conversationsError
         ? (isAuthError(conversationsError) 
             ? getErrorMessage(conversationsError.error)
             : 'Failed to load conversations. Please try again.')
-        : (isUnifiedSearchError(searchError)
+        : searchError
+        ? (isUnifiedSearchError(searchError)
             ? getUnifiedSearchErrorMessage(searchError)
-            : 'Failed to search friends. Please try again.');
+            : 'Failed to search friends. Please try again.')
+        : priorityError
+        ? (isPriorityServiceError(priorityError)
+            ? `Priority service error: ${getPriorityServiceErrorMessage(priorityError)}`
+            : 'Failed to load priority rankings. Using default sorting.')
+        : null;
       
-      setError(errorMessage);
+      // For priority errors, we don't set the main error since it falls back gracefully
+      if (priorityError && !conversationsError && !searchError) {
+        console.warn('Priority service unavailable, falling back to default sorting');
+        setError(null);
+      } else if (errorMessage) {
+        setError(errorMessage);
+      } else {
+        setError(null);
+      }
     } else {
       setError(null);
     }
-  }, [conversationsError, searchError, setError]);
+  }, [conversationsError, searchError, priorityError, setError]);
 
   // Chat actions
   const createChatConversation = async (participantId: string) => {
@@ -186,6 +253,22 @@ export function useChatData(options: UseChatDataOptions = {}) {
       });
       
       const newChat = conversationToChat(conversation);
+      
+      // Record user action for priority service learning
+      try {
+        await recordUserAction({
+          actionType: 'conversation_opened',
+          conversationId: newChat.id,
+          metadata: {
+            created_new: true,
+            participant_id: participantId,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (actionError) {
+        // Don't fail the main action if recording fails
+        console.warn('Failed to record user action:', actionError);
+      }
       
       // Add to local state and refresh
       setChats([newChat, ...chats]);
@@ -201,6 +284,33 @@ export function useChatData(options: UseChatDataOptions = {}) {
     }
   };
 
+  // Load more friends function
+  const loadMoreFriends = async () => {
+    if (!searchQuery.trim() || !searchHasMore || isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    
+    try {
+      const request: UnifiedSearchRequest = {
+        query: searchQuery.trim(),
+        scope: 'friends',
+        pagination: {
+          limit: 20,
+          offset: searchOffset,
+        },
+      };
+      
+      const response = await unifiedSearch(request);
+      appendFriendResults(response.users, response.hasMore, response.total);
+      
+    } catch (error) {
+      console.error('Failed to load more friends:', error);
+      setError('Failed to load more friends. Please try again.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   return {
     // Data
     conversations: getSortedChats(),
@@ -210,13 +320,27 @@ export function useChatData(options: UseChatDataOptions = {}) {
     // Loading states
     isLoading: conversationsLoading,
     isSearching: searchLoading,
+    isLoadingMore,
+    isPriorityLoading: priorityLoading,
+    
+    // Pagination states
+    searchHasMore,
+    searchTotalResults,
+    searchOffset,
     
     // Error states
     error: conversationsError || searchError,
+    priorityError,
+    
+    // Priority service states
+    isPriorityServiceEnabled: isPriorityServiceFlagEnabled || shouldUsePriorityService(),
+    isUsingPriorityService: shouldUsePriority,
+    priorityServiceContext: priorityData?.debug_info,
     
     // Actions
     refreshConversations,
     createChat: createChatConversation,
+    loadMoreFriends,
     
     // Utilities
     isEmpty: !conversationsLoading && !conversationsError && chats.length === 0,

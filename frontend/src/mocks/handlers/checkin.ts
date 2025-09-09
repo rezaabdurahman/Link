@@ -192,6 +192,8 @@ const getUserSpecificCheckIns = (userId: string) => {
             { id: 'tag-alex-1', tag_name: 'indie films' },
             { id: 'tag-alex-2', tag_name: 'cinema' }
           ],
+          file_attachments: [],
+          voice_note: undefined,
           created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
           updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
         },
@@ -225,6 +227,8 @@ const getUserSpecificCheckIns = (userId: string) => {
             { id: 'tag-alex-3', tag_name: 'hiking' },
             { id: 'tag-alex-4', tag_name: 'nature' }
           ],
+          file_attachments: [],
+          voice_note: undefined,
           created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
           updated_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         },
@@ -258,6 +262,8 @@ const getUserSpecificCheckIns = (userId: string) => {
             { id: 'tag-alex-5', tag_name: 'coffee' },
             { id: 'tag-alex-6', tag_name: 'reading' }
           ],
+          file_attachments: [],
+          voice_note: undefined,
           created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
           updated_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
         }

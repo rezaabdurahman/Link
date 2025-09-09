@@ -41,9 +41,9 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
 
 
   return (
-    <div className="min-h-screen bg-surface-dark">
+    <div className="min-h-screen bg-surface-secondary">
       {/* Header */}
-      <header className="ios-card border-b border-gray-200/50">
+      <header className="ios-card border-b border-surface-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             {/* Left side - Back button */}
@@ -93,9 +93,9 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
       </main>
 
       {/* Footer */}
-      <footer className="bg-surface-card border-t border-gray-200 mt-auto">
+      <footer className="bg-surface-card border-t border-surface-border mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-center items-center space-x-6 text-sm text-muted">
+          <div className="flex justify-center items-center space-x-6 text-sm text-text-muted">
             <Link 
               to="/help" 
               className="hover:text-primary transition-colors"

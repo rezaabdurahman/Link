@@ -27,6 +27,9 @@ const (
 	AIService_CheckUserConsent_FullMethodName            = "/ai.AIService/CheckUserConsent"
 	AIService_UpdateUserConsent_FullMethodName           = "/ai.AIService/UpdateUserConsent"
 	AIService_GenerateInsights_FullMethodName            = "/ai.AIService/GenerateInsights"
+	AIService_GenerateCueCards_FullMethodName            = "/ai.AIService/GenerateCueCards"
+	AIService_GenerateMessageFromCue_FullMethodName      = "/ai.AIService/GenerateMessageFromCue"
+	AIService_AnalyzeTonality_FullMethodName             = "/ai.AIService/AnalyzeTonality"
 	AIService_Health_FullMethodName                      = "/ai.AIService/Health"
 )
 
@@ -50,6 +53,12 @@ type AIServiceClient interface {
 	UpdateUserConsent(ctx context.Context, in *UpdateUserConsentRequest, opts ...grpc.CallOption) (*UpdateUserConsentResponse, error)
 	// Generate conversation insights
 	GenerateInsights(ctx context.Context, in *GenerateInsightsRequest, opts ...grpc.CallOption) (*GenerateInsightsResponse, error)
+	// Generate conversational cue cards
+	GenerateCueCards(ctx context.Context, in *GenerateCueCardsRequest, opts ...grpc.CallOption) (*GenerateCueCardsResponse, error)
+	// Generate message from selected cue card with tonality adjustment
+	GenerateMessageFromCue(ctx context.Context, in *GenerateMessageFromCueRequest, opts ...grpc.CallOption) (*GenerateMessageFromCueResponse, error)
+	// Analyze user tonality patterns
+	AnalyzeTonality(ctx context.Context, in *AnalyzeTonalityRequest, opts ...grpc.CallOption) (*AnalyzeTonalityResponse, error)
 	// Health check
 	Health(ctx context.Context, in *common.HealthCheckRequest, opts ...grpc.CallOption) (*common.HealthCheckResponse, error)
 }
@@ -141,6 +150,36 @@ func (c *aIServiceClient) GenerateInsights(ctx context.Context, in *GenerateInsi
 	return out, nil
 }
 
+func (c *aIServiceClient) GenerateCueCards(ctx context.Context, in *GenerateCueCardsRequest, opts ...grpc.CallOption) (*GenerateCueCardsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateCueCardsResponse)
+	err := c.cc.Invoke(ctx, AIService_GenerateCueCards_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) GenerateMessageFromCue(ctx context.Context, in *GenerateMessageFromCueRequest, opts ...grpc.CallOption) (*GenerateMessageFromCueResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateMessageFromCueResponse)
+	err := c.cc.Invoke(ctx, AIService_GenerateMessageFromCue_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) AnalyzeTonality(ctx context.Context, in *AnalyzeTonalityRequest, opts ...grpc.CallOption) (*AnalyzeTonalityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AnalyzeTonalityResponse)
+	err := c.cc.Invoke(ctx, AIService_AnalyzeTonality_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aIServiceClient) Health(ctx context.Context, in *common.HealthCheckRequest, opts ...grpc.CallOption) (*common.HealthCheckResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(common.HealthCheckResponse)
@@ -171,6 +210,12 @@ type AIServiceServer interface {
 	UpdateUserConsent(context.Context, *UpdateUserConsentRequest) (*UpdateUserConsentResponse, error)
 	// Generate conversation insights
 	GenerateInsights(context.Context, *GenerateInsightsRequest) (*GenerateInsightsResponse, error)
+	// Generate conversational cue cards
+	GenerateCueCards(context.Context, *GenerateCueCardsRequest) (*GenerateCueCardsResponse, error)
+	// Generate message from selected cue card with tonality adjustment
+	GenerateMessageFromCue(context.Context, *GenerateMessageFromCueRequest) (*GenerateMessageFromCueResponse, error)
+	// Analyze user tonality patterns
+	AnalyzeTonality(context.Context, *AnalyzeTonalityRequest) (*AnalyzeTonalityResponse, error)
 	// Health check
 	Health(context.Context, *common.HealthCheckRequest) (*common.HealthCheckResponse, error)
 	mustEmbedUnimplementedAIServiceServer()
@@ -203,6 +248,15 @@ func (UnimplementedAIServiceServer) UpdateUserConsent(context.Context, *UpdateUs
 }
 func (UnimplementedAIServiceServer) GenerateInsights(context.Context, *GenerateInsightsRequest) (*GenerateInsightsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GenerateInsights not implemented")
+}
+func (UnimplementedAIServiceServer) GenerateCueCards(context.Context, *GenerateCueCardsRequest) (*GenerateCueCardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateCueCards not implemented")
+}
+func (UnimplementedAIServiceServer) GenerateMessageFromCue(context.Context, *GenerateMessageFromCueRequest) (*GenerateMessageFromCueResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateMessageFromCue not implemented")
+}
+func (UnimplementedAIServiceServer) AnalyzeTonality(context.Context, *AnalyzeTonalityRequest) (*AnalyzeTonalityResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AnalyzeTonality not implemented")
 }
 func (UnimplementedAIServiceServer) Health(context.Context, *common.HealthCheckRequest) (*common.HealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Health not implemented")
@@ -347,6 +401,60 @@ func _AIService_GenerateInsights_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_GenerateCueCards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateCueCardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).GenerateCueCards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_GenerateCueCards_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).GenerateCueCards(ctx, req.(*GenerateCueCardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_GenerateMessageFromCue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateMessageFromCueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).GenerateMessageFromCue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_GenerateMessageFromCue_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).GenerateMessageFromCue(ctx, req.(*GenerateMessageFromCueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_AnalyzeTonality_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AnalyzeTonalityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).AnalyzeTonality(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_AnalyzeTonality_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).AnalyzeTonality(ctx, req.(*AnalyzeTonalityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AIService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(common.HealthCheckRequest)
 	if err := dec(in); err != nil {
@@ -395,6 +503,18 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GenerateInsights",
 			Handler:    _AIService_GenerateInsights_Handler,
+		},
+		{
+			MethodName: "GenerateCueCards",
+			Handler:    _AIService_GenerateCueCards_Handler,
+		},
+		{
+			MethodName: "GenerateMessageFromCue",
+			Handler:    _AIService_GenerateMessageFromCue_Handler,
+		},
+		{
+			MethodName: "AnalyzeTonality",
+			Handler:    _AIService_AnalyzeTonality_Handler,
 		},
 		{
 			MethodName: "Health",

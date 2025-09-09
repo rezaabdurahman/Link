@@ -127,12 +127,12 @@ func setupRoutes(lifecycleManager *lifecycle.ServiceManager) *gin.Engine {
 	router := gin.Default()
 
 	// Standard health endpoints (Kubernetes-compatible)
-	router.GET("/health/live", lifecycleManager.CreateLivenessHandler())
-	router.GET("/health/ready", lifecycleManager.CreateReadinessHandler())
-	router.GET("/health/detailed", lifecycleManager.CreateHealthHandler())
+	router.GET("/health/live", gin.WrapH(lifecycleManager.CreateLivenessHandler()))
+	router.GET("/health/ready", gin.WrapH(lifecycleManager.CreateReadinessHandler()))
+	router.GET("/health/detailed", gin.WrapH(lifecycleManager.CreateHealthHandler()))
 
 	// Legacy health endpoint for backward compatibility
-	router.GET("/health", lifecycleManager.CreateHealthHandler())
+	router.GET("/health", gin.WrapH(lifecycleManager.CreateHealthHandler()))
 
 	// Service-specific routes
 	v1 := router.Group("/api/v1")

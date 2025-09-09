@@ -19,22 +19,22 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
   const validProgress = Math.max(0, Math.min(100, progress));
 
   return (
-    <div className={`mb-12 ${className}`}>
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-lg font-semibold text-gray-800">
+    <div className={`mb-8 sm:mb-12 ${className}`}>
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <span className="text-base sm:text-lg font-semibold text-text-primary">
           Your Progress
         </span>
         {showPercentage && (
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3">
             {validProgress === 100 && (
-              <div className="flex items-center space-x-2 text-aqua">
-                <div className="w-6 h-6 bg-aqua/20 rounded-full flex items-center justify-center">
-                  <Check className="w-4 h-4" />
+              <div className="flex items-center space-x-1 sm:space-x-2 text-aqua">
+                <div className="w-5 h-5 sm:w-6 sm:h-6 bg-aqua/20 rounded-full flex items-center justify-center">
+                  <Check className="w-3 h-3 sm:w-4 sm:h-4" />
                 </div>
-                <span className="text-sm font-semibold">Complete!</span>
+                <span className="text-xs sm:text-sm font-semibold">Complete!</span>
               </div>
             )}
-            <span className="text-lg font-bold text-gray-800 bg-gray-100 px-3 py-1 rounded-full">
+            <span className="text-base sm:text-lg font-bold text-text-primary bg-surface-hover px-2 sm:px-3 py-1 rounded-full">
               {Math.round(validProgress)}%
             </span>
           </div>
@@ -43,14 +43,14 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
 
       {/* Progress Bar Container */}
       <div className="relative">
-        <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
+        <div className="w-full bg-surface-border rounded-full h-3 sm:h-4 overflow-hidden shadow-inner">
           {/* Progress Fill */}
           <div
-            className="h-full bg-aqua rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-pulse-slow"
+            className="h-full bg-aqua rounded-full transition-all duration-700 ease-out relative overflow-hidden"
             style={{ width: `${validProgress}%` }}
           >
             {/* Shimmer effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 animate-pulse" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12" />
           </div>
         </div>
 
@@ -77,8 +77,8 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
         </div>
       </div>
 
-      {/* Step Labels */}
-      <div className="flex justify-between mt-3 px-1">
+      {/* Step Labels - Hidden on very small screens */}
+      <div className="hidden sm:flex justify-between mt-3 px-1">
         {[
           'Profile',
           'About',
@@ -100,7 +100,7 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
                   ? 'text-aqua font-medium'
                   : isCurrent
                   ? 'text-primary-600 font-medium'
-                  : 'text-gray-400'
+                  : 'text-text-muted'
               }`}
             >
               {label}

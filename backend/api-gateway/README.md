@@ -42,8 +42,7 @@ api-gateway/
 │   └── main.go
 ├── internal/
 │   ├── config/              # Configuration management
-│   │   ├── enhanced_services.go
-│   │   ├── services.go      # Legacy configuration
+│   │   ├── services.go           # Unified service configuration with load balancing
 │   │   └── utils.go
 │   ├── handlers/            # HTTP handlers
 │   │   ├── enhanced_proxy.go # Enhanced proxy with load balancing

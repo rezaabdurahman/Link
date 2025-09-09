@@ -15,6 +15,7 @@ import (
 type UserClient interface {
 	GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserProfile, error)
 	GetUserFriends(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	GetAllUsers(ctx context.Context, limit, offset int) ([]uuid.UUID, error)
 }
 
 type userClient struct {
@@ -36,16 +37,15 @@ func NewUserClient(baseURL, authToken string) UserClient {
 
 // UserProfile represents the public user profile from user-svc
 type UserProfile struct {
-	ID               uuid.UUID `json:"id"`
-	Bio              string    `json:"bio"`
-	Interests        []string  `json:"interests"`
-	Profession       string    `json:"profession"`
-	Skills           []string  `json:"skills,omitempty"`
-	Location         string    `json:"location,omitempty"`
-	ProfilePicture   *string   `json:"profile_picture,omitempty"`
-	AdditionalPhotos []string  `json:"additional_photos,omitempty"`
-	ImageDescriptions *string  `json:"image_descriptions,omitempty"` // Cached image analysis results
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                uuid.UUID `json:"id"`
+	Bio               string    `json:"bio"`
+	Interests         []string  `json:"interests"`
+	Age               *int      `json:"age,omitempty"` // Added: age information for semantic search
+	Location          string    `json:"location,omitempty"`
+	ProfilePicture    *string   `json:"profile_picture,omitempty"`
+	AdditionalPhotos  []string  `json:"additional_photos,omitempty"`
+	ImageDescriptions *string   `json:"image_descriptions,omitempty"` // Cached image analysis results
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // GetUserProfile fetches a user's public profile from user-svc
@@ -143,16 +143,56 @@ func (c *userClient) GetUserFriends(ctx context.Context, userID uuid.UUID) ([]uu
 	return friendIDs, nil
 }
 
+// AllUsersResponse represents the response from user-svc for all users
+type AllUsersResponse struct {
+	UserIDs []uuid.UUID `json:"user_ids"`
+	Page    int         `json:"page"`
+	Limit   int         `json:"limit"`
+	Count   int         `json:"count"`
+	Total   int         `json:"total"`
+}
+
+// GetAllUsers fetches all user IDs from user-svc (paginated)
+func (c *userClient) GetAllUsers(ctx context.Context, limit, offset int) ([]uuid.UUID, error) {
+	url := fmt.Sprintf("%s/api/v1/users/all?limit=%d&offset=%d", c.baseURL, limit, offset)
+	
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add service auth header (service-to-service call)
+	if c.authToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
+	}
+	req.Header.Set("User-Agent", "search-svc/1.0")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("user-svc returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var response AllUsersResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return response.UserIDs, nil
+}
+
 // ProfileToText converts user profile to searchable text for embedding
 func (p *UserProfile) ProfileToText() string {
 	var text string
 	
 	if p.Bio != "" {
 		text += p.Bio + " "
-	}
-	
-	if p.Profession != "" {
-		text += p.Profession + " "
 	}
 	
 	if len(p.Interests) > 0 {
@@ -166,15 +206,9 @@ func (p *UserProfile) ProfileToText() string {
 		text += " "
 	}
 	
-	if len(p.Skills) > 0 {
-		text += "Skills: "
-		for i, skill := range p.Skills {
-			if i > 0 {
-				text += ", "
-			}
-			text += skill
-		}
-		text += " "
+	// Add age information for semantic search (respects privacy settings from user-svc)
+	if p.Age != nil && *p.Age > 0 && *p.Age <= 150 {
+		text += fmt.Sprintf("Age: %d ", *p.Age)
 	}
 	
 	if p.Location != "" {

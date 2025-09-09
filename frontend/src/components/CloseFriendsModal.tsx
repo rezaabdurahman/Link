@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Check } from 'lucide-react';
-import { friends as allFriends, closeFriends } from '../data/mockData';
 import { getDisplayName, getFullName } from '../utils/nameHelpers';
+import { 
+  getCloseFriends, 
+  updateCloseFriends, 
+  getFriends,
+  getCloseFriendsErrorMessage, 
+  type PublicUser 
+} from '../services/userClient';
 
 interface CloseFriendsModalProps {
   isOpen: boolean;
@@ -16,20 +22,44 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [allFriends, setAllFriends] = useState<PublicUser[]>([]);
+  const [closeFriends, setCloseFriends] = useState<PublicUser[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize selected friends from current close friends list
+  // Load friends and close friends when modal opens
   useEffect(() => {
     if (isOpen) {
-      setSelectedFriendIds(closeFriends.map(cf => cf.userId));
+      loadData();
       setSearchQuery('');
+      setError(null);
     }
   }, [isOpen]);
+
+  const loadData = async (): Promise<void> => {
+    setIsInitialLoading(true);
+    try {
+      // Load both friends and close friends in parallel
+      const [friendsResponse, closeFriendsResponse] = await Promise.all([
+        getFriends({ limit: 100 }), // Get up to 100 friends
+        getCloseFriends()
+      ]);
+
+      setAllFriends(friendsResponse.data);
+      setCloseFriends(closeFriendsResponse.data);
+      setSelectedFriendIds(closeFriendsResponse.data.map(cf => cf.id));
+    } catch (err: any) {
+      setError(getCloseFriendsErrorMessage(err?.error || err));
+    } finally {
+      setIsInitialLoading(false);
+    }
+  };
 
   // Filter friends based on search query
   const filteredFriends = allFriends.filter(friend =>
     getFullName(friend).toLowerCase().includes(searchQuery.toLowerCase()) ||
-    friend.bio.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (friend.bio && friend.bio.toLowerCase().includes(searchQuery.toLowerCase())) ||
     friend.interests.some(interest => 
       interest.toLowerCase().includes(searchQuery.toLowerCase())
     )
@@ -45,11 +75,14 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
 
   const handleSave = async (): Promise<void> => {
     setIsLoading(true);
+    setError(null);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Update close friends via API
+      await updateCloseFriends(selectedFriendIds);
       onSave(selectedFriendIds);
       onClose();
+    } catch (err: any) {
+      setError(getCloseFriendsErrorMessage(err?.error || err));
     } finally {
       setIsLoading(false);
     }
@@ -57,8 +90,9 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
 
   const handleCancel = (): void => {
     // Reset to original state
-    setSelectedFriendIds(closeFriends.map(cf => cf.userId));
+    setSelectedFriendIds(closeFriends.map(cf => cf.id));
     setSearchQuery('');
+    setError(null);
     onClose();
   };
 
@@ -103,20 +137,37 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
           </p>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="p-4 bg-red-50 border-l-4 border-red-400">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
         {/* Friends List */}
         <div className="flex-1 overflow-y-auto max-h-96">
-          {filteredFriends.length === 0 ? (
+          {isInitialLoading ? (
             <div className="p-8 text-center text-gray-500">
-              <p>No friends found</p>
-              {searchQuery && (
-                <p className="text-xs mt-1">Try a different search term</p>
+              <p>Loading friends...</p>
+            </div>
+          ) : filteredFriends.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              {allFriends.length === 0 ? (
+                <p>No friends found. Add some friends first!</p>
+              ) : (
+                <>
+                  <p>No friends found</p>
+                  {searchQuery && (
+                    <p className="text-xs mt-1">Try a different search term</p>
+                  )}
+                </>
               )}
             </div>
           ) : (
             <div className="p-2">
               {filteredFriends.map((friend) => {
                 const isSelected = selectedFriendIds.includes(friend.id);
-                const profilePicture = friend.profileMedia?.thumbnail || friend.profilePicture;
+                const profilePicture = friend.profile_picture || undefined;
                 
                 return (
                   <button
@@ -143,7 +194,7 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
                     
                     <div className="flex-1 text-left">
                       <h3 className="font-medium text-gray-900">{getDisplayName(friend)}</h3>
-                      <p className="text-sm text-gray-500 line-clamp-1">{friend.bio}</p>
+                      <p className="text-sm text-gray-500 line-clamp-1">{friend.bio || 'No bio available'}</p>
                     </div>
                     
                     <div className={`w-5 h-5 border-2 rounded-full transition-colors ${
@@ -171,17 +222,17 @@ const CloseFriendsModal: React.FC<CloseFriendsModalProps> = ({
           <div className="flex gap-3">
             <button
               onClick={handleCancel}
-              disabled={isLoading}
+              disabled={isLoading || isInitialLoading}
               className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-ios hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              disabled={isLoading}
+              disabled={isLoading || isInitialLoading}
               className="flex-1 gradient-btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Saving...' : 'Save'}
+              {isLoading ? 'Saving...' : isInitialLoading ? 'Loading...' : 'Save'}
             </button>
           </div>
         </div>

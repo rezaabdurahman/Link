@@ -37,13 +37,12 @@ This guide covers the migration from the legacy Gin-based API Gateway to the enh
 - `cmd/gateway/main.go` - New enhanced main entry point
 - `internal/loadbalancer/` - Load balancing and health checking logic
 - `internal/retry/` - Retry mechanism with exponential backoff
-- `internal/config/enhanced_services.go` - Multi-instance configuration
+- `internal/config/services.go` - Unified service configuration with load balancing and legacy compatibility
 - `internal/handlers/enhanced_proxy.go` - Load-balancing proxy handler
 
 ### Preserved (Legacy Components)
 The following legacy components are still available but not used in the enhanced version:
-- `internal/handlers/proxy.go` - Legacy single-endpoint proxy
-- `internal/config/services.go` - Legacy service configuration
+- `internal/handlers/proxy.go` - Legacy single-endpoint proxy (now uses services.go)
 - `internal/middleware/` - Auth, CORS, rate limiting middleware
 - `internal/logger/` - Structured logging
 - `internal/metrics/` - Prometheus metrics (Gin-based)

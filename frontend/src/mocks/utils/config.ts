@@ -50,6 +50,7 @@ export const API_ENDPOINTS = {
   // User endpoints
   USERS: {
     profile: '/users/profile',
+    updateProfile: '/users/profile',
     me: '/users/profile/me',
     byId: (id: string) => `/users/profile/${id}`,
   },
@@ -77,6 +78,8 @@ export const API_ENDPOINTS = {
     start: '/onboarding/start',
     step: '/onboarding/step',
     complete: '/onboarding/complete',
+    skip: '/onboarding/skip',
+    skipStep: '/onboarding/skip-step',
   },
   
   // Availability endpoints

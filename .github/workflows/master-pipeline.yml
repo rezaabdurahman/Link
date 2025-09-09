@@ -40,6 +40,11 @@ on:
         required: false
         type: boolean
         default: false
+      monitor_hotfixes:
+        description: 'Include hotfix monitoring in pipeline'
+        required: false
+        type: boolean
+        default: false
 
 env:
   PIPELINE_VERSION: "v3.0"  # Updated for new orchestrator architecture
@@ -97,12 +102,43 @@ jobs:
     secrets: inherit
 
   # ================================================================
+  # OPTIONAL: HOTFIX ACTIVITY MONITORING
+  # ================================================================
+  
+  hotfix-monitoring:
+    name: 🚨 Hotfix Activity Monitor
+    if: github.event.inputs.monitor_hotfixes == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Monitor active hotfixes
+      run: |
+        echo "🚨 HOTFIX ACTIVITY MONITOR"
+        echo "========================"
+        echo ""
+        
+        # Check for active hotfix branches
+        echo "🌿 Active Hotfix Branches:"
+        git ls-remote --heads origin | grep "refs/heads/hotfix/" | sed 's|.*refs/heads/||' || echo "No active hotfix branches"
+        echo ""
+        
+        # Show recent hotfix deployments
+        echo "🔄 Recent Hotfix Activity:"
+        echo "This would show recent hotfix workflow runs (requires GitHub CLI)"
+        echo ""
+        
+        echo "📊 Impact on Master Pipeline:"
+        echo "• Hotfixes bypass normal development flow"
+        echo "• Production may have changes not reflected in main branch"  
+        echo "• Consider syncing after hotfix completion"
+
+  # ================================================================
   # STAGE 4: PIPELINE SUMMARY & NOTIFICATIONS
   # ================================================================
   
   pipeline-summary:
     name: 📋 Master Pipeline Summary
-    needs: [continuous-integration, continuous-deployment, continuous-monitoring]
+    needs: [continuous-integration, continuous-deployment, continuous-monitoring, hotfix-monitoring]
     if: always()
     runs-on: ubuntu-latest
     
@@ -118,10 +154,15 @@ jobs:
         ci_result="${{ needs.continuous-integration.result }}"
         cd_result="${{ needs.continuous-deployment.result }}"
         monitoring_result="${{ needs.continuous-monitoring.result }}"
+        hotfix_result="${{ needs.hotfix-monitoring.result || 'skipped' }}"
         
         echo "🔬 CI Orchestrator: $ci_result"
         echo "🚀 CD Orchestrator: $cd_result"
         echo "📊 Monitoring Orchestrator: $monitoring_result"
+        
+        if [[ "${{ github.event.inputs.monitor_hotfixes }}" == "true" ]]; then
+          echo "🚨 Hotfix Monitor: $hotfix_result"
+        fi
         echo ""
         
         # Determine overall status

@@ -21,17 +21,28 @@ A modern social discovery platform that helps people connect with others in pers
 
 ## Development Commands
 
-### Quick Start (Recommended)
-- **Full stack setup**: `./scripts/dev-workflow.sh setup` (one-time setup)
-- **Start all services**: `./scripts/dev-workflow.sh start`
-- **Start individual service**: `./scripts/dev-workflow.sh start user-svc` (available: user-svc, api-gateway, chat-svc, discovery-svc, ai-svc, search-svc, feature-svc)
-- **Frontend development**: `npm run dev` (from root)
+### Quick Start (Recommended) - NEW UNIFIED INTERFACE
+- **Full stack setup**: `make dev-setup` (one-time setup)
+- **Start all services**: `make dev-start`
+- **Start specific service**: `make dev-start-service SERVICE=user-svc`
+- **Start backend only**: `make dev-start --backend-only`
+- **Frontend development**: `make dev-start --frontend-only`
+- **Stop all services**: `make dev-stop`
 
-### Feature Flag Management
-- **List all flags**: `./scripts/feature-admin.sh list_flags`
-- **Create new flag**: `./scripts/feature-admin.sh create_flag <key> <name> <description> <type>`
-- **Toggle flag**: `./scripts/feature-admin.sh toggle_flag <key> <environment>`
-- **View flag history**: `./scripts/feature-admin.sh flag_history <key> <limit>`
+### Testing Commands (NEW)
+- **Run all tests**: `make test`
+- **Unit tests**: `make test-unit`
+- **Integration tests**: `make test-integration`
+- **Security tests**: `make test-security`
+- **Performance tests**: `make test-performance`
+- **Smoke tests**: `make test-smoke`
+
+### Feature Flag Management (NEW MAKEFILE INTERFACE)
+- **List all flags**: `make feature-list`
+- **Get flag details**: `make feature-get FLAG=my_flag`
+- **Toggle flag**: `make feature-toggle FLAG=my_flag ENV=production`
+- **Enable with rollout**: `make feature-enable FLAG=my_flag ENV=production PERCENT=25`
+- **View flag history**: `make feature-history FLAG=my_flag`
 
 ### Root Level Commands
 - **Start backend services**: `cd backend && docker-compose up -d`
@@ -67,12 +78,13 @@ A modern social discovery platform that helps people connect with others in pers
 - **Migrate**: `make migrate-up`
 - **Dev with hot reload**: `make dev` (requires air)
 
-### Production Operations
-- **Deploy to Kubernetes**: `kubectl apply -f k8s/argocd/root-app.yaml`
-- **Validate deployment**: `./scripts/validate-k8s-deployment.sh`
-- **Security testing**: `./scripts/test-security-boundaries.sh`
-- **Database monitoring**: `./scripts/test-database-monitoring.sh`
-- **Performance testing**: `./scripts/enhanced_performance_test.sh`
+### Production Operations (NEW UNIFIED INTERFACE)
+- **Deploy to production**: `make deploy`
+- **Deploy to staging**: `make deploy-staging`
+- **Rollback deployment**: `make rollback VERSION=v1.2.3`
+- **Database migrations**: `make migrate`
+- **Security validation**: `make validate-security`
+- **Monitoring control**: `make monitor-start PROFILE=production`
 
 ### Build & Cache Management
 - **Cached development**: `make -f Makefile.cache dev-cached`
@@ -267,12 +279,39 @@ const isDarkModeEnabled = useFeatureFlag('dark_mode');
 5. **Analytics**: User behavior tracking, engagement metrics
 6. **Scaling**: Auto-scaling policies, load testing
 
+## Encryption Key Management Status & TODOs
+
+### ✅ Current Status (Deployed)
+- **Versioned encryption system** deployed with safe key rotation
+- **Monthly automated rotation** enabled (1st of each month)
+- **Zero data loss guarantee** during key rotation
+- **Backward compatibility** maintained for all existing code
+
+### 🔄 Phase 2 TODOs (6-12 months)
+- [ ] **Data Migration Analysis** - Survey key version distribution in production
+- [ ] **Background Migration Jobs** - Implement gradual re-encryption of old data
+- [ ] **Key Usage Dashboard** - Monitoring and metrics for key versions
+- [ ] **Legacy Key Cleanup** - Remove keys after data migration complete
+- [ ] **Performance Testing** - Ensure migration has zero production impact
+
+### 🚀 Phase 3 TODOs (12+ months)  
+- [ ] **AWS KMS Integration** - Evaluate vendor-managed key rotation
+- [ ] **Compliance Reporting** - Audit logs and key rotation reports
+- [ ] **Automated Lifecycle** - Policy-based key retirement
+- [ ] **Security Monitoring** - Encryption success rate alerting
+
+### Developer Notes
+- **Encryption usage**: `encryption.NewServiceEncryptor()` - handles versioning automatically
+- **Key rotation**: `./scripts/rotate-application-secrets.sh production` - safe rotation
+- **Documentation**: See `docs/security/encryption-key-versioning.md` for complete guide
+
 ## Notes for Claude
 - **Documentation**: Use the `docs/` structure. All major topics are covered including `docs/FEATURE_FLAGS_SETUP_GUIDE.md`
 - **Development**: Use `./scripts/dev-workflow.sh` for local development
 - **Feature Flags**: Use `./scripts/feature-admin.sh` for CLI-based flag management (security-first approach)
 - **Deployment**: Use ArgoCD for production deployments
 - **Security**: Run security tests before any production changes. Feature flag admin is CLI-only for security
+- **Encryption**: Versioned encryption system deployed - key rotation is now safe to use monthly
 - **Architecture**: The platform is mature - focus on optimization, new features, and A/B testing
 - **Code Quality**: Maintain high standards - this is production code with real users
 - **Migration**: Legacy static feature flags are being migrated to dynamic system using `FEATURE_FLAG_MIGRATION` mapping

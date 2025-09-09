@@ -138,10 +138,10 @@ distribute: generate
 	cp -r $(GENERATED_DIR)/proto/chat/* chat-svc/pkg/pb/ 2>/dev/null || true
 	cp -r $(GENERATED_DIR)/proto/common/* chat-svc/pkg/pb/ 2>/dev/null || true
 	
-	# AI service
-	mkdir -p ai-svc/pkg/pb
-	cp -r $(GENERATED_DIR)/proto/ai/* ai-svc/pkg/pb/ 2>/dev/null || true
-	cp -r $(GENERATED_DIR)/proto/common/* ai-svc/pkg/pb/ 2>/dev/null || true
+	# Summary generation service
+	mkdir -p summarygen-svc/pkg/pb
+	cp -r $(GENERATED_DIR)/proto/ai/* summarygen-svc/pkg/pb/ 2>/dev/null || true
+	cp -r $(GENERATED_DIR)/proto/common/* summarygen-svc/pkg/pb/ 2>/dev/null || true
 	
 	# Search service
 	mkdir -p search-svc/pkg/pb

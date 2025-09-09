@@ -159,3 +159,18 @@ func GetQdrantAPIKey() string {
 func GetSlackWebhookURL() string {
 	return GetSecret("SLACK_WEBHOOK_URL", "")
 }
+
+// GetDataEncryptionKey retrieves the key for encrypting sensitive data fields
+func GetDataEncryptionKey() string {
+	return GetSecret("DATA_ENCRYPTION_KEY", "dev-encryption-key-change-in-production")
+}
+
+// GetDataEncryptionKeyConfig retrieves the full key configuration for versioned encryption
+func GetDataEncryptionKeyConfig() map[string]string {
+	return map[string]string{
+		"current_key":     GetDataEncryptionKey(),
+		"current_version": GetEnv("DATA_ENCRYPTION_VERSION", "2"),
+		"legacy_keys":     GetEnv("DATA_ENCRYPTION_LEGACY_KEYS", "{}"),
+	}
+}
+

@@ -257,7 +257,7 @@ func executeZeroDowntimeDown(ctx context.Context, engine *migrations.ZeroDowntim
 	
 	// For now, delegate to the regular migration engine
 	// In a full implementation, this would use zero-downtime rollback strategies
-	return engine.MigrationEngine.Down()
+	return engine.MigrationEngine.MigrateDown()
 }
 
 func executeStatus(ctx context.Context, engine *migrations.MigrationEngine) error {
@@ -290,7 +290,7 @@ func executeStatus(ctx context.Context, engine *migrations.MigrationEngine) erro
 func executeVerify(ctx context.Context, engine *migrations.MigrationEngine) error {
 	log.Println("Verifying migration integrity...")
 	
-	if err := engine.Verify(); err != nil {
+	if err := engine.VerifyIntegrity(); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
 

@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [api-gateway, chat-svc, discovery-svc, search-svc, user-svc, feature-svc, ai-svc]
+        service: [api-gateway, chat-svc, discovery-svc, search-svc, user-svc, feature-svc, summarygen-svc]
         
     steps:
     - name: Checkout code
@@ -153,7 +153,7 @@ jobs:
     - name: Run go vet
       run: |
         cd backend
-        for service in api-gateway chat-svc discovery-svc search-svc user-svc feature-svc ai-svc; do
+        for service in api-gateway chat-svc discovery-svc search-svc user-svc feature-svc summarygen-svc; do
           if [ -d "$service" ] && [ -f "$service/go.mod" ]; then
             echo "Running go vet for $service..."
             cd "$service"
@@ -336,7 +336,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [api-gateway, chat-svc, discovery-svc, search-svc, user-svc, feature-svc, ai-svc]
+        service: [api-gateway, chat-svc, discovery-svc, search-svc, user-svc, feature-svc, summarygen-svc]
     
     steps:
     - name: Checkout code
@@ -363,9 +363,13 @@ jobs:
         echo "Building ${{ matrix.service }}..."
         go build -v ./...
         
-        # Also test if main package builds
-        if [ -f "cmd/main.go" ] || [ -f "main.go" ]; then
-          echo "Building main package..."
+        # Also test if main package builds with standardized structure
+        if [ -f "cmd/server/main.go" ]; then
+          echo "Building main package from cmd/server..."
+          go build -o ../bin/${{ matrix.service }} ./cmd/server
+          echo "✅ Build successful"
+        elif [ -f "cmd/main.go" ] || [ -f "main.go" ]; then
+          echo "Building main package from legacy location..."
           go build -o ../bin/${{ matrix.service }} ./...
           echo "✅ Build successful"
         fi

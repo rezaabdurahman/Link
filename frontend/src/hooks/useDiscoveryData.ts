@@ -20,7 +20,6 @@ export function useDiscoveryData(options: UseDiscoveryDataOptions = {}) {
     scope: 'discovery',
     filters: {
       distance: activeFilters.distance,
-      interests: activeFilters.interests.length > 0 ? activeFilters.interests : undefined,
       available_only: true,
     },
     pagination: {

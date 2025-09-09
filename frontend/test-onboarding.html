@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Onboarding Page</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .button {
+            background: #007AFF;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 8px;
+            font-size: 16px;
+        }
+        .button:hover {
+            background: #005BB5;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Onboarding Page Test Tool</h1>
+    
+    <div class="status info">
+        <strong>Purpose:</strong> Test the onboarding page functionality with mocks enabled.
+        <br><strong>Server:</strong> Make sure the dev server is running on <code>localhost:3000</code>
+    </div>
+
+    <h2>Quick Tests</h2>
+    <button class="button" onclick="openOnboardingPage()">Open Onboarding Page</button>
+    <button class="button" onclick="resetAndOpen()">Reset & Open Fresh</button>
+    <button class="button" onclick="checkDevConsole()">Check Dev Console</button>
+    <button class="button" onclick="testMockEndpoints()">Test Mock Endpoints</button>
+
+    <h2>Debug Actions</h2>
+    <button class="button" onclick="executeCommand('devAuth.status()')">Check Auth Status</button>
+    <button class="button" onclick="executeCommand('devAuth.resetOnboarding()')">Reset Onboarding</button>
+    <button class="button" onclick="executeCommand('devAuth.loginAsNewUser()')">Create New User</button>
+    <button class="button" onclick="clearLogs()">Clear Logs</button>
+
+    <h2>Test Results</h2>
+    <div id="logs" class="log">
+        <div>Ready to test. Click buttons above to start testing...</div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.style.marginBottom = '5px';
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '<div>Logs cleared.</div>';
+        }
+
+        function openOnboardingPage() {
+            log('🌐 Opening onboarding page in new tab...');
+            const newWindow = window.open('http://localhost:3000/onboarding', '_blank');
+            if (newWindow) {
+                log('✅ Opened onboarding page. Check the new tab and browser console.');
+                setTimeout(() => {
+                    log('💡 Tip: Open browser DevTools (F12) in the new tab to see console logs');
+                }, 1000);
+            } else {
+                log('❌ Failed to open new tab. Check popup blocker settings.');
+            }
+        }
+
+        function resetAndOpen() {
+            log('🔄 Attempting to reset onboarding and open fresh...');
+            
+            // Try to access the main app to reset onboarding
+            const resetWindow = window.open('http://localhost:3000', '_blank');
+            if (resetWindow) {
+                log('✅ Opened main app for reset. Execute these commands in console:');
+                log('   1. devAuth.resetOnboarding()');
+                log('   2. Navigate to /onboarding manually');
+                log('   3. Or run: window.location.href = "/onboarding"');
+            } else {
+                log('❌ Failed to open main app. Try manually.');
+            }
+        }
+
+        function checkDevConsole() {
+            log('🔍 Instructions for checking dev console:');
+            log('1. Open http://localhost:3000/onboarding in a new tab');
+            log('2. Press F12 or right-click → Inspect Element');
+            log('3. Go to Console tab');
+            log('4. Look for these messages:');
+            log('   - "🔧 MSW: Mock Service Worker started successfully"');
+            log('   - "🔧 Dev auth: Auto-authentication completed successfully"');
+            log('   - "🔧 OnboardingPage: Component rendering..."');
+            log('5. If you see errors, copy them and check the issue.');
+        }
+
+        function testMockEndpoints() {
+            log('🧪 Testing mock API endpoints...');
+            
+            // Test the onboarding status endpoint
+            fetch('http://localhost:3000/api/onboarding/status', {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer dev-token-test',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                log(`📡 GET /api/onboarding/status → ${response.status} ${response.statusText}`);
+                return response.json();
+            })
+            .then(data => {
+                log(`📦 Response data: ${JSON.stringify(data, null, 2)}`);
+                if (data.status) {
+                    log('✅ Mock API is working correctly!');
+                } else {
+                    log('⚠️ Unexpected response format');
+                }
+            })
+            .catch(error => {
+                log(`❌ API test failed: ${error.message}`);
+                log('💡 This might indicate MSW is not intercepting requests');
+            });
+        }
+
+        function executeCommand(command) {
+            log(`⚡ To execute: ${command}`);
+            log('Instructions:');
+            log('1. Open http://localhost:3000 in a new tab');
+            log('2. Open browser console (F12)');
+            log(`3. Type: ${command}`);
+            log('4. Press Enter and observe the result');
+            
+            // Open the main app
+            const commandWindow = window.open('http://localhost:3000', '_blank');
+            if (commandWindow) {
+                log('✅ Opened main app. Use console to execute the command.');
+            }
+        }
+
+        // Initialize
+        log('🚀 Onboarding test tool loaded');
+        log('📋 Prerequisites:');
+        log('  • Frontend dev server running on localhost:3000');
+        log('  • MSW (Mock Service Worker) enabled');
+        log('  • Development environment configured');
+        log('');
+        log('🎯 Goal: Verify onboarding page loads and functions correctly');
+    </script>
+</body>
+</html>

@@ -33,7 +33,7 @@ services:
     environment:
       PORT: "8083"
       
-  ai-svc:
+  summarygen-svc:
     # Remove port mapping when scaling (uncomment for scaling tests)
     # ports: []
     deploy:

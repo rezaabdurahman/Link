@@ -9,13 +9,13 @@ export const convertBackendCheckInToFrontend = (backendCheckIn: BackendCheckIn):
   return {
     id: backendCheckIn.id,
     text: backendCheckIn.text_content || '',
-    mediaAttachments: backendCheckIn.media_attachments.map(media => ({
+    mediaAttachments: (backendCheckIn.media_attachments || []).map(media => ({
       id: media.id,
       type: media.media_type,
       url: media.file_url,
       name: media.file_name,
     })),
-    fileAttachments: backendCheckIn.file_attachments.map(file => ({
+    fileAttachments: (backendCheckIn.file_attachments || []).map(file => ({
       id: file.id,
       name: file.file_name,
       size: file.file_size ? `${(file.file_size / 1024).toFixed(1)} KB` : 'Unknown size',
@@ -34,7 +34,7 @@ export const convertBackendCheckInToFrontend = (backendCheckIn: BackendCheckIn):
         lng: backendCheckIn.location.longitude,
       },
     } : null,
-    tags: backendCheckIn.tags.map(tag => ({
+    tags: (backendCheckIn.tags || []).map(tag => ({
       id: tag.id,
       label: tag.tag_name,
       type: 'manual' as const,

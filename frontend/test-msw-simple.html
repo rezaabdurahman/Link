@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MSW Test</title>
+</head>
+<body>
+    <h1>MSW Simple Test</h1>
+    <button onclick="testMSW()">Test MSW</button>
+    <div id="result"></div>
+
+    <script>
+        async function testMSW() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                // Test a simple API call that MSW should intercept
+                const response = await fetch('http://localhost:8080/onboarding/status', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer dev-token-user-alex-thompson',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <h3>Success!</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Response:</strong></p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <h3>Error!</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p>This suggests MSW is not intercepting the request.</p>
+                `;
+            }
+        }
+
+        // Check if MSW is loaded
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                console.log('Service Worker registrations:', registrations);
+                if (registrations.length === 0) {
+                    console.error('No service workers registered - MSW may not be working');
+                } else {
+                    console.log('Service workers found - MSW should be active');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

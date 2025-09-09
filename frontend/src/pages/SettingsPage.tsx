@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Bell, Shield, Users, Heart, Calendar, LogOut } from 'lucide-react';
+import { ArrowLeft, Bell, Shield, Users, Heart, Calendar, LogOut, Crown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,6 +8,7 @@ const SettingsPage: React.FC = (): JSX.Element => {
   const { logout } = useAuth();
 
   const settingsItems = [
+    { icon: Crown, label: 'Subscription', action: 'navigate' },
     { icon: Bell, label: 'Notifications', action: 'navigate' },
     { icon: Shield, label: 'Privacy & Location', action: 'navigate' },
     { icon: Users, label: 'Close Friends', action: 'navigate' },
@@ -17,6 +18,9 @@ const SettingsPage: React.FC = (): JSX.Element => {
 
   const handleSettingClick = (label: string): void => {
     switch (label) {
+      case 'Subscription':
+        navigate('/subscription');
+        break;
       case 'Privacy & Location':
         navigate('/settings/privacy');
         break;

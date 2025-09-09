@@ -206,6 +206,45 @@ func RateLimitingMiddleware() gin.HandlerFunc {
 	}
 }
 
+// NewRateLimitMiddleware creates a rate limiting middleware with configurable parameters
+func NewRateLimitMiddleware(requests int, window time.Duration, identifier string) gin.HandlerFunc {
+	clients := make(map[string][]time.Time)
+	mutex := &sync.Mutex{}
+
+	return func(c *gin.Context) {
+		clientIP := c.ClientIP()
+		now := time.Now()
+		
+		mutex.Lock()
+		defer mutex.Unlock()
+
+		// Clean up old requests outside the window
+		if timestamps, exists := clients[clientIP]; exists {
+			var validTimestamps []time.Time
+			for _, timestamp := range timestamps {
+				if now.Sub(timestamp) < window {
+					validTimestamps = append(validTimestamps, timestamp)
+				}
+			}
+			clients[clientIP] = validTimestamps
+		}
+
+		// Check if limit exceeded
+		if len(clients[clientIP]) >= requests {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error": "Rate limit exceeded",
+				"retry_after": int(window.Seconds()),
+			})
+			c.Abort()
+			return
+		}
+
+		// Add current request
+		clients[clientIP] = append(clients[clientIP], now)
+		c.Next()
+	}
+}
+
 // GetUserID extracts user ID from gin context
 func GetUserID(c *gin.Context) (uuid.UUID, bool) {
 	userID, exists := c.Get("user_id")

@@ -8,13 +8,8 @@ export interface UnifiedSearchRequest {
   scope: 'friends' | 'discovery' | 'all';
   filters?: {
     distance?: number; // in miles
-    interests?: string[];
     available_only?: boolean;
     friends_only?: boolean;
-    age_range?: {
-      min?: number;
-      max?: number;
-    };
     location?: {
       lat?: number;
       lng?: number;
@@ -37,7 +32,6 @@ export interface UnifiedSearchResponse {
   query?: string;
   filters?: {
     maxDistance: number;
-    availableInterests: string[];
     appliedFilters: Record<string, any>;
   };
   metadata?: {

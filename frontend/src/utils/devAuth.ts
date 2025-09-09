@@ -47,6 +47,17 @@ export async function devLogin(userData?: Partial<AuthUser>): Promise<{ user: Au
   // Store the token
   await secureTokenStorage.setToken(mockToken);
   
+  // IMPORTANT: Set token on API client immediately for MSW to work
+  if (typeof window !== 'undefined') {
+    try {
+      const { apiClient } = await import('../services/authClient');
+      apiClient.setAuthToken(mockToken.token);
+      console.log('🔧 DevAuth: Set token on API client:', mockToken.token.substring(0, 20) + '...');
+    } catch (error) {
+      console.warn('🔧 DevAuth: Could not set token on API client:', error);
+    }
+  }
+  
   // Store user data for AuthContext to retrieve
   if (typeof window !== 'undefined') {
     try {
@@ -120,22 +131,101 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       }
     },
     
+    resetOnboarding: (status: 'not_started' | 'in_progress' | 'completed' = 'not_started') => {
+      // Clear onboarding-related localStorage entries
+      const keysToRemove = ['onboardingState', 'onboardingStatus', 'onboarding_progress'];
+      keysToRemove.forEach(key => {
+        try {
+          localStorage.removeItem(key);
+        } catch (error) {
+          console.warn(`Failed to remove ${key} from localStorage:`, error);
+        }
+      });
+      
+      // Set the desired onboarding status for MSW testing
+      try {
+        localStorage.setItem('dev_onboarding_override', JSON.stringify({
+          status,
+          timestamp: Date.now(),
+          current_step: status === 'in_progress' ? 'profile_picture' : undefined
+        }));
+      } catch (error) {
+        console.warn('Failed to set onboarding override:', error);
+      }
+      
+      console.log(`🔄 Onboarding reset to: ${status}`);
+      console.log('📍 Navigate to /onboarding to test the flow');
+      return status;
+    },
+    
+    loginAsNewUser: async (userData?: Partial<AuthUser>) => {
+      // Create a completely new user for onboarding testing
+      const newUserId = 'new-user-' + Date.now();
+      const newUserData: Partial<AuthUser> = {
+        id: newUserId,
+        first_name: 'New',
+        last_name: 'User',
+        email: 'newuser@example.com',
+        username: 'newuser' + Date.now(),
+        profile_picture: null,
+        bio: null,
+        location: null,
+        interests: [],
+        ...userData
+      };
+      
+      // Login as the new user
+      const result = await devLogin(newUserData);
+      
+      // Set onboarding to not_started for this user
+      try {
+        localStorage.setItem('dev_onboarding_override', JSON.stringify({
+          status: 'not_started',
+          timestamp: Date.now(),
+          user_id: newUserId
+        }));
+      } catch (error) {
+        console.warn('Failed to set onboarding override:', error);
+      }
+      
+      console.log('👤 Created new user for onboarding testing:', result.user);
+      console.log('🚀 Onboarding status set to: not_started');
+      console.log('📍 Navigate to /onboarding to test the flow');
+      
+      // Don't auto-reload for this function, let user navigate manually
+      return result;
+    },
+
     help: () => {
       console.log(`
 🔧 Development Authentication Helper
 ===================================
 
-Available commands:
-- devAuth.loginAs('jane')    → Login as Jane Smith
-- devAuth.loginCustom({...}) → Login with custom user data
-- devAuth.logout()           → Clear authentication
-- devAuth.status()           → Check current auth status
-- devAuth.help()             → Show this help
+Authentication:
+- devAuth.loginAs('jane')         → Login as Jane Smith
+- devAuth.loginCustom({...})      → Login with custom user data
+- devAuth.loginAsNewUser({...})   → Create & login as new user for onboarding
+- devAuth.logout()                → Clear authentication
+- devAuth.status()                → Check current auth status
 
-Example:
-> devAuth.loginAs('jane')
-> devAuth.status()
-> devAuth.logout()
+Onboarding Testing:
+- devAuth.resetOnboarding()         → Reset to 'not_started'
+- devAuth.resetOnboarding('in_progress') → Set to 'in_progress'
+- devAuth.resetOnboarding('completed')   → Set to 'completed'
+
+Workflow Examples:
+1. Test fresh onboarding:
+   > devAuth.loginAsNewUser()
+   > // Navigate to /onboarding manually
+
+2. Test onboarding steps:
+   > devAuth.resetOnboarding('in_progress')
+   > // Navigate to /onboarding
+
+3. Standard testing:
+   > devAuth.loginAs('jane')
+   > devAuth.status()
+   > devAuth.logout()
       `);
     }
   };

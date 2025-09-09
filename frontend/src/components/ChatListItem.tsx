@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Chat } from '../types';
-import { getConversationSummaryWithFallback } from '../services/aiClient';
+import { getConversationSummaryWithFallback } from '../services/summarygenClient';
+import { useFeatureConsent, useConsentSelectors } from '../stores/consentStore';
+import { AIConsentModal } from './consent/AIConsentModal';
 
 interface ChatListItemProps {
   chat: Chat;
@@ -12,34 +14,72 @@ interface ChatListItemProps {
 const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, onProfileClick, enableAISummary = false }): JSX.Element => {
   const [aiSummary, setAiSummary] = useState<string>('');
   const [isLoadingAISummary, setIsLoadingAISummary] = useState<boolean>(false);
+  const [showConsentModal, setShowConsentModal] = useState<boolean>(false);
   
-  // Fetch AI summary if enabled
+  // Consent management
+  const { canUseChatSummaries, requireAIConsent } = useFeatureConsent();
+  const { hasAIProcessingConsent } = useConsentSelectors();
+  
+  // Fetch AI summary if enabled and user has consent
   useEffect(() => {
     if (!enableAISummary) return;
     
     const fetchAISummary = async () => {
+      // Check if user has required consents for AI features
+      if (!canUseChatSummaries) {
+        console.log('AI summary skipped: User consent required');
+        setAiSummary('');
+        return;
+      }
+      
       setIsLoadingAISummary(true);
       try {
+        // Validate consent before making API call
+        requireAIConsent();
+        
         const summary = await getConversationSummaryWithFallback(
           chat.id, 
           chat.conversationSummary || 'No summary available'
         );
         setAiSummary(summary);
       } catch (error) {
-        console.warn(`Failed to fetch AI summary for chat ${chat.id}:`, error);
-        setAiSummary(chat.conversationSummary || 'No summary available');
+        if (error instanceof Error && error.name === 'ConsentValidationError') {
+          console.log('AI summary blocked: Missing consent -', error.message);
+          setAiSummary('');
+          // Optionally show consent modal
+          // setShowConsentModal(true);
+        } else {
+          console.warn(`Failed to fetch AI summary for chat ${chat.id}:`, error);
+          setAiSummary(chat.conversationSummary || 'No summary available');
+        }
       } finally {
         setIsLoadingAISummary(false);
       }
     };
     
     fetchAISummary();
-  }, [chat.id, chat.conversationSummary, enableAISummary]);
+  }, [chat.id, chat.conversationSummary, enableAISummary, canUseChatSummaries, requireAIConsent]);
   
   // Determine which summary to display
   const displaySummary = enableAISummary 
     ? (aiSummary || chat.conversationSummary || 'No summary available')
     : (chat.conversationSummary || 'No summary available');
+
+  // Handle consent modal actions
+  const handleConsentAccept = () => {
+    setShowConsentModal(false);
+    // Refresh will be triggered by the useEffect when consent state changes
+  };
+
+  const handleConsentDecline = () => {
+    setShowConsentModal(false);
+  };
+  
+  // Show consent prompt for AI features
+  const handleShowConsentPrompt = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowConsentModal(true);
+  };
   
   const formatTime = (date: Date): string => {
     const now = new Date();
@@ -161,7 +201,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, onProfileCli
         </div>
 
         {/* Conversation Summary */}
-        <p style={{
+        <div style={{
           fontSize: '12px',
           color: '#06b6d4',
           margin: '0 0 6px 0',
@@ -179,6 +219,31 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, onProfileCli
             }}>
               Generating...
             </span>
+          ) : enableAISummary && !canUseChatSummaries ? (
+            <button
+              onClick={handleShowConsentPrompt}
+              style={{
+                background: 'none',
+                border: '1px solid #06b6d4',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                fontSize: '10px',
+                color: '#06b6d4',
+                cursor: 'pointer',
+                fontStyle: 'italic',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#06b6d4';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#06b6d4';
+              }}
+            >
+              Enable AI
+            </button>
           ) : (
             <span style={{
               overflow: 'hidden',
@@ -188,7 +253,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, onProfileCli
               {displaySummary}
             </span>
           )}
-        </p>
+        </div>
 
         {/* Last Message */}
         <p style={{
@@ -208,6 +273,17 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onClick, onProfileCli
           {chat.lastMessage.content}
         </p>
       </div>
+
+      {/* AI Consent Modal */}
+      {showConsentModal && (
+        <AIConsentModal
+          isOpen={showConsentModal}
+          onClose={() => setShowConsentModal(false)}
+          onAccept={handleConsentAccept}
+          onDecline={handleConsentDecline}
+          showDataAnonymization={true}
+        />
+      )}
     </article>
   );
 };

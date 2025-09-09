@@ -13,6 +13,7 @@ import ProfileDetailModal from '../components/ProfileDetailModal';
 import { SearchResultsSkeleton } from '../components/SkeletonShimmer';
 import FixedHeader from '../components/layout/FixedHeader';
 import Toast from '../components/Toast';
+import { recordUserAction } from '../services/priorityClient';
 
 const ChatPageRefactored: React.FC = (): JSX.Element => {
   const { preferences } = useUserPreferencesStore();
@@ -22,7 +23,9 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
     hideToast,
     modals, 
     openModal, 
-    closeModal 
+    closeModal,
+    openConversationModal,
+    closeConversationModal
   } = useUIStore();
 
   const {
@@ -37,8 +40,13 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
     combinedChatList,
     isLoading, 
     isSearching,
+    isLoadingMore,
+    searchHasMore,
+    searchTotalResults,
+    searchOffset,
     error, 
     createChat,
+    loadMoreFriends,
     totalUnreadCount,
   } = useChatData({ 
     enabled: true,
@@ -53,14 +61,32 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
 
   const handleChatClick = async (chat: Chat): Promise<void> => {
     try {
+      let finalChat = chat;
+      
       if (!chat.id) {
-        // No existing conversation - create new one
-        await createChat(chat.participantId);
+        // No existing conversation - create new one (action recording handled in useChatData)
+        finalChat = await createChat(chat.participantId);
+      } else {
+        // Existing conversation - record the interaction
+        try {
+          await recordUserAction({
+            actionType: 'conversation_opened',
+            conversationId: chat.id,
+            metadata: {
+              created_new: false,
+              participant_id: chat.participantId,
+              timestamp: new Date().toISOString(),
+              from_priority_sort: sortBy === 'priority'
+            }
+          });
+        } catch (actionError) {
+          // Don't fail the main action if recording fails
+          console.warn('Failed to record conversation interaction:', actionError);
+        }
       }
       
-      // Open conversation modal
-      openModal('conversationModalOpen');
-      // Note: You may want to add selectedChat state to uiStore modals
+      // Open conversation modal with selected chat
+      openConversationModal(finalChat);
       
     } catch (error) {
       console.error('Failed to open conversation:', error);
@@ -158,6 +184,38 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
             />
           ))}
         </div>
+        
+        {/* Load More Friends Button */}
+        {searchQuery.trim() && searchHasMore && (
+          <div className="flex flex-col items-center py-6 px-4">
+            <p className="text-sm text-secondary mb-3 text-center">
+              Showing {searchOffset} of {searchTotalResults} friends
+            </p>
+            <button
+              onClick={loadMoreFriends}
+              disabled={isLoadingMore}
+              className="w-full max-w-xs px-6 py-3 bg-aqua text-white rounded-lg font-medium
+                         hover:bg-aqua-dark active:scale-95 transition-all duration-200
+                         disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
+                         flex items-center justify-center gap-2"
+              data-testid="load-more-friends"
+            >
+              {isLoadingMore ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Loading more friends...
+                </>
+              ) : (
+                <>
+                  Load More Friends
+                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                    +{searchTotalResults - searchOffset} remaining
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </>
     );
   };
@@ -225,12 +283,12 @@ const ChatPageRefactored: React.FC = (): JSX.Element => {
       </div>
 
       {/* Modals */}
-      {modals.conversationModalOpen && (
+      {modals.conversationModalOpen && modals.selectedChat && (
         <ConversationModal 
           isOpen={modals.conversationModalOpen}
-          onClose={() => closeModal('conversationModalOpen')}
-          chat={null} // TODO: Add selectedChat to uiStore
-          initialMessage={""} // TODO: Get from message drafts
+          onClose={closeConversationModal}
+          chat={modals.selectedChat}
+          initialMessage={modals.initialMessage}
         />
       )}
 

@@ -9,7 +9,6 @@ const USER_ENDPOINTS = {
   myProfile: '/users/profile/me',
   updateProfile: '/users/profile',
   profile: (userId: string) => `/users/profile/${userId}`,
-  searchFriends: '/users/friends/search',
   block: '/users/block',
   unblock: (userId: string) => `/users/block/${userId}`,
   blockedUsers: '/users/blocked',
@@ -36,6 +35,23 @@ const FRIEND_ENDPOINTS = {
   friends: '/users/friends',
   removeFriend: (userId: string) => `/users/friends/${userId}`,
   friendshipStatus: (userId: string) => `/users/friends/status/${userId}`,
+  // Close friends endpoints
+  closeFriends: '/users/friends/close',
+  addCloseFriend: (userId: string) => `/users/friends/close/${userId}`,
+  removeCloseFriend: (userId: string) => `/users/friends/close/${userId}`,
+} as const;
+
+// Friend memory endpoints
+const MEMORY_ENDPOINTS = {
+  save: '/users/friends/memories',
+  list: '/users/friends/memories',
+  recent: '/users/friends/memories/recent',
+  stats: '/users/friends/memories/stats',
+  export: '/users/friends/memories/export',
+  byFriend: (friendId: string) => `/users/friends/memories/friend/${friendId}`,
+  get: (memoryId: string) => `/users/friends/memories/${memoryId}`,
+  updateNotes: (memoryId: string) => `/users/friends/memories/${memoryId}/notes`,
+  delete: (memoryId: string) => `/users/friends/memories/${memoryId}`,
 } as const;
 
 // Social Link Interface
@@ -81,6 +97,61 @@ export interface PublicUser extends AuthUser {
   readonly is_friend?: boolean;
   readonly mutual_friends_count?: number;
   readonly last_active?: string; // ISO string format
+}
+
+// Friend Memory Interfaces
+export interface FriendMemoryRequest {
+  readonly friend_id: string;
+  readonly message_id: string;
+  readonly conversation_id: string;
+  readonly sender_id: string;
+  readonly message_type: string;
+  readonly message_content: string;
+  readonly notes?: string;
+}
+
+export interface FriendMemory {
+  readonly id: string;
+  readonly friend_id: string;
+  readonly friend_name: string;
+  readonly message_id: string;
+  readonly conversation_id: string;
+  readonly sender_id: string;
+  readonly message_type: string;
+  readonly message_content: string;
+  readonly notes?: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface PaginatedMemoriesRequest {
+  readonly cursor?: string;
+  readonly limit?: number;
+  readonly friend_id?: string;
+}
+
+export interface PaginatedMemoriesResponse {
+  readonly memories: FriendMemory[];
+  readonly has_more: boolean;
+  readonly next_cursor?: string;
+  readonly total_count?: number;
+}
+
+export interface UpdateMemoryNotesRequest {
+  readonly notes: string;
+}
+
+export interface MemoryStats {
+  readonly total_memories: number;
+  readonly memories_this_month: number;
+  readonly top_friends: FriendMemoryCount[];
+  readonly recent_activity: string[];
+}
+
+export interface FriendMemoryCount {
+  readonly friend_id: string;
+  readonly friend_name: string;
+  readonly count: number;
 }
 
 /**
@@ -144,19 +215,6 @@ export async function getUserProfile(userId: string): Promise<UserProfileRespons
   }
 }
 
-/**
- * Search for friends with optional pagination
- * @param query - The search query string
- * @param options - Optional pagination parameters
- * @returns Promise resolving to search results with friends array
- * @throws AuthServiceError with detailed error information
- */
-export async function searchFriends(query: string, options?: {page?: number; limit?: number}) {
-  const params = new URLSearchParams({ q: query.trim() });
-  if (options?.page) params.append('page', options.page.toString());
-  if (options?.limit) params.append('limit', options.limit.toString());
-  return apiClient.get<{friends: PublicUser[]}>(`${USER_ENDPOINTS.searchFriends}?${params}`);
-}
 
 // Re-export shared error handling utilities for consistency
 export { AuthServiceError, getErrorMessage, isAuthError } from './authClient';
@@ -543,6 +601,118 @@ export async function getFriendshipStatus(userId: string): Promise<{ data: Frien
   }
 }
 
+// Close Friends Types
+export interface UpdateCloseFriendsRequest {
+  readonly friend_ids: string[];
+}
+
+// Close Friends Functions
+
+/**
+ * Get user's close friends list
+ */
+export async function getCloseFriends(): Promise<{ data: PublicUser[]; count: number }> {
+  try {
+    const response = await apiClient.get<{ data: PublicUser[]; count: number }>(
+      FRIEND_ENDPOINTS.closeFriends
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get close friends',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Update the entire close friends list
+ */
+export async function updateCloseFriends(friendIds: string[]): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.put<{ message: string }>(
+      FRIEND_ENDPOINTS.closeFriends,
+      { friend_ids: friendIds }
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to update close friends',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Add a friend to close friends list
+ */
+export async function addCloseFriend(userId: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.post<{ message: string }>(
+      FRIEND_ENDPOINTS.addCloseFriend(userId)
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to add close friend',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Remove a friend from close friends list
+ */
+export async function removeCloseFriend(userId: string): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.delete<{ message: string }>(
+      FRIEND_ENDPOINTS.removeCloseFriend(userId)
+    );
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to remove close friend',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Helper function to get user-friendly close friends error messages
+ */
+export function getCloseFriendsErrorMessage(error: ApiError): string {
+  const message = error.message?.toLowerCase() || '';
+  
+  if (message.includes('cannot add yourself')) {
+    return 'You cannot add yourself as a close friend.';
+  }
+  if (message.includes('not friends') || message.includes('can only add friends')) {
+    return 'You can only add existing friends as close friends.';
+  }
+  if (message.includes('cannot include yourself')) {
+    return 'You cannot include yourself in your close friends list.';
+  }
+  
+  // Fall back to the original error message
+  return getErrorMessage(error);
+}
+
 // Update Profile Request Interface
 export interface UpdateProfileRequest {
   readonly first_name?: string;
@@ -912,6 +1082,229 @@ export function getContactErrorMessage(error: ApiError): string {
   }
   if (message.includes('not found') || message.includes('expired')) {
     return 'Invitation not found or has expired.';
+  }
+  
+  // Fall back to the original error message
+  return getErrorMessage(error);
+}
+
+// Friend Memory Management Functions
+
+/**
+ * Save a message as a friend memory
+ * @param request - The memory save request
+ * @returns Promise resolving to the saved memory
+ * @throws AuthServiceError with detailed error information
+ */
+export async function saveFriendMemory(request: FriendMemoryRequest): Promise<FriendMemory> {
+  try {
+    const response = await apiClient.post<{ data: FriendMemory }>(
+      MEMORY_ENDPOINTS.save,
+      request
+    );
+    
+    return response.data;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to save friend memory',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get memories for a specific friend
+ * @param friendId - The friend's user ID
+ * @param request - Pagination parameters
+ * @returns Promise resolving to paginated memories
+ */
+export async function getFriendMemories(friendId: string, request: PaginatedMemoriesRequest = {}): Promise<PaginatedMemoriesResponse> {
+  try {
+    const params = new URLSearchParams();
+    if (request.cursor) params.append('cursor', request.cursor);
+    if (request.limit) params.append('limit', request.limit.toString());
+    
+    const url = request.limit || request.cursor 
+      ? `${MEMORY_ENDPOINTS.byFriend(friendId)}?${params.toString()}`
+      : MEMORY_ENDPOINTS.byFriend(friendId);
+
+    const response = await apiClient.get<PaginatedMemoriesResponse>(url);
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get friend memories',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get all user memories with pagination
+ * @param request - Pagination parameters
+ * @returns Promise resolving to paginated memories
+ */
+export async function getUserMemories(request: PaginatedMemoriesRequest = {}): Promise<PaginatedMemoriesResponse> {
+  try {
+    const params = new URLSearchParams();
+    if (request.cursor) params.append('cursor', request.cursor);
+    if (request.limit) params.append('limit', request.limit.toString());
+    if (request.friend_id) params.append('friend_id', request.friend_id);
+    
+    const url = params.toString() 
+      ? `${MEMORY_ENDPOINTS.list}?${params.toString()}`
+      : MEMORY_ENDPOINTS.list;
+
+    const response = await apiClient.get<{ data: PaginatedMemoriesResponse }>(url);
+    
+    return response.data;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get user memories',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get recent memories
+ * @param limit - Number of recent memories to fetch (max 50)
+ * @returns Promise resolving to recent memories
+ */
+export async function getRecentMemories(limit: number = 10): Promise<FriendMemory[]> {
+  try {
+    const params = new URLSearchParams();
+    if (limit && limit > 0 && limit <= 50) {
+      params.append('limit', limit.toString());
+    }
+    
+    const url = params.toString() 
+      ? `${MEMORY_ENDPOINTS.recent}?${params.toString()}`
+      : MEMORY_ENDPOINTS.recent;
+
+    const response = await apiClient.get<{ data: { memories: FriendMemory[] } }>(url);
+    
+    return response.data.memories;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get recent memories',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Delete a friend memory
+ * @param memoryId - The memory ID to delete
+ * @returns Promise that resolves when memory is deleted
+ */
+export async function deleteFriendMemory(memoryId: string): Promise<void> {
+  try {
+    await apiClient.delete(MEMORY_ENDPOINTS.delete(memoryId));
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to delete friend memory',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Update memory notes
+ * @param memoryId - The memory ID to update
+ * @param request - The notes update request
+ * @returns Promise resolving to the updated memory
+ */
+export async function updateMemoryNotes(memoryId: string, request: UpdateMemoryNotesRequest): Promise<FriendMemory> {
+  try {
+    const response = await apiClient.put<FriendMemory>(
+      MEMORY_ENDPOINTS.updateNotes(memoryId),
+      request
+    );
+    
+    return response;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to update memory notes',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Get memory statistics
+ * @returns Promise resolving to memory statistics
+ */
+export async function getMemoryStats(): Promise<MemoryStats> {
+  try {
+    const response = await apiClient.get<{ data: MemoryStats }>(
+      MEMORY_ENDPOINTS.stats
+    );
+    
+    return response.data;
+  } catch (error) {
+    if (error instanceof AuthServiceError) {
+      throw error;
+    }
+    
+    throw new AuthServiceError({
+      type: 'SERVER_ERROR',
+      message: 'Failed to get memory statistics',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  }
+}
+
+/**
+ * Helper function to get user-friendly memory error messages
+ */
+export function getMemoryErrorMessage(error: ApiError): string {
+  const message = error.message?.toLowerCase() || '';
+  
+  if (message.includes('not friends')) {
+    return 'You can only save memories from friends.';
+  }
+  if (message.includes('already exists')) {
+    return 'You have already saved this message as a memory.';
+  }
+  if (message.includes('not found')) {
+    return 'Memory not found or has been deleted.';
+  }
+  if (message.includes('access denied') || message.includes('forbidden')) {
+    return 'You do not have permission to access this memory.';
+  }
+  if (message.includes('encryption')) {
+    return 'Unable to process memory due to security constraints.';
   }
   
   // Fall back to the original error message

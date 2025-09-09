@@ -27,6 +27,7 @@ import {
   isCheckInError,
   type CheckInApiError
 } from '../services/checkinClient';
+import { updateProfile, UpdateProfileRequest } from '../services/userClient';
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { convertBackendCheckInToExtended, ExtendedCheckIn } from '../utils/checkinTransformers';
 
@@ -38,6 +39,7 @@ interface ProfileDetailModalProps {
   isEmbedded?: boolean; // true when used in ProfilePage, false when used as modal
   showMontageByDefault?: boolean; // true to show montage section by default
   isEditing?: boolean; // true when in editing mode
+  bioEditTrigger?: number; // number that changes to trigger bio editing
 }
 
 // Helper function to determine if content should be shown based on privacy settings
@@ -121,7 +123,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   mode = 'other',
   isEmbedded = false,
   showMontageByDefault: _showMontageByDefault = false,
-  isEditing: _isEditing = false
+  isEditing: _isEditing = false,
+  bioEditTrigger
 }): JSX.Element => {
   const { user: currentUser } = useAuth();
   const checkInsEnabled = useFeatureFlag('enable_checkins');
@@ -145,6 +148,12 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const [editingCheckInId, setEditingCheckInId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
   const [editingPrivacy, setEditingPrivacy] = useState<Privacy>('public');
+  
+  // Bio editing state
+  const [isBioEditing, setIsBioEditing] = useState<boolean>(false);
+  const [editingBio, setEditingBio] = useState<string>('');
+  const [isBioSaving, setIsBioSaving] = useState<boolean>(false);
+  const [bioError, setBioError] = useState<string | undefined>(undefined);
   
   // Broadcast state
   const [broadcast, setBroadcast] = useState<PublicBroadcastResponse | null>(null);
@@ -189,8 +198,14 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         );
         
         if (!isCancelled) {
-          const convertedCheckIns = checkInsResponse.checkins.map(convertBackendCheckInToExtended);
-          setCheckIns(convertedCheckIns);
+          if (checkInsResponse && checkInsResponse.checkins && Array.isArray(checkInsResponse.checkins)) {
+            const convertedCheckIns = checkInsResponse.checkins.map(convertBackendCheckInToExtended);
+            setCheckIns(convertedCheckIns);
+            setCheckInsError(undefined); // Clear any previous errors
+          } else {
+            setCheckInsError('Invalid response from server');
+            setCheckIns([]);
+          }
         }
       } catch (error: any) {
         if (!isCancelled) {
@@ -295,6 +310,70 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     }
   };
   
+  // Effect to handle external bio edit trigger
+  useEffect(() => {
+    if (bioEditTrigger && bioEditTrigger > 0 && user && mode === 'own') {
+      setEditingBio(user.bio || '');
+      setIsBioEditing(true);
+      setBioError(undefined);
+    }
+  }, [bioEditTrigger, user, mode]);
+
+  // Bio editing handlers
+  
+  const handleCancelBioEdit = (): void => {
+    setIsBioEditing(false);
+    setEditingBio('');
+    setBioError(undefined);
+  };
+  
+  const handleSaveBio = async (): Promise<void> => {
+    if (!user || isBioSaving) return;
+    
+    const trimmedBio = editingBio.trim();
+    
+    // Check if bio actually changed
+    if (trimmedBio === user.bio) {
+      handleCancelBioEdit();
+      return;
+    }
+    
+    setIsBioSaving(true);
+    setBioError(undefined);
+    
+    try {
+      const updateData: UpdateProfileRequest = {
+        bio: trimmedBio
+      };
+      
+      const updatedProfile = await updateProfile(updateData);
+      
+      // Update local user state with new bio
+      setUser(prev => prev ? {
+        ...prev,
+        bio: updatedProfile.bio || 'No bio available'
+      } : prev);
+      
+      // Update profile response as well
+      setProfileResponse(prev => prev ? {
+        ...prev,
+        bio: updatedProfile.bio
+      } : prev);
+      
+      // Exit editing mode
+      setIsBioEditing(false);
+      setEditingBio('');
+      
+    } catch (error: any) {
+      console.error('Failed to update bio:', error);
+      setBioError(
+        error?.error?.message || error?.message || 'Failed to update bio. Please try again.'
+      );
+    } finally {
+      setIsBioSaving(false);
+    }
+  };
+
   // Handle new check-in submission
   const handleNewCheckInSubmit = async (checkInData: any): Promise<void> => {
     setIsSubmittingCheckIn(true);
@@ -723,39 +802,86 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
                   {/* Bio - moved here between meta info and action buttons */}
                   <div className="mb-1">
-                    <p className="text-text-secondary text-sm leading-relaxed">
-                      {user.bio}
-                    </p>
+                    {mode === 'own' && isBioEditing ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editingBio}
+                          onChange={(e) => setEditingBio(e.target.value)}
+                          className="w-full text-text-secondary text-sm leading-relaxed border border-gray-300 rounded-md px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-aqua focus:border-aqua"
+                          rows={3}
+                          maxLength={500}
+                          placeholder="Tell others about yourself..."
+                          disabled={isBioSaving}
+                        />
+                        <div className="flex items-center justify-between">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleCancelBioEdit}
+                              disabled={isBioSaving}
+                              className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSaveBio}
+                              disabled={isBioSaving || editingBio.trim() === ''}
+                              className="px-3 py-1 text-xs bg-aqua hover:bg-aqua-dark text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              {isBioSaving ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent" />
+                                  Saving...
+                                </>
+                              ) : (
+                                'Save'
+                              )}
+                            </button>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {editingBio.length}/500
+                          </span>
+                        </div>
+                        {bioError && (
+                          <p className="text-red-500 text-xs">{bioError}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-text-secondary text-sm leading-relaxed">
+                        {user.bio}
+                      </p>
+                    )}
                   </div>
                   
                   {/* Action Buttons - Now inline with profile */}
                   <div className="flex gap-1.5">
-                    <button
-                      onClick={handleMessageButtonClick}
-                      disabled={isLookingUpConversation}
-                      className={`bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 flex items-center justify-center gap-1 text-xs min-w-0 ${isLookingUpConversation ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {isLookingUpConversation ? (
-                        <div className="animate-spin rounded-full h-3 w-3 border border-gray-600 border-t-transparent" />
-                      ) : (
-                        <MessageCircle size={12} />
-                      )}
-                      {isLookingUpConversation ? 'Loading...' : 'Message'}
-                    </button>
-                    <FriendButton
-                      userId={user.id}
-                      size="medium"
-                      variant="default"
-                      className="bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-xs min-w-0 whitespace-nowrap"
-                    />
                     {mode !== 'own' && (
-                      <BlockButton
-                        userId={user.id}
-                        size="small"
-                        variant="default"
-                        className="bg-red-500 hover:bg-red-600 text-white py-1.5 px-2 rounded-md transition-colors duration-200 text-xs min-w-0"
-                        onBlock={onBlock}
-                      />
+                      <>
+                        <button
+                          onClick={handleMessageButtonClick}
+                          disabled={isLookingUpConversation}
+                          className={`bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 flex items-center justify-center gap-1 text-xs min-w-0 ${isLookingUpConversation ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {isLookingUpConversation ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border border-gray-600 border-t-transparent" />
+                          ) : (
+                            <MessageCircle size={12} />
+                          )}
+                          {isLookingUpConversation ? 'Loading...' : 'Message'}
+                        </button>
+                        <FriendButton
+                          userId={user.id}
+                          size="medium"
+                          variant="default"
+                          className="bg-gray-200 hover:bg-gray-300 !text-gray-800 font-medium py-1.5 px-3 rounded-md transition-colors duration-200 [&>*]:!text-gray-800 [&_svg]:!text-gray-800 text-xs min-w-0 whitespace-nowrap"
+                        />
+                        <BlockButton
+                          userId={user.id}
+                          size="small"
+                          variant="default"
+                          className="bg-red-500 hover:bg-red-600 text-white py-1.5 px-2 rounded-md transition-colors duration-200 text-xs min-w-0"
+                          onBlock={onBlock}
+                        />
+                      </>
                     )}
                   </div>
                 </div>

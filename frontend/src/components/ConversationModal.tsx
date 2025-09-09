@@ -4,14 +4,35 @@ import { X, Send, Bot, Clock, MapPin, Bookmark, Check, X as XIcon } from 'lucide
 import { Message, Chat, User } from '../types';
 // import { useFriendRequests } from '../hooks/useFriendRequests';
 import { isFeatureEnabled } from '../config/featureFlags';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { 
   getConversationMessages, 
   sendMessage as sendApiMessage, 
   apiMessageToUIMessage, 
   chatWebSocket 
 } from '../services/chatClient';
+import { getUserCheckIns } from '../services/checkinClient';
+import type { CheckIn as BackendCheckIn } from '../services/checkinClient';
+import { 
+  saveFriendMemory, 
+  deleteFriendMemory, 
+  getFriendMemories,
+  getMemoryErrorMessage,
+  type FriendMemoryRequest 
+} from '../services/userClient';
 import { useAuth } from '../contexts/AuthContext';
 import ConversationalCueCards from './ConversationalCueCards';
+
+// Constants
+const BOT_SUMMARY_CONSTANTS = {
+  MIN_DELAY_MS: 1500,
+  MAX_DELAY_MS: 2500,
+  CHECKINS_PAGE_SIZE: 5,
+  MAX_ACTIVITIES_DISPLAY: 3,
+  SUMMARY_TIMESTAMP_OFFSET_MS: 5 * 60 * 1000, // 5 minutes ago
+  SHORT_TEXT_LIMIT: 50,
+  LONG_TEXT_LIMIT: 80,
+} as const;
 
 interface ConversationModalProps {
   isOpen: boolean;
@@ -28,7 +49,7 @@ interface BotSummary {
   content: string;
   timestamp: Date;
   activities: Array<{
-    type: 'story' | 'checkin' | 'activity';
+    type: 'checkin' | 'activity';
     content: string;
     location?: string;
     time: string;
@@ -44,14 +65,19 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
   const [messages, setMessages] = useState<(Message | BotSummary)[]>([]);
   const [newMessage, setNewMessage] = useState<string>(initialMessage || '');
   const [user] = useState<User | null>(null);
-  const [savedContexts, setSavedContexts] = useState<Set<string>>(new Set());
+  const [savedMemories, setSavedMemories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(false);
+  const [memoriesLoading, setMemoriesLoading] = useState<boolean>(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [linkBotTyping, setLinkBotTyping] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const botSummaryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const { user: currentUser, token } = useAuth();
+  
+  // Feature flag for friend memory functionality
+  const isFriendMemoryEnabled = useFeatureFlag('friend_memory_feature');
   
   // Use friendship hook to get real-time friendship status
   // const { getFriendshipStatus } = useFriendRequests();
@@ -74,6 +100,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     if (isOpen && chat && token) {
       loadConversationMessages();
       setupWebSocket();
+      loadSavedMemories();
       
       // Set initial message if provided
       if (initialMessage) {
@@ -84,11 +111,33 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
       // Cleanup function
       return () => {
         chatWebSocket.disconnect();
+        // Clear bot summary timeout if it exists
+        if (botSummaryTimeoutRef.current) {
+          clearTimeout(botSummaryTimeoutRef.current);
+          botSummaryTimeoutRef.current = null;
+        }
       };
     }
     // Return undefined cleanup for cases where the effect doesn't run
     return undefined;
-  }, [isOpen, chat, initialMessage, token]);
+  }, [isOpen, chat, initialMessage, token, isFriendMemoryEnabled]);
+
+  // Load existing saved memories for this friend
+  const loadSavedMemories = async () => {
+    if (!chat?.participantId || !chat.isFriend || !isFriendMemoryEnabled) return;
+    
+    try {
+      setMemoriesLoading(true);
+      const memoriesResponse = await getFriendMemories(chat.participantId, { limit: 50 });
+      const memoryMessageIds = new Set(memoriesResponse.memories.map(memory => memory.message_id));
+      setSavedMemories(memoryMessageIds);
+    } catch (error) {
+      console.warn('Failed to load saved memories:', error);
+      // Don't show error to user as this is not critical
+    } finally {
+      setMemoriesLoading(false);
+    }
+  };
 
   // Load conversation messages from API
   const loadConversationMessages = async () => {
@@ -110,15 +159,6 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         senderId: apiMessage.sender_id === currentUser?.id ? 'current-user' : chat.participantId,
       }));
       
-      // Generate bot summary for friends
-      const botSummary: BotSummary = {
-        id: `bot-${Date.now()}`,
-        type: 'summary',
-        content: generateBotSummary(chat.participantName),
-        timestamp: new Date(Date.now() - 5 * 60 * 1000),
-        activities: generateMockActivities()
-      };
-      
       // Only add bot summary for friends with typing animation
       if (chat.isFriend) {
         // First set the regular messages
@@ -127,11 +167,45 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
         // Show LinkBot typing indicator
         setLinkBotTyping(true);
         
+        // Generate and add bot summary with real checkin data
+        const generateAndAddBotSummary = async () => {
+          try {
+            const activities = await generateCheckinActivities(chat.participantId);
+            const botSummary: BotSummary = {
+              id: `bot-${Date.now()}`,
+              type: 'summary',
+              content: generateBotSummary(chat.participantName),
+              timestamp: new Date(Date.now() - BOT_SUMMARY_CONSTANTS.SUMMARY_TIMESTAMP_OFFSET_MS),
+              activities
+            };
+            
+            setMessages(prev => [...prev, botSummary]);
+          } catch (error) {
+            console.error('Failed to generate bot summary:', error);
+            // Fallback to simple message without activities
+            const fallbackSummary: BotSummary = {
+              id: `bot-${Date.now()}`,
+              type: 'summary',
+              content: generateBotSummary(chat.participantName),
+              timestamp: new Date(Date.now() - BOT_SUMMARY_CONSTANTS.SUMMARY_TIMESTAMP_OFFSET_MS),
+              activities: [{
+                type: 'activity',
+                content: 'Unable to load recent activity',
+                time: 'N/A'
+              }]
+            };
+            setMessages(prev => [...prev, fallbackSummary]);
+          } finally {
+            setLinkBotTyping(false);
+          }
+        };
+        
         // After a delay, add the bot summary and hide typing
-        setTimeout(() => {
-          setMessages(prev => [...prev, botSummary]);
-          setLinkBotTyping(false);
-        }, 1500 + Math.random() * 1000); // 1.5-2.5 seconds for natural feel
+        const delay = BOT_SUMMARY_CONSTANTS.MIN_DELAY_MS + 
+                     Math.random() * (BOT_SUMMARY_CONSTANTS.MAX_DELAY_MS - BOT_SUMMARY_CONSTANTS.MIN_DELAY_MS);
+        botSummaryTimeoutRef.current = setTimeout(() => {
+          generateAndAddBotSummary();
+        }, delay);
       } else {
         setMessages(uiMessages);
       }
@@ -210,56 +284,140 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
     return summaries[Math.floor(Math.random() * summaries.length)];
   };
 
-  const generateMockActivities = (): Array<{ type: 'story' | 'checkin' | 'activity'; content: string; location?: string; time: string; }> => {
-    const activities = [
-      {
-        type: 'story' as const,
-        content: "Posted a story about trying the new coffee shop downtown ☕",
-        time: "2 hours ago"
-      },
-      {
-        type: 'checkin' as const,
-        content: "Checked in at Golden Gate Park",
-        location: "Golden Gate Park, SF",
-        time: "5 hours ago"
-      },
-      {
-        type: 'activity' as const,
-        content: "Shared photos from last night's rooftop dinner 📸",
-        time: "1 day ago"
-      },
-      {
-        type: 'checkin' as const,
-        content: "Checked in at SoulCycle Mission",
-        location: "SoulCycle Mission Bay",
-        time: "2 days ago"
-      },
-      {
-        type: 'story' as const,
-        content: "Posted about finishing a 10K run along the Embarcadero 🏃‍♀️",
-        time: "3 days ago"
+  const generateCheckinActivities = async (userId: string): Promise<Array<{ type: 'checkin' | 'activity'; content: string; location?: string; time: string; }>> => {
+    try {
+      // Get recent checkins for the user (friends privacy or higher)
+      const checkinsResponse = await getUserCheckIns(userId, {
+        page: 1,
+        page_size: BOT_SUMMARY_CONSTANTS.CHECKINS_PAGE_SIZE,
+        privacy: 'friends' // Only show checkins visible to friends
+      });
+      
+      const activities = checkinsResponse.checkins.map((checkin: BackendCheckIn) => {
+        const timeAgo = formatTimeAgo(new Date(checkin.created_at));
+        let content = '';
+        
+        if (checkin.location?.location_name) {
+          content = `Checked in at ${checkin.location.location_name}`;
+          if (checkin.text_content) {
+            content += ` - "${checkin.text_content.substring(0, BOT_SUMMARY_CONSTANTS.SHORT_TEXT_LIMIT)}${checkin.text_content.length > BOT_SUMMARY_CONSTANTS.SHORT_TEXT_LIMIT ? '...' : ''}"`;
+          }
+        } else if (checkin.text_content) {
+          content = `Posted: "${checkin.text_content.substring(0, BOT_SUMMARY_CONSTANTS.LONG_TEXT_LIMIT)}${checkin.text_content.length > BOT_SUMMARY_CONSTANTS.LONG_TEXT_LIMIT ? '...' : ''}"`;
+        } else if (checkin.media_attachments.length > 0) {
+          content = `Shared ${checkin.media_attachments.length} photo${checkin.media_attachments.length > 1 ? 's' : ''}`;
+        } else {
+          content = 'Posted an update';
+        }
+        
+        return {
+          type: 'checkin' as const,
+          content,
+          location: checkin.location?.location_name,
+          time: timeAgo
+        };
+      });
+      
+      // If no checkins found, return a fallback activity
+      if (activities.length === 0) {
+        return [{
+          type: 'activity' as const,
+          content: "No recent activity to show",
+          time: "N/A"
+        }];
       }
-    ];
-
-    // Return 2-4 random activities
-    const shuffled = activities.sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
+      
+      return activities.slice(0, BOT_SUMMARY_CONSTANTS.MAX_ACTIVITIES_DISPLAY);
+    } catch (error) {
+      console.warn('Failed to fetch user checkins for bot summary:', error);
+      // Fallback to a generic activity
+      return [{
+        type: 'activity' as const,
+        content: "Recent activity not available",
+        time: "N/A"
+      }];
+    }
+  };
+  
+  const formatTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString();
   };
 
   const handleSuggestionClick = (suggestion: string): void => {
     setNewMessage(suggestion);
   };
 
-  const handleToggleContext = (messageId: string): void => {
-    setSavedContexts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(messageId)) {
-        newSet.delete(messageId);
+  const handleToggleMemory = async (message: Message): Promise<void> => {
+    if (!chat?.isFriend || !currentUser || memoriesLoading || !isFriendMemoryEnabled) return;
+    
+    const isCurrentlySaved = savedMemories.has(message.id);
+    
+    try {
+      if (isCurrentlySaved) {
+        // Delete the memory
+        // Note: We would need to store memory IDs to delete properly
+        // For now, we'll just remove from local state and let it reload
+        setSavedMemories(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(message.id);
+          return newSet;
+        });
+        
+        // Find and delete the memory from the backend
+        // This is a simplified approach - in production, we'd store the memory ID mapping
+        const memoriesResponse = await getFriendMemories(chat.participantId, { limit: 50 });
+        const existingMemory = memoriesResponse.memories.find(mem => mem.message_id === message.id);
+        
+        if (existingMemory) {
+          await deleteFriendMemory(existingMemory.id);
+        }
       } else {
-        newSet.add(messageId);
+        // Save the memory
+        const memoryRequest: FriendMemoryRequest = {
+          friend_id: chat.participantId,
+          message_id: message.id,
+          conversation_id: chat.id || '', // Fallback to empty string if no chat ID
+          sender_id: message.senderId === 'current-user' ? currentUser.id : chat.participantId,
+          message_type: message.type || 'text',
+          message_content: message.content,
+          notes: '', // Empty notes initially
+        };
+        
+        await saveFriendMemory(memoryRequest);
+        
+        // Update local state
+        setSavedMemories(prev => new Set([...prev, message.id]));
       }
-      return newSet;
-    });
+    } catch (error) {
+      console.error('Failed to toggle memory:', error);
+      
+      // Revert local state on error
+      if (isCurrentlySaved) {
+        setSavedMemories(prev => new Set([...prev, message.id]));
+      } else {
+        setSavedMemories(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(message.id);
+          return newSet;
+        });
+      }
+      
+      // Show error to user
+      const errorMessage = getMemoryErrorMessage(error as any);
+      // You could show a toast notification here
+      console.warn('Memory toggle failed:', errorMessage);
+    }
   };
 
   const handleSendMessage = async (): Promise<void> => {
@@ -486,7 +644,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                             <div className="w-1 h-1 rounded-full bg-aqua mt-2 flex-shrink-0" />
                             <div className="flex-1">
                               <p className="text-white">{activity.content}</p>
-                              <div className="flex items-center gap-2 text-white/70 mt-1">
+                              <div className="flex items-center gap-2 text-white/70 mt-1 flex-wrap">
                                 <Clock size={10} />
                                 <span>{activity.time}</span>
                                 {activity.location && (
@@ -511,7 +669,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
               // Regular message and other message types
               const msg = message as Message;
               const isFromCurrentUser = msg.senderId === 'current-user';
-              const isSaved = savedContexts.has(msg.id);
+              const isSaved = savedMemories.has(msg.id);
               const isLinkBot = msg.senderId === 'linkbot';
               
               // Handle different message types
@@ -619,15 +777,16 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
                           {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
-                      {!isFromCurrentUser && (
+                      {!isFromCurrentUser && chat?.isFriend && isFriendMemoryEnabled && (
                         <button
-                          onClick={() => handleToggleContext(msg.id)}
-                          className={`mt-2 p-1.5 rounded-full transition-all duration-200 hover:scale-110 ${
+                          onClick={() => handleToggleMemory(msg)}
+                          disabled={memoriesLoading}
+                          className={`mt-2 p-1.5 rounded-full transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed ${
                             isSaved 
                               ? 'bg-accent-copper/20 text-accent-copper hover:bg-accent-copper/30' 
                               : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
                           }`}
-                          title={isSaved ? 'Remove from friend context' : 'Save to friend context'}
+                          title={isSaved ? 'Remove from friend memory' : 'Save to friend memory'}
                         >
                           <Bookmark size={12} className={`transition-all duration-200 ${
                             isSaved ? 'fill-current' : ''
@@ -693,6 +852,7 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
           <ConversationalCueCards
             chat={chat}
             user={user}
+            messages={messages.filter(msg => 'senderId' in msg) as Message[]}
             onSuggestionClick={handleSuggestionClick}
           />
         )}

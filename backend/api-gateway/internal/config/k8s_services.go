@@ -61,6 +61,9 @@ func initializeK8sServiceConfig() *K8sServiceConfig {
 	config.Services["search-svc"] = createServiceConfig(
 		"search-svc", "SEARCH_SVC_URL", namespace, clusterDomain, 8080, 30*time.Second)
 	
+	config.Services["priority-svc"] = createServiceConfig(
+		"priority-svc", "PRIORITY_SVC_URL", namespace, clusterDomain, 8080, 30*time.Second)
+	
 	config.Services["feature-svc"] = createServiceConfig(
 		"feature-svc", "FEATURE_SVC_URL", namespace, clusterDomain, 8080, 30*time.Second)
 
@@ -121,6 +124,8 @@ func RouteToK8sService(path string) (*K8sService, error) {
 		serviceName = "discovery-svc"
 	case matchesPath(path, "/search"):
 		serviceName = "search-svc"
+	case matchesPath(path, "/conversations/priority"):
+		serviceName = "priority-svc"
 	case matchesPath(path, "/features/"):
 		serviceName = "feature-svc"
 	default:

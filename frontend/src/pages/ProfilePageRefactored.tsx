@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Edit, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useProfileData } from '../hooks/useProfileData';
@@ -15,11 +15,12 @@ const ProfilePageRefactored: React.FC = (): JSX.Element => {
   } = useUIStore();
 
   const {
-    isEditing,
     showMontage,
-    setEditing,
     setShowMontage,
   } = useProfileStore();
+  
+  // Local bio editing trigger state
+  const [bioEditTrigger, setBioEditTrigger] = useState<number>(0);
 
   const { 
     currentUserProfile,
@@ -45,11 +46,8 @@ const ProfilePageRefactored: React.FC = (): JSX.Element => {
   };
 
   const handleEditProfile = (): void => {
-    setEditing(true);
-  };
-
-  const handleCloseEdit = (): void => {
-    setEditing(false);
+    // Trigger bio editing in the embedded ProfileDetailModal
+    setBioEditTrigger(prev => prev + 1);
   };
 
   const toggleAvailability = async (): Promise<void> => {
@@ -208,19 +206,10 @@ const ProfilePageRefactored: React.FC = (): JSX.Element => {
         mode="own"
         isEmbedded={true} // Embedded in page, not a modal
         showMontageByDefault={true} // Show montage on page load
-        isEditing={false} // Not editing in embedded mode
+        bioEditTrigger={bioEditTrigger} // Trigger bio editing
       />
 
-      {/* Edit mode overlay modal when editing */}
-      {isEditing && (
-        <ProfileDetailModal
-          userId={currentUserProfile.id}
-          onClose={handleCloseEdit}
-          mode="own"
-          isEmbedded={false}
-          isEditing={true}
-        />
-      )}
+      {/* Bio editing is now handled inline - no modal overlay needed */}
 
       {/* Toast Notification */}
       {toast.isVisible && (

@@ -9,6 +9,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// ValidationError represents a validation error with field context
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+// Error implements the error interface
+func (e *ValidationError) Error() string {
+	return e.Message
+}
+
 // Role represents a system role for RBAC
 type Role struct {
 	ID          uuid.UUID    `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
@@ -384,6 +395,48 @@ type FriendRequest struct {
 	// Relationships
 	Requester User `json:"requester,omitempty" gorm:"foreignKey:RequesterID"`
 	Requestee User `json:"requestee,omitempty" gorm:"foreignKey:RequesteeID"`
+}
+
+// CloseFriend represents a close friend relationship - a subset of friendships
+type CloseFriend struct {
+	UserID   uuid.UUID `json:"user_id" gorm:"type:uuid;not null;primaryKey;index"`
+	FriendID uuid.UUID `json:"friend_id" gorm:"type:uuid;not null;primaryKey;index"`
+	AddedAt  time.Time `json:"added_at" gorm:"autoCreateTime"`
+
+	// Relationships
+	User   User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Friend User `json:"friend,omitempty" gorm:"foreignKey:FriendID"`
+}
+
+// TableName ensures the table name matches our migration
+func (CloseFriend) TableName() string {
+	return "close_friends"
+}
+
+// Validate ensures the close friend relationship is valid
+func (cf *CloseFriend) Validate() error {
+	if cf.UserID == uuid.Nil {
+		return &ValidationError{
+			Field:   "user_id",
+			Message: "User ID is required",
+		}
+	}
+	
+	if cf.FriendID == uuid.Nil {
+		return &ValidationError{
+			Field:   "friend_id", 
+			Message: "Friend ID is required",
+		}
+	}
+	
+	if cf.UserID == cf.FriendID {
+		return &ValidationError{
+			Field:   "friend_id",
+			Message: "User cannot add themselves as close friend",
+		}
+	}
+	
+	return nil
 }
 
 // Session represents a user session for tracking active logins

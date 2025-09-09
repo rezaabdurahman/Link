@@ -19,8 +19,10 @@ export const extractUserId = (req: any): string | null => {
   const userIdHeader = req.headers.get('X-User-ID');
   
   console.log('🔍 MSW: Extracting user ID from headers:', {
-    authHeader: authHeader ? authHeader.substring(0, 20) + '...' : 'none',
-    userIdHeader: userIdHeader || 'none'
+    authHeader: authHeader ? authHeader.substring(0, 30) + '...' : 'none',
+    userIdHeader: userIdHeader || 'none',
+    requestUrl: req.url,
+    requestMethod: req.method
   });
   
   // SECURITY: In development/demo, validate dev token format

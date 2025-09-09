@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -349,7 +348,6 @@ func maskIPAddress(ip string) string {
 	
 	// Simple IPv4 masking
 	dotCount := 0
-	lastDotIndex := -1
 	
 	for i, char := range ip {
 		if char == '.' {
